@@ -325,6 +325,14 @@ p {
   background-image: radial-gradient(#d4d9df 1px, transparent 1px);
   background-size: 16px 16px;
   overflow: auto;
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.graph-canvas::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
 }
 
 .edge-layer {
