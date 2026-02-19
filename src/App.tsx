@@ -1483,7 +1483,7 @@ function App() {
       return;
     }
     const target = e.target as HTMLElement;
-    if (target.closest(".canvas-zoom-controls, .canvas-runbar, .canvas-fullscreen-toggle")) {
+    if (target.closest(".canvas-zoom-controls, .canvas-runbar")) {
       return;
     }
     panRef.current = {
@@ -2396,6 +2396,13 @@ function App() {
                       −
                     </button>
                     <button
+                      onClick={() => setCanvasFullscreen((prev) => !prev)}
+                      title={canvasFullscreen ? "캔버스 기본 보기" : "캔버스 전체 보기"}
+                      type="button"
+                    >
+                      {canvasFullscreen ? "⤡" : "⤢"}
+                    </button>
+                    <button
                       className={panMode ? "is-active" : ""}
                       onClick={() => setPanMode((prev) => !prev)}
                       type="button"
@@ -2403,15 +2410,6 @@ function App() {
                       ↕
                     </button>
                   </div>
-
-                  <button
-                    className="canvas-fullscreen-toggle"
-                    onClick={() => setCanvasFullscreen((prev) => !prev)}
-                    title={canvasFullscreen ? "캔버스 기본 보기" : "캔버스 전체 보기"}
-                    type="button"
-                  >
-                    {canvasFullscreen ? "⤡" : "⤢"}
-                  </button>
 
                   <div className="canvas-runbar">
                     <button
