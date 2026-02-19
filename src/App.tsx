@@ -155,7 +155,14 @@ const GRAPH_STAGE_WIDTH = 2600;
 const GRAPH_STAGE_HEIGHT = 1800;
 const MIN_CANVAS_ZOOM = 0.6;
 const MAX_CANVAS_ZOOM = 1.8;
-const TURN_MODEL_OPTIONS = ["gpt-5-codex", "gpt-5-mini"] as const;
+const TURN_MODEL_OPTIONS = [
+  "gpt-5.3-codex",
+  "gpt-5.3-codex-spark",
+  "gpt-5.2-codex",
+  "gpt-5.1-codex-max",
+  "gpt-5.2",
+  "gpt-5.1-codex-mini",
+] as const;
 
 function formatUnknown(value: unknown): string {
   try {
@@ -448,12 +455,7 @@ function lifecycleStateLabel(state: string): string {
 function NavIcon({ tab }: { tab: WorkspaceTab }) {
   if (tab === "workflow") {
     return (
-      <svg aria-hidden="true" fill="none" height="20" viewBox="0 0 24 24" width="20">
-        <circle cx="6" cy="6" r="2.4" stroke="currentColor" strokeWidth="1.8" />
-        <circle cx="18" cy="6" r="2.4" stroke="currentColor" strokeWidth="1.8" />
-        <circle cx="12" cy="18" r="2.4" stroke="currentColor" strokeWidth="1.8" />
-        <path d="M8.2 7.2L10.3 15.8M15.8 7.2L13.7 15.8" stroke="currentColor" strokeWidth="1.8" />
-      </svg>
+      <img alt="" aria-hidden="true" className="nav-workflow-image" src="/workflow.svg" />
     );
   }
   if (tab === "history") {
@@ -559,25 +561,25 @@ function makePresetNode(
 function buildValidationPreset(): GraphData {
   const nodes: GraphNode[] = [
     makePresetNode("turn-intake", "turn", 120, 120, {
-      model: "gpt-5-mini",
+      model: "gpt-5.1-codex-mini",
       cwd: ".",
       promptTemplate:
         "질문을 분석하고 검증 계획을 3개 불릿으로 요약해줘. 입력 질문: {{input}}",
     }),
     makePresetNode("turn-search-a", "turn", 420, 40, {
-      model: "gpt-5-mini",
+      model: "gpt-5.2",
       cwd: ".",
       promptTemplate:
         "입력 내용을 바탕으로 찬성 근거를 조사해 JSON으로 정리해줘. {{input}}",
     }),
     makePresetNode("turn-search-b", "turn", 420, 220, {
-      model: "gpt-5-mini",
+      model: "gpt-5.2-codex",
       cwd: ".",
       promptTemplate:
         "입력 내용을 바탕으로 반대 근거/한계를 조사해 JSON으로 정리해줘. {{input}}",
     }),
     makePresetNode("turn-judge", "turn", 720, 120, {
-      model: "gpt-5-codex",
+      model: "gpt-5.3-codex",
       cwd: ".",
       promptTemplate:
         "근거를 종합해 엄격한 JSON만 출력해라: {\"decision\":\"PASS|REJECT\",\"finalDraft\":\"...\",\"why\":\"...\"}. 입력: {{input}}",
@@ -589,7 +591,7 @@ function buildValidationPreset(): GraphData {
       schemaJson: "{\"type\":\"object\",\"required\":[\"decision\"]}",
     }),
     makePresetNode("turn-final", "turn", 1320, 40, {
-      model: "gpt-5-codex",
+      model: "gpt-5.3-codex",
       cwd: ".",
       promptTemplate:
         "decision=PASS로 가정하고 finalDraft와 근거를 정리해 최종 답변을 한국어로 작성해줘. {{input}}",
@@ -616,25 +618,25 @@ function buildValidationPreset(): GraphData {
 function buildDevelopmentPreset(): GraphData {
   const nodes: GraphNode[] = [
     makePresetNode("turn-requirements", "turn", 120, 120, {
-      model: "gpt-5-mini",
+      model: "gpt-5.1-codex-mini",
       cwd: ".",
       promptTemplate:
         "요구사항을 기능/비기능으로 분해하고 우선순위를 매겨줘. 질문: {{input}}",
     }),
     makePresetNode("turn-architecture", "turn", 420, 40, {
-      model: "gpt-5-mini",
+      model: "gpt-5.2",
       cwd: ".",
       promptTemplate:
         "입력을 바탕으로 풀스택 아키텍처를 제안해 JSON으로 출력해줘. {{input}}",
     }),
     makePresetNode("turn-implementation", "turn", 420, 220, {
-      model: "gpt-5-mini",
+      model: "gpt-5.2-codex",
       cwd: ".",
       promptTemplate:
         "구현 단계 계획(파일 단위 포함)을 작성해줘. 입력: {{input}}",
     }),
     makePresetNode("turn-evaluator", "turn", 720, 120, {
-      model: "gpt-5-codex",
+      model: "gpt-5.3-codex",
       cwd: ".",
       promptTemplate:
         "계획을 검토하고 JSON만 출력: {\"decision\":\"PASS|REJECT\",\"finalDraft\":\"...\",\"risk\":\"...\"}. 입력: {{input}}",
@@ -646,7 +648,7 @@ function buildDevelopmentPreset(): GraphData {
       schemaJson: "{\"type\":\"object\",\"required\":[\"decision\"]}",
     }),
     makePresetNode("turn-final-dev", "turn", 1320, 40, {
-      model: "gpt-5-codex",
+      model: "gpt-5.3-codex",
       cwd: ".",
       promptTemplate:
         "실행 가능한 최종 개발 가이드를 산출해줘. 코드/테스트/배포 체크리스트 포함. {{input}}",
@@ -1298,13 +1300,6 @@ function App() {
     setConnectFromNodeId("");
   }
 
-  function deleteEdge(index: number) {
-    setGraph((prev) => ({
-      ...prev,
-      edges: prev.edges.filter((_, i) => i !== index),
-    }));
-  }
-
   function clampCanvasZoom(nextZoom: number): number {
     return Math.max(MIN_CANVAS_ZOOM, Math.min(MAX_CANVAS_ZOOM, nextZoom));
   }
@@ -1400,6 +1395,34 @@ function App() {
       return;
     }
     zoomAtClientPoint(nextZoom, e.clientX, e.clientY);
+    setStatus(`그래프 배율 ${Math.round(nextZoom * 100)}%`);
+  }
+
+  function zoomAtCanvasCenter(nextZoom: number) {
+    const canvas = graphCanvasRef.current;
+    if (!canvas) {
+      setCanvasZoom(nextZoom);
+      return;
+    }
+    const rect = canvas.getBoundingClientRect();
+    zoomAtClientPoint(nextZoom, rect.left + rect.width / 2, rect.top + rect.height / 2);
+  }
+
+  function onCanvasZoomIn() {
+    const nextZoom = clampCanvasZoom(canvasZoom * 1.08);
+    if (nextZoom === canvasZoom) {
+      return;
+    }
+    zoomAtCanvasCenter(nextZoom);
+    setStatus(`그래프 배율 ${Math.round(nextZoom * 100)}%`);
+  }
+
+  function onCanvasZoomOut() {
+    const nextZoom = clampCanvasZoom(canvasZoom * 0.92);
+    if (nextZoom === canvasZoom) {
+      return;
+    }
+    zoomAtCanvasCenter(nextZoom);
     setStatus(`그래프 배율 ${Math.round(nextZoom * 100)}%`);
   }
 
@@ -2203,69 +2226,6 @@ function App() {
                     value={workflowQuestion}
                   />
                 </label>
-                <div className="toolbar-groups">
-                  <div className="button-row">
-                    <button onClick={() => addNode("turn")} type="button">
-                      + 응답 에이전트
-                    </button>
-                    <button onClick={() => addNode("transform")} type="button">
-                      + 데이터 변환
-                    </button>
-                    <button onClick={() => addNode("gate")} type="button">
-                      + 분기
-                    </button>
-                    <button
-                      disabled={!connectFromNodeId}
-                      onClick={() => setConnectFromNodeId("")}
-                      type="button"
-                    >
-                      연결 취소
-                    </button>
-                  </div>
-
-                  <div className="button-row">
-                    <button onClick={() => applyPreset("validation")} type="button">
-                      검증형 5에이전트
-                    </button>
-                    <button onClick={() => applyPreset("development")} type="button">
-                      개발형 5에이전트
-                    </button>
-                  </div>
-
-                  <div className="save-row">
-                    <input
-                      value={graphFileName}
-                      onChange={(e) => setGraphFileName(e.currentTarget.value)}
-                      placeholder="저장할 그래프 파일 이름"
-                    />
-                    <button onClick={saveGraph} type="button">
-                      저장
-                    </button>
-                    <button onClick={() => loadGraph()} type="button">
-                      불러오기
-                    </button>
-                    <button onClick={refreshGraphFiles} type="button">
-                      새로고침
-                    </button>
-                    <select
-                      className="graph-file-select"
-                      onChange={(e) => {
-                        const value = e.currentTarget.value;
-                        if (value) {
-                          loadGraph(value);
-                        }
-                      }}
-                      value=""
-                    >
-                      <option value="">그래프 파일 선택</option>
-                      {graphFiles.map((file) => (
-                        <option key={file} value={file}>
-                          {file}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
               </div>
 
               <div
@@ -2279,11 +2239,13 @@ function App() {
                 tabIndex={0}
               >
                 <div className="canvas-overlay">
-                  <div className="canvas-left-tools">
-                    <button type="button">□</button>
-                    <button type="button">✦</button>
-                    <button type="button">⌁</button>
-                    <button type="button">⚙</button>
+                  <div className="canvas-zoom-controls">
+                    <button onClick={onCanvasZoomIn} type="button">
+                      +
+                    </button>
+                    <button onClick={onCanvasZoomOut} type="button">
+                      −
+                    </button>
                   </div>
 
                   <div className="canvas-runbar">
@@ -2389,20 +2351,6 @@ function App() {
                   </div>
                 </div>
               </div>
-
-              <div className="edge-list">
-                {graph.edges.length === 0 && <div>(연결 없음)</div>}
-                {graph.edges.map((edge, index) => (
-                  <div className="edge-item" key={`${edge.from.nodeId}-${edge.to.nodeId}-${index}`}>
-                    <code>
-                      {edge.from.nodeId}.출력 -&gt; {edge.to.nodeId}.입력
-                    </code>
-                    <button onClick={() => deleteEdge(index)} type="button">
-                      제거
-                    </button>
-                  </div>
-                ))}
-              </div>
             </section>
 
             <aside className="inspector-pane">
@@ -2431,6 +2379,71 @@ function App() {
                 {inspectorTab === "config" && (
                   <div className="inspector-section">
                     <h2>노드 설정</h2>
+                    <section className="inspector-block">
+                      <h3>그래프 도구</h3>
+                      <div className="button-row">
+                        <button onClick={() => addNode("turn")} type="button">
+                          + 응답 에이전트
+                        </button>
+                        <button onClick={() => addNode("transform")} type="button">
+                          + 데이터 변환
+                        </button>
+                        <button onClick={() => addNode("gate")} type="button">
+                          + 분기
+                        </button>
+                        <button
+                          disabled={!connectFromNodeId}
+                          onClick={() => setConnectFromNodeId("")}
+                          type="button"
+                        >
+                          연결 취소
+                        </button>
+                      </div>
+
+                      <div className="button-row">
+                        <button onClick={() => applyPreset("validation")} type="button">
+                          검증형 5에이전트
+                        </button>
+                        <button onClick={() => applyPreset("development")} type="button">
+                          개발형 5에이전트
+                        </button>
+                      </div>
+
+                      <div className="save-row">
+                        <input
+                          value={graphFileName}
+                          onChange={(e) => setGraphFileName(e.currentTarget.value)}
+                          placeholder="저장할 그래프 파일 이름"
+                        />
+                        <button onClick={saveGraph} type="button">
+                          저장
+                        </button>
+                        <button onClick={() => loadGraph()} type="button">
+                          불러오기
+                        </button>
+                        <button onClick={refreshGraphFiles} type="button">
+                          새로고침
+                        </button>
+                        <select
+                          className="graph-file-select"
+                          onChange={(e) => {
+                            const value = e.currentTarget.value;
+                            if (value) {
+                              loadGraph(value);
+                            }
+                          }}
+                          value=""
+                        >
+                          <option value="">그래프 파일 선택</option>
+                          {graphFiles.map((file) => (
+                            <option key={file} value={file}>
+                              {file}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </section>
+
                     {!selectedNode && <div className="inspector-empty">노드를 선택하세요.</div>}
                     {selectedNode && (
                       <>
@@ -2595,14 +2608,6 @@ function App() {
                           <button onClick={() => setSelectedNodeId(node.id)} type="button">
                             {nodeTypeLabel(node.type)} · {node.id}
                           </button>
-                        </li>
-                      ))}
-                    </ul>
-                    <h3>엣지 ({graph.edges.length})</h3>
-                    <ul>
-                      {graph.edges.map((edge, index) => (
-                        <li key={`layer-edge-${index}`}>
-                          {edge.from.nodeId} → {edge.to.nodeId}
                         </li>
                       ))}
                     </ul>

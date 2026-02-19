@@ -1,28 +1,9 @@
 @font-face {
-  font-family: "1984DialogueBody";
-  src: url("/fonts/1984-body-light.otf") format("opentype");
-  font-weight: 300;
-  font-style: normal;
-  font-display: swap;
-  unicode-range: U+1100-11FF, U+3130-318F, U+AC00-D7A3, U+A960-A97F, U+D7B0-D7FF;
-}
-
-@font-face {
-  font-family: "1984DialogueBody";
-  src: url("/fonts/1984-body-regular.otf") format("opentype");
-  font-weight: 400;
-  font-style: normal;
-  font-display: swap;
-  unicode-range: U+1100-11FF, U+3130-318F, U+AC00-D7A3, U+A960-A97F, U+D7B0-D7FF;
-}
-
-@font-face {
-  font-family: "1984DialogueBody";
-  src: url("/fonts/1984-body-bold.otf") format("opentype");
+  font-family: "Galmuri14";
+  src: url("/fonts/galmuri14.ttf") format("truetype");
   font-weight: 700;
   font-style: normal;
   font-display: swap;
-  unicode-range: U+1100-11FF, U+3130-318F, U+AC00-D7A3, U+A960-A97F, U+D7B0-D7FF;
 }
 
 @font-face {
@@ -61,7 +42,8 @@
 }
 
 :root {
-  font-family: "1984DialogueBody", "BasicallyAMono", "IBM Plex Sans", "Noto Sans KR", sans-serif;
+  font-family: "Galmuri14", "BasicallyAMono", "IBM Plex Sans", "Noto Sans KR", sans-serif;
+  font-size: 13px;
   letter-spacing: -0.7px;
   color: #1b2229;
   background: #d9dbe0;
@@ -140,8 +122,12 @@ h3,
 h4,
 h5,
 h6 {
-  font-family: "DNFBitBitV2", "1984DialogueBody", sans-serif;
+  font-family: "DNFBitBitV2", "Galmuri14", sans-serif;
   letter-spacing: -0.7px;
+}
+
+h3 {
+  font-size: 0.9rem;
 }
 
 .app-shell {
@@ -203,6 +189,12 @@ h6 {
 .nav-icon svg {
   width: 20px;
   height: 20px;
+}
+
+.nav-workflow-image {
+  width: 20px;
+  height: 20px;
+  object-fit: contain;
 }
 
 .nav-label {
@@ -305,7 +297,7 @@ h6 {
   height: calc(100% - 20px);
   margin: 10px;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 330px;
+  grid-template-columns: minmax(0, 1fr) 300px;
   gap: 10px;
   overflow: hidden;
 }
@@ -314,7 +306,7 @@ h6 {
   min-width: 0;
   min-height: 0;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-rows: auto minmax(0, 1fr);
   gap: 10px;
   padding: 12px;
   border: 1px solid #e2e6eb;
@@ -507,15 +499,13 @@ h6 {
 }
 
 .canvas-overlay {
-  position: sticky;
-  top: 0;
-  left: 0;
-  height: 0;
+  position: absolute;
+  inset: 14px;
   z-index: 12;
   pointer-events: none;
 }
 
-.canvas-left-tools {
+.canvas-zoom-controls {
   position: absolute;
   left: 0;
   top: 0;
@@ -526,10 +516,10 @@ h6 {
   border-radius: 5px;
   background: rgba(255, 255, 255, 0.96);
   box-shadow: 0 4px 14px rgba(21, 31, 39, 0.08);
-  z-index: 9;
+  z-index: 11;
 }
 
-.canvas-left-tools button,
+.canvas-zoom-controls button,
 .canvas-runbar button {
   width: 40px;
   height: 40px;
@@ -538,16 +528,10 @@ h6 {
   pointer-events: auto;
 }
 
-.canvas-left-tools button.is-active {
-  background: #eaf1ff;
-  border-color: #b9cbf3;
-  color: #24509f;
-}
-
 .canvas-runbar {
   position: absolute;
   left: 50%;
-  top: 0;
+  bottom: 0;
   transform: translateX(-50%);
   display: flex;
   gap: 8px;
@@ -569,21 +553,6 @@ h6 {
 .canvas-runbar button {
   width: auto;
   min-width: 40px;
-}
-
-.edge-list {
-  max-height: 106px;
-  overflow: auto;
-  display: grid;
-  gap: 5px;
-}
-
-.edge-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  font-size: 0.8rem;
 }
 
 .inspector-pane {
@@ -695,6 +664,12 @@ h6 {
 .inspector-section select,
 .inspector-section textarea {
   width: 100%;
+}
+
+.inspector-section .save-row input,
+.inspector-section .save-row select {
+  min-width: 0;
+  flex: 1 1 100%;
 }
 
 .form-grid,
