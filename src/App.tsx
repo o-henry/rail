@@ -160,6 +160,7 @@ const NODE_WIDTH = 240;
 const NODE_HEIGHT = 136;
 const GRAPH_STAGE_WIDTH = 2600;
 const GRAPH_STAGE_HEIGHT = 1800;
+const GRAPH_PAN_PADDING = 900;
 const MIN_CANVAS_ZOOM = 0.6;
 const MAX_CANVAS_ZOOM = 1.8;
 const TURN_MODEL_OPTIONS = [
@@ -1378,9 +1379,10 @@ function App() {
       return null;
     }
     const rect = canvas.getBoundingClientRect();
+    const stageOffset = GRAPH_PAN_PADDING / 2;
     return {
-      x: (clientX - rect.left + canvas.scrollLeft) / canvasZoom,
-      y: (clientY - rect.top + canvas.scrollTop) / canvasZoom,
+      x: (clientX - rect.left + canvas.scrollLeft - stageOffset) / canvasZoom,
+      y: (clientY - rect.top + canvas.scrollTop - stageOffset) / canvasZoom,
     };
   }
 
@@ -1392,10 +1394,11 @@ function App() {
     }
 
     const rect = canvas.getBoundingClientRect();
+    const stageOffset = GRAPH_PAN_PADDING / 2;
     const pointerX = clientX - rect.left + canvas.scrollLeft;
     const pointerY = clientY - rect.top + canvas.scrollTop;
-    const logicalX = pointerX / canvasZoom;
-    const logicalY = pointerY / canvasZoom;
+    const logicalX = (pointerX - stageOffset) / canvasZoom;
+    const logicalY = (pointerY - stageOffset) / canvasZoom;
 
     setCanvasZoom(nextZoom);
     requestAnimationFrame(() => {
@@ -1403,8 +1406,8 @@ function App() {
       if (!currentCanvas) {
         return;
       }
-      currentCanvas.scrollLeft = logicalX * nextZoom - (clientX - rect.left);
-      currentCanvas.scrollTop = logicalY * nextZoom - (clientY - rect.top);
+      currentCanvas.scrollLeft = logicalX * nextZoom + stageOffset - (clientX - rect.left);
+      currentCanvas.scrollTop = logicalY * nextZoom + stageOffset - (clientY - rect.top);
     });
   }
 
@@ -1486,6 +1489,7 @@ function App() {
     if (target.closest(".canvas-zoom-controls, .canvas-runbar")) {
       return;
     }
+    e.preventDefault();
     panRef.current = {
       startX: e.clientX,
       startY: e.clientY,
@@ -2392,8 +2396,10 @@ function App() {
                       {canvasFullscreen ? "⤡" : "⤢"}
                     </button>
                     <button
+                      aria-label="이동"
                       className={panMode ? "is-active" : ""}
                       onClick={() => setPanMode((prev) => !prev)}
+                      title="캔버스 이동"
                       type="button"
                     >
                       ↕
@@ -2409,7 +2415,7 @@ function App() {
                       title="실행"
                       type="button"
                     >
-                      ▶
+                      <img alt="" aria-hidden="true" className="canvas-icon-image" src="/canvas-play.svg" />
                     </button>
                     <button
                       aria-label="중지"
@@ -2419,7 +2425,7 @@ function App() {
                       title="중지"
                       type="button"
                     >
-                      ■
+                      <img alt="" aria-hidden="true" className="canvas-icon-image" src="/canvas-stop.svg" />
                     </button>
                     <button
                       aria-label="되돌리기"
@@ -2429,7 +2435,7 @@ function App() {
                       title="되돌리기"
                       type="button"
                     >
-                      ↶
+                      <img alt="" aria-hidden="true" className="canvas-icon-image" src="/canvas-undo.svg" />
                     </button>
                     <button
                       aria-label="다시하기"
@@ -2439,7 +2445,7 @@ function App() {
                       title="다시하기"
                       type="button"
                     >
-                      ↷
+                      <img alt="" aria-hidden="true" className="canvas-icon-image" src="/canvas-replay.svg" />
                     </button>
                   </div>
                 </div>
@@ -2447,13 +2453,15 @@ function App() {
                 <div
                   className="graph-stage-shell"
                   style={{
-                    width: Math.round(GRAPH_STAGE_WIDTH * canvasZoom),
-                    height: Math.round(GRAPH_STAGE_HEIGHT * canvasZoom),
+                    width: Math.round(GRAPH_STAGE_WIDTH * canvasZoom + GRAPH_PAN_PADDING),
+                    height: Math.round(GRAPH_STAGE_HEIGHT * canvasZoom + GRAPH_PAN_PADDING),
                   }}
                 >
                   <div
                     className="graph-stage"
                     style={{
+                      left: GRAPH_PAN_PADDING / 2,
+                      top: GRAPH_PAN_PADDING / 2,
                       transform: `scale(${canvasZoom})`,
                       width: GRAPH_STAGE_WIDTH,
                       height: GRAPH_STAGE_HEIGHT,
@@ -2539,6 +2547,63 @@ function App() {
               </div>
 
               <div className="canvas-topbar">
+                <div className="toolbar-groups">
+                  <div className="button-row">
+                    <button onClick={() => addNode("turn")} type="button">
+                      + 응답 에이전트
+                    </button>
+                    <button onClick={() => addNode("transform")} type="button">
+                      + 데이터 변환
+                    </button>
+                    <button onClick={() => addNode("gate")} type="button">
+                      + 분기
+                    </button>
+                    <button disabled={!connectFromNodeId} onClick={() => setConnectFromNodeId("")} type="button">
+                      연결 취소
+                    </button>
+                    <button onClick={() => applyPreset("validation")} type="button">
+                      검증형 5에이전트
+                    </button>
+                    <button onClick={() => applyPreset("development")} type="button">
+                      개발형 5에이전트
+                    </button>
+                  </div>
+
+                  <div className="save-row">
+                    <input
+                      value={graphFileName}
+                      onChange={(e) => setGraphFileName(e.currentTarget.value)}
+                      placeholder="저장할 그래프 파일 이름"
+                    />
+                    <button onClick={saveGraph} type="button">
+                      저장
+                    </button>
+                    <button onClick={() => loadGraph()} type="button">
+                      불러오기
+                    </button>
+                    <button onClick={refreshGraphFiles} type="button">
+                      새로고침
+                    </button>
+                    <select
+                      className="graph-file-select modern-select"
+                      onChange={(e) => {
+                        const value = e.currentTarget.value;
+                        if (value) {
+                          loadGraph(value);
+                        }
+                      }}
+                      value=""
+                    >
+                      <option value="">그래프 파일 선택</option>
+                      {graphFiles.map((file) => (
+                        <option key={file} value={file}>
+                          {file}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
                 <label className="question-input">
                   질문 입력
                   <textarea
@@ -2564,71 +2629,6 @@ function App() {
               </div>
               <div className="inspector-content">
                 <div className="inspector-section">
-                  <section className="inspector-block">
-                    <h3>그래프 도구</h3>
-                    <div className="button-row">
-                      <button onClick={() => addNode("turn")} type="button">
-                        + 응답 에이전트
-                      </button>
-                      <button onClick={() => addNode("transform")} type="button">
-                        + 데이터 변환
-                      </button>
-                      <button onClick={() => addNode("gate")} type="button">
-                        + 분기
-                      </button>
-                      <button
-                        disabled={!connectFromNodeId}
-                        onClick={() => setConnectFromNodeId("")}
-                        type="button"
-                      >
-                        연결 취소
-                      </button>
-                    </div>
-
-                    <div className="button-row">
-                      <button onClick={() => applyPreset("validation")} type="button">
-                        검증형 5에이전트
-                      </button>
-                      <button onClick={() => applyPreset("development")} type="button">
-                        개발형 5에이전트
-                      </button>
-                    </div>
-
-                    <div className="save-row">
-                      <input
-                        value={graphFileName}
-                        onChange={(e) => setGraphFileName(e.currentTarget.value)}
-                        placeholder="저장할 그래프 파일 이름"
-                      />
-                      <button onClick={saveGraph} type="button">
-                        저장
-                      </button>
-                      <button onClick={() => loadGraph()} type="button">
-                        불러오기
-                      </button>
-                      <button onClick={refreshGraphFiles} type="button">
-                        새로고침
-                      </button>
-                      <select
-                        className="graph-file-select modern-select"
-                        onChange={(e) => {
-                          const value = e.currentTarget.value;
-                          if (value) {
-                            loadGraph(value);
-                          }
-                        }}
-                        value=""
-                      >
-                        <option value="">그래프 파일 선택</option>
-                        {graphFiles.map((file) => (
-                          <option key={file} value={file}>
-                            {file}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </section>
-
                   {!selectedNode && <div className="inspector-empty">노드를 선택하세요.</div>}
                   {selectedNode && (
                     <>

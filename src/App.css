@@ -150,28 +150,31 @@ h3 {
 
 .left-nav {
   position: absolute;
-  top: 82px;
-  left: 12px;
-  bottom: 12px;
-  width: 68px;
+  top: 50%;
+  left: 14px;
+  bottom: auto;
+  transform: translateY(-50%);
+  width: 60px;
   z-index: 30;
-  border-radius: 12px;
-  background: var(--surface);
-  padding: 10px 8px;
+  border-radius: 16px;
+  background: rgba(230, 236, 245, 0.82);
+  backdrop-filter: blur(8px);
+  padding: 8px 6px;
   display: grid;
-  grid-template-rows: auto 1fr;
-  gap: 12px;
+  grid-template-rows: 1fr;
+  place-items: center;
+  gap: 0;
 }
 
 .brand-spacer {
-  /* height: 10px; */
+  display: none;
 }
 
 .nav-list {
   display: grid;
-  gap: 8px;
+  gap: 10px;
   justify-items: center;
-  align-content: start;
+  align-content: center;
 }
 
 .nav-list button {
@@ -235,7 +238,7 @@ h3 {
 }
 
 .workspace.canvas-fullscreen-active .left-nav {
-  top: 12px;
+  top: 50%;
 }
 
 .workspace-header {
@@ -441,7 +444,7 @@ h3 {
 }
 
 .graph-stage {
-  position: relative;
+  position: absolute;
   transform-origin: top left;
 }
 
@@ -641,6 +644,17 @@ h3 {
 
 .canvas-runbar .canvas-icon-btn {
   letter-spacing: 0;
+}
+
+.canvas-icon-image {
+  width: 15px;
+  height: 15px;
+  display: block;
+  object-fit: contain;
+}
+
+.canvas-runbar .play .canvas-icon-image {
+  filter: brightness(0) invert(1);
 }
 
 .inspector-pane {
@@ -921,9 +935,9 @@ pre {
 
   .left-nav {
     left: 8px;
-    top: 72px;
-    width: 56px;
-    padding: 8px 6px;
+    top: 50%;
+    width: 52px;
+    padding: 6px 4px;
   }
 
   .nav-list {
