@@ -26,16 +26,35 @@
 }
 
 @font-face {
-  font-family: "Kanok";
-  src: url("/fonts/kanok-regular.otf") format("opentype");
+  font-family: "DMMono";
+  src: url("/fonts/dm-mono-light.ttf") format("truetype");
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+0000-00FF, U+0100-024F, U+1E00-1EFF;
+}
+
+@font-face {
+  font-family: "DMMono";
+  src: url("/fonts/dm-mono-regular.ttf") format("truetype");
   font-weight: 400;
   font-style: normal;
   font-display: swap;
   unicode-range: U+0000-00FF, U+0100-024F, U+1E00-1EFF;
 }
 
+@font-face {
+  font-family: "DMMono";
+  src: url("/fonts/dm-mono-medium.ttf") format("truetype");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+0000-00FF, U+0100-024F, U+1E00-1EFF;
+}
+
 :root {
-  font-family: "1984DialogueBody", "Kanok", "IBM Plex Sans", "Noto Sans KR", sans-serif;
+  font-family: "1984DialogueBody", "DMMono", "IBM Plex Sans", "Noto Sans KR", sans-serif;
+  letter-spacing: -0.7px;
   color: #1b2229;
   background: #d9dbe0;
 }
