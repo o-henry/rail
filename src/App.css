@@ -175,7 +175,7 @@ p {
 .workspace {
   border: 1px solid #cfd4dc;
   border-radius: 20px;
-  background: #f7f8fa;
+  background: #fcfcfd;
   min-width: 0;
   overflow: hidden;
   display: grid;
@@ -272,6 +272,7 @@ p {
   gap: 10px;
   padding: 12px;
   border-right: 1px solid #e2e6eb;
+  background: #fcfcfd;
 }
 
 .canvas-topbar {
@@ -493,7 +494,7 @@ p {
   display: grid;
   align-content: start;
   gap: 10px;
-  background: #f4f5f7;
+  background: #fcfcfd;
 }
 
 .inspector-head {
@@ -571,7 +572,7 @@ p {
 .panel-card {
   border: 1px solid #dde2e8;
   border-radius: 14px;
-  background: #ffffff;
+  background: #fcfcfd;
   padding: 12px;
 }
 
