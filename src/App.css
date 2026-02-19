@@ -25,8 +25,17 @@
   unicode-range: U+1100-11FF, U+3130-318F, U+AC00-D7A3, U+A960-A97F, U+D7B0-D7FF;
 }
 
+@font-face {
+  font-family: "Kanok";
+  src: url("/fonts/kanok-regular.otf") format("opentype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+0000-00FF, U+0100-024F, U+1E00-1EFF;
+}
+
 :root {
-  font-family: "1984DialogueBody", "IBM Plex Sans", "Noto Sans KR", sans-serif;
+  font-family: "1984DialogueBody", "Kanok", "IBM Plex Sans", "Noto Sans KR", sans-serif;
   color: #0f1f25;
   background: #f5f7f9;
 }
