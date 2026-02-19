@@ -1006,6 +1006,7 @@ function App() {
   const [canvasZoom, setCanvasZoom] = useState(1);
   const [panMode, setPanMode] = useState(false);
   const [canvasFullscreen, setCanvasFullscreen] = useState(false);
+  const [isNavClosed, setIsNavClosed] = useState(false);
   const [undoStack, setUndoStack] = useState<GraphData[]>([]);
   const [redoStack, setRedoStack] = useState<GraphData[]>([]);
 
@@ -2497,10 +2498,75 @@ function App() {
   const isActiveTab = (tab: WorkspaceTab): boolean => workspaceTab === tab;
 
   return (
-    <main className={`app-shell ${canvasFullscreen ? "canvas-fullscreen-mode" : ""}`}>
-      <aside className="left-nav">
-        <div className="brand-spacer" />
-        <nav className="nav-list">
+    <main
+      className={`app-shell ${canvasFullscreen ? "canvas-fullscreen-mode" : ""}`}
+      style={isNavClosed ? { gridTemplateColumns: "0 minmax(0, 1fr)", gap: 0 } : undefined}
+    >
+      {isNavClosed && (
+        <button
+          onClick={() => setIsNavClosed(false)}
+          style={{
+            position: "fixed",
+            top: 12,
+            left: 12,
+            zIndex: 60,
+            width: 34,
+            height: 34,
+            padding: 0,
+            borderRadius: 8,
+            background: "rgba(255,255,255,0.94)",
+            border: "1px solid rgba(205,212,224,0.95)",
+            boxShadow: "0 4px 10px rgba(16, 23, 31, 0.14)",
+          }}
+          title="왼쪽 메뉴 열기"
+          type="button"
+        >
+          <img alt="" aria-hidden="true" src="/nav-open.svg" style={{ width: 16, height: 16 }} />
+        </button>
+      )}
+      <aside
+        className="left-nav"
+        style={
+          isNavClosed
+            ? {
+                width: 0,
+                minWidth: 0,
+                padding: 0,
+                border: 0,
+                opacity: 0,
+                overflow: "hidden",
+                pointerEvents: "none",
+              }
+            : undefined
+        }
+      >
+        <button
+          onClick={() => setIsNavClosed(true)}
+          style={{
+            width: 34,
+            height: 34,
+            padding: 0,
+            borderRadius: 8,
+            justifySelf: "center",
+            background: "rgba(255,255,255,0.94)",
+            border: "1px solid rgba(205,212,224,0.95)",
+            boxShadow: "0 2px 8px rgba(16, 23, 31, 0.12)",
+            display: isNavClosed ? "none" : "inline-grid",
+            placeItems: "center",
+          }}
+          title="왼쪽 메뉴 닫기"
+          type="button"
+        >
+          <img alt="" aria-hidden="true" src="/nav-closed.svg" style={{ width: 16, height: 16 }} />
+        </button>
+        <nav
+          className="nav-list"
+          style={{
+            alignContent: "center",
+            height: "100%",
+            display: isNavClosed ? "none" : "grid",
+          }}
+        >
           <button
             className={isActiveTab("workflow") ? "is-active" : ""}
             onClick={() => setWorkspaceTab("workflow")}
