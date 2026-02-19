@@ -254,32 +254,10 @@ h3 {
   background: var(--surface);
   border-bottom: 0;
   padding: 12px 14px;
-  display: grid;
-  grid-template-columns: 190px minmax(0, 1fr) auto;
+  display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 14px;
-}
-
-.header-title h1 {
-  font-size: 1.12rem;
-  letter-spacing: 0.01em;
-}
-
-.header-title p {
-  margin-top: 4px;
-  color: #6d7682;
-  font-size: 0.76rem;
-}
-
-.header-search-wrap {
-  min-width: 0;
-}
-
-.header-search {
-  width: 100%;
-  background: #dfe5ee;
-  height: var(--header-control-height);
-  padding: 0 10px;
 }
 
 .header-actions {
@@ -920,12 +898,7 @@ pre {
 }
 
 @media (max-width: 1400px) {
-  .workspace-header {
-    grid-template-columns: 160px minmax(0, 1fr);
-  }
-
   .header-actions {
-    grid-column: 1 / -1;
     justify-content: flex-end;
   }
 }

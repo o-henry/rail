@@ -936,7 +936,6 @@ function App() {
   const defaultCwd = useMemo(() => ".", []);
 
   const [workspaceTab, setWorkspaceTab] = useState<WorkspaceTab>("workflow");
-  const [headerSearch, setHeaderSearch] = useState("");
   const [isInspectorWide, setIsInspectorWide] = useState(false);
 
   const [cwd, setCwd] = useState(defaultCwd);
@@ -2511,14 +2510,6 @@ function App() {
       <section className={`workspace ${canvasFullscreen ? "canvas-fullscreen-active" : ""}`}>
 
         {!canvasFullscreen && <header className="workspace-header">
-          <div className="header-search-wrap">
-            <input
-              className="header-search"
-              onChange={(e) => setHeaderSearch(e.currentTarget.value)}
-              placeholder="노드 검색"
-              value={headerSearch}
-            />
-          </div>
           <div className="header-actions">
             <button className="primary-action" type="button">
               생성
@@ -2660,14 +2651,6 @@ function App() {
                     </svg>
 
                     {graph.nodes.map((node) => {
-                      const keyword = headerSearch.trim().toLowerCase();
-                      if (
-                        keyword &&
-                        !node.id.toLowerCase().includes(keyword) &&
-                        !nodeTypeLabel(node.type).toLowerCase().includes(keyword)
-                      ) {
-                        return null;
-                      }
                       const runState = nodeStates[node.id];
                       const nodeStatus = runState?.status ?? "idle";
                       return (
