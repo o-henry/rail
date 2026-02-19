@@ -2539,11 +2539,14 @@ function App() {
             background: "rgba(255,255,255,0.94)",
             border: "1px solid rgba(205,212,224,0.95)",
             boxShadow: "0 4px 10px rgba(16, 23, 31, 0.14)",
+            display: "inline-grid",
+            placeItems: "center",
+            lineHeight: 0,
           }}
           title="왼쪽 메뉴 열기"
           type="button"
         >
-          <img alt="" aria-hidden="true" src="/nav-open.svg" style={{ width: 16, height: 16 }} />
+          <img alt="" aria-hidden="true" src="/nav-open.svg" style={{ width: 16, height: 16, display: "block" }} />
         </button>
       )}
       <aside className="left-nav" style={leftNavStyle}>
@@ -2560,11 +2563,17 @@ function App() {
             boxShadow: "0 2px 8px rgba(16, 23, 31, 0.12)",
             display: isNavClosed ? "none" : "inline-grid",
             placeItems: "center",
+            lineHeight: 0,
           }}
           title="왼쪽 메뉴 닫기"
           type="button"
         >
-          <img alt="" aria-hidden="true" src="/nav-closed.svg" style={{ width: 16, height: 16 }} />
+          <img
+            alt=""
+            aria-hidden="true"
+            src="/nav-closed.svg"
+            style={{ width: 16, height: 16, display: "block" }}
+          />
         </button>
         <nav
           className="nav-list"
