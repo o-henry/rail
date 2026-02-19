@@ -22,3 +22,9 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Runtime graph orchestration artifacts
+runs/
+graphs/
+src-tauri/runs/
+src-tauri/graphs/
