@@ -47,7 +47,7 @@ type PendingApproval = {
   params: unknown;
 };
 
-type ViewMode = "graph" | "dev";
+type WorkspaceTab = "workflow" | "history" | "settings" | "dev";
 type NodeType = "turn" | "transform" | "gate" | "search" | "command";
 type PortType = "in" | "out";
 
@@ -533,7 +533,7 @@ function isTurnTerminalEvent(method: string, params: unknown): TurnTerminal | nu
 function App() {
   const defaultCwd = useMemo(() => ".", []);
 
-  const [viewMode, setViewMode] = useState<ViewMode>("graph");
+  const [workspaceTab, setWorkspaceTab] = useState<WorkspaceTab>("workflow");
 
   const [cwd, setCwd] = useState(defaultCwd);
   const [model, setModel] = useState("gpt-5-codex");
@@ -1788,442 +1788,482 @@ function App() {
     : [];
 
   return (
-    <main className="app">
-      <section className="auth-banner">
-        <div className="auth-inline">
-          <span>Current authMode</span>
-          <strong>{authMode}</strong>
-        </div>
-        <div className="auth-inline">
-          <button onClick={() => setViewMode("graph")} type="button">
-            Graph
+    <main className="app-shell">
+      <aside className="left-nav">
+        <div className="brand">Rail</div>
+        <nav className="nav-list">
+          <button
+            className={workspaceTab === "workflow" ? "is-active" : ""}
+            onClick={() => setWorkspaceTab("workflow")}
+            type="button"
+          >
+            Workflow
           </button>
-          <button onClick={() => setViewMode("dev")} type="button">
+          <button
+            className={workspaceTab === "history" ? "is-active" : ""}
+            onClick={() => setWorkspaceTab("history")}
+            type="button"
+          >
+            History
+          </button>
+          <button
+            className={workspaceTab === "settings" ? "is-active" : ""}
+            onClick={() => setWorkspaceTab("settings")}
+            type="button"
+          >
+            Settings
+          </button>
+          <button
+            className={workspaceTab === "dev" ? "is-active" : ""}
+            onClick={() => setWorkspaceTab("dev")}
+            type="button"
+          >
             Dev
           </button>
+        </nav>
+        <div className="left-meta">
+          <div>authMode: {authMode}</div>
+          <div>engine: {engineStarted ? "ready" : "stopped"}</div>
+          <div>runs: {runFiles.length}</div>
         </div>
-      </section>
+      </aside>
 
-      <h1>Graph Orchestrator MVP</h1>
-
-      <section className="controls">
-        <label>
-          CWD
-          <input value={cwd} onChange={(e) => setCwd(e.currentTarget.value)} />
-        </label>
-
-        <label>
-          Model
-          <input value={model} onChange={(e) => setModel(e.currentTarget.value)} />
-        </label>
-
-        <div className="button-row">
-          <button onClick={onStartEngine} disabled={running || isGraphRunning} type="button">
-            Engine Start
-          </button>
-          <button onClick={onStopEngine} type="button">
-            Engine Stop
-          </button>
-          <button onClick={onLoginChatgpt} disabled={running || isGraphRunning} type="button">
-            Login ChatGPT
-          </button>
-        </div>
-      </section>
-
-      <section className="meta">
-        <div>engineStarted: {String(engineStarted)}</div>
-        <div>status: {status}</div>
-        <div>loginCompleted: {String(loginCompleted)}</div>
-        <div>pendingApprovals: {pendingApprovals.length}</div>
-        <div>last item/completed status: {lastCompletedStatus}</div>
-        <div>saved runs: {runFiles.length}</div>
-        {lastSavedRunFile && <div>last run file: {lastSavedRunFile}</div>}
-        {authUrl && (
+      <section className="workspace">
+        <header className="workspace-header">
           <div>
-            authUrl: <code>{authUrl}</code>{" "}
-            <button onClick={onCopyAuthUrl} type="button">
-              Copy
-            </button>
+            <h1>Rail Workflow Studio</h1>
+            <p>{status}</p>
           </div>
-        )}
+          <div className="auth-inline">
+            <span>authMode</span>
+            <strong>{authMode}</strong>
+          </div>
+        </header>
+
         {error && <div className="error">error: {error}</div>}
-      </section>
 
-      {viewMode === "graph" && (
-        <section className="graph-layout">
-          <article className="graph-main">
-            <h2>Graph Editor</h2>
-            <div className="button-row">
-              <button onClick={() => addNode("turn")} type="button">
-                + TurnNode
-              </button>
-              <button onClick={() => addNode("search")} type="button">
-                + SearchNode
-              </button>
-              <button onClick={() => addNode("transform")} type="button">
-                + TransformNode
-              </button>
-              <button onClick={() => addNode("command")} type="button">
-                + CommandNode
-              </button>
-              <button onClick={() => addNode("gate")} type="button">
-                + GateNode
-              </button>
-              <button disabled={!connectFromNodeId} onClick={() => setConnectFromNodeId("")} type="button">
-                Cancel Connect
-              </button>
-            </div>
-
-            <div className="save-row">
-              <input
-                value={graphFileName}
-                onChange={(e) => setGraphFileName(e.currentTarget.value)}
-                placeholder="graph file name"
-              />
-              <button onClick={saveGraph} type="button">
-                Save Graph
-              </button>
-              <button onClick={() => loadGraph()} type="button">
-                Load Graph
-              </button>
-              <button onClick={refreshGraphFiles} type="button">
-                Refresh
-              </button>
-              <select
-                onChange={(e) => {
-                  const value = e.currentTarget.value;
-                  if (value) {
-                    loadGraph(value);
-                  }
-                }}
-                value=""
-              >
-                <option value="">graphs/*.json</option>
-                {graphFiles.map((file) => (
-                  <option key={file} value={file}>
-                    {file}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div
-              className="graph-canvas"
-              onMouseLeave={onCanvasMouseUp}
-              onMouseMove={onCanvasMouseMove}
-              onMouseUp={onCanvasMouseUp}
-            >
-              <svg className="edge-layer">
-                {edgeLines.map((line) => (
-                  <line
-                    key={line.key}
-                    stroke="#4b7180"
-                    strokeWidth={2}
-                    x1={line.x1}
-                    x2={line.x2}
-                    y1={line.y1}
-                    y2={line.y2}
-                  />
-                ))}
-              </svg>
-
-              {graph.nodes.map((node) => {
-                const runState = nodeStates[node.id];
-                return (
-                  <div
-                    className={`graph-node ${selectedNodeId === node.id ? "selected" : ""}`}
-                    key={node.id}
-                    onClick={() => setSelectedNodeId(node.id)}
-                    style={{ left: node.position.x, top: node.position.y }}
-                  >
-                    <div className="node-head" onMouseDown={(e) => onNodeDragStart(e, node.id)}>
-                      <strong>{node.type.toUpperCase()}</strong>
-                      <button onClick={() => deleteNode(node.id)} type="button">
-                        Delete
-                      </button>
-                    </div>
-                    <div className="node-body">
-                      <div className="node-id">{node.id}</div>
-                      <div>status: {runState?.status ?? "idle"}</div>
-                    </div>
-                    <div className="node-ports">
-                      <button onClick={() => onPortInClick(node.id)} type="button">
-                        in
-                      </button>
-                      <button onClick={() => onPortOutClick(node.id)} type="button">
-                        {connectFromNodeId === node.id ? "out*" : "out"}
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            <div className="edge-list">
-              <h3>Edges</h3>
-              {graph.edges.length === 0 && <div>(no edges)</div>}
-              {graph.edges.map((edge, index) => (
-                <div className="edge-item" key={`${edge.from.nodeId}-${edge.to.nodeId}-${index}`}>
-                  <code>
-                    {edge.from.nodeId}.out -&gt; {edge.to.nodeId}.in
-                  </code>
-                  <button onClick={() => deleteEdge(index)} type="button">
-                    remove
-                  </button>
-                </div>
-              ))}
-            </div>
-          </article>
-
-          <article className="graph-side">
-            <h2>Node Panel</h2>
-            {!selectedNode && <div>노드를 선택하세요.</div>}
-            {selectedNode && (
-              <>
-                <div>
-                  <strong>{selectedNode.id}</strong>
-                </div>
-                <div>type: {selectedNode.type}</div>
-
-                {selectedNode.type === "turn" && (
-                  <div className="form-grid">
-                    <label>
-                      model
-                      <input
-                        onChange={(e) => updateSelectedNodeConfig("model", e.currentTarget.value)}
-                        value={String((selectedNode.config as TurnConfig).model ?? model)}
-                      />
-                    </label>
-                    <label>
-                      cwd
-                      <input
-                        onChange={(e) => updateSelectedNodeConfig("cwd", e.currentTarget.value)}
-                        value={String((selectedNode.config as TurnConfig).cwd ?? cwd)}
-                      />
-                    </label>
-                    <label>
-                      promptTemplate
-                      <textarea
-                        onChange={(e) =>
-                          updateSelectedNodeConfig("promptTemplate", e.currentTarget.value)
-                        }
-                        rows={3}
-                        value={String((selectedNode.config as TurnConfig).promptTemplate ?? "{{input}}")}
-                      />
-                    </label>
-                  </div>
-                )}
-
-                {selectedNode.type === "search" && (
-                  <div className="form-grid">
-                    <label>
-                      queryTemplate
-                      <textarea
-                        onChange={(e) => updateSelectedNodeConfig("queryTemplate", e.currentTarget.value)}
-                        rows={3}
-                        value={String((selectedNode.config as SearchConfig).queryTemplate ?? "{{input}}")}
-                      />
-                    </label>
-                    <label>
-                      resultLimit
-                      <input
-                        onChange={(e) => updateSelectedNodeConfig("resultLimit", e.currentTarget.value)}
-                        value={String((selectedNode.config as SearchConfig).resultLimit ?? "5")}
-                      />
-                    </label>
-                    <label>
-                      fallbackUrls (line separated)
-                      <textarea
-                        onChange={(e) => updateSelectedNodeConfig("fallbackUrls", e.currentTarget.value)}
-                        rows={4}
-                        value={String((selectedNode.config as SearchConfig).fallbackUrls ?? "")}
-                      />
-                    </label>
-                  </div>
-                )}
-
-                {selectedNode.type === "transform" && (
-                  <div className="form-grid">
-                    <label>
-                      mode
-                      <select
-                        onChange={(e) => updateSelectedNodeConfig("mode", e.currentTarget.value)}
-                        value={String((selectedNode.config as TransformConfig).mode ?? "pick")}
-                      >
-                        <option value="pick">pick</option>
-                        <option value="merge">merge</option>
-                        <option value="template">template</option>
-                      </select>
-                    </label>
-                    <label>
-                      pickPath
-                      <input
-                        onChange={(e) => updateSelectedNodeConfig("pickPath", e.currentTarget.value)}
-                        value={String((selectedNode.config as TransformConfig).pickPath ?? "")}
-                      />
-                    </label>
-                    <label>
-                      mergeJson
-                      <textarea
-                        onChange={(e) => updateSelectedNodeConfig("mergeJson", e.currentTarget.value)}
-                        rows={3}
-                        value={String((selectedNode.config as TransformConfig).mergeJson ?? "{}")}
-                      />
-                    </label>
-                    <label>
-                      template
-                      <textarea
-                        onChange={(e) => updateSelectedNodeConfig("template", e.currentTarget.value)}
-                        rows={3}
-                        value={String((selectedNode.config as TransformConfig).template ?? "{{input}}")}
-                      />
-                    </label>
-                  </div>
-                )}
-
-                {selectedNode.type === "command" && (
-                  <div className="form-grid">
-                    <label>
-                      command
-                      <textarea
-                        onChange={(e) => updateSelectedNodeConfig("command", e.currentTarget.value)}
-                        rows={3}
-                        value={String((selectedNode.config as CommandConfig).command ?? "")}
-                      />
-                    </label>
-                    <label>
-                      cwd
-                      <input
-                        onChange={(e) => updateSelectedNodeConfig("cwd", e.currentTarget.value)}
-                        value={String((selectedNode.config as CommandConfig).cwd ?? cwd)}
-                      />
-                    </label>
-                    <label>
-                      timeoutSec
-                      <input
-                        onChange={(e) => updateSelectedNodeConfig("timeoutSec", e.currentTarget.value)}
-                        value={String((selectedNode.config as CommandConfig).timeoutSec ?? "120")}
-                      />
-                    </label>
-                    <label>
-                      failOnNonZero (true/false)
-                      <input
-                        onChange={(e) => updateSelectedNodeConfig("failOnNonZero", e.currentTarget.value)}
-                        value={String((selectedNode.config as CommandConfig).failOnNonZero ?? "true")}
-                      />
-                    </label>
-                  </div>
-                )}
-
-                {selectedNode.type === "gate" && (
-                  <div className="form-grid">
-                    <label>
-                      decisionPath
-                      <input
-                        onChange={(e) => updateSelectedNodeConfig("decisionPath", e.currentTarget.value)}
-                        value={String((selectedNode.config as GateConfig).decisionPath ?? "decision")}
-                      />
-                    </label>
-                    <label>
-                      PASS target
-                      <select
-                        onChange={(e) => updateSelectedNodeConfig("passNodeId", e.currentTarget.value)}
-                        value={String((selectedNode.config as GateConfig).passNodeId ?? "")}
-                      >
-                        <option value="">(none)</option>
-                        {outgoingFromSelected.map((nodeId) => (
-                          <option key={nodeId} value={nodeId}>
-                            {nodeId}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <label>
-                      REJECT target
-                      <select
-                        onChange={(e) => updateSelectedNodeConfig("rejectNodeId", e.currentTarget.value)}
-                        value={String((selectedNode.config as GateConfig).rejectNodeId ?? "")}
-                      >
-                        <option value="">(none)</option>
-                        {outgoingFromSelected.map((nodeId) => (
-                          <option key={nodeId} value={nodeId}>
-                            {nodeId}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <label>
-                      schemaJson (optional)
-                      <textarea
-                        onChange={(e) => updateSelectedNodeConfig("schemaJson", e.currentTarget.value)}
-                        rows={4}
-                        value={String((selectedNode.config as GateConfig).schemaJson ?? "")}
-                      />
-                    </label>
-                  </div>
-                )}
-
-                <h3>Node Logs</h3>
-                <pre>{(selectedNodeState?.logs ?? []).join("\n") || "(no logs)"}</pre>
-                <h3>Node Output</h3>
-                <pre>{formatUnknown(selectedNodeState?.output) || "(no output)"}</pre>
-              </>
-            )}
-
-            <div className="button-row">
-              <button
-                disabled={isGraphRunning || graph.nodes.length === 0}
-                onClick={onRunGraph}
-                type="button"
-              >
-                Run Graph
-              </button>
-              <button disabled={!isGraphRunning} onClick={onCancelGraphRun} type="button">
-                Cancel Run
-              </button>
-            </div>
-          </article>
-        </section>
-      )}
-
-      {viewMode === "dev" && (
-        <section className="graph-layout">
-          <article>
-            <h2>Dev Single Turn</h2>
-            <label>
-              Thread ID
-              <input
-                onChange={(e) => setThreadId(e.currentTarget.value)}
-                placeholder="thread_start 결과 자동 입력"
-                value={threadId}
-              />
-            </label>
-
-            <form className="prompt" onSubmit={onRunTurnDev}>
-              <label>
-                Input
-                <textarea onChange={(e) => setText(e.currentTarget.value)} rows={4} value={text} />
-              </label>
+        {workspaceTab === "workflow" && (
+          <div className="workflow-layout">
+            <section className="canvas-pane">
               <div className="button-row">
-                <button disabled={running || !text.trim()} type="submit">
-                  {running ? "Running..." : "실행"}
+                <button onClick={() => addNode("turn")} type="button">
+                  + TurnNode
                 </button>
-                <button disabled={!threadId} onClick={onInterruptDev} type="button">
-                  Interrupt
+                <button onClick={() => addNode("search")} type="button">
+                  + SearchNode
+                </button>
+                <button onClick={() => addNode("transform")} type="button">
+                  + TransformNode
+                </button>
+                <button onClick={() => addNode("command")} type="button">
+                  + CommandNode
+                </button>
+                <button onClick={() => addNode("gate")} type="button">
+                  + GateNode
+                </button>
+                <button disabled={!connectFromNodeId} onClick={() => setConnectFromNodeId("")} type="button">
+                  Cancel Connect
                 </button>
               </div>
-            </form>
 
-            <h3>Streaming Output</h3>
-            <pre>{streamText || "(waiting for item/agentMessage/delta...)"}</pre>
-          </article>
+              <div className="save-row">
+                <input
+                  value={graphFileName}
+                  onChange={(e) => setGraphFileName(e.currentTarget.value)}
+                  placeholder="graph file name"
+                />
+                <button onClick={saveGraph} type="button">
+                  Save
+                </button>
+                <button onClick={() => loadGraph()} type="button">
+                  Load
+                </button>
+                <button onClick={refreshGraphFiles} type="button">
+                  Refresh
+                </button>
+                <select
+                  onChange={(e) => {
+                    const value = e.currentTarget.value;
+                    if (value) {
+                      loadGraph(value);
+                    }
+                  }}
+                  value=""
+                >
+                  <option value="">graphs/*.json</option>
+                  {graphFiles.map((file) => (
+                    <option key={file} value={file}>
+                      {file}
+                    </option>
+                  ))}
+                </select>
+              </div>
 
-          <article>
-            <h2>Notifications</h2>
-            <pre>{events.join("\n") || "(no events yet)"}</pre>
-          </article>
-        </section>
-      )}
+              <div
+                className="graph-canvas"
+                onMouseLeave={onCanvasMouseUp}
+                onMouseMove={onCanvasMouseMove}
+                onMouseUp={onCanvasMouseUp}
+              >
+                <svg className="edge-layer">
+                  {edgeLines.map((line) => (
+                    <line
+                      key={line.key}
+                      stroke="#70848a"
+                      strokeWidth={2}
+                      x1={line.x1}
+                      x2={line.x2}
+                      y1={line.y1}
+                      y2={line.y2}
+                    />
+                  ))}
+                </svg>
+
+                {graph.nodes.map((node) => {
+                  const runState = nodeStates[node.id];
+                  return (
+                    <div
+                      className={`graph-node ${selectedNodeId === node.id ? "selected" : ""}`}
+                      key={node.id}
+                      onClick={() => setSelectedNodeId(node.id)}
+                      style={{ left: node.position.x, top: node.position.y }}
+                    >
+                      <div className="node-head" onMouseDown={(e) => onNodeDragStart(e, node.id)}>
+                        <strong>{node.type.toUpperCase()}</strong>
+                        <button onClick={() => deleteNode(node.id)} type="button">
+                          Delete
+                        </button>
+                      </div>
+                      <div className="node-body">
+                        <div className="node-id">{node.id}</div>
+                        <div>status: {runState?.status ?? "idle"}</div>
+                      </div>
+                      <div className="node-ports">
+                        <button onClick={() => onPortInClick(node.id)} type="button">
+                          in
+                        </button>
+                        <button onClick={() => onPortOutClick(node.id)} type="button">
+                          {connectFromNodeId === node.id ? "out*" : "out"}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="edge-list">
+                {graph.edges.length === 0 && <div>(no edges)</div>}
+                {graph.edges.map((edge, index) => (
+                  <div className="edge-item" key={`${edge.from.nodeId}-${edge.to.nodeId}-${index}`}>
+                    <code>
+                      {edge.from.nodeId}.out -&gt; {edge.to.nodeId}.in
+                    </code>
+                    <button onClick={() => deleteEdge(index)} type="button">
+                      remove
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </section>
+
+            <aside className="inspector-pane">
+              <h2>Inspector</h2>
+              {!selectedNode && <div>노드를 선택하세요.</div>}
+              {selectedNode && (
+                <>
+                  <div>
+                    <strong>{selectedNode.id}</strong>
+                  </div>
+                  <div>type: {selectedNode.type}</div>
+
+                  {selectedNode.type === "turn" && (
+                    <div className="form-grid">
+                      <label>
+                        model
+                        <input
+                          onChange={(e) => updateSelectedNodeConfig("model", e.currentTarget.value)}
+                          value={String((selectedNode.config as TurnConfig).model ?? model)}
+                        />
+                      </label>
+                      <label>
+                        cwd
+                        <input
+                          onChange={(e) => updateSelectedNodeConfig("cwd", e.currentTarget.value)}
+                          value={String((selectedNode.config as TurnConfig).cwd ?? cwd)}
+                        />
+                      </label>
+                      <label>
+                        promptTemplate
+                        <textarea
+                          onChange={(e) =>
+                            updateSelectedNodeConfig("promptTemplate", e.currentTarget.value)
+                          }
+                          rows={3}
+                          value={String((selectedNode.config as TurnConfig).promptTemplate ?? "{{input}}")}
+                        />
+                      </label>
+                    </div>
+                  )}
+
+                  {selectedNode.type === "search" && (
+                    <div className="form-grid">
+                      <label>
+                        queryTemplate
+                        <textarea
+                          onChange={(e) => updateSelectedNodeConfig("queryTemplate", e.currentTarget.value)}
+                          rows={3}
+                          value={String((selectedNode.config as SearchConfig).queryTemplate ?? "{{input}}")}
+                        />
+                      </label>
+                      <label>
+                        resultLimit
+                        <input
+                          onChange={(e) => updateSelectedNodeConfig("resultLimit", e.currentTarget.value)}
+                          value={String((selectedNode.config as SearchConfig).resultLimit ?? "5")}
+                        />
+                      </label>
+                      <label>
+                        fallbackUrls
+                        <textarea
+                          onChange={(e) => updateSelectedNodeConfig("fallbackUrls", e.currentTarget.value)}
+                          rows={4}
+                          value={String((selectedNode.config as SearchConfig).fallbackUrls ?? "")}
+                        />
+                      </label>
+                    </div>
+                  )}
+
+                  {selectedNode.type === "transform" && (
+                    <div className="form-grid">
+                      <label>
+                        mode
+                        <select
+                          onChange={(e) => updateSelectedNodeConfig("mode", e.currentTarget.value)}
+                          value={String((selectedNode.config as TransformConfig).mode ?? "pick")}
+                        >
+                          <option value="pick">pick</option>
+                          <option value="merge">merge</option>
+                          <option value="template">template</option>
+                        </select>
+                      </label>
+                      <label>
+                        pickPath
+                        <input
+                          onChange={(e) => updateSelectedNodeConfig("pickPath", e.currentTarget.value)}
+                          value={String((selectedNode.config as TransformConfig).pickPath ?? "")}
+                        />
+                      </label>
+                      <label>
+                        mergeJson
+                        <textarea
+                          onChange={(e) => updateSelectedNodeConfig("mergeJson", e.currentTarget.value)}
+                          rows={3}
+                          value={String((selectedNode.config as TransformConfig).mergeJson ?? "{}")}
+                        />
+                      </label>
+                      <label>
+                        template
+                        <textarea
+                          onChange={(e) => updateSelectedNodeConfig("template", e.currentTarget.value)}
+                          rows={3}
+                          value={String((selectedNode.config as TransformConfig).template ?? "{{input}}")}
+                        />
+                      </label>
+                    </div>
+                  )}
+
+                  {selectedNode.type === "command" && (
+                    <div className="form-grid">
+                      <label>
+                        command
+                        <textarea
+                          onChange={(e) => updateSelectedNodeConfig("command", e.currentTarget.value)}
+                          rows={3}
+                          value={String((selectedNode.config as CommandConfig).command ?? "")}
+                        />
+                      </label>
+                      <label>
+                        cwd
+                        <input
+                          onChange={(e) => updateSelectedNodeConfig("cwd", e.currentTarget.value)}
+                          value={String((selectedNode.config as CommandConfig).cwd ?? cwd)}
+                        />
+                      </label>
+                      <label>
+                        timeoutSec
+                        <input
+                          onChange={(e) => updateSelectedNodeConfig("timeoutSec", e.currentTarget.value)}
+                          value={String((selectedNode.config as CommandConfig).timeoutSec ?? "120")}
+                        />
+                      </label>
+                      <label>
+                        failOnNonZero (true/false)
+                        <input
+                          onChange={(e) => updateSelectedNodeConfig("failOnNonZero", e.currentTarget.value)}
+                          value={String((selectedNode.config as CommandConfig).failOnNonZero ?? "true")}
+                        />
+                      </label>
+                    </div>
+                  )}
+
+                  {selectedNode.type === "gate" && (
+                    <div className="form-grid">
+                      <label>
+                        decisionPath
+                        <input
+                          onChange={(e) => updateSelectedNodeConfig("decisionPath", e.currentTarget.value)}
+                          value={String((selectedNode.config as GateConfig).decisionPath ?? "decision")}
+                        />
+                      </label>
+                      <label>
+                        PASS target
+                        <select
+                          onChange={(e) => updateSelectedNodeConfig("passNodeId", e.currentTarget.value)}
+                          value={String((selectedNode.config as GateConfig).passNodeId ?? "")}
+                        >
+                          <option value="">(none)</option>
+                          {outgoingFromSelected.map((nodeId) => (
+                            <option key={nodeId} value={nodeId}>
+                              {nodeId}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label>
+                        REJECT target
+                        <select
+                          onChange={(e) => updateSelectedNodeConfig("rejectNodeId", e.currentTarget.value)}
+                          value={String((selectedNode.config as GateConfig).rejectNodeId ?? "")}
+                        >
+                          <option value="">(none)</option>
+                          {outgoingFromSelected.map((nodeId) => (
+                            <option key={nodeId} value={nodeId}>
+                              {nodeId}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label>
+                        schemaJson (optional)
+                        <textarea
+                          onChange={(e) => updateSelectedNodeConfig("schemaJson", e.currentTarget.value)}
+                          rows={4}
+                          value={String((selectedNode.config as GateConfig).schemaJson ?? "")}
+                        />
+                      </label>
+                    </div>
+                  )}
+
+                  <h3>Node Logs</h3>
+                  <pre>{(selectedNodeState?.logs ?? []).join("\n") || "(no logs)"}</pre>
+                  <h3>Node Output</h3>
+                  <pre>{formatUnknown(selectedNodeState?.output) || "(no output)"}</pre>
+                </>
+              )}
+
+              <div className="button-row">
+                <button
+                  disabled={isGraphRunning || graph.nodes.length === 0}
+                  onClick={onRunGraph}
+                  type="button"
+                >
+                  Run Graph
+                </button>
+                <button disabled={!isGraphRunning} onClick={onCancelGraphRun} type="button">
+                  Cancel Run
+                </button>
+              </div>
+            </aside>
+          </div>
+        )}
+
+        {workspaceTab === "history" && (
+          <section className="panel-card">
+            <h2>History</h2>
+            <p>질문/답변 히스토리와 실행 로그 패널은 다음 커밋에서 추가됩니다.</p>
+            <pre>{runFiles.join("\n") || "(no run files)"}</pre>
+          </section>
+        )}
+
+        {workspaceTab === "settings" && (
+          <section className="panel-card controls">
+            <h2>Engine Settings</h2>
+            <label>
+              CWD
+              <input value={cwd} onChange={(e) => setCwd(e.currentTarget.value)} />
+            </label>
+            <label>
+              Model
+              <input value={model} onChange={(e) => setModel(e.currentTarget.value)} />
+            </label>
+            <div className="button-row">
+              <button onClick={onStartEngine} disabled={running || isGraphRunning} type="button">
+                Engine Start
+              </button>
+              <button onClick={onStopEngine} type="button">
+                Engine Stop
+              </button>
+              <button onClick={onLoginChatgpt} disabled={running || isGraphRunning} type="button">
+                Login ChatGPT
+              </button>
+            </div>
+            <div className="meta">
+              <div>engineStarted: {String(engineStarted)}</div>
+              <div>loginCompleted: {String(loginCompleted)}</div>
+              <div>pendingApprovals: {pendingApprovals.length}</div>
+              <div>last item/completed status: {lastCompletedStatus}</div>
+              {lastSavedRunFile && <div>last run file: {lastSavedRunFile}</div>}
+              {authUrl && (
+                <div>
+                  authUrl: <code>{authUrl}</code>{" "}
+                  <button onClick={onCopyAuthUrl} type="button">
+                    Copy
+                  </button>
+                </div>
+              )}
+            </div>
+          </section>
+        )}
+
+        {workspaceTab === "dev" && (
+          <section className="workflow-layout">
+            <article className="panel-card">
+              <h2>Dev Single Turn</h2>
+              <label>
+                Thread ID
+                <input
+                  onChange={(e) => setThreadId(e.currentTarget.value)}
+                  placeholder="thread_start 결과 자동 입력"
+                  value={threadId}
+                />
+              </label>
+
+              <form className="prompt" onSubmit={onRunTurnDev}>
+                <label>
+                  Input
+                  <textarea onChange={(e) => setText(e.currentTarget.value)} rows={4} value={text} />
+                </label>
+                <div className="button-row">
+                  <button disabled={running || !text.trim()} type="submit">
+                    {running ? "Running..." : "실행"}
+                  </button>
+                  <button disabled={!threadId} onClick={onInterruptDev} type="button">
+                    Interrupt
+                  </button>
+                </div>
+              </form>
+
+              <h3>Streaming Output</h3>
+              <pre>{streamText || "(waiting for item/agentMessage/delta...)"}</pre>
+            </article>
+
+            <article className="panel-card">
+              <h2>Notifications</h2>
+              <pre>{events.join("\n") || "(no events yet)"}</pre>
+            </article>
+          </section>
+        )}
+      </section>
 
       {activeApproval && (
         <div className="modal-backdrop">
