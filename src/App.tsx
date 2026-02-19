@@ -431,6 +431,46 @@ function lifecycleStateLabel(state: string): string {
   return map[state] ?? state;
 }
 
+function NavIcon({ tab }: { tab: WorkspaceTab }) {
+  if (tab === "workflow") {
+    return (
+      <svg aria-hidden="true" fill="none" height="20" viewBox="0 0 24 24" width="20">
+        <circle cx="6" cy="6" r="2.4" stroke="currentColor" strokeWidth="1.8" />
+        <circle cx="18" cy="6" r="2.4" stroke="currentColor" strokeWidth="1.8" />
+        <circle cx="12" cy="18" r="2.4" stroke="currentColor" strokeWidth="1.8" />
+        <path d="M8.2 7.2L10.3 15.8M15.8 7.2L13.7 15.8" stroke="currentColor" strokeWidth="1.8" />
+      </svg>
+    );
+  }
+  if (tab === "history") {
+    return (
+      <svg aria-hidden="true" fill="none" height="20" viewBox="0 0 24 24" width="20">
+        <path d="M4 12a8 8 0 1 0 2.4-5.7" stroke="currentColor" strokeLinecap="round" strokeWidth="1.8" />
+        <path d="M4 4v4h4M12 8v4l2.8 1.8" stroke="currentColor" strokeLinecap="round" strokeWidth="1.8" />
+      </svg>
+    );
+  }
+  if (tab === "dev") {
+    return (
+      <svg aria-hidden="true" fill="none" height="20" viewBox="0 0 24 24" width="20">
+        <path d="M6 8L3 12l3 4M18 8l3 4-3 4M14 5l-4 14" stroke="currentColor" strokeLinecap="round" strokeWidth="1.8" />
+      </svg>
+    );
+  }
+  return (
+    <svg aria-hidden="true" fill="none" height="20" viewBox="0 0 24 24" width="20">
+      <path
+        d="M12 3.5l2 1.1 2.3-.2 1 2 2 .9-.1 2.4 1.4 1.8-1.4 1.8.1 2.4-2 .9-1 2-2.3-.2-2 1.1-2-1.1-2.3.2-1-2-2-.9.1-2.4-1.4-1.8 1.4-1.8-.1-2.4 2-.9 1-2 2.3.2 2-1.1z"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.5"
+      />
+      <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="1.8" />
+    </svg>
+  );
+}
+
 function authModeLabel(mode: AuthMode): string {
   if (mode === "chatgpt") {
     return "챗지피티";
@@ -1904,34 +1944,42 @@ function App() {
           <button
             className={isActiveTab("workflow") ? "is-active" : ""}
             onClick={() => setWorkspaceTab("workflow")}
+            aria-label="워크플로우"
+            title="워크플로우"
             type="button"
           >
-            <span className="nav-icon">◉</span>
+            <span className="nav-icon"><NavIcon tab="workflow" /></span>
             <span className="nav-label">워크</span>
           </button>
           <button
             className={isActiveTab("history") ? "is-active" : ""}
             onClick={() => setWorkspaceTab("history")}
+            aria-label="기록"
+            title="기록"
             type="button"
           >
-            <span className="nav-icon">≡</span>
+            <span className="nav-icon"><NavIcon tab="history" /></span>
             <span className="nav-label">기록</span>
-          </button>
-          <button
-            className={isActiveTab("settings") ? "is-active" : ""}
-            onClick={() => setWorkspaceTab("settings")}
-            type="button"
-          >
-            <span className="nav-icon">⚙</span>
-            <span className="nav-label">설정</span>
           </button>
           <button
             className={isActiveTab("dev") ? "is-active" : ""}
             onClick={() => setWorkspaceTab("dev")}
+            aria-label="개발"
+            title="개발"
             type="button"
           >
-            <span className="nav-icon">⌘</span>
+            <span className="nav-icon"><NavIcon tab="dev" /></span>
             <span className="nav-label">개발</span>
+          </button>
+          <button
+            className={isActiveTab("settings") ? "is-active" : ""}
+            onClick={() => setWorkspaceTab("settings")}
+            aria-label="설정"
+            title="설정"
+            type="button"
+          >
+            <span className="nav-icon"><NavIcon tab="settings" /></span>
+            <span className="nav-label">설정</span>
           </button>
         </nav>
       </aside>
@@ -2018,6 +2066,7 @@ function App() {
                       새로고침
                     </button>
                     <select
+                      className="graph-file-select"
                       onChange={(e) => {
                         const value = e.currentTarget.value;
                         if (value) {
