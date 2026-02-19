@@ -852,6 +852,7 @@ function App() {
   const [isGraphRunning, setIsGraphRunning] = useState(false);
   const [canvasZoom, setCanvasZoom] = useState(1);
   const [panMode, setPanMode] = useState(false);
+  const [canvasFullscreen, setCanvasFullscreen] = useState(false);
   const [undoStack, setUndoStack] = useState<GraphData[]>([]);
   const [redoStack, setRedoStack] = useState<GraphData[]>([]);
 
@@ -1482,7 +1483,7 @@ function App() {
       return;
     }
     const target = e.target as HTMLElement;
-    if (target.closest(".canvas-zoom-controls, .canvas-runbar")) {
+    if (target.closest(".canvas-zoom-controls, .canvas-runbar, .canvas-fullscreen-toggle")) {
       return;
     }
     panRef.current = {
@@ -1638,6 +1639,25 @@ function App() {
       setSelectedNodeId("");
     }
   }, [graph.nodes, selectedNodeId]);
+
+  useEffect(() => {
+    if (workspaceTab !== "workflow" && canvasFullscreen) {
+      setCanvasFullscreen(false);
+    }
+  }, [workspaceTab, canvasFullscreen]);
+
+  useEffect(() => {
+    if (!canvasFullscreen) {
+      return;
+    }
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setCanvasFullscreen(false);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [canvasFullscreen]);
 
   async function saveRunRecord(runRecord: RunRecord) {
     const fileName = `run-${runRecord.runId}.json`;
@@ -2265,7 +2285,7 @@ function App() {
   const isActiveTab = (tab: WorkspaceTab): boolean => workspaceTab === tab;
 
   return (
-    <main className="app-shell">
+    <main className={`app-shell ${canvasFullscreen ? "canvas-fullscreen-mode" : ""}`}>
       <aside className="left-nav">
         <div className="brand-spacer" />
         <nav className="nav-list">
@@ -2312,8 +2332,8 @@ function App() {
         </nav>
       </aside>
 
-      <section className="workspace">
-        <header className="workspace-header">
+      <section className={`workspace ${canvasFullscreen ? "canvas-fullscreen-active" : ""}`}>
+        {!canvasFullscreen && <header className="workspace-header">
           <div className="header-title">
             <h1>워크플로우</h1>
             <p>{status}</p>
@@ -2334,12 +2354,16 @@ function App() {
               생성
             </button>
           </div>
-        </header>
+        </header>}
 
         {error && <div className="error">오류: {error}</div>}
 
         {workspaceTab === "workflow" && (
-          <div className={`workflow-layout ${isInspectorWide ? "inspector-wide" : ""}`}>
+          <div
+            className={`workflow-layout ${isInspectorWide ? "inspector-wide" : ""} ${
+              canvasFullscreen ? "canvas-only-layout" : ""
+            }`}
+          >
             <section className="canvas-pane">
               <div className="canvas-topbar">
                 <label className="question-input">
@@ -2379,6 +2403,15 @@ function App() {
                       ↕
                     </button>
                   </div>
+
+                  <button
+                    className="canvas-fullscreen-toggle"
+                    onClick={() => setCanvasFullscreen((prev) => !prev)}
+                    title={canvasFullscreen ? "캔버스 기본 보기" : "캔버스 전체 보기"}
+                    type="button"
+                  >
+                    {canvasFullscreen ? "⤡" : "⤢"}
+                  </button>
 
                   <div className="canvas-runbar">
                     <button
@@ -2519,7 +2552,7 @@ function App() {
               </div>
             </section>
 
-            <aside className="inspector-pane">
+            {!canvasFullscreen && <aside className="inspector-pane">
               <div className="inspector-head">
                 <div className="inspector-title-chip">노드 설정</div>
                 <button
@@ -2755,7 +2788,7 @@ function App() {
                   <section className="inspector-block">{renderSettingsPanel(true)}</section>
                 </div>
               </div>
-            </aside>
+            </aside>}
           </div>
         )}
 
