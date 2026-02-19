@@ -15,6 +15,8 @@
         "title": "",
         "width": 800,
         "height": 600,
+        "minWidth": 1200,
+        "minHeight": 760,
         "titleBarStyle": "Transparent",
         "hiddenTitle": true,
         "backgroundColor": "#f6f6f6"
