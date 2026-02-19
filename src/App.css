@@ -48,9 +48,9 @@
   font-size: 13px;
   letter-spacing: -0.7px;
   color: #1b2229;
-  background: #f6f6f6;
+  background: #ffffff;
   --header-control-height: 34px;
-  --surface: #F6F6F6;
+  --surface: #eef1f5;
   --surface-strong: #e7ebf1;
   --surface-soft: #f7f9fc;
   --text-muted: #667180;
@@ -145,7 +145,7 @@ h3 {
   display: grid;
   grid-template-columns: 82px minmax(0, 1fr);
   gap: 10px;
-  background: #f6f6f6;
+  background: #ffffff;
 }
 
 .app-shell.canvas-fullscreen-mode {
