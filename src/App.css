@@ -140,22 +140,21 @@ h3 {
   height: 100vh;
   padding: 16px;
   display: grid;
-  grid-template-columns: 82px minmax(0, 1fr);
-  gap: 5px;
+  grid-template-columns: 1fr;
   background: #ffffff;
 }
 
 .app-shell.canvas-fullscreen-mode {
-  grid-template-columns: 1fr;
   padding: 8px;
 }
 
-.app-shell.canvas-fullscreen-mode .left-nav {
-  display: none;
-}
-
 .left-nav {
-  border: 0;
+  position: absolute;
+  top: 82px;
+  left: 12px;
+  bottom: 12px;
+  width: 68px;
+  z-index: 30;
   border-radius: 12px;
   background: var(--surface);
   padding: 10px 8px;
@@ -218,6 +217,7 @@ h3 {
 }
 
 .workspace {
+  position: relative;
   border: 0;
   border-radius: 12px;
   background: var(--surface);
@@ -232,6 +232,10 @@ h3 {
 
 .workspace.canvas-fullscreen-active {
   border-radius: 8px;
+}
+
+.workspace.canvas-fullscreen-active .left-nav {
+  top: 12px;
 }
 
 .workspace-header {
@@ -815,6 +819,7 @@ h3 {
 
 .history-layout {
   margin: 12px;
+  margin-left: 88px;
   height: calc(100% - 24px);
   min-height: 0;
   display: grid;
@@ -830,6 +835,16 @@ h3 {
   gap: 8px;
   min-height: 0;
   overflow: auto;
+}
+
+.settings-view {
+  margin: 12px;
+  margin-left: 88px;
+  height: calc(100% - 24px);
+}
+
+.dev-layout {
+  margin-left: 88px;
 }
 
 .history-list button.is-active {
@@ -901,19 +916,25 @@ pre {
 
 @media (max-width: 900px) {
   .app-shell {
-    grid-template-columns: 1fr;
     padding: 10px;
   }
 
   .left-nav {
-    grid-template-rows: auto auto;
-    grid-template-columns: auto 1fr;
-    align-items: center;
-    gap: 10px;
+    left: 8px;
+    top: 72px;
+    width: 56px;
+    padding: 8px 6px;
   }
 
   .nav-list {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  .history-layout,
+  .settings-view,
+  .dev-layout {
+    margin-left: 72px;
+    width: auto;
   }
 
 }
