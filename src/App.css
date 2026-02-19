@@ -221,6 +221,42 @@ p {
   font-size: 0.84rem;
 }
 
+.status-pill {
+  width: fit-content;
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 0.74rem;
+  border: 1px solid #cdd9df;
+  background: #edf3f6;
+  text-transform: uppercase;
+}
+
+.status-idle,
+.status-queued {
+  background: #eef2f5;
+}
+
+.status-running {
+  background: #fff2d9;
+  border-color: #e4c07b;
+}
+
+.status-done {
+  background: #dcf5e9;
+  border-color: #92d3b1;
+}
+
+.status-failed {
+  background: #ffe2e2;
+  border-color: #e5a5a5;
+}
+
+.status-skipped,
+.status-cancelled {
+  background: #ece8f7;
+  border-color: #c7bae8;
+}
+
 .node-id {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
   font-size: 0.75rem;

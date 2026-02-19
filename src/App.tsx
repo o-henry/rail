@@ -345,6 +345,19 @@ function defaultNodeConfig(type: NodeType): Record<string, unknown> {
   };
 }
 
+function nodeCardSummary(node: GraphNode): string {
+  if (node.type === "turn") {
+    const config = node.config as TurnConfig;
+    return `model=${String(config.model ?? "gpt-5-codex")}`;
+  }
+  if (node.type === "transform") {
+    const config = node.config as TransformConfig;
+    return `mode=${String(config.mode ?? "pick")}`;
+  }
+  const config = node.config as GateConfig;
+  return `decisionPath=${String(config.decisionPath ?? "decision")}`;
+}
+
 function normalizeGraph(input: unknown): GraphData {
   if (!input || typeof input !== "object") {
     return { version: 1, nodes: [], edges: [] };
@@ -453,6 +466,9 @@ function App() {
 
   const [cwd, setCwd] = useState(defaultCwd);
   const [model, setModel] = useState("gpt-5-codex");
+  const [workflowQuestion, setWorkflowQuestion] = useState(
+    "언어 학습에서 AI가 기존 학습 패러다임을 어떻게 개선할 수 있는지 분석해줘.",
+  );
   const [threadId, setThreadId] = useState("");
   const [text, setText] = useState("안녕하세요. 지금 상태를 3줄로 요약해줘.");
 
@@ -935,10 +951,14 @@ function App() {
     }
   }
 
-  function nodeInputFor(nodeId: string, outputs: Record<string, unknown>): unknown {
+  function nodeInputFor(
+    nodeId: string,
+    outputs: Record<string, unknown>,
+    rootInput: string,
+  ): unknown {
     const incoming = graph.edges.filter((edge) => edge.to.nodeId === nodeId);
     if (incoming.length === 0) {
-      return null;
+      return rootInput;
     }
     if (incoming.length === 1) {
       return outputs[incoming[0].from.nodeId] ?? null;
@@ -1252,7 +1272,7 @@ function App() {
           setNodeStatus(nodeId, "running", "node execution started");
           transition(runRecord, nodeId, "running");
 
-          const input = nodeInputFor(nodeId, outputs);
+          const input = nodeInputFor(nodeId, outputs, workflowQuestion);
 
           if (node.type === "turn") {
             const result = await executeTurnNode(node, input);
@@ -1508,6 +1528,15 @@ function App() {
         {workspaceTab === "workflow" && (
           <div className="workflow-layout">
             <section className="canvas-pane">
+              <label>
+                질문 (Workflow Input)
+                <textarea
+                  onChange={(e) => setWorkflowQuestion(e.currentTarget.value)}
+                  rows={3}
+                  value={workflowQuestion}
+                />
+              </label>
+
               <div className="button-row">
                 <button onClick={() => addNode("turn")} type="button">
                   + TurnNode
@@ -1578,6 +1607,7 @@ function App() {
 
                 {graph.nodes.map((node) => {
                   const runState = nodeStates[node.id];
+                  const nodeStatus = runState?.status ?? "idle";
                   return (
                     <div
                       className={`graph-node ${selectedNodeId === node.id ? "selected" : ""}`}
@@ -1593,7 +1623,8 @@ function App() {
                       </div>
                       <div className="node-body">
                         <div className="node-id">{node.id}</div>
-                        <div>status: {runState?.status ?? "idle"}</div>
+                        <div className={`status-pill status-${nodeStatus}`}>{nodeStatus}</div>
+                        <div>{nodeCardSummary(node)}</div>
                       </div>
                       <div className="node-ports">
                         <button onClick={() => onPortInClick(node.id)} type="button">
@@ -1632,6 +1663,9 @@ function App() {
                     <strong>{selectedNode.id}</strong>
                   </div>
                   <div>type: {selectedNode.type}</div>
+                  <div className={`status-pill status-${selectedNodeState?.status ?? "idle"}`}>
+                    status: {selectedNodeState?.status ?? "idle"}
+                  </div>
 
                   {selectedNode.type === "turn" && (
                     <div className="form-grid">
