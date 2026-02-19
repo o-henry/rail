@@ -57,6 +57,7 @@
   letter-spacing: -0.7px;
   color: #1b2229;
   background: #d9dbe0;
+  --header-control-height: 34px;
 }
 
 html,
@@ -153,6 +154,7 @@ p {
 
 .nav-list button {
   min-height: 54px;
+  height: 54px;
   border-color: transparent;
   background: transparent;
   display: grid;
@@ -218,6 +220,8 @@ p {
   width: 100%;
   background: #f4f6f8;
   border-color: #e1e4e9;
+  height: var(--header-control-height);
+  padding: 0 10px;
 }
 
 .header-actions {
@@ -232,7 +236,10 @@ p {
   border: 1px solid #dbe0e7;
   background: #ffffff;
   border-radius: 5px;
-  padding: 4px 10px;
+  min-height: var(--header-control-height);
+  padding: 0 10px;
+  display: inline-flex;
+  align-items: center;
   font-size: 0.76rem;
   white-space: nowrap;
 }
@@ -242,7 +249,10 @@ p {
   color: #ffffff;
   border-color: #1d7cff;
   border-radius: 5px;
-  padding: 7px 14px;
+  min-height: var(--header-control-height);
+  padding: 0 14px;
+  display: inline-flex;
+  align-items: center;
 }
 
 .error {
