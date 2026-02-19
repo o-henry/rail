@@ -25,6 +25,21 @@ type LoginChatgptResult = {
 };
 
 type AuthMode = "chatgpt" | "apikey" | "unknown";
+type ApprovalDecision = "accept" | "acceptForSession" | "decline" | "cancel";
+
+type EngineApprovalRequestEvent = {
+  requestId: number;
+  method: string;
+  params: unknown;
+};
+
+type PendingApproval = {
+  requestId: number;
+  method: string;
+  params: unknown;
+};
+
+const APPROVAL_DECISIONS: ApprovalDecision[] = ["accept", "acceptForSession", "decline", "cancel"];
 
 function formatUnknown(value: unknown): string {
   try {
@@ -105,6 +120,40 @@ function extractAuthMode(input: unknown, depth = 0): AuthMode | null {
   return null;
 }
 
+function extractCompletedStatus(input: unknown, depth = 0): string | null {
+  if (depth > 4 || input == null) {
+    return null;
+  }
+  if (typeof input === "string") {
+    return input;
+  }
+  if (Array.isArray(input)) {
+    for (const item of input) {
+      const status = extractCompletedStatus(item, depth + 1);
+      if (status) {
+        return status;
+      }
+    }
+    return null;
+  }
+  if (typeof input !== "object") {
+    return null;
+  }
+
+  const record = input as Record<string, unknown>;
+  if (typeof record.status === "string") {
+    return record.status;
+  }
+  const candidates = [record.item, record.result, record.data, record.payload, record.output];
+  for (const candidate of candidates) {
+    const status = extractCompletedStatus(candidate, depth + 1);
+    if (status) {
+      return status;
+    }
+  }
+  return null;
+}
+
 function App() {
   const defaultCwd = useMemo(() => ".", []);
 
@@ -121,8 +170,11 @@ function App() {
   const [authUrl, setAuthUrl] = useState("");
   const [authMode, setAuthMode] = useState<AuthMode>("unknown");
   const [loginCompleted, setLoginCompleted] = useState(false);
+  const [lastCompletedStatus, setLastCompletedStatus] = useState("unknown");
   const [streamText, setStreamText] = useState("");
   const [events, setEvents] = useState<string[]>([]);
+  const [pendingApprovals, setPendingApprovals] = useState<PendingApproval[]>([]);
+  const [approvalSubmitting, setApprovalSubmitting] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -158,6 +210,33 @@ function App() {
               setStatus("account/updated received (authMode unknown)");
             }
           }
+
+          if (payload.method === "item/completed") {
+            const completedStatus = extractCompletedStatus(payload.params) ?? "unknown";
+            setLastCompletedStatus(completedStatus);
+            setStatus(`item/completed status=${completedStatus}`);
+          }
+        },
+      );
+
+      const unlistenApprovalRequest = await listen<EngineApprovalRequestEvent>(
+        "engine://approval_request",
+        (event) => {
+          const payload = event.payload;
+          setPendingApprovals((prev) => {
+            if (prev.some((item) => item.requestId === payload.requestId)) {
+              return prev;
+            }
+            return [
+              ...prev,
+              {
+                requestId: payload.requestId,
+                method: payload.method,
+                params: payload.params,
+              },
+            ];
+          });
+          setStatus(`approval requested (${payload.method})`);
         },
       );
 
@@ -175,17 +254,21 @@ function App() {
             setEngineStarted(false);
             setAuthMode("unknown");
             setLoginCompleted(false);
+            setPendingApprovals([]);
+            setApprovalSubmitting(false);
           }
         },
       );
 
       if (cancelled) {
         unlistenNotification();
+        unlistenApprovalRequest();
         unlistenLifecycle();
       }
 
       return () => {
         unlistenNotification();
+        unlistenApprovalRequest();
         unlistenLifecycle();
       };
     };
@@ -313,6 +396,32 @@ function App() {
     }
   }
 
+  async function onRespondApproval(decision: ApprovalDecision) {
+    const activeApproval = pendingApprovals[0];
+    if (!activeApproval) {
+      return;
+    }
+
+    setError("");
+    setApprovalSubmitting(true);
+    try {
+      await invoke("approval_respond", {
+        requestId: activeApproval.requestId,
+        result: {
+          decision,
+        },
+      });
+      setPendingApprovals((prev) => prev.slice(1));
+      setStatus(`approval response sent (${decision})`);
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setApprovalSubmitting(false);
+    }
+  }
+
+  const activeApproval = pendingApprovals[0];
+
   return (
     <main className="app">
       <section className="auth-banner">
@@ -372,6 +481,8 @@ function App() {
         <div>engineStarted: {String(engineStarted)}</div>
         <div>status: {status}</div>
         <div>loginCompleted: {String(loginCompleted)}</div>
+        <div>pendingApprovals: {pendingApprovals.length}</div>
+        <div>last item/completed status: {lastCompletedStatus}</div>
         {authUrl && (
           <div>
             authUrl: <code>{authUrl}</code>{" "}
@@ -394,6 +505,29 @@ function App() {
           <pre>{events.join("\n") || "(no events yet)"}</pre>
         </article>
       </section>
+
+      {activeApproval && (
+        <div className="modal-backdrop">
+          <section className="approval-modal">
+            <h2>Approval Required</h2>
+            <div>method: {activeApproval.method}</div>
+            <div>requestId: {activeApproval.requestId}</div>
+            <pre>{formatUnknown(activeApproval.params)}</pre>
+            <div className="button-row">
+              {APPROVAL_DECISIONS.map((decision) => (
+                <button
+                  disabled={approvalSubmitting}
+                  key={decision}
+                  onClick={() => onRespondApproval(decision)}
+                  type="button"
+                >
+                  {decision}
+                </button>
+              ))}
+            </div>
+          </section>
+        </div>
+      )}
     </main>
   );
 }

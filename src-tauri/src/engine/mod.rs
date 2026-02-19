@@ -18,6 +18,7 @@ use tokio::{
 
 const EVENT_ENGINE_NOTIFICATION: &str = "engine://notification";
 const EVENT_ENGINE_LIFECYCLE: &str = "engine://lifecycle";
+const EVENT_ENGINE_APPROVAL_REQUEST: &str = "engine://approval_request";
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(90);
 
 #[derive(Default)]
@@ -60,16 +61,26 @@ struct RpcError {
 }
 
 type PendingMap = HashMap<u64, oneshot::Sender<Result<Value, String>>>;
+type PendingServerRequestMap = HashMap<u64, String>;
 
 struct EngineRuntime {
     app: AppHandle,
     child: Arc<Mutex<Child>>,
     stdin: Arc<Mutex<ChildStdin>>,
     pending: Arc<Mutex<PendingMap>>,
+    pending_server_requests: Arc<Mutex<PendingServerRequestMap>>,
     next_id: AtomicU64,
     initialized: AtomicBool,
     reader_task: JoinHandle<()>,
     stderr_task: JoinHandle<()>,
+}
+
+#[derive(Debug, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct EngineApprovalRequestEvent {
+    request_id: u64,
+    method: String,
+    params: Value,
 }
 
 #[derive(Debug, Serialize)]
@@ -113,12 +124,14 @@ impl EngineRuntime {
             .ok_or_else(|| "failed to open child stderr".to_string())?;
 
         let pending = Arc::new(Mutex::new(HashMap::new()));
+        let pending_server_requests = Arc::new(Mutex::new(HashMap::new()));
         let child = Arc::new(Mutex::new(child));
         let stdin = Arc::new(Mutex::new(stdin));
 
         let reader_task = {
             let app = app.clone();
             let pending = pending.clone();
+            let pending_server_requests = pending_server_requests.clone();
             tokio::spawn(async move {
                 let mut lines = BufReader::new(stdout).lines();
 
@@ -129,7 +142,10 @@ impl EngineRuntime {
                             if line.is_empty() {
                                 continue;
                             }
-                            if let Err(err) = handle_incoming_line(&app, &pending, line).await {
+                            if let Err(err) =
+                                handle_incoming_line(&app, &pending, &pending_server_requests, line)
+                                    .await
+                            {
                                 emit_lifecycle(
                                     &app,
                                     "parseError",
@@ -188,6 +204,7 @@ impl EngineRuntime {
             child,
             stdin,
             pending,
+            pending_server_requests,
             next_id: AtomicU64::new(1),
             initialized: AtomicBool::new(false),
             reader_task,
@@ -313,7 +330,38 @@ impl EngineRuntime {
         }
 
         resolve_all_pending(&self.pending, "engine stopped").await;
+        self.pending_server_requests.lock().await.clear();
         emit_lifecycle(&self.app, "stopped", None);
+
+        Ok(())
+    }
+
+    async fn respond_server_request(&self, request_id: u64, result: Value) -> Result<(), String> {
+        let method = self
+            .pending_server_requests
+            .lock()
+            .await
+            .remove(&request_id)
+            .ok_or_else(|| format!("unknown approval request id: {request_id}"))?;
+
+        let payload = json!({
+          "jsonrpc": "2.0",
+          "id": request_id,
+          "result": result
+        });
+
+        self.write_jsonl(&payload).await?;
+
+        let _ = self.app.emit(
+            EVENT_ENGINE_NOTIFICATION,
+            EngineNotificationEvent {
+                method: "engine/approvalResponseSent".to_string(),
+                params: json!({
+                    "requestId": request_id,
+                    "approvalMethod": method
+                }),
+            },
+        );
 
         Ok(())
     }
@@ -322,10 +370,48 @@ impl EngineRuntime {
 async fn handle_incoming_line(
     app: &AppHandle,
     pending: &Arc<Mutex<PendingMap>>,
+    pending_server_requests: &Arc<Mutex<PendingServerRequestMap>>,
     line: &str,
 ) -> Result<(), String> {
     let incoming: RpcIncomingMessage =
         serde_json::from_str(line).map_err(|e| format!("invalid json: {e}"))?;
+
+    if let (Some(method), Some(id_value)) = (incoming.method.clone(), incoming.id.as_ref()) {
+        if incoming.result.is_none() && incoming.error.is_none() {
+            if let Some(request_id) = rpc_id_to_u64(id_value) {
+                if is_approval_method(&method) {
+                    pending_server_requests
+                        .lock()
+                        .await
+                        .insert(request_id, method.clone());
+                    let params = incoming.params.unwrap_or(Value::Null);
+                    let payload = EngineApprovalRequestEvent {
+                        request_id,
+                        method: method.clone(),
+                        params: params.clone(),
+                    };
+                    let _ = app.emit(EVENT_ENGINE_APPROVAL_REQUEST, payload);
+                    let _ = app.emit(
+                        EVENT_ENGINE_NOTIFICATION,
+                        EngineNotificationEvent { method, params },
+                    );
+                } else {
+                    let _ = app.emit(
+                        EVENT_ENGINE_NOTIFICATION,
+                        EngineNotificationEvent {
+                            method: "engine/unhandledServerRequest".to_string(),
+                            params: json!({
+                                "requestId": request_id,
+                                "method": method,
+                                "params": incoming.params.unwrap_or(Value::Null)
+                            }),
+                        },
+                    );
+                }
+            }
+            return Ok(());
+        }
+    }
 
     if let Some(method) = incoming.method {
         if incoming.id.is_none() {
@@ -352,6 +438,13 @@ async fn handle_incoming_line(
     }
 
     Ok(())
+}
+
+fn is_approval_method(method: &str) -> bool {
+    matches!(
+        method,
+        "item/commandExecution/requestApproval" | "item/fileChange/requestApproval"
+    )
 }
 
 async fn resolve_all_pending(pending: &Arc<Mutex<PendingMap>>, reason: &str) {
@@ -480,8 +573,7 @@ pub async fn thread_start(
             json!({
               "model": model,
               "cwd": cwd,
-              "sandboxPolicy": "readOnly",
-              "approvalPolicy": "never"
+              "sandboxPolicy": "readOnly"
             }),
         )
         .await?;
@@ -522,8 +614,7 @@ pub async fn turn_start(
                   "text": text
                 }
               ],
-              "sandboxPolicy": "readOnly",
-              "approvalPolicy": "never"
+              "sandboxPolicy": "readOnly"
             }),
         )
         .await
@@ -543,4 +634,14 @@ pub async fn turn_interrupt(
             }),
         )
         .await
+}
+
+#[tauri::command]
+pub async fn approval_respond(
+    state: State<'_, EngineManager>,
+    request_id: u64,
+    result: Value,
+) -> Result<(), String> {
+    let runtime = current_runtime(&state).await?;
+    runtime.respond_server_request(request_id, result).await
 }

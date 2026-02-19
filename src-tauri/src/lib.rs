@@ -12,6 +12,7 @@ pub fn run() {
             engine::thread_start,
             engine::turn_start,
             engine::turn_interrupt,
+            engine::approval_respond,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

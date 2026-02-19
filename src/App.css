@@ -117,6 +117,26 @@ button:disabled {
   gap: 12px;
 }
 
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(13, 31, 36, 0.55);
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  z-index: 20;
+}
+
+.approval-modal {
+  width: min(720px, 100%);
+  background: #ffffff;
+  border: 1px solid #9cb0b7;
+  border-radius: 14px;
+  padding: 14px;
+  display: grid;
+  gap: 10px;
+}
+
 pre {
   margin: 0;
   white-space: pre-wrap;
