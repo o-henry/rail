@@ -1894,52 +1894,10 @@ function App() {
         .map((edge) => edge.to.nodeId)
         .filter((value, index, arr) => arr.indexOf(value) === index)
     : [];
+  const isActiveTab = (tab: WorkspaceTab): boolean => workspaceTab === tab;
 
   return (
     <main className="app-shell">
-      <aside className="left-nav">
-        <div className="brand">R</div>
-        <nav className="nav-list">
-          <button
-            className={workspaceTab === "workflow" ? "is-active" : ""}
-            onClick={() => setWorkspaceTab("workflow")}
-            type="button"
-          >
-            <span className="nav-icon">◉</span>
-            <span className="nav-label">워크</span>
-          </button>
-          <button
-            className={workspaceTab === "history" ? "is-active" : ""}
-            onClick={() => setWorkspaceTab("history")}
-            type="button"
-          >
-            <span className="nav-icon">≡</span>
-            <span className="nav-label">기록</span>
-          </button>
-          <button
-            className={workspaceTab === "settings" ? "is-active" : ""}
-            onClick={() => setWorkspaceTab("settings")}
-            type="button"
-          >
-            <span className="nav-icon">⚙</span>
-            <span className="nav-label">설정</span>
-          </button>
-          <button
-            className={workspaceTab === "dev" ? "is-active" : ""}
-            onClick={() => setWorkspaceTab("dev")}
-            type="button"
-          >
-            <span className="nav-icon">⌘</span>
-            <span className="nav-label">개발</span>
-          </button>
-        </nav>
-        <div className="left-meta">
-          <div className="meta-dot" />
-          <div className="meta-dot" />
-          <div className="meta-dot" />
-        </div>
-      </aside>
-
       <section className="workspace">
         <header className="workspace-header">
           <div className="header-title">
@@ -1955,6 +1913,36 @@ function App() {
             />
           </div>
           <div className="header-actions">
+            <div className="header-view-tabs">
+              <button
+                className={isActiveTab("workflow") ? "is-active" : ""}
+                onClick={() => setWorkspaceTab("workflow")}
+                type="button"
+              >
+                워크플로우
+              </button>
+              <button
+                className={isActiveTab("history") ? "is-active" : ""}
+                onClick={() => setWorkspaceTab("history")}
+                type="button"
+              >
+                기록
+              </button>
+              <button
+                className={isActiveTab("settings") ? "is-active" : ""}
+                onClick={() => setWorkspaceTab("settings")}
+                type="button"
+              >
+                설정
+              </button>
+              <button
+                className={isActiveTab("dev") ? "is-active" : ""}
+                onClick={() => setWorkspaceTab("dev")}
+                type="button"
+              >
+                개발
+              </button>
+            </div>
             <span className="chip">인증: {authModeLabel(authMode)}</span>
             <span className="chip">실행 {runFiles.length}</span>
             <button className="primary-action" type="button">
@@ -2106,10 +2094,38 @@ function App() {
                 })}
 
                 <div className="canvas-left-tools">
-                  <button type="button">□</button>
-                  <button type="button">✦</button>
-                  <button type="button">⌁</button>
-                  <button type="button">⚙</button>
+                  <button
+                    className={isActiveTab("workflow") ? "is-active" : ""}
+                    onClick={() => setWorkspaceTab("workflow")}
+                    title="워크플로우"
+                    type="button"
+                  >
+                    ◉
+                  </button>
+                  <button
+                    className={isActiveTab("history") ? "is-active" : ""}
+                    onClick={() => setWorkspaceTab("history")}
+                    title="실행 기록"
+                    type="button"
+                  >
+                    ≡
+                  </button>
+                  <button
+                    className={isActiveTab("settings") ? "is-active" : ""}
+                    onClick={() => setWorkspaceTab("settings")}
+                    title="설정"
+                    type="button"
+                  >
+                    ⚙
+                  </button>
+                  <button
+                    className={isActiveTab("dev") ? "is-active" : ""}
+                    onClick={() => setWorkspaceTab("dev")}
+                    title="개발 테스트"
+                    type="button"
+                  >
+                    ⌘
+                  </button>
                 </div>
 
                 <div className="canvas-zoom-controls">
