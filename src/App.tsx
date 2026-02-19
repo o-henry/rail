@@ -351,14 +351,103 @@ function defaultNodeConfig(type: NodeType): Record<string, unknown> {
 function nodeCardSummary(node: GraphNode): string {
   if (node.type === "turn") {
     const config = node.config as TurnConfig;
-    return `model=${String(config.model ?? "gpt-5-codex")}`;
+    return `모델: ${String(config.model ?? "gpt-5-codex")}`;
   }
   if (node.type === "transform") {
     const config = node.config as TransformConfig;
-    return `mode=${String(config.mode ?? "pick")}`;
+    return `모드: ${String(config.mode ?? "pick")}`;
   }
   const config = node.config as GateConfig;
-  return `decisionPath=${String(config.decisionPath ?? "decision")}`;
+  return `분기 경로: ${String(config.decisionPath ?? "decision")}`;
+}
+
+function nodeTypeLabel(type: NodeType): string {
+  if (type === "turn") {
+    return "응답 에이전트";
+  }
+  if (type === "transform") {
+    return "데이터 변환";
+  }
+  return "분기";
+}
+
+function nodeStatusLabel(status: NodeExecutionStatus): string {
+  if (status === "idle") {
+    return "대기";
+  }
+  if (status === "queued") {
+    return "대기열";
+  }
+  if (status === "running") {
+    return "실행 중";
+  }
+  if (status === "done") {
+    return "완료";
+  }
+  if (status === "failed") {
+    return "실패";
+  }
+  if (status === "skipped") {
+    return "건너뜀";
+  }
+  return "취소됨";
+}
+
+function approvalDecisionLabel(decision: ApprovalDecision): string {
+  if (decision === "accept") {
+    return "허용";
+  }
+  if (decision === "acceptForSession") {
+    return "세션 동안 허용";
+  }
+  if (decision === "decline") {
+    return "거절";
+  }
+  return "취소";
+}
+
+function approvalSourceLabel(source: PendingApproval["source"]): string {
+  if (source === "remote") {
+    return "엔진(app-server)";
+  }
+  return source;
+}
+
+function lifecycleStateLabel(state: string): string {
+  const map: Record<string, string> = {
+    starting: "시작 중",
+    ready: "준비됨",
+    stopped: "중지됨",
+    disconnected: "연결 끊김",
+    parseError: "파싱 오류",
+    readError: "읽기 오류",
+    stderrError: "표준오류 스트림 오류",
+  };
+  return map[state] ?? state;
+}
+
+function authModeLabel(mode: AuthMode): string {
+  if (mode === "chatgpt") {
+    return "챗지피티";
+  }
+  if (mode === "apikey") {
+    return "API 키";
+  }
+  return "미확인";
+}
+
+function completedStatusLabel(status: string): string {
+  const map: Record<string, string> = {
+    unknown: "미확인",
+    completed: "완료",
+    done: "완료",
+    failed: "실패",
+    cancelled: "취소됨",
+    rejected: "거절됨",
+    success: "성공",
+    succeeded: "성공",
+  };
+  return map[status.toLowerCase()] ?? status;
 }
 
 function extractFinalAnswer(output: unknown): string {
@@ -642,14 +731,14 @@ function App() {
   const [text, setText] = useState("안녕하세요. 지금 상태를 3줄로 요약해줘.");
 
   const [engineStarted, setEngineStarted] = useState(false);
-  const [status, setStatus] = useState("idle");
+  const [status, setStatus] = useState("대기 중");
   const [running, setRunning] = useState(false);
   const [error, setError] = useState("");
 
   const [authUrl, setAuthUrl] = useState("");
   const [authMode, setAuthMode] = useState<AuthMode>("unknown");
   const [loginCompleted, setLoginCompleted] = useState(false);
-  const [lastCompletedStatus, setLastCompletedStatus] = useState("unknown");
+  const [lastCompletedStatus, setLastCompletedStatus] = useState("미확인");
   const [streamText, setStreamText] = useState("");
   const [events, setEvents] = useState<string[]>([]);
   const [pendingApprovals, setPendingApprovals] = useState<PendingApproval[]>([]);
@@ -752,16 +841,16 @@ function App() {
 
           if (payload.method === "account/login/completed") {
             setLoginCompleted(true);
-            setStatus("account/login/completed received");
+            setStatus("로그인 완료 이벤트 수신");
           }
 
           if (payload.method === "account/updated") {
             const mode = extractAuthMode(payload.params);
             if (mode) {
               setAuthMode(mode);
-              setStatus(`account/updated received (authMode=${mode})`);
+              setStatus(`계정 상태 갱신 수신 (인증 모드=${mode})`);
             } else {
-              setStatus("account/updated received (authMode unknown)");
+              setStatus("계정 상태 갱신 수신 (인증 모드 미확인)");
             }
           }
 
@@ -797,7 +886,7 @@ function App() {
               },
             ];
           });
-          setStatus(`approval requested (${payload.method})`);
+          setStatus(`승인 요청 수신 (${payload.method})`);
         },
       );
 
@@ -806,7 +895,7 @@ function App() {
         (event) => {
           const payload = event.payload;
           const msg = payload.message ? ` (${payload.message})` : "";
-          setStatus(`${payload.state}${msg}`);
+          setStatus(`${lifecycleStateLabel(payload.state)}${msg}`);
 
           if (payload.state === "ready") {
             setEngineStarted(true);
@@ -896,19 +985,19 @@ function App() {
       try {
         await ensureEngineStarted();
         if (!cancelled) {
-          setStatus("ready");
+          setStatus("준비됨");
         }
       } catch (e) {
         const message = String(e);
         if (message.includes("already started")) {
           if (!cancelled) {
             setEngineStarted(true);
-            setStatus("ready");
+            setStatus("준비됨");
           }
           return;
         }
         if (!cancelled) {
-          setStatus(`auto-start failed (${message})`);
+          setStatus(`자동 시작 실패 (${message})`);
         }
       }
     };
@@ -931,7 +1020,7 @@ function App() {
     setError("");
     try {
       await ensureEngineStarted();
-      setStatus("ready");
+      setStatus("준비됨");
     } catch (e) {
       setError(String(e));
     }
@@ -942,7 +1031,7 @@ function App() {
     try {
       await invoke("engine_stop");
       setEngineStarted(false);
-      setStatus("stopped");
+      setStatus("중지됨");
       setRunning(false);
       setIsGraphRunning(false);
     } catch (e) {
@@ -957,12 +1046,12 @@ function App() {
       await ensureEngineStarted();
       const result = await invoke<LoginChatgptResult>("login_chatgpt");
       setAuthUrl(result.authUrl);
-      setStatus("auth url received");
+      setStatus("인증 URL 수신");
       try {
         await openUrl(result.authUrl);
-        setStatus("auth url opened in external browser");
+        setStatus("외부 브라우저에서 인증 URL 열림");
       } catch (openErr) {
-        setStatus("auth url open failed, copy URL manually");
+        setStatus("브라우저 열기 실패, URL 복사 후 수동 진행");
         setError(`openUrl failed: ${String(openErr)}`);
       }
     } catch (e) {
@@ -976,7 +1065,7 @@ function App() {
     }
     try {
       await navigator.clipboard.writeText(authUrl);
-      setStatus("auth url copied");
+      setStatus("인증 URL 복사 완료");
     } catch (e) {
       setError(`clipboard copy failed: ${String(e)}`);
     }
@@ -997,7 +1086,7 @@ function App() {
         },
       });
       setPendingApprovals((prev) => prev.slice(1));
-      setStatus(`approval response sent (${decision})`);
+      setStatus(`승인 응답 전송 (${approvalDecisionLabel(decision)})`);
     } catch (e) {
       setError(String(e));
     } finally {
@@ -1032,8 +1121,8 @@ function App() {
     setConnectFromNodeId("");
     setStatus(
       kind === "validation"
-        ? "validation preset loaded (5-agent)"
-        : "development preset loaded (5-agent)",
+        ? "검증형 5-에이전트 프리셋 로드됨"
+        : "개발형 5-에이전트 프리셋 로드됨",
     );
   }
 
@@ -1146,7 +1235,7 @@ function App() {
         graph,
       });
       await refreshGraphFiles();
-      setStatus(`graph saved (${graphFileName})`);
+      setStatus(`그래프 저장 완료 (${graphFileName})`);
     } catch (e) {
       setError(String(e));
     }
@@ -1165,7 +1254,7 @@ function App() {
       setGraph(normalized);
       setSelectedNodeId(normalized.nodes[0]?.id ?? "");
       setNodeStates({});
-      setStatus(`graph loaded (${target})`);
+      setStatus(`그래프 불러오기 완료 (${target})`);
       setGraphFileName(target);
     } catch (e) {
       setError(String(e));
@@ -1235,7 +1324,7 @@ function App() {
       try {
         mergeValue = JSON.parse(rawMerge);
       } catch (e) {
-        return { ok: false, error: `invalid mergeJson: ${String(e)}` };
+        return { ok: false, error: `merge JSON 형식 오류: ${String(e)}` };
       }
 
       if (input && typeof input === "object" && !Array.isArray(input) && mergeValue && typeof mergeValue === "object") {
@@ -1279,13 +1368,13 @@ function App() {
       try {
         parsedSchema = JSON.parse(schemaRaw);
       } catch (e) {
-        return { ok: false, error: `invalid schemaJson: ${String(e)}` };
+        return { ok: false, error: `스키마 JSON 형식 오류: ${String(e)}` };
       }
       const schemaErrors = validateSimpleSchema(parsedSchema, input);
       if (schemaErrors.length > 0) {
         return {
           ok: false,
-          error: `schema validation failed: ${schemaErrors.join("; ")}`,
+          error: `스키마 검증 실패: ${schemaErrors.join("; ")}`,
         };
       }
     }
@@ -1297,7 +1386,7 @@ function App() {
     if (decision !== "PASS" && decision !== "REJECT") {
       return {
         ok: false,
-        error: `Gate decision must be PASS or REJECT. got=${String(decisionRaw)}`,
+        error: `분기 값은 PASS 또는 REJECT 여야 합니다. 입력값=${String(decisionRaw)}`,
       };
     }
 
@@ -1328,7 +1417,7 @@ function App() {
     return {
       ok: true,
       output: { decision },
-      message: `Gate decision=${decision}, allowed=${Array.from(allowed).join(",") || "none"}`,
+      message: `분기 결과=${decision}, 실행 대상=${Array.from(allowed).join(",") || "없음"}`,
     };
   }
 
@@ -1356,7 +1445,7 @@ function App() {
     }
 
     if (!activeThreadId) {
-      return { ok: false, error: "failed to obtain threadId" };
+      return { ok: false, error: "threadId를 가져오지 못했습니다." };
     }
 
     setNodeRuntimeFields(node.id, { threadId: activeThreadId });
@@ -1411,7 +1500,7 @@ function App() {
     if (!terminal.ok) {
       return {
         ok: false,
-        error: `turn failed (${terminal.status})`,
+        error: `턴 실행 실패 (${terminal.status})`,
         threadId: activeThreadId,
         turnId: turnId ?? undefined,
       };
@@ -1434,7 +1523,7 @@ function App() {
     }
 
     setError("");
-    setStatus("graph run started");
+    setStatus("그래프 실행 시작");
     setIsGraphRunning(true);
     cancelRequestedRef.current = false;
     collectingRunRef.current = true;
@@ -1503,16 +1592,16 @@ function App() {
         }
 
         if (cancelRequestedRef.current) {
-          setNodeStatus(nodeId, "cancelled", "cancel requested");
-          transition(runRecord, nodeId, "cancelled", "cancel requested");
+          setNodeStatus(nodeId, "cancelled", "취소 요청됨");
+          transition(runRecord, nodeId, "cancelled", "취소 요청됨");
           break;
         }
 
         if (skipSet.has(nodeId)) {
-          setNodeStatus(nodeId, "skipped", "skipped by gate decision");
-          transition(runRecord, nodeId, "skipped", "skipped by gate decision");
+          setNodeStatus(nodeId, "skipped", "분기 결과로 건너뜀");
+          transition(runRecord, nodeId, "skipped", "분기 결과로 건너뜀");
         } else {
-          setNodeStatus(nodeId, "running", "node execution started");
+          setNodeStatus(nodeId, "running", "노드 실행 시작");
           transition(runRecord, nodeId, "running");
 
           const input = nodeInputFor(nodeId, outputs, workflowQuestion);
@@ -1520,13 +1609,13 @@ function App() {
           if (node.type === "turn") {
             const result = await executeTurnNode(node, input);
             if (!result.ok) {
-              setNodeStatus(nodeId, "failed", result.error ?? "turn failed");
+              setNodeStatus(nodeId, "failed", result.error ?? "턴 실행 실패");
               setNodeRuntimeFields(nodeId, {
                 error: result.error,
                 threadId: result.threadId,
                 turnId: result.turnId,
               });
-              transition(runRecord, nodeId, "failed", result.error ?? "turn failed");
+              transition(runRecord, nodeId, "failed", result.error ?? "턴 실행 실패");
               break;
             }
 
@@ -1537,19 +1626,19 @@ function App() {
               threadId: result.threadId,
               turnId: result.turnId,
             });
-            setNodeStatus(nodeId, "done", "turn completed");
+            setNodeStatus(nodeId, "done", "턴 실행 완료");
             runRecord.threadTurnMap[nodeId] = {
               threadId: result.threadId,
               turnId: result.turnId,
             };
-            transition(runRecord, nodeId, "done", "turn completed");
+            transition(runRecord, nodeId, "done", "턴 실행 완료");
             lastDoneNodeId = nodeId;
           } else if (node.type === "transform") {
             const result = await executeTransformNode(node, input);
             if (!result.ok) {
-              setNodeStatus(nodeId, "failed", result.error ?? "transform failed");
+              setNodeStatus(nodeId, "failed", result.error ?? "변환 실패");
               setNodeRuntimeFields(nodeId, { error: result.error });
-              transition(runRecord, nodeId, "failed", result.error ?? "transform failed");
+              transition(runRecord, nodeId, "failed", result.error ?? "변환 실패");
               break;
             }
 
@@ -1558,15 +1647,15 @@ function App() {
               status: "done",
               output: result.output,
             });
-            setNodeStatus(nodeId, "done", "transform completed");
-            transition(runRecord, nodeId, "done", "transform completed");
+            setNodeStatus(nodeId, "done", "변환 완료");
+            transition(runRecord, nodeId, "done", "변환 완료");
             lastDoneNodeId = nodeId;
           } else {
             const result = executeGateNode(node, input, skipSet);
             if (!result.ok) {
-              setNodeStatus(nodeId, "failed", result.error ?? "gate failed");
+              setNodeStatus(nodeId, "failed", result.error ?? "분기 실패");
               setNodeRuntimeFields(nodeId, { error: result.error });
-              transition(runRecord, nodeId, "failed", result.error ?? "gate failed");
+              transition(runRecord, nodeId, "failed", result.error ?? "분기 실패");
               break;
             }
 
@@ -1575,8 +1664,8 @@ function App() {
               status: "done",
               output: result.output,
             });
-            setNodeStatus(nodeId, "done", result.message ?? "gate completed");
-            transition(runRecord, nodeId, "done", result.message ?? "gate completed");
+            setNodeStatus(nodeId, "done", result.message ?? "분기 완료");
+            transition(runRecord, nodeId, "done", result.message ?? "분기 완료");
             lastDoneNodeId = nodeId;
           }
         }
@@ -1619,10 +1708,10 @@ function App() {
       await saveRunRecord(runRecord);
       setSelectedRunDetail(runRecord);
       setSelectedRunFile(`run-${runRecord.runId}.json`);
-      setStatus("graph run finished");
+      setStatus("그래프 실행 완료");
     } catch (e) {
       setError(String(e));
-      setStatus("graph run failed");
+      setStatus("그래프 실행 실패");
     } finally {
       turnTerminalResolverRef.current = null;
       activeTurnNodeIdRef.current = "";
@@ -1634,7 +1723,7 @@ function App() {
 
   async function onCancelGraphRun() {
     cancelRequestedRef.current = true;
-    setStatus("cancel requested");
+    setStatus("취소 요청됨");
 
     const activeNodeId = activeTurnNodeIdRef.current;
     if (!activeNodeId) {
@@ -1648,7 +1737,7 @@ function App() {
 
     try {
       await invoke("turn_interrupt", { threadId: active.threadId });
-      addNodeLog(activeNodeId, "turn_interrupt requested");
+      addNodeLog(activeNodeId, "turn_interrupt 요청 전송");
     } catch (e) {
       setError(String(e));
     }
@@ -1677,7 +1766,7 @@ function App() {
         threadId: activeThreadId,
         text,
       });
-      setStatus(`dev turn started (thread: ${activeThreadId})`);
+      setStatus(`개발 테스트 실행 시작 (스레드: ${activeThreadId})`);
     } catch (err) {
       setError(String(err));
     } finally {
@@ -1692,7 +1781,7 @@ function App() {
     setError("");
     try {
       await invoke("turn_interrupt", { threadId });
-      setStatus("interrupt requested");
+      setStatus("중단 요청됨");
     } catch (e) {
       setError(String(e));
     }
@@ -1701,37 +1790,37 @@ function App() {
   function renderSettingsPanel(compact = false) {
     return (
       <section className={`controls ${compact ? "settings-compact" : ""}`}>
-        <h2>Engine Settings</h2>
+        <h2>엔진 설정</h2>
         <label>
-          CWD
+          작업 경로(CWD)
           <input value={cwd} onChange={(e) => setCwd(e.currentTarget.value)} />
         </label>
         <label>
-          Model
+          모델
           <input value={model} onChange={(e) => setModel(e.currentTarget.value)} />
         </label>
         <div className="button-row">
           <button onClick={onStartEngine} disabled={running || isGraphRunning} type="button">
-            Engine Start
+            엔진 시작
           </button>
           <button onClick={onStopEngine} type="button">
-            Engine Stop
+            엔진 중지
           </button>
           <button onClick={onLoginChatgpt} disabled={running || isGraphRunning} type="button">
-            Login ChatGPT
+            ChatGPT 로그인
           </button>
         </div>
         <div className="meta">
-          <div>authMode: {authMode}</div>
-          <div>engineStarted: {String(engineStarted)}</div>
-          <div>loginCompleted: {String(loginCompleted)}</div>
-          <div>pendingApprovals: {pendingApprovals.length}</div>
-          <div>last item/completed status: {lastCompletedStatus}</div>
+          <div>인증 모드: {authModeLabel(authMode)}</div>
+          <div>엔진 시작 여부: {engineStarted ? "예" : "아니오"}</div>
+          <div>로그인 완료: {loginCompleted ? "예" : "아니오"}</div>
+          <div>대기 중 승인 요청: {pendingApprovals.length}</div>
+          <div>마지막 완료 상태: {completedStatusLabel(lastCompletedStatus)}</div>
           {authUrl && (
             <div>
-              authUrl: <code>{authUrl}</code>{" "}
+              인증 URL: <code>{authUrl}</code>{" "}
               <button onClick={onCopyAuthUrl} type="button">
-                Copy
+                복사
               </button>
             </div>
           )}
@@ -1775,56 +1864,56 @@ function App() {
             onClick={() => setWorkspaceTab("workflow")}
             type="button"
           >
-            Workflow
+            워크플로우
           </button>
           <button
             className={workspaceTab === "history" ? "is-active" : ""}
             onClick={() => setWorkspaceTab("history")}
             type="button"
           >
-            History
+            실행 기록
           </button>
           <button
             className={workspaceTab === "settings" ? "is-active" : ""}
             onClick={() => setWorkspaceTab("settings")}
             type="button"
           >
-            Settings
+            설정
           </button>
           <button
             className={workspaceTab === "dev" ? "is-active" : ""}
             onClick={() => setWorkspaceTab("dev")}
             type="button"
           >
-            Dev
+            개발 테스트
           </button>
         </nav>
         <div className="left-meta">
-          <div>authMode: {authMode}</div>
-          <div>engine: {engineStarted ? "ready" : "stopped"}</div>
-          <div>runs: {runFiles.length}</div>
+          <div>인증 모드: {authModeLabel(authMode)}</div>
+          <div>엔진: {engineStarted ? "준비됨" : "중지됨"}</div>
+          <div>실행 수: {runFiles.length}</div>
         </div>
       </aside>
 
       <section className="workspace">
         <header className="workspace-header">
           <div>
-            <h1>Rail Workflow Studio</h1>
+            <h1>Rail 워크플로우 스튜디오</h1>
             <p>{status}</p>
           </div>
           <div className="auth-inline">
-            <span>authMode</span>
-            <strong>{authMode}</strong>
+            <span>인증 모드</span>
+            <strong>{authModeLabel(authMode)}</strong>
           </div>
         </header>
 
-        {error && <div className="error">error: {error}</div>}
+        {error && <div className="error">오류: {error}</div>}
 
         {workspaceTab === "workflow" && (
           <div className="workflow-layout">
             <section className="canvas-pane">
               <label>
-                질문 (Workflow Input)
+                질문 입력
                 <textarea
                   onChange={(e) => setWorkflowQuestion(e.currentTarget.value)}
                   rows={3}
@@ -1834,22 +1923,22 @@ function App() {
 
               <div className="button-row">
                 <button onClick={() => addNode("turn")} type="button">
-                  + TurnNode
+                  + 응답 에이전트
                 </button>
                 <button onClick={() => addNode("transform")} type="button">
-                  + TransformNode
+                  + 데이터 변환
                 </button>
                 <button onClick={() => addNode("gate")} type="button">
-                  + GateNode
+                  + 분기
                 </button>
                 <button disabled={!connectFromNodeId} onClick={() => setConnectFromNodeId("")} type="button">
-                  Cancel Connect
+                  연결 취소
                 </button>
                 <button onClick={() => applyPreset("validation")} type="button">
-                  Load 검증형 5-Agent
+                  검증형 5에이전트 불러오기
                 </button>
                 <button onClick={() => applyPreset("development")} type="button">
-                  Load 개발형 5-Agent
+                  개발형 5에이전트 불러오기
                 </button>
               </div>
 
@@ -1857,16 +1946,16 @@ function App() {
                 <input
                   value={graphFileName}
                   onChange={(e) => setGraphFileName(e.currentTarget.value)}
-                  placeholder="graph file name"
+                  placeholder="저장할 그래프 파일 이름"
                 />
                 <button onClick={saveGraph} type="button">
-                  Save
+                  저장
                 </button>
                 <button onClick={() => loadGraph()} type="button">
-                  Load
+                  불러오기
                 </button>
                 <button onClick={refreshGraphFiles} type="button">
-                  Refresh
+                  새로고침
                 </button>
                 <select
                   onChange={(e) => {
@@ -1877,7 +1966,7 @@ function App() {
                   }}
                   value=""
                 >
-                  <option value="">graphs/*.json</option>
+                  <option value="">그래프 파일 선택</option>
                   {graphFiles.map((file) => (
                     <option key={file} value={file}>
                       {file}
@@ -1917,22 +2006,24 @@ function App() {
                       style={{ left: node.position.x, top: node.position.y }}
                     >
                       <div className="node-head" onMouseDown={(e) => onNodeDragStart(e, node.id)}>
-                        <strong>{node.type.toUpperCase()}</strong>
+                        <strong>{nodeTypeLabel(node.type)}</strong>
                         <button onClick={() => deleteNode(node.id)} type="button">
-                          Delete
+                          삭제
                         </button>
                       </div>
                       <div className="node-body">
                         <div className="node-id">{node.id}</div>
-                        <div className={`status-pill status-${nodeStatus}`}>{nodeStatus}</div>
+                        <div className={`status-pill status-${nodeStatus}`}>
+                          {nodeStatusLabel(nodeStatus)}
+                        </div>
                         <div>{nodeCardSummary(node)}</div>
                       </div>
                       <div className="node-ports">
                         <button onClick={() => onPortInClick(node.id)} type="button">
-                          in
+                          입력
                         </button>
                         <button onClick={() => onPortOutClick(node.id)} type="button">
-                          {connectFromNodeId === node.id ? "out*" : "out"}
+                          {connectFromNodeId === node.id ? "출력*" : "출력"}
                         </button>
                       </div>
                     </div>
@@ -1941,14 +2032,14 @@ function App() {
               </div>
 
               <div className="edge-list">
-                {graph.edges.length === 0 && <div>(no edges)</div>}
+                {graph.edges.length === 0 && <div>(연결 없음)</div>}
                 {graph.edges.map((edge, index) => (
                   <div className="edge-item" key={`${edge.from.nodeId}-${edge.to.nodeId}-${index}`}>
                     <code>
-                      {edge.from.nodeId}.out -&gt; {edge.to.nodeId}.in
+                      {edge.from.nodeId}.출력 -&gt; {edge.to.nodeId}.입력
                     </code>
                     <button onClick={() => deleteEdge(index)} type="button">
-                      remove
+                      제거
                     </button>
                   </div>
                 ))}
@@ -1956,36 +2047,36 @@ function App() {
             </section>
 
             <aside className="inspector-pane">
-              <h2>Inspector</h2>
+              <h2>노드 상세</h2>
               {!selectedNode && <div>노드를 선택하세요.</div>}
               {selectedNode && (
                 <>
                   <div>
                     <strong>{selectedNode.id}</strong>
                   </div>
-                  <div>type: {selectedNode.type}</div>
+                  <div>유형: {nodeTypeLabel(selectedNode.type)}</div>
                   <div className={`status-pill status-${selectedNodeState?.status ?? "idle"}`}>
-                    status: {selectedNodeState?.status ?? "idle"}
+                    상태: {nodeStatusLabel(selectedNodeState?.status ?? "idle")}
                   </div>
 
                   {selectedNode.type === "turn" && (
                     <div className="form-grid">
                       <label>
-                        model
+                        모델
                         <input
                           onChange={(e) => updateSelectedNodeConfig("model", e.currentTarget.value)}
                           value={String((selectedNode.config as TurnConfig).model ?? model)}
                         />
                       </label>
                       <label>
-                        cwd
+                        작업 경로
                         <input
                           onChange={(e) => updateSelectedNodeConfig("cwd", e.currentTarget.value)}
                           value={String((selectedNode.config as TurnConfig).cwd ?? cwd)}
                         />
                       </label>
                       <label>
-                        promptTemplate
+                        프롬프트 템플릿
                         <textarea
                           onChange={(e) =>
                             updateSelectedNodeConfig("promptTemplate", e.currentTarget.value)
@@ -2000,25 +2091,25 @@ function App() {
                   {selectedNode.type === "transform" && (
                     <div className="form-grid">
                       <label>
-                        mode
+                        변환 모드
                         <select
                           onChange={(e) => updateSelectedNodeConfig("mode", e.currentTarget.value)}
                           value={String((selectedNode.config as TransformConfig).mode ?? "pick")}
                         >
-                          <option value="pick">pick</option>
-                          <option value="merge">merge</option>
-                          <option value="template">template</option>
+                          <option value="pick">필드 선택</option>
+                          <option value="merge">병합</option>
+                          <option value="template">문자열 템플릿</option>
                         </select>
                       </label>
                       <label>
-                        pickPath
+                        pick 경로
                         <input
                           onChange={(e) => updateSelectedNodeConfig("pickPath", e.currentTarget.value)}
                           value={String((selectedNode.config as TransformConfig).pickPath ?? "")}
                         />
                       </label>
                       <label>
-                        mergeJson
+                        merge JSON
                         <textarea
                           onChange={(e) => updateSelectedNodeConfig("mergeJson", e.currentTarget.value)}
                           rows={3}
@@ -2026,7 +2117,7 @@ function App() {
                         />
                       </label>
                       <label>
-                        template
+                        템플릿
                         <textarea
                           onChange={(e) => updateSelectedNodeConfig("template", e.currentTarget.value)}
                           rows={3}
@@ -2039,19 +2130,19 @@ function App() {
                   {selectedNode.type === "gate" && (
                     <div className="form-grid">
                       <label>
-                        decisionPath
+                        분기 경로(decisionPath)
                         <input
                           onChange={(e) => updateSelectedNodeConfig("decisionPath", e.currentTarget.value)}
                           value={String((selectedNode.config as GateConfig).decisionPath ?? "decision")}
                         />
                       </label>
                       <label>
-                        PASS target
+                        PASS 대상 노드
                         <select
                           onChange={(e) => updateSelectedNodeConfig("passNodeId", e.currentTarget.value)}
                           value={String((selectedNode.config as GateConfig).passNodeId ?? "")}
                         >
-                          <option value="">(none)</option>
+                          <option value="">(없음)</option>
                           {outgoingFromSelected.map((nodeId) => (
                             <option key={nodeId} value={nodeId}>
                               {nodeId}
@@ -2060,12 +2151,12 @@ function App() {
                         </select>
                       </label>
                       <label>
-                        REJECT target
+                        REJECT 대상 노드
                         <select
                           onChange={(e) => updateSelectedNodeConfig("rejectNodeId", e.currentTarget.value)}
                           value={String((selectedNode.config as GateConfig).rejectNodeId ?? "")}
                         >
-                          <option value="">(none)</option>
+                          <option value="">(없음)</option>
                           {outgoingFromSelected.map((nodeId) => (
                             <option key={nodeId} value={nodeId}>
                               {nodeId}
@@ -2074,7 +2165,7 @@ function App() {
                         </select>
                       </label>
                       <label>
-                        schemaJson (optional)
+                        스키마 JSON (선택)
                         <textarea
                           onChange={(e) => updateSelectedNodeConfig("schemaJson", e.currentTarget.value)}
                           rows={4}
@@ -2084,10 +2175,10 @@ function App() {
                     </div>
                   )}
 
-                  <h3>Node Logs</h3>
-                  <pre>{(selectedNodeState?.logs ?? []).join("\n") || "(no logs)"}</pre>
-                  <h3>Node Output</h3>
-                  <pre>{formatUnknown(selectedNodeState?.output) || "(no output)"}</pre>
+                  <h3>노드 로그</h3>
+                  <pre>{(selectedNodeState?.logs ?? []).join("\n") || "(로그 없음)"}</pre>
+                  <h3>노드 출력</h3>
+                  <pre>{formatUnknown(selectedNodeState?.output) || "(출력 없음)"}</pre>
                 </>
               )}
 
@@ -2097,10 +2188,10 @@ function App() {
                   onClick={onRunGraph}
                   type="button"
                 >
-                  Run Graph
+                  그래프 실행
                 </button>
                 <button disabled={!isGraphRunning} onClick={onCancelGraphRun} type="button">
-                  Cancel Run
+                  실행 취소
                 </button>
               </div>
 
@@ -2112,13 +2203,13 @@ function App() {
         {workspaceTab === "history" && (
           <section className="history-layout">
             <article className="panel-card history-list">
-              <h2>History</h2>
+              <h2>실행 기록</h2>
               <div className="button-row">
                 <button onClick={refreshRunFiles} type="button">
-                  Refresh
+                  새로고침
                 </button>
               </div>
-              {runFiles.length === 0 && <div>(no run files)</div>}
+              {runFiles.length === 0 && <div>(실행 기록 파일 없음)</div>}
               {runFiles.map((file) => (
                 <button
                   className={selectedRunFile === file ? "is-active" : ""}
@@ -2135,19 +2226,19 @@ function App() {
               {!selectedRunDetail && <div>실행 기록을 선택하세요.</div>}
               {selectedRunDetail && (
                 <>
-                  <h2>Run Detail</h2>
-                  <div>runId: {selectedRunDetail.runId}</div>
-                  <div>startedAt: {selectedRunDetail.startedAt}</div>
-                  <div>finishedAt: {selectedRunDetail.finishedAt ?? "-"}</div>
-                  <h3>Question</h3>
-                  <pre>{selectedRunDetail.question || "(empty)"}</pre>
-                  <h3>Final Answer</h3>
-                  <pre>{selectedRunDetail.finalAnswer || "(none)"}</pre>
-                  <h3>Summary Logs</h3>
-                  <pre>{selectedRunDetail.summaryLogs.join("\n") || "(none)"}</pre>
-                  <h3>Transitions</h3>
+                  <h2>실행 상세</h2>
+                  <div>실행 ID: {selectedRunDetail.runId}</div>
+                  <div>시작 시간: {selectedRunDetail.startedAt}</div>
+                  <div>종료 시간: {selectedRunDetail.finishedAt ?? "-"}</div>
+                  <h3>질문</h3>
+                  <pre>{selectedRunDetail.question || "(비어 있음)"}</pre>
+                  <h3>최종 답변</h3>
+                  <pre>{selectedRunDetail.finalAnswer || "(없음)"}</pre>
+                  <h3>요약 로그</h3>
+                  <pre>{selectedRunDetail.summaryLogs.join("\n") || "(없음)"}</pre>
+                  <h3>상태 전이</h3>
                   <pre>{formatUnknown(selectedRunDetail.transitions)}</pre>
-                  <h3>Node Logs</h3>
+                  <h3>노드 로그</h3>
                   <pre>{formatUnknown(selectedRunDetail.nodeLogs ?? {})}</pre>
                 </>
               )}
@@ -2158,45 +2249,45 @@ function App() {
         {workspaceTab === "settings" && (
           <section className="panel-card">
             {renderSettingsPanel()}
-            {lastSavedRunFile && <div>last run file: {lastSavedRunFile}</div>}
+            {lastSavedRunFile && <div>최근 실행 파일: {lastSavedRunFile}</div>}
           </section>
         )}
 
         {workspaceTab === "dev" && (
           <section className="workflow-layout">
             <article className="panel-card">
-              <h2>Dev Single Turn</h2>
+              <h2>개발용 단일 턴 테스트</h2>
               <label>
-                Thread ID
+                스레드 ID
                 <input
                   onChange={(e) => setThreadId(e.currentTarget.value)}
-                  placeholder="thread_start 결과 자동 입력"
+                  placeholder="thread_start 결과가 자동 입력됩니다"
                   value={threadId}
                 />
               </label>
 
               <form className="prompt" onSubmit={onRunTurnDev}>
                 <label>
-                  Input
+                  입력
                   <textarea onChange={(e) => setText(e.currentTarget.value)} rows={4} value={text} />
                 </label>
                 <div className="button-row">
                   <button disabled={running || !text.trim()} type="submit">
-                    {running ? "Running..." : "실행"}
+                    {running ? "실행 중..." : "실행"}
                   </button>
                   <button disabled={!threadId} onClick={onInterruptDev} type="button">
-                    Interrupt
+                    중단
                   </button>
                 </div>
               </form>
 
-              <h3>Streaming Output</h3>
-              <pre>{streamText || "(waiting for item/agentMessage/delta...)"}</pre>
+              <h3>스트리밍 출력</h3>
+              <pre>{streamText || "(item/agentMessage/delta를 기다리는 중...)"}</pre>
             </article>
 
             <article className="panel-card">
-              <h2>Notifications</h2>
-              <pre>{events.join("\n") || "(no events yet)"}</pre>
+              <h2>알림 이벤트</h2>
+              <pre>{events.join("\n") || "(아직 이벤트 없음)"}</pre>
             </article>
           </section>
         )}
@@ -2205,10 +2296,10 @@ function App() {
       {activeApproval && (
         <div className="modal-backdrop">
           <section className="approval-modal">
-            <h2>Approval Required</h2>
-            <div>source: {activeApproval.source}</div>
-            <div>method: {activeApproval.method}</div>
-            <div>requestId: {activeApproval.requestId}</div>
+            <h2>승인 필요</h2>
+            <div>요청 출처: {approvalSourceLabel(activeApproval.source)}</div>
+            <div>메서드: {activeApproval.method}</div>
+            <div>요청 ID: {activeApproval.requestId}</div>
             <pre>{formatUnknown(activeApproval.params)}</pre>
             <div className="button-row">
               {APPROVAL_DECISIONS.map((decision) => (
@@ -2218,7 +2309,7 @@ function App() {
                   onClick={() => onRespondApproval(decision)}
                   type="button"
                 >
-                  {decision}
+                  {approvalDecisionLabel(decision)}
                 </button>
               ))}
             </div>
