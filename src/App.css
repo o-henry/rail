@@ -140,21 +140,24 @@ h3 {
   height: 100vh;
   padding: 16px;
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: 82px minmax(0, 1fr);
+  gap: 10px;
   background: #f6f6f6;
 }
 
 .app-shell.canvas-fullscreen-mode {
+  grid-template-columns: 1fr;
   padding: 8px;
 }
 
+.app-shell.canvas-fullscreen-mode .left-nav {
+  display: none;
+}
+
 .left-nav {
-  position: absolute;
-  top: 12px;
-  left: 12px;
-  bottom: 12px;
+  position: relative;
   width: 68px;
-  z-index: 30;
+  min-height: 0;
   border-radius: 22px;
   border: 1px solid rgba(255, 255, 255, 0.72);
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.48), rgba(233, 238, 246, 0.3));
@@ -179,10 +182,10 @@ h3 {
 }
 
 .nav-list button {
-  width: 42px;
-  min-width: 42px;
-  min-height: 42px;
-  height: 42px;
+  width: 36px;
+  min-width: 36px;
+  min-height: 36px;
+  height: 36px;
   border-color: transparent;
   background: rgba(255, 255, 255, 0.5);
   border-radius: 50%;
@@ -192,10 +195,9 @@ h3 {
 }
 
 .nav-list button.is-active {
-  background: rgba(29, 38, 49, 0.86);
-  color: #ffffff;
-  border: 1px solid rgba(255, 255, 255, 0.22);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18), 0 6px 14px rgba(16, 23, 31, 0.26);
+  background: rgba(216, 226, 240, 0.95);
+  border: 1px solid rgba(177, 190, 210, 0.8);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6), 0 4px 10px rgba(16, 23, 31, 0.12);
 }
 
 .nav-icon {
@@ -239,8 +241,7 @@ h3 {
 }
 
 .workspace.canvas-fullscreen-active .left-nav {
-  top: 8px;
-  bottom: 8px;
+  display: none;
 }
 
 .workspace-header {
@@ -846,7 +847,6 @@ h3 {
 
 .history-layout {
   margin: 12px;
-  margin-left: 88px;
   height: calc(100% - 24px);
   min-height: 0;
   display: grid;
@@ -866,12 +866,11 @@ h3 {
 
 .settings-view {
   margin: 12px;
-  margin-left: 88px;
   height: calc(100% - 24px);
 }
 
 .dev-layout {
-  margin-left: 88px;
+  margin-left: 0;
 }
 
 .history-list button.is-active {
@@ -943,14 +942,13 @@ pre {
 
 @media (max-width: 900px) {
   .app-shell {
+    grid-template-columns: 68px minmax(0, 1fr);
     padding: 10px;
+    gap: 8px;
   }
 
   .left-nav {
-    left: 8px;
-    top: 8px;
-    bottom: 8px;
-    width: 56px;
+    width: 60px;
     padding: 6px 4px;
     border-radius: 18px;
   }
@@ -962,7 +960,7 @@ pre {
   .history-layout,
   .settings-view,
   .dev-layout {
-    margin-left: 72px;
+    margin-left: 12px;
     width: auto;
   }
 

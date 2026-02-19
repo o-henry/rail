@@ -2462,52 +2462,53 @@ function App() {
 
   return (
     <main className={`app-shell ${canvasFullscreen ? "canvas-fullscreen-mode" : ""}`}>
+      <aside className="left-nav">
+        <div className="brand-spacer" />
+        <nav className="nav-list">
+          <button
+            className={isActiveTab("workflow") ? "is-active" : ""}
+            onClick={() => setWorkspaceTab("workflow")}
+            aria-label="워크플로우"
+            title="워크플로우"
+            type="button"
+          >
+            <span className="nav-icon"><NavIcon tab="workflow" /></span>
+            <span className="nav-label">워크</span>
+          </button>
+          <button
+            className={isActiveTab("history") ? "is-active" : ""}
+            onClick={() => setWorkspaceTab("history")}
+            aria-label="기록"
+            title="기록"
+            type="button"
+          >
+            <span className="nav-icon"><NavIcon tab="history" /></span>
+            <span className="nav-label">기록</span>
+          </button>
+          <button
+            className={isActiveTab("dev") ? "is-active" : ""}
+            onClick={() => setWorkspaceTab("dev")}
+            aria-label="개발"
+            title="개발"
+            type="button"
+          >
+            <span className="nav-icon"><NavIcon tab="dev" /></span>
+            <span className="nav-label">개발</span>
+          </button>
+          <button
+            className={isActiveTab("settings") ? "is-active" : ""}
+            onClick={() => setWorkspaceTab("settings")}
+            aria-label="설정"
+            title="설정"
+            type="button"
+          >
+            <span className="nav-icon"><NavIcon tab="settings" /></span>
+            <span className="nav-label">설정</span>
+          </button>
+        </nav>
+      </aside>
+
       <section className={`workspace ${canvasFullscreen ? "canvas-fullscreen-active" : ""}`}>
-        <aside className="left-nav">
-          <div className="brand-spacer" />
-          <nav className="nav-list">
-            <button
-              className={isActiveTab("workflow") ? "is-active" : ""}
-              onClick={() => setWorkspaceTab("workflow")}
-              aria-label="워크플로우"
-              title="워크플로우"
-              type="button"
-            >
-              <span className="nav-icon"><NavIcon tab="workflow" /></span>
-              <span className="nav-label">워크</span>
-            </button>
-            <button
-              className={isActiveTab("history") ? "is-active" : ""}
-              onClick={() => setWorkspaceTab("history")}
-              aria-label="기록"
-              title="기록"
-              type="button"
-            >
-              <span className="nav-icon"><NavIcon tab="history" /></span>
-              <span className="nav-label">기록</span>
-            </button>
-            <button
-              className={isActiveTab("dev") ? "is-active" : ""}
-              onClick={() => setWorkspaceTab("dev")}
-              aria-label="개발"
-              title="개발"
-              type="button"
-            >
-              <span className="nav-icon"><NavIcon tab="dev" /></span>
-              <span className="nav-label">개발</span>
-            </button>
-            <button
-              className={isActiveTab("settings") ? "is-active" : ""}
-              onClick={() => setWorkspaceTab("settings")}
-              aria-label="설정"
-              title="설정"
-              type="button"
-            >
-              <span className="nav-icon"><NavIcon tab="settings" /></span>
-              <span className="nav-label">설정</span>
-            </button>
-          </nav>
-        </aside>
 
         {!canvasFullscreen && <header className="workspace-header">
           <div className="header-search-wrap">
