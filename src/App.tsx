@@ -1,4 +1,11 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import {
+  FormEvent,
+  MouseEvent as ReactMouseEvent,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { openUrl } from "@tauri-apps/plugin-opener";
@@ -39,7 +46,99 @@ type PendingApproval = {
   params: unknown;
 };
 
+type ViewMode = "graph" | "dev";
+type NodeType = "turn" | "transform" | "gate";
+type PortType = "in" | "out";
+
+type GraphNode = {
+  id: string;
+  type: NodeType;
+  position: { x: number; y: number };
+  config: Record<string, unknown>;
+};
+
+type GraphEdge = {
+  from: { nodeId: string; port: PortType };
+  to: { nodeId: string; port: PortType };
+};
+
+type GraphData = {
+  version: number;
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+};
+
+type NodeExecutionStatus =
+  | "idle"
+  | "queued"
+  | "running"
+  | "done"
+  | "failed"
+  | "skipped"
+  | "cancelled";
+
+type NodeRunState = {
+  status: NodeExecutionStatus;
+  logs: string[];
+  output?: unknown;
+  error?: string;
+  threadId?: string;
+  turnId?: string;
+};
+
+type RunTransition = {
+  at: string;
+  nodeId: string;
+  status: NodeExecutionStatus;
+  message?: string;
+};
+
+type RunRecord = {
+  runId: string;
+  startedAt: string;
+  finishedAt?: string;
+  graphSnapshot: GraphData;
+  transitions: RunTransition[];
+  summaryLogs: string[];
+  threadTurnMap: Record<string, { threadId?: string; turnId?: string }>;
+};
+
+type TurnTerminal = {
+  ok: boolean;
+  status: string;
+  params: unknown;
+};
+
+type DragState = {
+  nodeId: string;
+  offsetX: number;
+  offsetY: number;
+};
+
+type TurnConfig = {
+  model?: string;
+  cwd?: string;
+  promptTemplate?: string;
+};
+
+type TransformMode = "pick" | "merge" | "template";
+
+type TransformConfig = {
+  mode?: TransformMode;
+  pickPath?: string;
+  mergeJson?: string;
+  template?: string;
+};
+
+type GateConfig = {
+  decisionPath?: string;
+  passNodeId?: string;
+  rejectNodeId?: string;
+};
+
 const APPROVAL_DECISIONS: ApprovalDecision[] = ["accept", "acceptForSession", "decline", "cancel"];
+const NODE_WIDTH = 240;
+const NODE_HEIGHT = 136;
 
 function formatUnknown(value: unknown): string {
   try {
@@ -154,8 +253,140 @@ function extractCompletedStatus(input: unknown, depth = 0): string | null {
   return null;
 }
 
+function extractStringByPaths(value: unknown, paths: string[]): string | null {
+  if (value == null || typeof value !== "object") {
+    return null;
+  }
+
+  const root = value as Record<string, unknown>;
+  for (const path of paths) {
+    const parts = path.split(".");
+    let current: unknown = root;
+    let ok = true;
+
+    for (const part of parts) {
+      if (current && typeof current === "object" && part in (current as Record<string, unknown>)) {
+        current = (current as Record<string, unknown>)[part];
+      } else {
+        ok = false;
+        break;
+      }
+    }
+
+    if (ok && typeof current === "string") {
+      return current;
+    }
+  }
+
+  return null;
+}
+
+function getByPath(input: unknown, path: string): unknown {
+  if (!path.trim()) {
+    return input;
+  }
+
+  const parts = path.split(".").filter(Boolean);
+  let current: unknown = input;
+  for (const part of parts) {
+    if (current && typeof current === "object" && part in (current as Record<string, unknown>)) {
+      current = (current as Record<string, unknown>)[part];
+    } else {
+      return undefined;
+    }
+  }
+  return current;
+}
+
+function stringifyInput(input: unknown): string {
+  if (input == null) {
+    return "";
+  }
+  if (typeof input === "string") {
+    return input;
+  }
+  return formatUnknown(input);
+}
+
+function replaceInputPlaceholder(template: string, value: string): string {
+  return template.split("{{input}}").join(value);
+}
+
+function makeNodeId(type: NodeType): string {
+  const suffix = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  return `${type}-${suffix}`;
+}
+
+function defaultNodeConfig(type: NodeType): Record<string, unknown> {
+  if (type === "turn") {
+    return {
+      model: "gpt-5-codex",
+      cwd: ".",
+      promptTemplate: "{{input}}",
+    };
+  }
+
+  if (type === "transform") {
+    return {
+      mode: "pick",
+      pickPath: "text",
+      mergeJson: "{}",
+      template: "{{input}}",
+    };
+  }
+
+  return {
+    decisionPath: "decision",
+    passNodeId: "",
+    rejectNodeId: "",
+  };
+}
+
+function normalizeGraph(input: unknown): GraphData {
+  if (!input || typeof input !== "object") {
+    return { version: 1, nodes: [], edges: [] };
+  }
+
+  const data = input as Record<string, unknown>;
+  const nodes = Array.isArray(data.nodes) ? data.nodes : [];
+  const edges = Array.isArray(data.edges) ? data.edges : [];
+
+  return {
+    version: typeof data.version === "number" ? data.version : 1,
+    nodes: nodes.filter(Boolean) as GraphNode[],
+    edges: edges.filter(Boolean) as GraphEdge[],
+  };
+}
+
+function isTurnTerminalEvent(method: string, params: unknown): TurnTerminal | null {
+  if (method === "turn/completed") {
+    return { ok: true, status: "completed", params };
+  }
+  if (method === "turn/failed") {
+    return { ok: false, status: "failed", params };
+  }
+
+  if (method === "item/completed") {
+    const kind = extractStringByPaths(params, ["type", "kind", "item.type", "item.kind"]);
+    if (kind && !kind.toLowerCase().includes("turn")) {
+      return null;
+    }
+    const status = (extractCompletedStatus(params) ?? "").toLowerCase();
+    if (["failed", "error", "cancelled", "rejected"].includes(status)) {
+      return { ok: false, status, params };
+    }
+    if (["completed", "done", "success", "succeeded"].includes(status)) {
+      return { ok: true, status, params };
+    }
+  }
+
+  return null;
+}
+
 function App() {
   const defaultCwd = useMemo(() => ".", []);
+
+  const [viewMode, setViewMode] = useState<ViewMode>("graph");
 
   const [cwd, setCwd] = useState(defaultCwd);
   const [model, setModel] = useState("gpt-5-codex");
@@ -176,6 +407,67 @@ function App() {
   const [pendingApprovals, setPendingApprovals] = useState<PendingApproval[]>([]);
   const [approvalSubmitting, setApprovalSubmitting] = useState(false);
 
+  const [graph, setGraph] = useState<GraphData>({ version: 1, nodes: [], edges: [] });
+  const [selectedNodeId, setSelectedNodeId] = useState<string>("");
+  const [connectFromNodeId, setConnectFromNodeId] = useState<string>("");
+  const [graphFileName, setGraphFileName] = useState("sample.json");
+  const [graphFiles, setGraphFiles] = useState<string[]>([]);
+  const [runFiles, setRunFiles] = useState<string[]>([]);
+  const [lastSavedRunFile, setLastSavedRunFile] = useState("");
+  const [nodeStates, setNodeStates] = useState<Record<string, NodeRunState>>({});
+  const [isGraphRunning, setIsGraphRunning] = useState(false);
+
+  const dragRef = useRef<DragState | null>(null);
+  const cancelRequestedRef = useRef(false);
+  const activeTurnNodeIdRef = useRef<string>("");
+  const turnTerminalResolverRef = useRef<((terminal: TurnTerminal) => void) | null>(null);
+  const activeRunDeltaRef = useRef<Record<string, string>>({});
+
+  const activeApproval = pendingApprovals[0];
+  const selectedNode = graph.nodes.find((node) => node.id === selectedNodeId) ?? null;
+
+  function addNodeLog(nodeId: string, message: string) {
+    setNodeStates((prev) => {
+      const current = prev[nodeId] ?? { status: "idle", logs: [] };
+      const nextLogs = [...current.logs, message].slice(-300);
+      return {
+        ...prev,
+        [nodeId]: {
+          ...current,
+          logs: nextLogs,
+        },
+      };
+    });
+  }
+
+  function setNodeStatus(nodeId: string, statusValue: NodeExecutionStatus, message?: string) {
+    setNodeStates((prev) => {
+      const current = prev[nodeId] ?? { status: "idle", logs: [] };
+      const nextLogs = message ? [...current.logs, message].slice(-300) : current.logs;
+      return {
+        ...prev,
+        [nodeId]: {
+          ...current,
+          status: statusValue,
+          logs: nextLogs,
+        },
+      };
+    });
+  }
+
+  function setNodeRuntimeFields(nodeId: string, patch: Partial<NodeRunState>) {
+    setNodeStates((prev) => {
+      const current = prev[nodeId] ?? { status: "idle", logs: [] };
+      return {
+        ...prev,
+        [nodeId]: {
+          ...current,
+          ...patch,
+        },
+      };
+    });
+  }
+
   useEffect(() => {
     let cancelled = false;
 
@@ -191,6 +483,12 @@ function App() {
 
           if (payload.method === "item/agentMessage/delta") {
             const delta = extractDeltaText(payload.params);
+            const activeNodeId = activeTurnNodeIdRef.current;
+            if (activeNodeId && delta) {
+              activeRunDeltaRef.current[activeNodeId] =
+                (activeRunDeltaRef.current[activeNodeId] ?? "") + delta;
+              addNodeLog(activeNodeId, delta);
+            }
             if (delta) {
               setStreamText((prev) => prev + delta);
             }
@@ -214,7 +512,13 @@ function App() {
           if (payload.method === "item/completed") {
             const completedStatus = extractCompletedStatus(payload.params) ?? "unknown";
             setLastCompletedStatus(completedStatus);
-            setStatus(`item/completed status=${completedStatus}`);
+          }
+
+          const terminal = isTurnTerminalEvent(payload.method, payload.params);
+          if (terminal && turnTerminalResolverRef.current) {
+            const resolve = turnTerminalResolverRef.current;
+            turnTerminalResolverRef.current = null;
+            resolve(terminal);
           }
         },
       );
@@ -290,6 +594,29 @@ function App() {
     };
   }, []);
 
+  async function refreshGraphFiles() {
+    try {
+      const files = await invoke<string[]>("graph_list");
+      setGraphFiles(files);
+    } catch (e) {
+      setError(String(e));
+    }
+  }
+
+  async function refreshRunFiles() {
+    try {
+      const files = await invoke<string[]>("run_list");
+      setRunFiles(files);
+    } catch (e) {
+      setError(String(e));
+    }
+  }
+
+  useEffect(() => {
+    refreshGraphFiles();
+    refreshRunFiles();
+  }, []);
+
   async function ensureEngineStarted() {
     if (engineStarted) {
       return;
@@ -315,6 +642,7 @@ function App() {
       setEngineStarted(false);
       setStatus("stopped");
       setRunning(false);
+      setIsGraphRunning(false);
     } catch (e) {
       setError(String(e));
     }
@@ -352,52 +680,7 @@ function App() {
     }
   }
 
-  async function onRunTurn(e: FormEvent) {
-    e.preventDefault();
-    setError("");
-    setRunning(true);
-
-    try {
-      await ensureEngineStarted();
-
-      let activeThreadId = threadId.trim();
-      if (!activeThreadId) {
-        const result = await invoke<ThreadStartResult>("thread_start", {
-          model,
-          cwd,
-        });
-        activeThreadId = result.threadId;
-        setThreadId(activeThreadId);
-      }
-
-      setStreamText((prev) => (prev ? `${prev}\n\n` : prev));
-      await invoke("turn_start", {
-        threadId: activeThreadId,
-        text,
-      });
-      setStatus(`turn started (thread: ${activeThreadId})`);
-    } catch (err) {
-      setError(String(err));
-    } finally {
-      setRunning(false);
-    }
-  }
-
-  async function onInterrupt() {
-    if (!threadId.trim()) {
-      return;
-    }
-    setError("");
-    try {
-      await invoke("turn_interrupt", { threadId });
-      setStatus("interrupt requested");
-    } catch (e) {
-      setError(String(e));
-    }
-  }
-
   async function onRespondApproval(decision: ApprovalDecision) {
-    const activeApproval = pendingApprovals[0];
     if (!activeApproval) {
       return;
     }
@@ -420,16 +703,690 @@ function App() {
     }
   }
 
-  const activeApproval = pendingApprovals[0];
+  function addNode(type: NodeType) {
+    setGraph((prev) => {
+      const index = prev.nodes.length;
+      const node: GraphNode = {
+        id: makeNodeId(type),
+        type,
+        position: {
+          x: 40 + (index % 4) * 280,
+          y: 40 + Math.floor(index / 4) * 180,
+        },
+        config: defaultNodeConfig(type),
+      };
+      return {
+        ...prev,
+        nodes: [...prev.nodes, node],
+      };
+    });
+  }
+
+  function deleteNode(nodeId: string) {
+    setGraph((prev) => ({
+      ...prev,
+      nodes: prev.nodes.filter((n) => n.id !== nodeId),
+      edges: prev.edges.filter((e) => e.from.nodeId !== nodeId && e.to.nodeId !== nodeId),
+    }));
+    setSelectedNodeId((prev) => (prev === nodeId ? "" : prev));
+    setNodeStates((prev) => {
+      const next = { ...prev };
+      delete next[nodeId];
+      return next;
+    });
+  }
+
+  function onPortOutClick(nodeId: string) {
+    setConnectFromNodeId(nodeId);
+  }
+
+  function onPortInClick(targetNodeId: string) {
+    if (!connectFromNodeId || connectFromNodeId === targetNodeId) {
+      return;
+    }
+
+    setGraph((prev) => {
+      const exists = prev.edges.some(
+        (edge) => edge.from.nodeId === connectFromNodeId && edge.to.nodeId === targetNodeId,
+      );
+      if (exists) {
+        return prev;
+      }
+      const edge: GraphEdge = {
+        from: { nodeId: connectFromNodeId, port: "out" },
+        to: { nodeId: targetNodeId, port: "in" },
+      };
+      return { ...prev, edges: [...prev.edges, edge] };
+    });
+    setConnectFromNodeId("");
+  }
+
+  function deleteEdge(index: number) {
+    setGraph((prev) => ({
+      ...prev,
+      edges: prev.edges.filter((_, i) => i !== index),
+    }));
+  }
+
+  function onNodeDragStart(e: ReactMouseEvent<HTMLDivElement>, nodeId: string) {
+    const node = graph.nodes.find((item) => item.id === nodeId);
+    if (!node) {
+      return;
+    }
+
+    dragRef.current = {
+      nodeId,
+      offsetX: e.clientX - node.position.x,
+      offsetY: e.clientY - node.position.y,
+    };
+  }
+
+  function onCanvasMouseMove(e: ReactMouseEvent<HTMLDivElement>) {
+    if (!dragRef.current) {
+      return;
+    }
+
+    const { nodeId, offsetX, offsetY } = dragRef.current;
+    const x = Math.max(0, e.clientX - offsetX);
+    const y = Math.max(0, e.clientY - offsetY);
+
+    setGraph((prev) => ({
+      ...prev,
+      nodes: prev.nodes.map((node) =>
+        node.id === nodeId ? { ...node, position: { x, y } } : node,
+      ),
+    }));
+  }
+
+  function onCanvasMouseUp() {
+    dragRef.current = null;
+  }
+
+  function updateSelectedNodeConfig(key: string, value: string) {
+    if (!selectedNode) {
+      return;
+    }
+
+    setGraph((prev) => ({
+      ...prev,
+      nodes: prev.nodes.map((node) =>
+        node.id === selectedNode.id
+          ? {
+              ...node,
+              config: {
+                ...node.config,
+                [key]: value,
+              },
+            }
+          : node,
+      ),
+    }));
+  }
+
+  async function saveGraph() {
+    setError("");
+    try {
+      await invoke("graph_save", {
+        name: graphFileName,
+        graph,
+      });
+      await refreshGraphFiles();
+      setStatus(`graph saved (${graphFileName})`);
+    } catch (e) {
+      setError(String(e));
+    }
+  }
+
+  async function loadGraph(name?: string) {
+    const target = (name ?? graphFileName).trim();
+    if (!target) {
+      return;
+    }
+
+    setError("");
+    try {
+      const loaded = await invoke<unknown>("graph_load", { name: target });
+      const normalized = normalizeGraph(loaded);
+      setGraph(normalized);
+      setSelectedNodeId(normalized.nodes[0]?.id ?? "");
+      setNodeStates({});
+      setStatus(`graph loaded (${target})`);
+      setGraphFileName(target);
+    } catch (e) {
+      setError(String(e));
+    }
+  }
+
+  async function saveRunRecord(runRecord: RunRecord) {
+    const fileName = `run-${runRecord.runId}.json`;
+    try {
+      await invoke("run_save", {
+        name: fileName,
+        run: runRecord,
+      });
+      setLastSavedRunFile(fileName);
+      await refreshRunFiles();
+    } catch (e) {
+      setError(String(e));
+    }
+  }
+
+  function nodeInputFor(nodeId: string, outputs: Record<string, unknown>): unknown {
+    const incoming = graph.edges.filter((edge) => edge.to.nodeId === nodeId);
+    if (incoming.length === 0) {
+      return null;
+    }
+    if (incoming.length === 1) {
+      return outputs[incoming[0].from.nodeId] ?? null;
+    }
+
+    const merged: Record<string, unknown> = {};
+    for (const edge of incoming) {
+      merged[edge.from.nodeId] = outputs[edge.from.nodeId];
+    }
+    return merged;
+  }
+
+  function transition(runRecord: RunRecord, nodeId: string, state: NodeExecutionStatus, message?: string) {
+    runRecord.transitions.push({
+      at: new Date().toISOString(),
+      nodeId,
+      status: state,
+      message,
+    });
+    if (message) {
+      runRecord.summaryLogs.push(`[${nodeId}] ${state}: ${message}`);
+    } else {
+      runRecord.summaryLogs.push(`[${nodeId}] ${state}`);
+    }
+  }
+
+  async function executeTransformNode(node: GraphNode, input: unknown): Promise<{ ok: boolean; output?: unknown; error?: string }> {
+    const config = node.config as TransformConfig;
+    const mode = (config.mode ?? "pick") as TransformMode;
+
+    if (mode === "pick") {
+      const path = String(config.pickPath ?? "");
+      return { ok: true, output: getByPath(input, path) };
+    }
+
+    if (mode === "merge") {
+      const rawMerge = String(config.mergeJson ?? "{}");
+      let mergeValue: unknown = {};
+      try {
+        mergeValue = JSON.parse(rawMerge);
+      } catch (e) {
+        return { ok: false, error: `invalid mergeJson: ${String(e)}` };
+      }
+
+      if (input && typeof input === "object" && !Array.isArray(input) && mergeValue && typeof mergeValue === "object") {
+        return {
+          ok: true,
+          output: {
+            ...(input as Record<string, unknown>),
+            ...(mergeValue as Record<string, unknown>),
+          },
+        };
+      }
+
+      return {
+        ok: true,
+        output: {
+          input,
+          merge: mergeValue,
+        },
+      };
+    }
+
+    const template = String(config.template ?? "{{input}}");
+    const rendered = replaceInputPlaceholder(template, stringifyInput(input));
+    return {
+      ok: true,
+      output: {
+        text: rendered,
+      },
+    };
+  }
+
+  function executeGateNode(
+    node: GraphNode,
+    input: unknown,
+    skipSet: Set<string>,
+  ): { ok: boolean; output?: unknown; error?: string; message?: string } {
+    const config = node.config as GateConfig;
+    const decisionPath = String(config.decisionPath ?? "decision");
+    const decisionRaw = getByPath(input, decisionPath);
+    const decision = String(decisionRaw ?? "").toUpperCase();
+
+    if (decision !== "PASS" && decision !== "REJECT") {
+      return {
+        ok: false,
+        error: `Gate decision must be PASS or REJECT. got=${String(decisionRaw)}`,
+      };
+    }
+
+    const children = graph.edges
+      .filter((edge) => edge.from.nodeId === node.id)
+      .map((edge) => edge.to.nodeId)
+      .filter((value, index, arr) => arr.indexOf(value) === index);
+
+    const allowed = new Set<string>();
+    if (decision === "PASS") {
+      const target = String(config.passNodeId ?? "") || children[0] || "";
+      if (target) {
+        allowed.add(target);
+      }
+    } else {
+      const target = String(config.rejectNodeId ?? "") || children[1] || "";
+      if (target) {
+        allowed.add(target);
+      }
+    }
+
+    for (const child of children) {
+      if (!allowed.has(child)) {
+        skipSet.add(child);
+      }
+    }
+
+    return {
+      ok: true,
+      output: { decision },
+      message: `Gate decision=${decision}, allowed=${Array.from(allowed).join(",") || "none"}`,
+    };
+  }
+
+  async function executeTurnNode(
+    node: GraphNode,
+    input: unknown,
+  ): Promise<{ ok: boolean; output?: unknown; error?: string; threadId?: string; turnId?: string }> {
+    const config = node.config as TurnConfig;
+    const nodeModel = String(config.model ?? model).trim() || model;
+    const nodeCwd = String(config.cwd ?? cwd).trim() || cwd;
+    const promptTemplate = String(config.promptTemplate ?? "{{input}}");
+
+    const inputText = stringifyInput(input);
+    const textToSend = promptTemplate.includes("{{input}}")
+      ? replaceInputPlaceholder(promptTemplate, inputText)
+      : `${promptTemplate}${inputText ? `\n${inputText}` : ""}`;
+
+    let activeThreadId = extractStringByPaths(nodeStates[node.id], ["threadId"]);
+    if (!activeThreadId) {
+      const threadStart = await invoke<ThreadStartResult>("thread_start", {
+        model: nodeModel,
+        cwd: nodeCwd,
+      });
+      activeThreadId = threadStart.threadId;
+    }
+
+    if (!activeThreadId) {
+      return { ok: false, error: "failed to obtain threadId" };
+    }
+
+    setNodeRuntimeFields(node.id, { threadId: activeThreadId });
+
+    activeTurnNodeIdRef.current = node.id;
+    activeRunDeltaRef.current[node.id] = "";
+
+    let timeoutHandle: ReturnType<typeof setTimeout> | null = null;
+    const terminalPromise = new Promise<TurnTerminal>((resolve) => {
+      turnTerminalResolverRef.current = resolve;
+      timeoutHandle = setTimeout(() => {
+        if (turnTerminalResolverRef.current) {
+          const resolver = turnTerminalResolverRef.current;
+          turnTerminalResolverRef.current = null;
+          resolver({ ok: false, status: "timeout", params: null });
+        }
+      }, 300000);
+    });
+
+    let turnStartResponse: unknown;
+    try {
+      turnStartResponse = await invoke<unknown>("turn_start", {
+        threadId: activeThreadId,
+        text: textToSend,
+      });
+    } catch (e) {
+      if (turnTerminalResolverRef.current) {
+        turnTerminalResolverRef.current = null;
+      }
+      if (timeoutHandle) {
+        clearTimeout(timeoutHandle);
+      }
+      activeTurnNodeIdRef.current = "";
+      return {
+        ok: false,
+        error: String(e),
+        threadId: activeThreadId,
+      };
+    }
+
+    const terminal = await terminalPromise;
+    if (timeoutHandle) {
+      clearTimeout(timeoutHandle);
+    }
+
+    const turnId =
+      extractStringByPaths(turnStartResponse, ["turnId", "turn_id", "id", "turn.id"]) ??
+      extractStringByPaths(terminal.params, ["turnId", "turn_id", "id", "turn.id"]);
+
+    activeTurnNodeIdRef.current = "";
+
+    if (!terminal.ok) {
+      return {
+        ok: false,
+        error: `turn failed (${terminal.status})`,
+        threadId: activeThreadId,
+        turnId: turnId ?? undefined,
+      };
+    }
+
+    return {
+      ok: true,
+      output: {
+        text: activeRunDeltaRef.current[node.id] ?? "",
+        completion: terminal.params,
+      },
+      threadId: activeThreadId,
+      turnId: turnId ?? undefined,
+    };
+  }
+
+  async function onRunGraph() {
+    if (isGraphRunning) {
+      return;
+    }
+
+    setError("");
+    setStatus("graph run started");
+    setIsGraphRunning(true);
+    cancelRequestedRef.current = false;
+
+    const initialState: Record<string, NodeRunState> = {};
+    graph.nodes.forEach((node) => {
+      initialState[node.id] = {
+        status: "idle",
+        logs: [],
+      };
+    });
+    setNodeStates(initialState);
+
+    const runRecord: RunRecord = {
+      runId: `${Date.now()}`,
+      startedAt: new Date().toISOString(),
+      graphSnapshot: graph,
+      transitions: [],
+      summaryLogs: [],
+      threadTurnMap: {},
+    };
+
+    try {
+      await ensureEngineStarted();
+
+      const nodeMap = new Map(graph.nodes.map((node) => [node.id, node]));
+      const indegree = new Map<string, number>();
+      const adjacency = new Map<string, string[]>();
+
+      for (const node of graph.nodes) {
+        indegree.set(node.id, 0);
+        adjacency.set(node.id, []);
+      }
+
+      for (const edge of graph.edges) {
+        indegree.set(edge.to.nodeId, (indegree.get(edge.to.nodeId) ?? 0) + 1);
+        const children = adjacency.get(edge.from.nodeId) ?? [];
+        children.push(edge.to.nodeId);
+        adjacency.set(edge.from.nodeId, children);
+      }
+
+      const queue: string[] = [];
+      indegree.forEach((degree, nodeId) => {
+        if (degree === 0) {
+          queue.push(nodeId);
+          setNodeStatus(nodeId, "queued");
+          transition(runRecord, nodeId, "queued");
+        }
+      });
+
+      const outputs: Record<string, unknown> = {};
+      const skipSet = new Set<string>();
+
+      while (queue.length > 0) {
+        const nodeId = queue.shift() as string;
+        const node = nodeMap.get(nodeId);
+        if (!node) {
+          continue;
+        }
+
+        if (cancelRequestedRef.current) {
+          setNodeStatus(nodeId, "cancelled", "cancel requested");
+          transition(runRecord, nodeId, "cancelled", "cancel requested");
+          break;
+        }
+
+        if (skipSet.has(nodeId)) {
+          setNodeStatus(nodeId, "skipped", "skipped by gate decision");
+          transition(runRecord, nodeId, "skipped", "skipped by gate decision");
+        } else {
+          setNodeStatus(nodeId, "running", "node execution started");
+          transition(runRecord, nodeId, "running");
+
+          const input = nodeInputFor(nodeId, outputs);
+
+          if (node.type === "turn") {
+            const result = await executeTurnNode(node, input);
+            if (!result.ok) {
+              setNodeStatus(nodeId, "failed", result.error ?? "turn failed");
+              setNodeRuntimeFields(nodeId, {
+                error: result.error,
+                threadId: result.threadId,
+                turnId: result.turnId,
+              });
+              transition(runRecord, nodeId, "failed", result.error ?? "turn failed");
+              break;
+            }
+
+            outputs[nodeId] = result.output;
+            setNodeRuntimeFields(nodeId, {
+              status: "done",
+              output: result.output,
+              threadId: result.threadId,
+              turnId: result.turnId,
+            });
+            setNodeStatus(nodeId, "done", "turn completed");
+            runRecord.threadTurnMap[nodeId] = {
+              threadId: result.threadId,
+              turnId: result.turnId,
+            };
+            transition(runRecord, nodeId, "done", "turn completed");
+          } else if (node.type === "transform") {
+            const result = await executeTransformNode(node, input);
+            if (!result.ok) {
+              setNodeStatus(nodeId, "failed", result.error ?? "transform failed");
+              setNodeRuntimeFields(nodeId, { error: result.error });
+              transition(runRecord, nodeId, "failed", result.error ?? "transform failed");
+              break;
+            }
+
+            outputs[nodeId] = result.output;
+            setNodeRuntimeFields(nodeId, {
+              status: "done",
+              output: result.output,
+            });
+            setNodeStatus(nodeId, "done", "transform completed");
+            transition(runRecord, nodeId, "done", "transform completed");
+          } else {
+            const result = executeGateNode(node, input, skipSet);
+            if (!result.ok) {
+              setNodeStatus(nodeId, "failed", result.error ?? "gate failed");
+              setNodeRuntimeFields(nodeId, { error: result.error });
+              transition(runRecord, nodeId, "failed", result.error ?? "gate failed");
+              break;
+            }
+
+            outputs[nodeId] = result.output;
+            setNodeRuntimeFields(nodeId, {
+              status: "done",
+              output: result.output,
+            });
+            setNodeStatus(nodeId, "done", result.message ?? "gate completed");
+            transition(runRecord, nodeId, "done", result.message ?? "gate completed");
+          }
+        }
+
+        const children = adjacency.get(nodeId) ?? [];
+        for (const childId of children) {
+          const next = (indegree.get(childId) ?? 0) - 1;
+          indegree.set(childId, next);
+          if (next === 0) {
+            queue.push(childId);
+            setNodeStatus(childId, "queued");
+            transition(runRecord, childId, "queued");
+          }
+        }
+      }
+
+      if (cancelRequestedRef.current) {
+        graph.nodes.forEach((node) => {
+          setNodeStates((prev) => {
+            const current = prev[node.id];
+            if (!current || ["done", "failed", "skipped", "cancelled"].includes(current.status)) {
+              return prev;
+            }
+            return {
+              ...prev,
+              [node.id]: {
+                ...current,
+                status: "cancelled",
+              },
+            };
+          });
+        });
+      }
+
+      runRecord.finishedAt = new Date().toISOString();
+      await saveRunRecord(runRecord);
+      setStatus("graph run finished");
+    } catch (e) {
+      setError(String(e));
+      setStatus("graph run failed");
+    } finally {
+      turnTerminalResolverRef.current = null;
+      activeTurnNodeIdRef.current = "";
+      setIsGraphRunning(false);
+      cancelRequestedRef.current = false;
+    }
+  }
+
+  async function onCancelGraphRun() {
+    cancelRequestedRef.current = true;
+    setStatus("cancel requested");
+
+    const activeNodeId = activeTurnNodeIdRef.current;
+    if (!activeNodeId) {
+      return;
+    }
+
+    const active = nodeStates[activeNodeId];
+    if (!active?.threadId) {
+      return;
+    }
+
+    try {
+      await invoke("turn_interrupt", { threadId: active.threadId });
+      addNodeLog(activeNodeId, "turn_interrupt requested");
+    } catch (e) {
+      setError(String(e));
+    }
+  }
+
+  async function onRunTurnDev(e: FormEvent) {
+    e.preventDefault();
+    setError("");
+    setRunning(true);
+
+    try {
+      await ensureEngineStarted();
+
+      let activeThreadId = threadId.trim();
+      if (!activeThreadId) {
+        const result = await invoke<ThreadStartResult>("thread_start", {
+          model,
+          cwd,
+        });
+        activeThreadId = result.threadId;
+        setThreadId(activeThreadId);
+      }
+
+      setStreamText((prev) => (prev ? `${prev}\n\n` : prev));
+      await invoke("turn_start", {
+        threadId: activeThreadId,
+        text,
+      });
+      setStatus(`dev turn started (thread: ${activeThreadId})`);
+    } catch (err) {
+      setError(String(err));
+    } finally {
+      setRunning(false);
+    }
+  }
+
+  async function onInterruptDev() {
+    if (!threadId.trim()) {
+      return;
+    }
+    setError("");
+    try {
+      await invoke("turn_interrupt", { threadId });
+      setStatus("interrupt requested");
+    } catch (e) {
+      setError(String(e));
+    }
+  }
+
+  const edgeLines = graph.edges
+    .map((edge, index) => {
+      const fromNode = graph.nodes.find((node) => node.id === edge.from.nodeId);
+      const toNode = graph.nodes.find((node) => node.id === edge.to.nodeId);
+      if (!fromNode || !toNode) {
+        return null;
+      }
+      return {
+        key: `${edge.from.nodeId}-${edge.to.nodeId}-${index}`,
+        x1: fromNode.position.x + NODE_WIDTH,
+        y1: fromNode.position.y + NODE_HEIGHT / 2,
+        x2: toNode.position.x,
+        y2: toNode.position.y + NODE_HEIGHT / 2,
+      };
+    })
+    .filter(Boolean) as Array<{ key: string; x1: number; y1: number; x2: number; y2: number }>;
+
+  const selectedNodeState = selectedNodeId ? nodeStates[selectedNodeId] : undefined;
+  const outgoingFromSelected = selectedNode
+    ? graph.edges
+        .filter((edge) => edge.from.nodeId === selectedNode.id)
+        .map((edge) => edge.to.nodeId)
+        .filter((value, index, arr) => arr.indexOf(value) === index)
+    : [];
 
   return (
     <main className="app">
       <section className="auth-banner">
-        <span>Current authMode</span>
-        <strong>{authMode}</strong>
+        <div className="auth-inline">
+          <span>Current authMode</span>
+          <strong>{authMode}</strong>
+        </div>
+        <div className="auth-inline">
+          <button onClick={() => setViewMode("graph")} type="button">
+            Graph
+          </button>
+          <button onClick={() => setViewMode("dev")} type="button">
+            Dev
+          </button>
+        </div>
       </section>
 
-      <h1>Codex Engine Smoke Test</h1>
+      <h1>Graph Orchestrator MVP</h1>
 
       <section className="controls">
         <label>
@@ -442,40 +1399,18 @@ function App() {
           <input value={model} onChange={(e) => setModel(e.currentTarget.value)} />
         </label>
 
-        <label>
-          Thread ID
-          <input
-            value={threadId}
-            onChange={(e) => setThreadId(e.currentTarget.value)}
-            placeholder="thread_start 결과 자동 입력"
-          />
-        </label>
-
         <div className="button-row">
-          <button onClick={onStartEngine} disabled={running} type="button">
+          <button onClick={onStartEngine} disabled={running || isGraphRunning} type="button">
             Engine Start
           </button>
           <button onClick={onStopEngine} type="button">
             Engine Stop
           </button>
-          <button onClick={onLoginChatgpt} disabled={running} type="button">
+          <button onClick={onLoginChatgpt} disabled={running || isGraphRunning} type="button">
             Login ChatGPT
-          </button>
-          <button onClick={onInterrupt} disabled={!threadId} type="button">
-            Interrupt
           </button>
         </div>
       </section>
-
-      <form className="prompt" onSubmit={onRunTurn}>
-        <label>
-          Input
-          <textarea value={text} onChange={(e) => setText(e.currentTarget.value)} rows={4} />
-        </label>
-        <button disabled={running || !text.trim()} type="submit">
-          {running ? "Running..." : "실행"}
-        </button>
-      </form>
 
       <section className="meta">
         <div>engineStarted: {String(engineStarted)}</div>
@@ -483,6 +1418,8 @@ function App() {
         <div>loginCompleted: {String(loginCompleted)}</div>
         <div>pendingApprovals: {pendingApprovals.length}</div>
         <div>last item/completed status: {lastCompletedStatus}</div>
+        <div>saved runs: {runFiles.length}</div>
+        {lastSavedRunFile && <div>last run file: {lastSavedRunFile}</div>}
         {authUrl && (
           <div>
             authUrl: <code>{authUrl}</code>{" "}
@@ -494,17 +1431,305 @@ function App() {
         {error && <div className="error">error: {error}</div>}
       </section>
 
-      <section className="panels">
-        <article>
-          <h2>Streaming Output</h2>
-          <pre>{streamText || "(waiting for item/agentMessage/delta...)"}</pre>
-        </article>
+      {viewMode === "graph" && (
+        <section className="graph-layout">
+          <article className="graph-main">
+            <h2>Graph Editor</h2>
+            <div className="button-row">
+              <button onClick={() => addNode("turn")} type="button">
+                + TurnNode
+              </button>
+              <button onClick={() => addNode("transform")} type="button">
+                + TransformNode
+              </button>
+              <button onClick={() => addNode("gate")} type="button">
+                + GateNode
+              </button>
+              <button disabled={!connectFromNodeId} onClick={() => setConnectFromNodeId("")} type="button">
+                Cancel Connect
+              </button>
+            </div>
 
-        <article>
-          <h2>Notifications</h2>
-          <pre>{events.join("\n") || "(no events yet)"}</pre>
-        </article>
-      </section>
+            <div className="save-row">
+              <input
+                value={graphFileName}
+                onChange={(e) => setGraphFileName(e.currentTarget.value)}
+                placeholder="graph file name"
+              />
+              <button onClick={saveGraph} type="button">
+                Save Graph
+              </button>
+              <button onClick={() => loadGraph()} type="button">
+                Load Graph
+              </button>
+              <button onClick={refreshGraphFiles} type="button">
+                Refresh
+              </button>
+              <select
+                onChange={(e) => {
+                  const value = e.currentTarget.value;
+                  if (value) {
+                    loadGraph(value);
+                  }
+                }}
+                value=""
+              >
+                <option value="">graphs/*.json</option>
+                {graphFiles.map((file) => (
+                  <option key={file} value={file}>
+                    {file}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div
+              className="graph-canvas"
+              onMouseLeave={onCanvasMouseUp}
+              onMouseMove={onCanvasMouseMove}
+              onMouseUp={onCanvasMouseUp}
+            >
+              <svg className="edge-layer">
+                {edgeLines.map((line) => (
+                  <line
+                    key={line.key}
+                    stroke="#4b7180"
+                    strokeWidth={2}
+                    x1={line.x1}
+                    x2={line.x2}
+                    y1={line.y1}
+                    y2={line.y2}
+                  />
+                ))}
+              </svg>
+
+              {graph.nodes.map((node) => {
+                const runState = nodeStates[node.id];
+                return (
+                  <div
+                    className={`graph-node ${selectedNodeId === node.id ? "selected" : ""}`}
+                    key={node.id}
+                    onClick={() => setSelectedNodeId(node.id)}
+                    style={{ left: node.position.x, top: node.position.y }}
+                  >
+                    <div className="node-head" onMouseDown={(e) => onNodeDragStart(e, node.id)}>
+                      <strong>{node.type.toUpperCase()}</strong>
+                      <button onClick={() => deleteNode(node.id)} type="button">
+                        Delete
+                      </button>
+                    </div>
+                    <div className="node-body">
+                      <div className="node-id">{node.id}</div>
+                      <div>status: {runState?.status ?? "idle"}</div>
+                    </div>
+                    <div className="node-ports">
+                      <button onClick={() => onPortInClick(node.id)} type="button">
+                        in
+                      </button>
+                      <button onClick={() => onPortOutClick(node.id)} type="button">
+                        {connectFromNodeId === node.id ? "out*" : "out"}
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="edge-list">
+              <h3>Edges</h3>
+              {graph.edges.length === 0 && <div>(no edges)</div>}
+              {graph.edges.map((edge, index) => (
+                <div className="edge-item" key={`${edge.from.nodeId}-${edge.to.nodeId}-${index}`}>
+                  <code>
+                    {edge.from.nodeId}.out -&gt; {edge.to.nodeId}.in
+                  </code>
+                  <button onClick={() => deleteEdge(index)} type="button">
+                    remove
+                  </button>
+                </div>
+              ))}
+            </div>
+          </article>
+
+          <article className="graph-side">
+            <h2>Node Panel</h2>
+            {!selectedNode && <div>노드를 선택하세요.</div>}
+            {selectedNode && (
+              <>
+                <div>
+                  <strong>{selectedNode.id}</strong>
+                </div>
+                <div>type: {selectedNode.type}</div>
+
+                {selectedNode.type === "turn" && (
+                  <div className="form-grid">
+                    <label>
+                      model
+                      <input
+                        onChange={(e) => updateSelectedNodeConfig("model", e.currentTarget.value)}
+                        value={String((selectedNode.config as TurnConfig).model ?? model)}
+                      />
+                    </label>
+                    <label>
+                      cwd
+                      <input
+                        onChange={(e) => updateSelectedNodeConfig("cwd", e.currentTarget.value)}
+                        value={String((selectedNode.config as TurnConfig).cwd ?? cwd)}
+                      />
+                    </label>
+                    <label>
+                      promptTemplate
+                      <textarea
+                        onChange={(e) =>
+                          updateSelectedNodeConfig("promptTemplate", e.currentTarget.value)
+                        }
+                        rows={3}
+                        value={String((selectedNode.config as TurnConfig).promptTemplate ?? "{{input}}")}
+                      />
+                    </label>
+                  </div>
+                )}
+
+                {selectedNode.type === "transform" && (
+                  <div className="form-grid">
+                    <label>
+                      mode
+                      <select
+                        onChange={(e) => updateSelectedNodeConfig("mode", e.currentTarget.value)}
+                        value={String((selectedNode.config as TransformConfig).mode ?? "pick")}
+                      >
+                        <option value="pick">pick</option>
+                        <option value="merge">merge</option>
+                        <option value="template">template</option>
+                      </select>
+                    </label>
+                    <label>
+                      pickPath
+                      <input
+                        onChange={(e) => updateSelectedNodeConfig("pickPath", e.currentTarget.value)}
+                        value={String((selectedNode.config as TransformConfig).pickPath ?? "")}
+                      />
+                    </label>
+                    <label>
+                      mergeJson
+                      <textarea
+                        onChange={(e) => updateSelectedNodeConfig("mergeJson", e.currentTarget.value)}
+                        rows={3}
+                        value={String((selectedNode.config as TransformConfig).mergeJson ?? "{}")}
+                      />
+                    </label>
+                    <label>
+                      template
+                      <textarea
+                        onChange={(e) => updateSelectedNodeConfig("template", e.currentTarget.value)}
+                        rows={3}
+                        value={String((selectedNode.config as TransformConfig).template ?? "{{input}}")}
+                      />
+                    </label>
+                  </div>
+                )}
+
+                {selectedNode.type === "gate" && (
+                  <div className="form-grid">
+                    <label>
+                      decisionPath
+                      <input
+                        onChange={(e) => updateSelectedNodeConfig("decisionPath", e.currentTarget.value)}
+                        value={String((selectedNode.config as GateConfig).decisionPath ?? "decision")}
+                      />
+                    </label>
+                    <label>
+                      PASS target
+                      <select
+                        onChange={(e) => updateSelectedNodeConfig("passNodeId", e.currentTarget.value)}
+                        value={String((selectedNode.config as GateConfig).passNodeId ?? "")}
+                      >
+                        <option value="">(none)</option>
+                        {outgoingFromSelected.map((nodeId) => (
+                          <option key={nodeId} value={nodeId}>
+                            {nodeId}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      REJECT target
+                      <select
+                        onChange={(e) => updateSelectedNodeConfig("rejectNodeId", e.currentTarget.value)}
+                        value={String((selectedNode.config as GateConfig).rejectNodeId ?? "")}
+                      >
+                        <option value="">(none)</option>
+                        {outgoingFromSelected.map((nodeId) => (
+                          <option key={nodeId} value={nodeId}>
+                            {nodeId}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+                )}
+
+                <h3>Node Logs</h3>
+                <pre>{(selectedNodeState?.logs ?? []).join("\n") || "(no logs)"}</pre>
+                <h3>Node Output</h3>
+                <pre>{formatUnknown(selectedNodeState?.output) || "(no output)"}</pre>
+              </>
+            )}
+
+            <div className="button-row">
+              <button
+                disabled={isGraphRunning || graph.nodes.length === 0}
+                onClick={onRunGraph}
+                type="button"
+              >
+                Run Graph
+              </button>
+              <button disabled={!isGraphRunning} onClick={onCancelGraphRun} type="button">
+                Cancel Run
+              </button>
+            </div>
+          </article>
+        </section>
+      )}
+
+      {viewMode === "dev" && (
+        <section className="graph-layout">
+          <article>
+            <h2>Dev Single Turn</h2>
+            <label>
+              Thread ID
+              <input
+                onChange={(e) => setThreadId(e.currentTarget.value)}
+                placeholder="thread_start 결과 자동 입력"
+                value={threadId}
+              />
+            </label>
+
+            <form className="prompt" onSubmit={onRunTurnDev}>
+              <label>
+                Input
+                <textarea onChange={(e) => setText(e.currentTarget.value)} rows={4} value={text} />
+              </label>
+              <div className="button-row">
+                <button disabled={running || !text.trim()} type="submit">
+                  {running ? "Running..." : "실행"}
+                </button>
+                <button disabled={!threadId} onClick={onInterruptDev} type="button">
+                  Interrupt
+                </button>
+              </div>
+            </form>
+
+            <h3>Streaming Output</h3>
+            <pre>{streamText || "(waiting for item/agentMessage/delta...)"}</pre>
+          </article>
+
+          <article>
+            <h2>Notifications</h2>
+            <pre>{events.join("\n") || "(no events yet)"}</pre>
+          </article>
+        </section>
+      )}
 
       {activeApproval && (
         <div className="modal-backdrop">
