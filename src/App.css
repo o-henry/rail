@@ -260,6 +260,13 @@ h3 {
   gap: 14px;
 }
 
+.workspace-header.workspace-header-spacer {
+  padding: 0;
+  min-height: 0;
+  height: 0;
+  overflow: hidden;
+}
+
 .header-actions {
   display: flex;
   align-items: center;
@@ -309,8 +316,8 @@ h3 {
 
 .workflow-layout {
   min-height: 0;
-  height: calc(100% - 20px);
-  margin: 10px;
+  height: 100%;
+  margin: 0 10px 10px;
   display: grid;
   grid-template-columns: minmax(0, 1fr) 300px;
   gap: 10px;
@@ -348,6 +355,11 @@ h3 {
 .canvas-topbar {
   display: grid;
   gap: 8px;
+}
+
+.canvas-topbar-actions {
+  display: flex;
+  justify-content: flex-end;
 }
 
 .question-input textarea {

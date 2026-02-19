@@ -2508,14 +2508,7 @@ function App() {
       </aside>
 
       <section className={`workspace ${canvasFullscreen ? "canvas-fullscreen-active" : ""}`}>
-
-        {!canvasFullscreen && <header className="workspace-header">
-          <div className="header-actions">
-            <button className="primary-action" type="button">
-              생성
-            </button>
-          </div>
-        </header>}
+        {!canvasFullscreen && <header className="workspace-header workspace-header-spacer" />}
 
         {error && <div className="error">오류: {error}</div>}
 
@@ -2714,6 +2707,11 @@ function App() {
                     value={workflowQuestion}
                   />
                 </label>
+                <div className="canvas-topbar-actions">
+                  <button className="primary-action" type="button">
+                    생성
+                  </button>
+                </div>
               </div>
             </section>
 
