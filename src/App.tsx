@@ -181,6 +181,7 @@ const TURN_MODEL_OPTIONS = [
   "gpt-5.2",
   "gpt-5.1-codex-mini",
 ] as const;
+const TRUSTED_AUTH_HOSTS = ["chatgpt.com", "openai.com", "auth.openai.com"] as const;
 
 function formatUnknown(value: unknown): string {
   try {
@@ -663,6 +664,36 @@ function loginStateLabel(engineStarted: boolean, loginCompleted: boolean, authMo
     return "세션 확인 중";
   }
   return "로그인 필요";
+}
+
+function validateAuthUrl(input: string): { ok: boolean; normalized?: string; reason?: string } {
+  const raw = input.trim();
+  if (!raw) {
+    return { ok: false, reason: "빈 URL" };
+  }
+
+  let parsed: URL;
+  try {
+    parsed = new URL(raw);
+  } catch {
+    return { ok: false, reason: "URL 형식 오류" };
+  }
+
+  if (parsed.protocol !== "https:") {
+    return { ok: false, reason: `허용되지 않은 프로토콜(${parsed.protocol})` };
+  }
+
+  if (parsed.username || parsed.password) {
+    return { ok: false, reason: "인증 정보가 포함된 URL은 허용되지 않음" };
+  }
+
+  const host = parsed.hostname.toLowerCase();
+  const trusted = TRUSTED_AUTH_HOSTS.some((allowed) => host === allowed || host.endsWith(`.${allowed}`));
+  if (!trusted) {
+    return { ok: false, reason: `허용되지 않은 인증 도메인(${host})` };
+  }
+
+  return { ok: true, normalized: parsed.toString() };
 }
 
 function extractFinalAnswer(output: unknown): string {
@@ -1355,9 +1386,15 @@ function App() {
       await ensureEngineStarted();
       const result = await invoke<LoginChatgptResult>("login_chatgpt");
       setAuthUrl(result.authUrl);
+      const validation = validateAuthUrl(result.authUrl);
+      if (!validation.ok || !validation.normalized) {
+        setStatus("인증 URL 검증 실패, 수동 진행 필요");
+        setError(`authUrl validation failed: ${validation.reason ?? "unknown reason"}`);
+        return;
+      }
       setStatus("인증 URL 수신");
       try {
-        await openUrl(result.authUrl);
+        await openUrl(validation.normalized);
         setStatus("외부 브라우저에서 인증 URL 열림");
       } catch (openErr) {
         setStatus("브라우저 열기 실패, URL 복사 후 수동 진행");
