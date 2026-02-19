@@ -12,9 +12,12 @@
   "app": {
     "windows": [
       {
-        "title": "rail",
+        "title": "",
         "width": 800,
-        "height": 600
+        "height": 600,
+        "titleBarStyle": "Transparent",
+        "hiddenTitle": true,
+        "backgroundColor": "#eceef1"
       }
     ],
     "security": {
