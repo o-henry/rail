@@ -24,6 +24,8 @@ type LoginChatgptResult = {
   raw: unknown;
 };
 
+type AuthMode = "chatgpt" | "apikey" | "unknown";
+
 function formatUnknown(value: unknown): string {
   try {
     return JSON.stringify(value);
@@ -62,6 +64,47 @@ function extractDeltaText(input: unknown, depth = 0): string {
   return candidates.map((candidate) => extractDeltaText(candidate, depth + 1)).join("");
 }
 
+function extractAuthMode(input: unknown, depth = 0): AuthMode | null {
+  if (depth > 4 || input == null) {
+    return null;
+  }
+  if (typeof input === "string") {
+    if (input === "chatgpt" || input === "apikey") {
+      return input;
+    }
+    return null;
+  }
+  if (Array.isArray(input)) {
+    for (const item of input) {
+      const mode = extractAuthMode(item, depth + 1);
+      if (mode) {
+        return mode;
+      }
+    }
+    return null;
+  }
+  if (typeof input !== "object") {
+    return null;
+  }
+
+  const record = input as Record<string, unknown>;
+  if (typeof record.authMode === "string") {
+    return extractAuthMode(record.authMode, depth + 1);
+  }
+  if (typeof record.auth_mode === "string") {
+    return extractAuthMode(record.auth_mode, depth + 1);
+  }
+
+  const candidates = [record.account, record.user, record.data, record.payload];
+  for (const candidate of candidates) {
+    const mode = extractAuthMode(candidate, depth + 1);
+    if (mode) {
+      return mode;
+    }
+  }
+  return null;
+}
+
 function App() {
   const defaultCwd = useMemo(() => ".", []);
 
@@ -76,6 +119,8 @@ function App() {
   const [error, setError] = useState("");
 
   const [authUrl, setAuthUrl] = useState("");
+  const [authMode, setAuthMode] = useState<AuthMode>("unknown");
+  const [loginCompleted, setLoginCompleted] = useState(false);
   const [streamText, setStreamText] = useState("");
   const [events, setEvents] = useState<string[]>([]);
 
@@ -98,6 +143,21 @@ function App() {
               setStreamText((prev) => prev + delta);
             }
           }
+
+          if (payload.method === "account/login/completed") {
+            setLoginCompleted(true);
+            setStatus("account/login/completed received");
+          }
+
+          if (payload.method === "account/updated") {
+            const mode = extractAuthMode(payload.params);
+            if (mode) {
+              setAuthMode(mode);
+              setStatus(`account/updated received (authMode=${mode})`);
+            } else {
+              setStatus("account/updated received (authMode unknown)");
+            }
+          }
         },
       );
 
@@ -113,6 +173,8 @@ function App() {
           }
           if (payload.state === "stopped" || payload.state === "disconnected") {
             setEngineStarted(false);
+            setAuthMode("unknown");
+            setLoginCompleted(false);
           }
         },
       );
@@ -177,14 +239,33 @@ function App() {
 
   async function onLoginChatgpt() {
     setError("");
+    setLoginCompleted(false);
     try {
       await ensureEngineStarted();
       const result = await invoke<LoginChatgptResult>("login_chatgpt");
       setAuthUrl(result.authUrl);
-      await openUrl(result.authUrl);
-      setStatus("auth url opened");
+      setStatus("auth url received");
+      try {
+        await openUrl(result.authUrl);
+        setStatus("auth url opened in external browser");
+      } catch (openErr) {
+        setStatus("auth url open failed, copy URL manually");
+        setError(`openUrl failed: ${String(openErr)}`);
+      }
     } catch (e) {
       setError(String(e));
+    }
+  }
+
+  async function onCopyAuthUrl() {
+    if (!authUrl) {
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(authUrl);
+      setStatus("auth url copied");
+    } catch (e) {
+      setError(`clipboard copy failed: ${String(e)}`);
     }
   }
 
@@ -234,6 +315,11 @@ function App() {
 
   return (
     <main className="app">
+      <section className="auth-banner">
+        <span>Current authMode</span>
+        <strong>{authMode}</strong>
+      </section>
+
       <h1>Codex Engine Smoke Test</h1>
 
       <section className="controls">
@@ -285,9 +371,13 @@ function App() {
       <section className="meta">
         <div>engineStarted: {String(engineStarted)}</div>
         <div>status: {status}</div>
+        <div>loginCompleted: {String(loginCompleted)}</div>
         {authUrl && (
           <div>
-            authUrl: <code>{authUrl}</code>
+            authUrl: <code>{authUrl}</code>{" "}
+            <button onClick={onCopyAuthUrl} type="button">
+              Copy
+            </button>
           </div>
         )}
         {error && <div className="error">error: {error}</div>}

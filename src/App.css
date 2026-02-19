@@ -30,6 +30,20 @@ h2 {
   font-size: 1rem;
 }
 
+.auth-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #143e4a;
+  color: #fff;
+  border: 1px solid #143e4a;
+}
+
+.auth-banner strong {
+  text-transform: lowercase;
+  letter-spacing: 0.02em;
+}
+
 section,
 form,
 article {
