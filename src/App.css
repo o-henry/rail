@@ -569,6 +569,11 @@ p {
   border-top: 1px solid #d9dfe6;
 }
 
+.usage-result {
+  display: grid;
+  gap: 6px;
+}
+
 .panel-card {
   border: 1px solid #dde2e8;
   border-radius: 14px;

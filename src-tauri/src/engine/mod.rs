@@ -97,6 +97,13 @@ pub struct ThreadStartResult {
     raw: Value,
 }
 
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UsageCheckResult {
+    source_method: String,
+    raw: Value,
+}
+
 impl EngineRuntime {
     async fn start(app: AppHandle, cwd: String) -> Result<Arc<Self>, String> {
         let mut child = Command::new("codex")
@@ -558,6 +565,37 @@ pub async fn login_chatgpt(state: State<'_, EngineManager>) -> Result<LoginChatg
         .ok_or_else(|| format!("authUrl not found in response: {raw}"))?;
 
     Ok(LoginChatgptResult { auth_url, raw })
+}
+
+#[tauri::command]
+pub async fn usage_check(state: State<'_, EngineManager>) -> Result<UsageCheckResult, String> {
+    let runtime = current_runtime(&state).await?;
+    let candidates: [(&str, Value); 4] = [
+        ("account/usage/get", json!({})),
+        ("account/usage", json!({})),
+        ("account/get", json!({})),
+        ("account/status", json!({})),
+    ];
+
+    let mut errors: Vec<String> = Vec::new();
+    for (method, params) in candidates {
+        match runtime.request(method, params).await {
+            Ok(raw) => {
+                return Ok(UsageCheckResult {
+                    source_method: method.to_string(),
+                    raw,
+                });
+            }
+            Err(err) => {
+                errors.push(format!("{method}: {err}"));
+            }
+        }
+    }
+
+    Err(format!(
+        "failed to fetch usage info from app-server; attempted methods: {}",
+        errors.join(" | ")
+    ))
 }
 
 #[tauri::command]

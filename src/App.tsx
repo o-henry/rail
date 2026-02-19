@@ -31,6 +31,11 @@ type LoginChatgptResult = {
   raw: unknown;
 };
 
+type UsageCheckResult = {
+  sourceMethod: string;
+  raw: unknown;
+};
+
 type AuthMode = "chatgpt" | "apikey" | "unknown";
 type ApprovalDecision = "accept" | "acceptForSession" | "decline" | "cancel";
 
@@ -738,6 +743,8 @@ function App() {
   const [error, setError] = useState("");
 
   const [authUrl, setAuthUrl] = useState("");
+  const [usageSourceMethod, setUsageSourceMethod] = useState("");
+  const [usageInfoText, setUsageInfoText] = useState("");
   const [authMode, setAuthMode] = useState<AuthMode>("unknown");
   const [loginCompleted, setLoginCompleted] = useState(false);
   const [lastCompletedStatus, setLastCompletedStatus] = useState("미확인");
@@ -906,6 +913,8 @@ function App() {
             setEngineStarted(false);
             setAuthMode("unknown");
             setLoginCompleted(false);
+            setUsageSourceMethod("");
+            setUsageInfoText("");
             setPendingApprovals([]);
             setApprovalSubmitting(false);
           }
@@ -1036,6 +1045,8 @@ function App() {
       setStatus("중지됨");
       setRunning(false);
       setIsGraphRunning(false);
+      setUsageSourceMethod("");
+      setUsageInfoText("");
     } catch (e) {
       setError(String(e));
     }
@@ -1058,6 +1069,20 @@ function App() {
       }
     } catch (e) {
       setError(String(e));
+    }
+  }
+
+  async function onCheckUsage() {
+    setError("");
+    try {
+      await ensureEngineStarted();
+      const result = await invoke<UsageCheckResult>("usage_check");
+      setUsageSourceMethod(result.sourceMethod);
+      setUsageInfoText(JSON.stringify(result.raw, null, 2));
+      setStatus(`사용량 조회 완료 (${result.sourceMethod})`);
+    } catch (e) {
+      setError(String(e));
+      setStatus("사용량 조회 실패");
     }
   }
 
@@ -1811,6 +1836,9 @@ function App() {
           <button onClick={onLoginChatgpt} disabled={running || isGraphRunning} type="button">
             ChatGPT 로그인
           </button>
+          <button onClick={onCheckUsage} disabled={running || isGraphRunning} type="button">
+            사용량 확인
+          </button>
         </div>
         <div className="meta">
           <div>인증 모드: {authModeLabel(authMode)}</div>
@@ -1826,7 +1854,18 @@ function App() {
               </button>
             </div>
           )}
+          {usageSourceMethod && (
+            <div>
+              사용량 조회 메서드: <code>{usageSourceMethod}</code>
+            </div>
+          )}
         </div>
+        {usageInfoText && (
+          <div className="usage-result">
+            <h3>사용량 조회 결과</h3>
+            <pre>{usageInfoText}</pre>
+          </div>
+        )}
       </section>
     );
   }
