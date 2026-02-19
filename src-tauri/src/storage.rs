@@ -100,3 +100,9 @@ pub fn run_list() -> Result<Vec<String>, String> {
 pub fn run_load(name: String) -> Result<Value, String> {
     read_json_file("runs", &name)
 }
+
+#[tauri::command]
+pub fn run_directory() -> Result<String, String> {
+    let dir = ensure_subdir("runs")?;
+    Ok(dir.to_string_lossy().to_string())
+}

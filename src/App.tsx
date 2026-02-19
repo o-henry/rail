@@ -10,7 +10,7 @@ import {
 } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { openUrl } from "@tauri-apps/plugin-opener";
+import { openPath, openUrl } from "@tauri-apps/plugin-opener";
 import "./App.css";
 
 type EngineNotificationEvent = {
@@ -124,6 +124,13 @@ type DragState = {
   nodeId: string;
   offsetX: number;
   offsetY: number;
+};
+
+type PanState = {
+  startX: number;
+  startY: number;
+  scrollLeft: number;
+  scrollTop: number;
 };
 
 type TurnConfig = {
@@ -343,6 +350,25 @@ function replaceInputPlaceholder(template: string, value: string): string {
   return template.split("{{input}}").join(value);
 }
 
+function cloneGraph(input: GraphData): GraphData {
+  return {
+    version: input.version,
+    nodes: input.nodes.map((node) => ({
+      ...node,
+      position: { ...node.position },
+      config: { ...node.config },
+    })),
+    edges: input.edges.map((edge) => ({
+      from: { ...edge.from },
+      to: { ...edge.to },
+    })),
+  };
+}
+
+function graphEquals(a: GraphData, b: GraphData): boolean {
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+
 function makeNodeId(type: NodeType): string {
   const suffix = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
   return `${type}-${suffix}`;
@@ -473,6 +499,9 @@ function NavIcon({ tab }: { tab: WorkspaceTab }) {
       </svg>
     );
   }
+  if (tab === "settings") {
+    return <img alt="" aria-hidden="true" className="nav-workflow-image" src="/setting.svg" />;
+  }
   return (
     <svg aria-hidden="true" fill="none" height="20" viewBox="0 0 24 24" width="20">
       <path
@@ -511,20 +540,6 @@ function loginStateLabel(engineStarted: boolean, loginCompleted: boolean, authMo
     return "세션 확인 중";
   }
   return "로그인 필요";
-}
-
-function completedStatusLabel(status: string): string {
-  const map: Record<string, string> = {
-    unknown: "미확인",
-    completed: "완료",
-    done: "완료",
-    failed: "실패",
-    cancelled: "취소됨",
-    rejected: "거절됨",
-    success: "성공",
-    succeeded: "성공",
-  };
-  return map[status.toLowerCase()] ?? status;
 }
 
 function extractFinalAnswer(output: unknown): string {
@@ -799,7 +814,7 @@ function App() {
 
   const [workspaceTab, setWorkspaceTab] = useState<WorkspaceTab>("workflow");
   const [headerSearch, setHeaderSearch] = useState("");
-  const [inspectorTab, setInspectorTab] = useState<"config" | "layers">("config");
+  const [isInspectorWide, setIsInspectorWide] = useState(false);
 
   const [cwd, setCwd] = useState(defaultCwd);
   const [model, setModel] = useState<string>(TURN_MODEL_OPTIONS[0]);
@@ -819,7 +834,6 @@ function App() {
   const [usageInfoText, setUsageInfoText] = useState("");
   const [authMode, setAuthMode] = useState<AuthMode>("unknown");
   const [loginCompleted, setLoginCompleted] = useState(false);
-  const [lastCompletedStatus, setLastCompletedStatus] = useState("미확인");
   const [streamText, setStreamText] = useState("");
   const [events, setEvents] = useState<string[]>([]);
   const [pendingApprovals, setPendingApprovals] = useState<PendingApproval[]>([]);
@@ -837,9 +851,14 @@ function App() {
   const [nodeStates, setNodeStates] = useState<Record<string, NodeRunState>>({});
   const [isGraphRunning, setIsGraphRunning] = useState(false);
   const [canvasZoom, setCanvasZoom] = useState(1);
+  const [panMode, setPanMode] = useState(false);
+  const [undoStack, setUndoStack] = useState<GraphData[]>([]);
+  const [redoStack, setRedoStack] = useState<GraphData[]>([]);
 
   const dragRef = useRef<DragState | null>(null);
   const graphCanvasRef = useRef<HTMLDivElement | null>(null);
+  const panRef = useRef<PanState | null>(null);
+  const dragStartSnapshotRef = useRef<GraphData | null>(null);
   const cancelRequestedRef = useRef(false);
   const activeTurnNodeIdRef = useRef<string>("");
   const turnTerminalResolverRef = useRef<((terminal: TurnTerminal) => void) | null>(null);
@@ -893,6 +912,46 @@ function App() {
           ...patch,
         },
       };
+    });
+  }
+
+  function applyGraphChange(updater: (prev: GraphData) => GraphData) {
+    setGraph((prev) => {
+      const next = updater(prev);
+      if (graphEquals(prev, next)) {
+        return prev;
+      }
+      setUndoStack((stack) => [...stack.slice(-79), cloneGraph(prev)]);
+      setRedoStack([]);
+      return next;
+    });
+  }
+
+  function onUndoGraph() {
+    setUndoStack((prevUndo) => {
+      if (prevUndo.length === 0) {
+        return prevUndo;
+      }
+      const snapshot = prevUndo[prevUndo.length - 1];
+      setGraph((current) => {
+        setRedoStack((redo) => [...redo.slice(-79), cloneGraph(current)]);
+        return cloneGraph(snapshot);
+      });
+      return prevUndo.slice(0, -1);
+    });
+  }
+
+  function onRedoGraph() {
+    setRedoStack((prevRedo) => {
+      if (prevRedo.length === 0) {
+        return prevRedo;
+      }
+      const snapshot = prevRedo[prevRedo.length - 1];
+      setGraph((current) => {
+        setUndoStack((undo) => [...undo.slice(-79), cloneGraph(current)]);
+        return cloneGraph(snapshot);
+      });
+      return prevRedo.slice(0, -1);
     });
   }
 
@@ -958,11 +1017,6 @@ function App() {
               } else {
                 setStatus("계정 상태 갱신 수신 (인증 모드 미확인)");
               }
-            }
-
-            if (payload.method === "item/completed") {
-              const completedStatus = extractCompletedStatus(payload.params) ?? "unknown";
-              setLastCompletedStatus(completedStatus);
             }
 
             const terminal = isTurnTerminalEvent(payload.method, payload.params);
@@ -1074,6 +1128,17 @@ function App() {
       setRunFiles(files);
     } catch (e) {
       setError(String(e));
+    }
+  }
+
+  async function onOpenRunsFolder() {
+    setError("");
+    try {
+      const runsDir = await invoke<string>("run_directory");
+      await openPath(runsDir);
+      setStatus("실행 기록 폴더 열림");
+    } catch (e) {
+      setError(`실행 기록 폴더 열기 실패: ${String(e)}`);
     }
   }
 
@@ -1230,7 +1295,7 @@ function App() {
   }
 
   function addNode(type: NodeType) {
-    setGraph((prev) => {
+    applyGraphChange((prev) => {
       const index = prev.nodes.length;
       const node: GraphNode = {
         id: makeNodeId(type),
@@ -1250,7 +1315,9 @@ function App() {
 
   function applyPreset(kind: "validation" | "development") {
     const preset = kind === "validation" ? buildValidationPreset() : buildDevelopmentPreset();
-    setGraph(preset);
+    setGraph(cloneGraph(preset));
+    setUndoStack([]);
+    setRedoStack([]);
     setSelectedNodeId(preset.nodes[0]?.id ?? "");
     setNodeStates({});
     setConnectFromNodeId("");
@@ -1262,7 +1329,7 @@ function App() {
   }
 
   function deleteNode(nodeId: string) {
-    setGraph((prev) => ({
+    applyGraphChange((prev) => ({
       ...prev,
       nodes: prev.nodes.filter((n) => n.id !== nodeId),
       edges: prev.edges.filter((e) => e.from.nodeId !== nodeId && e.to.nodeId !== nodeId),
@@ -1284,7 +1351,7 @@ function App() {
       return;
     }
 
-    setGraph((prev) => {
+    applyGraphChange((prev) => {
       const exists = prev.edges.some(
         (edge) => edge.from.nodeId === connectFromNodeId && edge.to.nodeId === targetNodeId,
       );
@@ -1341,6 +1408,10 @@ function App() {
   }
 
   function onNodeDragStart(e: ReactMouseEvent<HTMLDivElement>, nodeId: string) {
+    if (panMode) {
+      return;
+    }
+
     const node = graph.nodes.find((item) => item.id === nodeId);
     if (!node) {
       return;
@@ -1351,6 +1422,8 @@ function App() {
       return;
     }
 
+    dragStartSnapshotRef.current = cloneGraph(graph);
+
     dragRef.current = {
       nodeId,
       offsetX: canvasPoint.x - node.position.x,
@@ -1359,6 +1432,15 @@ function App() {
   }
 
   function onCanvasMouseMove(e: ReactMouseEvent<HTMLDivElement>) {
+    if (panRef.current) {
+      const canvas = graphCanvasRef.current;
+      if (canvas) {
+        canvas.scrollLeft = panRef.current.scrollLeft - (e.clientX - panRef.current.startX);
+        canvas.scrollTop = panRef.current.scrollTop - (e.clientY - panRef.current.startY);
+      }
+      return;
+    }
+
     if (!dragRef.current) {
       return;
     }
@@ -1381,7 +1463,34 @@ function App() {
   }
 
   function onCanvasMouseUp() {
+    panRef.current = null;
+    const dragSnapshot = dragStartSnapshotRef.current;
+    if (dragSnapshot && !graphEquals(dragSnapshot, graph)) {
+      setUndoStack((stack) => [...stack.slice(-79), cloneGraph(dragSnapshot)]);
+      setRedoStack([]);
+    }
+    dragStartSnapshotRef.current = null;
     dragRef.current = null;
+  }
+
+  function onCanvasMouseDown(e: ReactMouseEvent<HTMLDivElement>) {
+    if (!panMode) {
+      return;
+    }
+    const canvas = graphCanvasRef.current;
+    if (!canvas) {
+      return;
+    }
+    const target = e.target as HTMLElement;
+    if (target.closest(".canvas-zoom-controls, .canvas-runbar")) {
+      return;
+    }
+    panRef.current = {
+      startX: e.clientX,
+      startY: e.clientY,
+      scrollLeft: canvas.scrollLeft,
+      scrollTop: canvas.scrollTop,
+    };
   }
 
   function onCanvasWheel(e: ReactWheelEvent<HTMLDivElement>) {
@@ -1508,7 +1617,9 @@ function App() {
     try {
       const loaded = await invoke<unknown>("graph_load", { name: target });
       const normalized = normalizeGraph(loaded);
-      setGraph(normalized);
+      setGraph(cloneGraph(normalized));
+      setUndoStack([]);
+      setRedoStack([]);
       setSelectedNodeId(normalized.nodes[0]?.id ?? "");
       setNodeStates({});
       setStatus(`그래프 불러오기 완료 (${target})`);
@@ -1517,6 +1628,16 @@ function App() {
       setError(String(e));
     }
   }
+
+  useEffect(() => {
+    if (!selectedNodeId) {
+      return;
+    }
+    const exists = graph.nodes.some((node) => node.id === selectedNodeId);
+    if (!exists) {
+      setSelectedNodeId("");
+    }
+  }, [graph.nodes, selectedNodeId]);
 
   async function saveRunRecord(runRecord: RunRecord) {
     const fileName = `run-${runRecord.runId}.json`;
@@ -2047,14 +2168,23 @@ function App() {
   function renderSettingsPanel(compact = false) {
     return (
       <section className={`controls ${compact ? "settings-compact" : ""}`}>
-        <h2>엔진 설정</h2>
+        <h2>엔진 및 계정</h2>
+        <div className="settings-badges">
+          <span className={`status-tag ${engineStarted ? "on" : "off"}`}>
+            {engineStarted ? "엔진 연결됨" : "엔진 대기"}
+          </span>
+          <span className={`status-tag ${loginCompleted ? "on" : "off"}`}>
+            {loginCompleted ? "로그인 완료" : "로그인 필요"}
+          </span>
+          <span className="status-tag neutral">인증: {authModeLabel(authMode)}</span>
+        </div>
         <label>
           작업 경로(CWD)
           <input value={cwd} onChange={(e) => setCwd(e.currentTarget.value)} />
         </label>
         <label>
-          모델
-          <select value={model} onChange={(e) => setModel(e.currentTarget.value)}>
+          기본 모델
+          <select className="modern-select" value={model} onChange={(e) => setModel(e.currentTarget.value)}>
             {TURN_MODEL_OPTIONS.map((option) => (
               <option key={option} value={option}>
                 {option}
@@ -2076,26 +2206,20 @@ function App() {
             사용량 확인
           </button>
         </div>
-        <div className="meta">
-          <div>인증 모드: {authModeLabel(authMode)}</div>
-          <div>엔진 시작 여부: {engineStarted ? "예" : "아니오"}</div>
-          <div>로그인 완료: {loginCompleted ? "예" : "아니오"}</div>
-          <div>대기 중 승인 요청: {pendingApprovals.length}</div>
-          <div>마지막 완료 상태: {completedStatusLabel(lastCompletedStatus)}</div>
-          {authUrl && (
-            <div>
-              인증 URL: <code>{authUrl}</code>{" "}
-              <button onClick={onCopyAuthUrl} type="button">
-                복사
-              </button>
-            </div>
-          )}
-          {usageSourceMethod && (
-            <div>
-              사용량 조회 메서드: <code>{usageSourceMethod}</code>
-            </div>
-          )}
-        </div>
+        {authUrl && (
+          <div className="auth-url-box">
+            <span>인증 URL</span>
+            <code>{authUrl}</code>
+            <button onClick={onCopyAuthUrl} type="button">
+              복사
+            </button>
+          </div>
+        )}
+        {usageSourceMethod && (
+          <div className="usage-method">
+            사용량 조회 메서드: <code>{usageSourceMethod}</code>
+          </div>
+        )}
         {usageInfoText && (
           <div className="usage-result">
             <h3>사용량 조회 결과</h3>
@@ -2205,7 +2329,7 @@ function App() {
           <div className="header-actions">
             <span className="chip">로그인: {loginStateLabel(engineStarted, loginCompleted, authMode)}</span>
             <span className="chip">인증: {authModeLabel(authMode)}</span>
-            <span className="chip">실행 {runFiles.length}</span>
+            <span className="chip">기록 {runFiles.length}</span>
             <button className="primary-action" type="button">
               생성
             </button>
@@ -2215,7 +2339,7 @@ function App() {
         {error && <div className="error">오류: {error}</div>}
 
         {workspaceTab === "workflow" && (
-          <div className="workflow-layout">
+          <div className={`workflow-layout ${isInspectorWide ? "inspector-wide" : ""}`}>
             <section className="canvas-pane">
               <div className="canvas-topbar">
                 <label className="question-input">
@@ -2229,8 +2353,9 @@ function App() {
               </div>
 
               <div
-                className="graph-canvas"
+                className={`graph-canvas ${panMode ? "pan-mode" : ""}`}
                 onKeyDown={onCanvasKeyDown}
+                onMouseDown={onCanvasMouseDown}
                 onMouseLeave={onCanvasMouseUp}
                 onMouseMove={onCanvasMouseMove}
                 onMouseUp={onCanvasMouseUp}
@@ -2246,6 +2371,13 @@ function App() {
                     <button onClick={onCanvasZoomOut} type="button">
                       −
                     </button>
+                    <button
+                      className={panMode ? "is-active" : ""}
+                      onClick={() => setPanMode((prev) => !prev)}
+                      type="button"
+                    >
+                      ↕
+                    </button>
                   </div>
 
                   <div className="canvas-runbar">
@@ -2260,8 +2392,12 @@ function App() {
                     <button disabled={!isGraphRunning} onClick={onCancelGraphRun} type="button">
                       중지
                     </button>
-                    <button type="button">되돌리기</button>
-                    <button type="button">다시하기</button>
+                    <button disabled={undoStack.length === 0} onClick={onUndoGraph} type="button">
+                      되돌리기
+                    </button>
+                    <button disabled={redoStack.length === 0} onClick={onRedoGraph} type="button">
+                      다시하기
+                    </button>
                   </div>
                 </div>
 
@@ -2336,6 +2472,13 @@ function App() {
                               {nodeStatusLabel(nodeStatus)}
                             </div>
                             <div>{nodeCardSummary(node)}</div>
+                            <div className="node-snippet">
+                              {String(
+                                extractFinalAnswer(runState?.output) ||
+                                  (runState?.logs ?? []).slice(-1)[0] ||
+                                  "아직 실행 로그가 없습니다.",
+                              ).slice(0, 180)}
+                            </div>
                           </div>
                           <div className="node-ports">
                             <button onClick={() => onPortInClick(node.id)} type="button">
@@ -2355,264 +2498,239 @@ function App() {
 
             <aside className="inspector-pane">
               <div className="inspector-head">
-                <div className="inspector-tabs">
-                  <button
-                    className={inspectorTab === "config" ? "is-active" : ""}
-                    onClick={() => setInspectorTab("config")}
-                    type="button"
-                  >
-                    노드 설정
-                  </button>
-                  <button
-                    className={inspectorTab === "layers" ? "is-active" : ""}
-                    onClick={() => setInspectorTab("layers")}
-                    type="button"
-                  >
-                    레이어
-                  </button>
-                </div>
-                <button className="inspector-expand" type="button">
-                  →
+                <div className="inspector-title-chip">노드 설정</div>
+                <button
+                  className="inspector-resize"
+                  onClick={() => setIsInspectorWide((prev) => !prev)}
+                  title={isInspectorWide ? "패널 폭 줄이기" : "패널 폭 넓히기"}
+                  type="button"
+                >
+                  ↔
                 </button>
               </div>
               <div className="inspector-content">
-                {inspectorTab === "config" && (
-                  <div className="inspector-section">
-                    <h2>노드 설정</h2>
-                    <section className="inspector-block">
-                      <h3>그래프 도구</h3>
-                      <div className="button-row">
-                        <button onClick={() => addNode("turn")} type="button">
-                          + 응답 에이전트
-                        </button>
-                        <button onClick={() => addNode("transform")} type="button">
-                          + 데이터 변환
-                        </button>
-                        <button onClick={() => addNode("gate")} type="button">
-                          + 분기
-                        </button>
-                        <button
-                          disabled={!connectFromNodeId}
-                          onClick={() => setConnectFromNodeId("")}
-                          type="button"
-                        >
-                          연결 취소
-                        </button>
-                      </div>
+                <div className="inspector-section">
+                  <section className="inspector-block">
+                    <h3>그래프 도구</h3>
+                    <div className="button-row">
+                      <button onClick={() => addNode("turn")} type="button">
+                        + 응답 에이전트
+                      </button>
+                      <button onClick={() => addNode("transform")} type="button">
+                        + 데이터 변환
+                      </button>
+                      <button onClick={() => addNode("gate")} type="button">
+                        + 분기
+                      </button>
+                      <button
+                        disabled={!connectFromNodeId}
+                        onClick={() => setConnectFromNodeId("")}
+                        type="button"
+                      >
+                        연결 취소
+                      </button>
+                    </div>
 
-                      <div className="button-row">
-                        <button onClick={() => applyPreset("validation")} type="button">
-                          검증형 5에이전트
-                        </button>
-                        <button onClick={() => applyPreset("development")} type="button">
-                          개발형 5에이전트
-                        </button>
-                      </div>
+                    <div className="button-row">
+                      <button onClick={() => applyPreset("validation")} type="button">
+                        검증형 5에이전트
+                      </button>
+                      <button onClick={() => applyPreset("development")} type="button">
+                        개발형 5에이전트
+                      </button>
+                    </div>
 
-                      <div className="save-row">
-                        <input
-                          value={graphFileName}
-                          onChange={(e) => setGraphFileName(e.currentTarget.value)}
-                          placeholder="저장할 그래프 파일 이름"
-                        />
-                        <button onClick={saveGraph} type="button">
-                          저장
-                        </button>
-                        <button onClick={() => loadGraph()} type="button">
-                          불러오기
-                        </button>
-                        <button onClick={refreshGraphFiles} type="button">
-                          새로고침
-                        </button>
-                        <select
-                          className="graph-file-select"
-                          onChange={(e) => {
-                            const value = e.currentTarget.value;
-                            if (value) {
-                              loadGraph(value);
-                            }
-                          }}
-                          value=""
-                        >
-                          <option value="">그래프 파일 선택</option>
-                          {graphFiles.map((file) => (
-                            <option key={file} value={file}>
-                              {file}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    </section>
+                    <div className="save-row">
+                      <input
+                        value={graphFileName}
+                        onChange={(e) => setGraphFileName(e.currentTarget.value)}
+                        placeholder="저장할 그래프 파일 이름"
+                      />
+                      <button onClick={saveGraph} type="button">
+                        저장
+                      </button>
+                      <button onClick={() => loadGraph()} type="button">
+                        불러오기
+                      </button>
+                      <button onClick={refreshGraphFiles} type="button">
+                        새로고침
+                      </button>
+                      <select
+                        className="graph-file-select modern-select"
+                        onChange={(e) => {
+                          const value = e.currentTarget.value;
+                          if (value) {
+                            loadGraph(value);
+                          }
+                        }}
+                        value=""
+                      >
+                        <option value="">그래프 파일 선택</option>
+                        {graphFiles.map((file) => (
+                          <option key={file} value={file}>
+                            {file}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </section>
 
-                    {!selectedNode && <div className="inspector-empty">노드를 선택하세요.</div>}
-                    {selectedNode && (
-                      <>
-                        <section className="inspector-block inspector-summary">
-                          <div>
-                            <strong>{selectedNode.id}</strong>
-                          </div>
-                          <div>유형: {nodeTypeLabel(selectedNode.type)}</div>
-                          <div className={`status-pill status-${selectedNodeState?.status ?? "idle"}`}>
-                            상태: {nodeStatusLabel(selectedNodeState?.status ?? "idle")}
-                          </div>
+                  {!selectedNode && <div className="inspector-empty">노드를 선택하세요.</div>}
+                  {selectedNode && (
+                    <>
+                      <section className="inspector-block inspector-summary">
+                        <div>
+                          <strong>{selectedNode.id}</strong>
+                        </div>
+                        <div>유형: {nodeTypeLabel(selectedNode.type)}</div>
+                        <div className={`status-pill status-${selectedNodeState?.status ?? "idle"}`}>
+                          상태: {nodeStatusLabel(selectedNodeState?.status ?? "idle")}
+                        </div>
+                      </section>
+
+                      {selectedNode.type === "turn" && (
+                        <section className="inspector-block form-grid">
+                          <h3>모델 설정</h3>
+                          <label>
+                            모델
+                            <select
+                              className="modern-select"
+                              onChange={(e) => updateSelectedNodeConfig("model", e.currentTarget.value)}
+                              value={String((selectedNode.config as TurnConfig).model ?? model)}
+                            >
+                              {TURN_MODEL_OPTIONS.map((option) => (
+                                <option key={option} value={option}>
+                                  {option}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <label>
+                            작업 경로
+                            <input
+                              onChange={(e) => updateSelectedNodeConfig("cwd", e.currentTarget.value)}
+                              value={String((selectedNode.config as TurnConfig).cwd ?? cwd)}
+                            />
+                          </label>
+                          <label>
+                            프롬프트 템플릿
+                            <textarea
+                              onChange={(e) =>
+                                updateSelectedNodeConfig("promptTemplate", e.currentTarget.value)
+                              }
+                              rows={3}
+                              value={String((selectedNode.config as TurnConfig).promptTemplate ?? "{{input}}")}
+                            />
+                          </label>
                         </section>
+                      )}
 
-                        {selectedNode.type === "turn" && (
-                          <section className="inspector-block form-grid">
-                            <h3>모델 설정</h3>
-                            <label>
-                              모델
-                              <select
-                                onChange={(e) => updateSelectedNodeConfig("model", e.currentTarget.value)}
-                                value={String((selectedNode.config as TurnConfig).model ?? model)}
-                              >
-                                {TURN_MODEL_OPTIONS.map((option) => (
-                                  <option key={option} value={option}>
-                                    {option}
-                                  </option>
-                                ))}
-                              </select>
-                            </label>
-                            <label>
-                              작업 경로
-                              <input
-                                onChange={(e) => updateSelectedNodeConfig("cwd", e.currentTarget.value)}
-                                value={String((selectedNode.config as TurnConfig).cwd ?? cwd)}
-                              />
-                            </label>
-                            <label>
-                              프롬프트 템플릿
-                              <textarea
-                                onChange={(e) =>
-                                  updateSelectedNodeConfig("promptTemplate", e.currentTarget.value)
-                                }
-                                rows={3}
-                                value={String((selectedNode.config as TurnConfig).promptTemplate ?? "{{input}}")}
-                              />
-                            </label>
-                          </section>
-                        )}
-
-                        {selectedNode.type === "transform" && (
-                          <section className="inspector-block form-grid">
-                            <h3>변환 규칙</h3>
-                            <label>
-                              변환 모드
-                              <select
-                                onChange={(e) => updateSelectedNodeConfig("mode", e.currentTarget.value)}
-                                value={String((selectedNode.config as TransformConfig).mode ?? "pick")}
-                              >
-                                <option value="pick">필드 선택</option>
-                                <option value="merge">병합</option>
-                                <option value="template">문자열 템플릿</option>
-                              </select>
-                            </label>
-                            <label>
-                              pick 경로
-                              <input
-                                onChange={(e) => updateSelectedNodeConfig("pickPath", e.currentTarget.value)}
-                                value={String((selectedNode.config as TransformConfig).pickPath ?? "")}
-                              />
-                            </label>
-                            <label>
-                              merge JSON
-                              <textarea
-                                onChange={(e) => updateSelectedNodeConfig("mergeJson", e.currentTarget.value)}
-                                rows={3}
-                                value={String((selectedNode.config as TransformConfig).mergeJson ?? "{}")}
-                              />
-                            </label>
-                            <label>
-                              템플릿
-                              <textarea
-                                onChange={(e) => updateSelectedNodeConfig("template", e.currentTarget.value)}
-                                rows={3}
-                                value={String((selectedNode.config as TransformConfig).template ?? "{{input}}")}
-                              />
-                            </label>
-                          </section>
-                        )}
-
-                        {selectedNode.type === "gate" && (
-                          <section className="inspector-block form-grid">
-                            <h3>분기 설정</h3>
-                            <label>
-                              분기 경로(decisionPath)
-                              <input
-                                onChange={(e) => updateSelectedNodeConfig("decisionPath", e.currentTarget.value)}
-                                value={String((selectedNode.config as GateConfig).decisionPath ?? "decision")}
-                              />
-                            </label>
-                            <label>
-                              PASS 대상 노드
-                              <select
-                                onChange={(e) => updateSelectedNodeConfig("passNodeId", e.currentTarget.value)}
-                                value={String((selectedNode.config as GateConfig).passNodeId ?? "")}
-                              >
-                                <option value="">(없음)</option>
-                                {outgoingFromSelected.map((nodeId) => (
-                                  <option key={nodeId} value={nodeId}>
-                                    {nodeId}
-                                  </option>
-                                ))}
-                              </select>
-                            </label>
-                            <label>
-                              REJECT 대상 노드
-                              <select
-                                onChange={(e) => updateSelectedNodeConfig("rejectNodeId", e.currentTarget.value)}
-                                value={String((selectedNode.config as GateConfig).rejectNodeId ?? "")}
-                              >
-                                <option value="">(없음)</option>
-                                {outgoingFromSelected.map((nodeId) => (
-                                  <option key={nodeId} value={nodeId}>
-                                    {nodeId}
-                                  </option>
-                                ))}
-                              </select>
-                            </label>
-                            <label>
-                              스키마 JSON (선택)
-                              <textarea
-                                onChange={(e) => updateSelectedNodeConfig("schemaJson", e.currentTarget.value)}
-                                rows={4}
-                                value={String((selectedNode.config as GateConfig).schemaJson ?? "")}
-                              />
-                            </label>
-                          </section>
-                        )}
-
-                        <section className="inspector-block">
-                          <h3>노드 로그</h3>
-                          <pre>{(selectedNodeState?.logs ?? []).join("\n") || "(로그 없음)"}</pre>
+                      {selectedNode.type === "transform" && (
+                        <section className="inspector-block form-grid">
+                          <h3>변환 규칙</h3>
+                          <label>
+                            변환 모드
+                            <select
+                              className="modern-select"
+                              onChange={(e) => updateSelectedNodeConfig("mode", e.currentTarget.value)}
+                              value={String((selectedNode.config as TransformConfig).mode ?? "pick")}
+                            >
+                              <option value="pick">필드 선택</option>
+                              <option value="merge">병합</option>
+                              <option value="template">문자열 템플릿</option>
+                            </select>
+                          </label>
+                          <label>
+                            pick 경로
+                            <input
+                              onChange={(e) => updateSelectedNodeConfig("pickPath", e.currentTarget.value)}
+                              value={String((selectedNode.config as TransformConfig).pickPath ?? "")}
+                            />
+                          </label>
+                          <label>
+                            merge JSON
+                            <textarea
+                              onChange={(e) => updateSelectedNodeConfig("mergeJson", e.currentTarget.value)}
+                              rows={3}
+                              value={String((selectedNode.config as TransformConfig).mergeJson ?? "{}")}
+                            />
+                          </label>
+                          <label>
+                            템플릿
+                            <textarea
+                              onChange={(e) => updateSelectedNodeConfig("template", e.currentTarget.value)}
+                              rows={3}
+                              value={String((selectedNode.config as TransformConfig).template ?? "{{input}}")}
+                            />
+                          </label>
                         </section>
+                      )}
 
-                        <section className="inspector-block">
-                          <h3>노드 출력</h3>
-                          <pre>{formatUnknown(selectedNodeState?.output) || "(출력 없음)"}</pre>
+                      {selectedNode.type === "gate" && (
+                        <section className="inspector-block form-grid">
+                          <h3>분기 설정</h3>
+                          <label>
+                            분기 경로(decisionPath)
+                            <input
+                              onChange={(e) => updateSelectedNodeConfig("decisionPath", e.currentTarget.value)}
+                              value={String((selectedNode.config as GateConfig).decisionPath ?? "decision")}
+                            />
+                          </label>
+                          <label>
+                            PASS 대상 노드
+                            <select
+                              className="modern-select"
+                              onChange={(e) => updateSelectedNodeConfig("passNodeId", e.currentTarget.value)}
+                              value={String((selectedNode.config as GateConfig).passNodeId ?? "")}
+                            >
+                              <option value="">(없음)</option>
+                              {outgoingFromSelected.map((nodeId) => (
+                                <option key={nodeId} value={nodeId}>
+                                  {nodeId}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <label>
+                            REJECT 대상 노드
+                            <select
+                              className="modern-select"
+                              onChange={(e) => updateSelectedNodeConfig("rejectNodeId", e.currentTarget.value)}
+                              value={String((selectedNode.config as GateConfig).rejectNodeId ?? "")}
+                            >
+                              <option value="">(없음)</option>
+                              {outgoingFromSelected.map((nodeId) => (
+                                <option key={nodeId} value={nodeId}>
+                                  {nodeId}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <label>
+                            스키마 JSON (선택)
+                            <textarea
+                              onChange={(e) => updateSelectedNodeConfig("schemaJson", e.currentTarget.value)}
+                              rows={4}
+                              value={String((selectedNode.config as GateConfig).schemaJson ?? "")}
+                            />
+                          </label>
                         </section>
-                      </>
-                    )}
+                      )}
 
-                    <section className="inspector-block">{renderSettingsPanel(true)}</section>
-                  </div>
-                )}
+                      <section className="inspector-block">
+                        <h3>노드 로그</h3>
+                        <pre>{(selectedNodeState?.logs ?? []).join("\n") || "(로그 없음)"}</pre>
+                      </section>
 
-                {inspectorTab === "layers" && (
-                  <div className="layer-list inspector-section">
-                    <h2>그래프 레이어</h2>
-                    <h3>노드 ({graph.nodes.length})</h3>
-                    <ul>
-                      {graph.nodes.map((node) => (
-                        <li key={`layer-node-${node.id}`}>
-                          <button onClick={() => setSelectedNodeId(node.id)} type="button">
-                            {nodeTypeLabel(node.type)} · {node.id}
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
+                      <section className="inspector-block">
+                        <h3>노드 출력</h3>
+                        <pre>{formatUnknown(selectedNodeState?.output) || "(출력 없음)"}</pre>
+                      </section>
+                    </>
+                  )}
+
+                  <section className="inspector-block">{renderSettingsPanel(true)}</section>
+                </div>
               </div>
             </aside>
           </div>
@@ -2625,6 +2743,9 @@ function App() {
               <div className="button-row">
                 <button onClick={refreshRunFiles} type="button">
                   새로고침
+                </button>
+                <button onClick={onOpenRunsFolder} type="button">
+                  Finder에서 열기
                 </button>
               </div>
               {runFiles.length === 0 && <div>(실행 기록 파일 없음)</div>}
