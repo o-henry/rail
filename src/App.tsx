@@ -1961,7 +1961,6 @@ function App() {
             <button className="primary-action" type="button">
               생성
             </button>
-            <div className="avatar-badge">H</div>
           </div>
         </header>
 

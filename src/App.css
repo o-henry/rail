@@ -263,18 +263,6 @@ p {
   padding: 7px 14px;
 }
 
-.avatar-badge {
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
-  border: 1px solid #d4d9df;
-  background: #ffffff;
-  display: grid;
-  place-items: center;
-  font-size: 0.8rem;
-  font-weight: 700;
-}
-
 .error {
   margin: 12px;
   border: 1px solid #f0c2c2;
