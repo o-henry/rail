@@ -85,6 +85,12 @@ type NodeExecutionStatus =
   | "skipped"
   | "cancelled";
 
+type UsageStats = {
+  inputTokens?: number;
+  outputTokens?: number;
+  totalTokens?: number;
+};
+
 type NodeRunState = {
   status: NodeExecutionStatus;
   logs: string[];
@@ -92,6 +98,10 @@ type NodeRunState = {
   error?: string;
   threadId?: string;
   turnId?: string;
+  startedAt?: string;
+  finishedAt?: string;
+  durationMs?: number;
+  usage?: UsageStats;
 };
 
 type RunTransition = {
@@ -318,6 +328,118 @@ function extractStringByPaths(value: unknown, paths: string[]): string | null {
   }
 
   return null;
+}
+
+function readNumber(value: unknown): number | undefined {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) {
+      return parsed;
+    }
+  }
+  return undefined;
+}
+
+function findUsageObject(input: unknown, depth = 0): Record<string, unknown> | null {
+  if (depth > 5 || input == null || typeof input !== "object") {
+    return null;
+  }
+  const record = input as Record<string, unknown>;
+  const hasTokenKeys = [
+    "input_tokens",
+    "output_tokens",
+    "total_tokens",
+    "prompt_tokens",
+    "completion_tokens",
+    "inputTokens",
+    "outputTokens",
+    "totalTokens",
+  ].some((key) => key in record);
+  if (hasTokenKeys) {
+    return record;
+  }
+
+  const children = [
+    record.usage,
+    record.metrics,
+    record.tokenUsage,
+    record.result,
+    record.item,
+    record.data,
+    record.payload,
+    record.output,
+    record.completion,
+  ];
+  for (const child of children) {
+    const found = findUsageObject(child, depth + 1);
+    if (found) {
+      return found;
+    }
+  }
+  return null;
+}
+
+function extractUsageStats(input: unknown): UsageStats | undefined {
+  const usage = findUsageObject(input);
+  if (!usage) {
+    return undefined;
+  }
+
+  const inputTokens =
+    readNumber(usage.input_tokens) ??
+    readNumber(usage.prompt_tokens) ??
+    readNumber(usage.inputTokens) ??
+    readNumber(usage.promptTokens);
+  const outputTokens =
+    readNumber(usage.output_tokens) ??
+    readNumber(usage.completion_tokens) ??
+    readNumber(usage.outputTokens) ??
+    readNumber(usage.completionTokens);
+  const totalTokens = readNumber(usage.total_tokens) ?? readNumber(usage.totalTokens);
+
+  if (inputTokens == null && outputTokens == null && totalTokens == null) {
+    return undefined;
+  }
+
+  return {
+    inputTokens,
+    outputTokens,
+    totalTokens: totalTokens ?? ((inputTokens ?? 0) + (outputTokens ?? 0)),
+  };
+}
+
+function formatDuration(durationMs?: number): string {
+  if (durationMs == null || durationMs < 0) {
+    return "-";
+  }
+  if (durationMs < 1000) {
+    return `${durationMs}ms`;
+  }
+  return `${(durationMs / 1000).toFixed(1)}초`;
+}
+
+function formatUsage(usage?: UsageStats): string {
+  if (!usage) {
+    return "-";
+  }
+  const total = usage.totalTokens ?? ((usage.inputTokens ?? 0) + (usage.outputTokens ?? 0));
+  const inputText = usage.inputTokens != null ? `${usage.inputTokens}` : "-";
+  const outputText = usage.outputTokens != null ? `${usage.outputTokens}` : "-";
+  return `${total}토큰 (입력 ${inputText} / 출력 ${outputText})`;
+}
+
+function formatFinishedAt(value?: string): string {
+  if (!value) {
+    return "-";
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "-";
+  }
+  return date.toLocaleTimeString("ko-KR", { hour12: false });
 }
 
 function getByPath(input: unknown, path: string): unknown {
@@ -1826,7 +1948,14 @@ function App() {
   async function executeTurnNode(
     node: GraphNode,
     input: unknown,
-  ): Promise<{ ok: boolean; output?: unknown; error?: string; threadId?: string; turnId?: string }> {
+  ): Promise<{
+    ok: boolean;
+    output?: unknown;
+    error?: string;
+    threadId?: string;
+    turnId?: string;
+    usage?: UsageStats;
+  }> {
     const config = node.config as TurnConfig;
     const nodeModel = String(config.model ?? model).trim() || model;
     const nodeCwd = String(config.cwd ?? cwd).trim() || cwd;
@@ -1896,6 +2025,7 @@ function App() {
     const turnId =
       extractStringByPaths(turnStartResponse, ["turnId", "turn_id", "id", "turn.id"]) ??
       extractStringByPaths(terminal.params, ["turnId", "turn_id", "id", "turn.id"]);
+    const usage = extractUsageStats(terminal.params);
 
     activeTurnNodeIdRef.current = "";
 
@@ -1905,6 +2035,7 @@ function App() {
         error: `턴 실행 실패 (${terminal.status})`,
         threadId: activeThreadId,
         turnId: turnId ?? undefined,
+        usage,
       };
     }
 
@@ -1916,6 +2047,7 @@ function App() {
       },
       threadId: activeThreadId,
       turnId: turnId ?? undefined,
+      usage,
     };
   }
 
@@ -2001,9 +2133,22 @@ function App() {
 
         if (skipSet.has(nodeId)) {
           setNodeStatus(nodeId, "skipped", "분기 결과로 건너뜀");
+          setNodeRuntimeFields(nodeId, {
+            status: "skipped",
+            finishedAt: new Date().toISOString(),
+          });
           transition(runRecord, nodeId, "skipped", "분기 결과로 건너뜀");
         } else {
+          const startedAtMs = Date.now();
+          const startedAtIso = new Date(startedAtMs).toISOString();
           setNodeStatus(nodeId, "running", "노드 실행 시작");
+          setNodeRuntimeFields(nodeId, {
+            status: "running",
+            startedAt: startedAtIso,
+            finishedAt: undefined,
+            durationMs: undefined,
+            usage: undefined,
+          });
           transition(runRecord, nodeId, "running");
 
           const input = nodeInputFor(nodeId, outputs, workflowQuestion);
@@ -2011,22 +2156,31 @@ function App() {
           if (node.type === "turn") {
             const result = await executeTurnNode(node, input);
             if (!result.ok) {
+              const finishedAtIso = new Date().toISOString();
               setNodeStatus(nodeId, "failed", result.error ?? "턴 실행 실패");
               setNodeRuntimeFields(nodeId, {
                 error: result.error,
+                status: "failed",
                 threadId: result.threadId,
                 turnId: result.turnId,
+                usage: result.usage,
+                finishedAt: finishedAtIso,
+                durationMs: Date.now() - startedAtMs,
               });
               transition(runRecord, nodeId, "failed", result.error ?? "턴 실행 실패");
               break;
             }
 
+            const finishedAtIso = new Date().toISOString();
             outputs[nodeId] = result.output;
             setNodeRuntimeFields(nodeId, {
               status: "done",
               output: result.output,
               threadId: result.threadId,
               turnId: result.turnId,
+              usage: result.usage,
+              finishedAt: finishedAtIso,
+              durationMs: Date.now() - startedAtMs,
             });
             setNodeStatus(nodeId, "done", "턴 실행 완료");
             runRecord.threadTurnMap[nodeId] = {
@@ -2038,16 +2192,25 @@ function App() {
           } else if (node.type === "transform") {
             const result = await executeTransformNode(node, input);
             if (!result.ok) {
+              const finishedAtIso = new Date().toISOString();
               setNodeStatus(nodeId, "failed", result.error ?? "변환 실패");
-              setNodeRuntimeFields(nodeId, { error: result.error });
+              setNodeRuntimeFields(nodeId, {
+                status: "failed",
+                error: result.error,
+                finishedAt: finishedAtIso,
+                durationMs: Date.now() - startedAtMs,
+              });
               transition(runRecord, nodeId, "failed", result.error ?? "변환 실패");
               break;
             }
 
+            const finishedAtIso = new Date().toISOString();
             outputs[nodeId] = result.output;
             setNodeRuntimeFields(nodeId, {
               status: "done",
               output: result.output,
+              finishedAt: finishedAtIso,
+              durationMs: Date.now() - startedAtMs,
             });
             setNodeStatus(nodeId, "done", "변환 완료");
             transition(runRecord, nodeId, "done", "변환 완료");
@@ -2055,16 +2218,25 @@ function App() {
           } else {
             const result = executeGateNode(node, input, skipSet);
             if (!result.ok) {
+              const finishedAtIso = new Date().toISOString();
               setNodeStatus(nodeId, "failed", result.error ?? "분기 실패");
-              setNodeRuntimeFields(nodeId, { error: result.error });
+              setNodeRuntimeFields(nodeId, {
+                status: "failed",
+                error: result.error,
+                finishedAt: finishedAtIso,
+                durationMs: Date.now() - startedAtMs,
+              });
               transition(runRecord, nodeId, "failed", result.error ?? "분기 실패");
               break;
             }
 
+            const finishedAtIso = new Date().toISOString();
             outputs[nodeId] = result.output;
             setNodeRuntimeFields(nodeId, {
               status: "done",
               output: result.output,
+              finishedAt: finishedAtIso,
+              durationMs: Date.now() - startedAtMs,
             });
             setNodeStatus(nodeId, "done", result.message ?? "분기 완료");
             transition(runRecord, nodeId, "done", result.message ?? "분기 완료");
@@ -2338,10 +2510,6 @@ function App() {
         </aside>
 
         {!canvasFullscreen && <header className="workspace-header">
-          <div className="header-title">
-            <h1>워크플로우</h1>
-            <p>{status}</p>
-          </div>
           <div className="header-search-wrap">
             <input
               className="header-search"
@@ -2351,9 +2519,6 @@ function App() {
             />
           </div>
           <div className="header-actions">
-            <span className="chip">로그인: {loginStateLabel(engineStarted, loginCompleted, authMode)}</span>
-            <span className="chip">인증: {authModeLabel(authMode)}</span>
-            <span className="chip">기록 {runFiles.length}</span>
             <button className="primary-action" type="button">
               생성
             </button>
@@ -2419,7 +2584,7 @@ function App() {
                     </button>
                     <button
                       aria-label="중지"
-                      className="canvas-icon-btn"
+                      className="canvas-icon-btn stop"
                       disabled={!isGraphRunning}
                       onClick={onCancelGraphRun}
                       title="중지"
@@ -2523,6 +2688,11 @@ function App() {
                               {nodeStatusLabel(nodeStatus)}
                             </div>
                             <div>{nodeCardSummary(node)}</div>
+                            <div className="node-runtime-meta">
+                              <div>완료 여부: {nodeStatus === "done" ? "완료" : nodeStatus === "failed" ? "실패" : "대기"}</div>
+                              <div>생성 시간: {formatDuration(runState?.durationMs)}</div>
+                              <div>사용량: {formatUsage(runState?.usage)}</div>
+                            </div>
                             <div className="node-snippet">
                               {String(
                                 extractFinalAnswer(runState?.output) ||
@@ -2547,63 +2717,6 @@ function App() {
               </div>
 
               <div className="canvas-topbar">
-                <div className="toolbar-groups">
-                  <div className="button-row">
-                    <button onClick={() => addNode("turn")} type="button">
-                      + 응답 에이전트
-                    </button>
-                    <button onClick={() => addNode("transform")} type="button">
-                      + 데이터 변환
-                    </button>
-                    <button onClick={() => addNode("gate")} type="button">
-                      + 분기
-                    </button>
-                    <button disabled={!connectFromNodeId} onClick={() => setConnectFromNodeId("")} type="button">
-                      연결 취소
-                    </button>
-                    <button onClick={() => applyPreset("validation")} type="button">
-                      검증형 5에이전트
-                    </button>
-                    <button onClick={() => applyPreset("development")} type="button">
-                      개발형 5에이전트
-                    </button>
-                  </div>
-
-                  <div className="save-row">
-                    <input
-                      value={graphFileName}
-                      onChange={(e) => setGraphFileName(e.currentTarget.value)}
-                      placeholder="저장할 그래프 파일 이름"
-                    />
-                    <button onClick={saveGraph} type="button">
-                      저장
-                    </button>
-                    <button onClick={() => loadGraph()} type="button">
-                      불러오기
-                    </button>
-                    <button onClick={refreshGraphFiles} type="button">
-                      새로고침
-                    </button>
-                    <select
-                      className="graph-file-select modern-select"
-                      onChange={(e) => {
-                        const value = e.currentTarget.value;
-                        if (value) {
-                          loadGraph(value);
-                        }
-                      }}
-                      value=""
-                    >
-                      <option value="">그래프 파일 선택</option>
-                      {graphFiles.map((file) => (
-                        <option key={file} value={file}>
-                          {file}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-
                 <label className="question-input">
                   질문 입력
                   <textarea
@@ -2629,6 +2742,67 @@ function App() {
               </div>
               <div className="inspector-content">
                 <div className="inspector-section">
+                  <section className="inspector-block">
+                    <h3>그래프 도구</h3>
+                    <div className="button-row">
+                      <button onClick={() => addNode("turn")} type="button">
+                        + 응답 에이전트
+                      </button>
+                      <button onClick={() => addNode("transform")} type="button">
+                        + 데이터 변환
+                      </button>
+                      <button onClick={() => addNode("gate")} type="button">
+                        + 분기
+                      </button>
+                      <button disabled={!connectFromNodeId} onClick={() => setConnectFromNodeId("")} type="button">
+                        연결 취소
+                      </button>
+                    </div>
+
+                    <div className="button-row">
+                      <button onClick={() => applyPreset("validation")} type="button">
+                        검증형 5에이전트
+                      </button>
+                      <button onClick={() => applyPreset("development")} type="button">
+                        개발형 5에이전트
+                      </button>
+                    </div>
+
+                    <div className="save-row">
+                      <input
+                        value={graphFileName}
+                        onChange={(e) => setGraphFileName(e.currentTarget.value)}
+                        placeholder="저장할 그래프 파일 이름"
+                      />
+                      <button onClick={saveGraph} type="button">
+                        저장
+                      </button>
+                      <button onClick={() => loadGraph()} type="button">
+                        불러오기
+                      </button>
+                      <button onClick={refreshGraphFiles} type="button">
+                        새로고침
+                      </button>
+                      <select
+                        className="graph-file-select modern-select"
+                        onChange={(e) => {
+                          const value = e.currentTarget.value;
+                          if (value) {
+                            loadGraph(value);
+                          }
+                        }}
+                        value=""
+                      >
+                        <option value="">그래프 파일 선택</option>
+                        {graphFiles.map((file) => (
+                          <option key={file} value={file}>
+                            {file}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </section>
+
                   {!selectedNode && <div className="inspector-empty">노드를 선택하세요.</div>}
                   {selectedNode && (
                     <>
@@ -2640,6 +2814,10 @@ function App() {
                         <div className={`status-pill status-${selectedNodeState?.status ?? "idle"}`}>
                           상태: {nodeStatusLabel(selectedNodeState?.status ?? "idle")}
                         </div>
+                        <div>완료 여부: {(selectedNodeState?.status ?? "idle") === "done" ? "완료" : "미완료"}</div>
+                        <div>생성 시간: {formatDuration(selectedNodeState?.durationMs)}</div>
+                        <div>완료 시각: {formatFinishedAt(selectedNodeState?.finishedAt)}</div>
+                        <div>사용량: {formatUsage(selectedNodeState?.usage)}</div>
                       </section>
 
                       {selectedNode.type === "turn" && (
@@ -2784,6 +2962,20 @@ function App() {
                   )}
 
                   <section className="inspector-block">{renderSettingsPanel(true)}</section>
+                  <section className="inspector-block workflow-runtime-status">
+                    <h3>워크플로우 상태</h3>
+                    <div className="settings-badges">
+                      <span className="status-tag neutral">
+                        로그인: {loginStateLabel(engineStarted, loginCompleted, authMode)}
+                      </span>
+                      <span className="status-tag neutral">인증: {authModeLabel(authMode)}</span>
+                      <span className={`status-tag ${isGraphRunning ? "on" : "off"}`}>
+                        실행: {isGraphRunning ? "진행 중" : "대기"}
+                      </span>
+                      <span className="status-tag neutral">상태: {status}</span>
+                      <span className="status-tag neutral">기록: {runFiles.length}</span>
+                    </div>
+                  </section>
                 </div>
               </div>
             </aside>}
