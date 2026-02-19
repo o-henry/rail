@@ -2365,17 +2365,6 @@ function App() {
             }`}
           >
             <section className="canvas-pane">
-              <div className="canvas-topbar">
-                <label className="question-input">
-                  질문 입력
-                  <textarea
-                    onChange={(e) => setWorkflowQuestion(e.currentTarget.value)}
-                    rows={3}
-                    value={workflowQuestion}
-                  />
-                </label>
-              </div>
-
               <div
                 className={`graph-canvas ${panMode ? "pan-mode" : ""}`}
                 onKeyDown={onCanvasKeyDown}
@@ -2547,6 +2536,17 @@ function App() {
                     })}
                   </div>
                 </div>
+              </div>
+
+              <div className="canvas-topbar">
+                <label className="question-input">
+                  질문 입력
+                  <textarea
+                    onChange={(e) => setWorkflowQuestion(e.currentTarget.value)}
+                    rows={3}
+                    value={workflowQuestion}
+                  />
+                </label>
               </div>
             </section>
 
