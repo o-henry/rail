@@ -40,6 +40,13 @@
   background: #d9dbe0;
 }
 
+html,
+body,
+#root {
+  height: 100%;
+  overflow: hidden;
+}
+
 * {
   box-sizing: border-box;
 }
@@ -97,7 +104,7 @@ p {
 }
 
 .app-shell {
-  min-height: 100vh;
+  height: 100vh;
   padding: 16px;
   display: grid;
   grid-template-columns: 82px minmax(0, 1fr);
@@ -176,7 +183,9 @@ p {
   border: 1px solid #cfd4dc;
   border-radius: 20px;
   background: #fcfcfd;
+  height: 100%;
   min-width: 0;
+  min-height: 0;
   overflow: hidden;
   display: grid;
   grid-template-rows: auto 1fr;
@@ -260,19 +269,23 @@ p {
 
 .workflow-layout {
   min-height: 0;
+  height: 100%;
   display: grid;
   grid-template-columns: minmax(0, 1fr) 330px;
   gap: 0;
+  overflow: hidden;
 }
 
 .canvas-pane {
   min-width: 0;
+  min-height: 0;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
   gap: 10px;
   padding: 12px;
   border-right: 1px solid #e2e6eb;
   background: #fcfcfd;
+  overflow: hidden;
 }
 
 .canvas-topbar {
@@ -304,7 +317,8 @@ p {
 
 .graph-canvas {
   position: relative;
-  min-height: 620px;
+  min-height: 0;
+  height: 100%;
   border: 1px solid #e3e7ec;
   border-radius: 14px;
   background-color: #fafbfc;
@@ -490,11 +504,13 @@ p {
 }
 
 .inspector-pane {
+  min-height: 0;
   padding: 10px;
   display: grid;
   align-content: start;
   gap: 10px;
   background: #fcfcfd;
+  overflow: auto;
 }
 
 .inspector-head {
@@ -579,13 +595,18 @@ p {
   border-radius: 14px;
   background: #fcfcfd;
   padding: 12px;
+  min-height: 0;
+  overflow: auto;
 }
 
 .history-layout {
   margin: 12px;
+  height: calc(100% - 24px);
+  min-height: 0;
   display: grid;
   grid-template-columns: 320px minmax(0, 1fr);
   gap: 12px;
+  overflow: hidden;
 }
 
 .history-list,
@@ -593,6 +614,8 @@ p {
   display: grid;
   align-content: start;
   gap: 8px;
+  min-height: 0;
+  overflow: auto;
 }
 
 .history-list button.is-active {
@@ -658,6 +681,7 @@ pre {
 
   .history-layout {
     grid-template-columns: 1fr;
+    height: calc(100% - 24px);
   }
 }
 
