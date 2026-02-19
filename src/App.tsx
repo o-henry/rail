@@ -1934,11 +1934,6 @@ function App() {
             <span className="nav-label">개발</span>
           </button>
         </nav>
-        <div className="left-meta">
-          <div className="meta-dot" />
-          <div className="meta-dot" />
-          <div className="meta-dot" />
-        </div>
       </aside>
 
       <section className="workspace">
