@@ -129,7 +129,7 @@ p {
   display: grid;
   grid-template-columns: 82px minmax(0, 1fr);
   gap: 12px;
-  background: linear-gradient(180deg, #dadce1 0%, #eceef1 100%);
+  background: #d9dbe0;
 }
 
 .left-nav {
