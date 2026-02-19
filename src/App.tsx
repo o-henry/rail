@@ -2550,7 +2550,12 @@ function App() {
                       title={canvasFullscreen ? "캔버스 기본 보기" : "캔버스 전체 보기"}
                       type="button"
                     >
-                      {canvasFullscreen ? "⤡" : "⤢"}
+                      <img
+                        alt=""
+                        aria-hidden="true"
+                        className="canvas-control-icon"
+                        src="/canvas-fullscreen.svg"
+                      />
                     </button>
                     <button
                       aria-label="이동"

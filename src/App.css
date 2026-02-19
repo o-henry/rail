@@ -635,6 +635,13 @@ h3 {
   letter-spacing: 0;
 }
 
+.canvas-control-icon {
+  width: 14px;
+  height: 14px;
+  display: block;
+  object-fit: contain;
+}
+
 .canvas-icon-image {
   width: 15px;
   height: 15px;
