@@ -2529,8 +2529,8 @@ function App() {
           onClick={() => setIsNavClosed(false)}
           style={{
             position: "fixed",
-            top: 12,
-            left: 12,
+            top: 15,
+            left: 15,
             zIndex: 60,
             width: 34,
             height: 34,
