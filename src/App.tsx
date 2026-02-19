@@ -1899,7 +1899,7 @@ function App() {
   return (
     <main className="app-shell">
       <aside className="left-nav">
-        <div className="brand">R</div>
+        <div className="brand-minimal">rail</div>
         <nav className="nav-list">
           <button
             className={isActiveTab("workflow") ? "is-active" : ""}

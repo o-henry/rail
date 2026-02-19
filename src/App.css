@@ -141,16 +141,12 @@ p {
   gap: 12px;
 }
 
-.brand {
-  width: 40px;
-  height: 40px;
-  margin: 0 auto;
-  border-radius: 50%;
-  background: radial-gradient(circle at 30% 30%, #66e2b0, #109b76);
-  color: #ffffff;
-  display: grid;
-  place-items: center;
-  font-weight: 700;
+.brand-minimal {
+  text-align: center;
+  font-size: 0.72rem;
+  color: #7a8491;
+  letter-spacing: 0.02em;
+  padding-top: 2px;
 }
 
 .nav-list {
