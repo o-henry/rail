@@ -141,12 +141,8 @@ p {
   gap: 12px;
 }
 
-.brand-minimal {
-  text-align: center;
-  font-size: 0.72rem;
-  color: #7a8491;
-  letter-spacing: 0.02em;
-  padding-top: 2px;
+.brand-spacer {
+  height: 10px;
 }
 
 .nav-list {
