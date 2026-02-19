@@ -1,6 +1,5 @@
 mod engine;
 mod storage;
-mod system;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -21,7 +20,6 @@ pub fn run() {
             storage::run_save,
             storage::run_list,
             storage::run_load,
-            system::command_exec,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
