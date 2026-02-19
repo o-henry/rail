@@ -155,6 +155,29 @@ p {
   padding: 12px;
 }
 
+.history-layout {
+  display: grid;
+  grid-template-columns: 320px minmax(0, 1fr);
+  gap: 12px;
+}
+
+.history-list {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+}
+
+.history-list button.is-active {
+  background: #d9f2eb;
+  border-color: #9fd8c8;
+}
+
+.history-detail {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+}
+
 .canvas-pane,
 .inspector-pane {
   display: grid;
@@ -339,6 +362,10 @@ pre {
 
   .inspector-pane {
     min-height: 360px;
+  }
+
+  .history-layout {
+    grid-template-columns: 1fr;
   }
 }
 

@@ -96,11 +96,14 @@ type RunTransition = {
 
 type RunRecord = {
   runId: string;
+  question?: string;
   startedAt: string;
   finishedAt?: string;
+  finalAnswer?: string;
   graphSnapshot: GraphData;
   transitions: RunTransition[];
   summaryLogs: string[];
+  nodeLogs?: Record<string, string[]>;
   threadTurnMap: Record<string, { threadId?: string; turnId?: string }>;
 };
 
@@ -356,6 +359,22 @@ function nodeCardSummary(node: GraphNode): string {
   }
   const config = node.config as GateConfig;
   return `decisionPath=${String(config.decisionPath ?? "decision")}`;
+}
+
+function extractFinalAnswer(output: unknown): string {
+  const maybeText = extractStringByPaths(output, [
+    "text",
+    "completion.text",
+    "finalDraft",
+    "result",
+  ]);
+  if (maybeText) {
+    return maybeText;
+  }
+  if (output == null) {
+    return "";
+  }
+  return formatUnknown(output);
 }
 
 function makePresetNode(
@@ -642,6 +661,8 @@ function App() {
   const [graphFileName, setGraphFileName] = useState("sample.json");
   const [graphFiles, setGraphFiles] = useState<string[]>([]);
   const [runFiles, setRunFiles] = useState<string[]>([]);
+  const [selectedRunFile, setSelectedRunFile] = useState("");
+  const [selectedRunDetail, setSelectedRunDetail] = useState<RunRecord | null>(null);
   const [lastSavedRunFile, setLastSavedRunFile] = useState("");
   const [nodeStates, setNodeStates] = useState<Record<string, NodeRunState>>({});
   const [isGraphRunning, setIsGraphRunning] = useState(false);
@@ -651,11 +672,17 @@ function App() {
   const activeTurnNodeIdRef = useRef<string>("");
   const turnTerminalResolverRef = useRef<((terminal: TurnTerminal) => void) | null>(null);
   const activeRunDeltaRef = useRef<Record<string, string>>({});
+  const collectingRunRef = useRef(false);
+  const runLogCollectorRef = useRef<Record<string, string[]>>({});
 
   const activeApproval = pendingApprovals[0];
   const selectedNode = graph.nodes.find((node) => node.id === selectedNodeId) ?? null;
 
   function addNodeLog(nodeId: string, message: string) {
+    if (collectingRunRef.current) {
+      const current = runLogCollectorRef.current[nodeId] ?? [];
+      runLogCollectorRef.current[nodeId] = [...current, message].slice(-500);
+    }
     setNodeStates((prev) => {
       const current = prev[nodeId] ?? { status: "idle", logs: [] };
       const nextLogs = [...current.logs, message].slice(-300);
@@ -837,6 +864,21 @@ function App() {
     try {
       const files = await invoke<string[]>("run_list");
       setRunFiles(files);
+    } catch (e) {
+      setError(String(e));
+    }
+  }
+
+  async function loadRunDetail(name: string) {
+    const target = name.trim();
+    if (!target) {
+      return;
+    }
+
+    try {
+      const run = await invoke<RunRecord>("run_load", { name: target });
+      setSelectedRunFile(target);
+      setSelectedRunDetail(run);
     } catch (e) {
       setError(String(e));
     }
@@ -1365,6 +1407,7 @@ function App() {
     setStatus("graph run started");
     setIsGraphRunning(true);
     cancelRequestedRef.current = false;
+    collectingRunRef.current = true;
 
     const initialState: Record<string, NodeRunState> = {};
     graph.nodes.forEach((node) => {
@@ -1373,14 +1416,20 @@ function App() {
         logs: [],
       };
     });
+    runLogCollectorRef.current = graph.nodes.reduce<Record<string, string[]>>((acc, node) => {
+      acc[node.id] = [];
+      return acc;
+    }, {});
     setNodeStates(initialState);
 
     const runRecord: RunRecord = {
       runId: `${Date.now()}`,
+      question: workflowQuestion,
       startedAt: new Date().toISOString(),
       graphSnapshot: graph,
       transitions: [],
       summaryLogs: [],
+      nodeLogs: {},
       threadTurnMap: {},
     };
 
@@ -1414,6 +1463,7 @@ function App() {
 
       const outputs: Record<string, unknown> = {};
       const skipSet = new Set<string>();
+      let lastDoneNodeId = "";
 
       while (queue.length > 0) {
         const nodeId = queue.shift() as string;
@@ -1463,6 +1513,7 @@ function App() {
               turnId: result.turnId,
             };
             transition(runRecord, nodeId, "done", "turn completed");
+            lastDoneNodeId = nodeId;
           } else if (node.type === "transform") {
             const result = await executeTransformNode(node, input);
             if (!result.ok) {
@@ -1479,6 +1530,7 @@ function App() {
             });
             setNodeStatus(nodeId, "done", "transform completed");
             transition(runRecord, nodeId, "done", "transform completed");
+            lastDoneNodeId = nodeId;
           } else {
             const result = executeGateNode(node, input, skipSet);
             if (!result.ok) {
@@ -1495,6 +1547,7 @@ function App() {
             });
             setNodeStatus(nodeId, "done", result.message ?? "gate completed");
             transition(runRecord, nodeId, "done", result.message ?? "gate completed");
+            lastDoneNodeId = nodeId;
           }
         }
 
@@ -1528,8 +1581,14 @@ function App() {
         });
       }
 
+      runRecord.nodeLogs = runLogCollectorRef.current;
+      if (lastDoneNodeId && lastDoneNodeId in outputs) {
+        runRecord.finalAnswer = extractFinalAnswer(outputs[lastDoneNodeId]);
+      }
       runRecord.finishedAt = new Date().toISOString();
       await saveRunRecord(runRecord);
+      setSelectedRunDetail(runRecord);
+      setSelectedRunFile(`run-${runRecord.runId}.json`);
       setStatus("graph run finished");
     } catch (e) {
       setError(String(e));
@@ -1539,6 +1598,7 @@ function App() {
       activeTurnNodeIdRef.current = "";
       setIsGraphRunning(false);
       cancelRequestedRef.current = false;
+      collectingRunRef.current = false;
     }
   }
 
@@ -1976,10 +2036,48 @@ function App() {
         )}
 
         {workspaceTab === "history" && (
-          <section className="panel-card">
-            <h2>History</h2>
-            <p>질문/답변 히스토리와 실행 로그 패널은 다음 커밋에서 추가됩니다.</p>
-            <pre>{runFiles.join("\n") || "(no run files)"}</pre>
+          <section className="history-layout">
+            <article className="panel-card history-list">
+              <h2>History</h2>
+              <div className="button-row">
+                <button onClick={refreshRunFiles} type="button">
+                  Refresh
+                </button>
+              </div>
+              {runFiles.length === 0 && <div>(no run files)</div>}
+              {runFiles.map((file) => (
+                <button
+                  className={selectedRunFile === file ? "is-active" : ""}
+                  key={file}
+                  onClick={() => loadRunDetail(file)}
+                  type="button"
+                >
+                  {file}
+                </button>
+              ))}
+            </article>
+
+            <article className="panel-card history-detail">
+              {!selectedRunDetail && <div>실행 기록을 선택하세요.</div>}
+              {selectedRunDetail && (
+                <>
+                  <h2>Run Detail</h2>
+                  <div>runId: {selectedRunDetail.runId}</div>
+                  <div>startedAt: {selectedRunDetail.startedAt}</div>
+                  <div>finishedAt: {selectedRunDetail.finishedAt ?? "-"}</div>
+                  <h3>Question</h3>
+                  <pre>{selectedRunDetail.question || "(empty)"}</pre>
+                  <h3>Final Answer</h3>
+                  <pre>{selectedRunDetail.finalAnswer || "(none)"}</pre>
+                  <h3>Summary Logs</h3>
+                  <pre>{selectedRunDetail.summaryLogs.join("\n") || "(none)"}</pre>
+                  <h3>Transitions</h3>
+                  <pre>{formatUnknown(selectedRunDetail.transitions)}</pre>
+                  <h3>Node Logs</h3>
+                  <pre>{formatUnknown(selectedRunDetail.nodeLogs ?? {})}</pre>
+                </>
+              )}
+            </article>
           </section>
         )}
 

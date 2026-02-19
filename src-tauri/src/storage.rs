@@ -95,3 +95,8 @@ pub fn run_save(name: String, run: Value) -> Result<(), String> {
 pub fn run_list() -> Result<Vec<String>, String> {
     list_json_files("runs")
 }
+
+#[tauri::command]
+pub fn run_load(name: String) -> Result<Value, String> {
+    read_json_file("runs", &name)
+}

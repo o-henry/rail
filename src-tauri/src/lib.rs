@@ -20,6 +20,7 @@ pub fn run() {
             storage::graph_load,
             storage::run_save,
             storage::run_list,
+            storage::run_load,
             system::command_exec,
         ])
         .run(tauri::generate_context!())
