@@ -2382,21 +2382,44 @@ function App() {
 
                   <div className="canvas-runbar">
                     <button
-                      className="play"
+                      aria-label="실행"
+                      className="canvas-icon-btn play"
                       disabled={isGraphRunning || graph.nodes.length === 0}
                       onClick={onRunGraph}
+                      title="실행"
                       type="button"
                     >
-                      실행
+                      ▶
                     </button>
-                    <button disabled={!isGraphRunning} onClick={onCancelGraphRun} type="button">
-                      중지
+                    <button
+                      aria-label="중지"
+                      className="canvas-icon-btn"
+                      disabled={!isGraphRunning}
+                      onClick={onCancelGraphRun}
+                      title="중지"
+                      type="button"
+                    >
+                      ■
                     </button>
-                    <button disabled={undoStack.length === 0} onClick={onUndoGraph} type="button">
-                      되돌리기
+                    <button
+                      aria-label="되돌리기"
+                      className="canvas-icon-btn"
+                      disabled={undoStack.length === 0}
+                      onClick={onUndoGraph}
+                      title="되돌리기"
+                      type="button"
+                    >
+                      ↶
                     </button>
-                    <button disabled={redoStack.length === 0} onClick={onRedoGraph} type="button">
-                      다시하기
+                    <button
+                      aria-label="다시하기"
+                      className="canvas-icon-btn"
+                      disabled={redoStack.length === 0}
+                      onClick={onRedoGraph}
+                      title="다시하기"
+                      type="button"
+                    >
+                      ↷
                     </button>
                   </div>
                 </div>
