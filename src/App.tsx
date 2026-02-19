@@ -1,6 +1,8 @@
 import {
   FormEvent,
+  KeyboardEvent as ReactKeyboardEvent,
   MouseEvent as ReactMouseEvent,
+  WheelEvent as ReactWheelEvent,
   useEffect,
   useMemo,
   useRef,
@@ -149,6 +151,10 @@ type GateConfig = {
 const APPROVAL_DECISIONS: ApprovalDecision[] = ["accept", "acceptForSession", "decline", "cancel"];
 const NODE_WIDTH = 240;
 const NODE_HEIGHT = 136;
+const GRAPH_STAGE_WIDTH = 2600;
+const GRAPH_STAGE_HEIGHT = 1800;
+const MIN_CANVAS_ZOOM = 0.6;
+const MAX_CANVAS_ZOOM = 1.8;
 
 function formatUnknown(value: unknown): string {
   try {
@@ -804,8 +810,10 @@ function App() {
   const [lastSavedRunFile, setLastSavedRunFile] = useState("");
   const [nodeStates, setNodeStates] = useState<Record<string, NodeRunState>>({});
   const [isGraphRunning, setIsGraphRunning] = useState(false);
+  const [canvasZoom, setCanvasZoom] = useState(1);
 
   const dragRef = useRef<DragState | null>(null);
+  const graphCanvasRef = useRef<HTMLDivElement | null>(null);
   const cancelRequestedRef = useRef(false);
   const activeTurnNodeIdRef = useRef<string>("");
   const turnTerminalResolverRef = useRef<((terminal: TurnTerminal) => void) | null>(null);
@@ -1239,16 +1247,61 @@ function App() {
     }));
   }
 
+  function clampCanvasZoom(nextZoom: number): number {
+    return Math.max(MIN_CANVAS_ZOOM, Math.min(MAX_CANVAS_ZOOM, nextZoom));
+  }
+
+  function clientToCanvasPoint(clientX: number, clientY: number): { x: number; y: number } | null {
+    const canvas = graphCanvasRef.current;
+    if (!canvas) {
+      return null;
+    }
+    const rect = canvas.getBoundingClientRect();
+    return {
+      x: (clientX - rect.left + canvas.scrollLeft) / canvasZoom,
+      y: (clientY - rect.top + canvas.scrollTop) / canvasZoom,
+    };
+  }
+
+  function zoomAtClientPoint(nextZoom: number, clientX: number, clientY: number) {
+    const canvas = graphCanvasRef.current;
+    if (!canvas) {
+      setCanvasZoom(nextZoom);
+      return;
+    }
+
+    const rect = canvas.getBoundingClientRect();
+    const pointerX = clientX - rect.left + canvas.scrollLeft;
+    const pointerY = clientY - rect.top + canvas.scrollTop;
+    const logicalX = pointerX / canvasZoom;
+    const logicalY = pointerY / canvasZoom;
+
+    setCanvasZoom(nextZoom);
+    requestAnimationFrame(() => {
+      const currentCanvas = graphCanvasRef.current;
+      if (!currentCanvas) {
+        return;
+      }
+      currentCanvas.scrollLeft = logicalX * nextZoom - (clientX - rect.left);
+      currentCanvas.scrollTop = logicalY * nextZoom - (clientY - rect.top);
+    });
+  }
+
   function onNodeDragStart(e: ReactMouseEvent<HTMLDivElement>, nodeId: string) {
     const node = graph.nodes.find((item) => item.id === nodeId);
     if (!node) {
       return;
     }
 
+    const canvasPoint = clientToCanvasPoint(e.clientX, e.clientY);
+    if (!canvasPoint) {
+      return;
+    }
+
     dragRef.current = {
       nodeId,
-      offsetX: e.clientX - node.position.x,
-      offsetY: e.clientY - node.position.y,
+      offsetX: canvasPoint.x - node.position.x,
+      offsetY: canvasPoint.y - node.position.y,
     };
   }
 
@@ -1257,9 +1310,14 @@ function App() {
       return;
     }
 
+    const canvasPoint = clientToCanvasPoint(e.clientX, e.clientY);
+    if (!canvasPoint) {
+      return;
+    }
+
     const { nodeId, offsetX, offsetY } = dragRef.current;
-    const x = Math.max(0, e.clientX - offsetX);
-    const y = Math.max(0, e.clientY - offsetY);
+    const x = Math.max(0, canvasPoint.x - offsetX);
+    const y = Math.max(0, canvasPoint.y - offsetY);
 
     setGraph((prev) => ({
       ...prev,
@@ -1271,6 +1329,57 @@ function App() {
 
   function onCanvasMouseUp() {
     dragRef.current = null;
+  }
+
+  function onCanvasWheel(e: ReactWheelEvent<HTMLDivElement>) {
+    if (!(e.ctrlKey || e.metaKey)) {
+      return;
+    }
+    e.preventDefault();
+    const ratio = e.deltaY < 0 ? 1.08 : 0.92;
+    const nextZoom = clampCanvasZoom(canvasZoom * ratio);
+    if (nextZoom === canvasZoom) {
+      return;
+    }
+    zoomAtClientPoint(nextZoom, e.clientX, e.clientY);
+    setStatus(`그래프 배율 ${Math.round(nextZoom * 100)}%`);
+  }
+
+  function onCanvasKeyDown(e: ReactKeyboardEvent<HTMLDivElement>) {
+    if (!(e.metaKey || e.ctrlKey)) {
+      return;
+    }
+
+    const canvas = graphCanvasRef.current;
+    if (!canvas) {
+      return;
+    }
+
+    const rect = canvas.getBoundingClientRect();
+    const centerX = rect.left + rect.width / 2;
+    const centerY = rect.top + rect.height / 2;
+
+    if (e.key === "+" || e.key === "=") {
+      e.preventDefault();
+      const nextZoom = clampCanvasZoom(canvasZoom * 1.08);
+      zoomAtClientPoint(nextZoom, centerX, centerY);
+      setStatus(`그래프 배율 ${Math.round(nextZoom * 100)}%`);
+      return;
+    }
+
+    if (e.key === "-" || e.key === "_") {
+      e.preventDefault();
+      const nextZoom = clampCanvasZoom(canvasZoom * 0.92);
+      zoomAtClientPoint(nextZoom, centerX, centerY);
+      setStatus(`그래프 배율 ${Math.round(nextZoom * 100)}%`);
+      return;
+    }
+
+    if (e.key === "0") {
+      e.preventDefault();
+      zoomAtClientPoint(1, centerX, centerY);
+      setStatus("그래프 배율 100%");
+    }
   }
 
   function updateSelectedNodeConfig(key: string, value: string) {
@@ -1917,15 +2026,23 @@ function App() {
       if (!fromNode || !toNode) {
         return null;
       }
+
+      const x1 = fromNode.position.x + NODE_WIDTH;
+      const y1 = fromNode.position.y + NODE_HEIGHT / 2;
+      const x2 = toNode.position.x;
+      const y2 = toNode.position.y + NODE_HEIGHT / 2;
+      const direction = x2 >= x1 ? 1 : -1;
+      const horizontalGap = Math.max(64, Math.min(180, Math.abs(x2 - x1) * 0.5));
+      const bendX = x1 + horizontalGap * direction;
+      const arrowLeadX = x2 - 12 * direction;
+      const path = `M ${x1} ${y1} L ${bendX} ${y1} L ${bendX} ${y2} L ${arrowLeadX} ${y2} L ${x2} ${y2}`;
+
       return {
         key: `${edge.from.nodeId}-${edge.to.nodeId}-${index}`,
-        x1: fromNode.position.x + NODE_WIDTH,
-        y1: fromNode.position.y + NODE_HEIGHT / 2,
-        x2: toNode.position.x,
-        y2: toNode.position.y + NODE_HEIGHT / 2,
+        path,
       };
     })
-    .filter(Boolean) as Array<{ key: string; x1: number; y1: number; x2: number; y2: number }>;
+    .filter(Boolean) as Array<{ key: string; path: string }>;
 
   const selectedNodeState = selectedNodeId ? nodeStates[selectedNodeId] : undefined;
   const outgoingFromSelected = selectedNode
@@ -2088,93 +2205,123 @@ function App() {
 
               <div
                 className="graph-canvas"
+                onKeyDown={onCanvasKeyDown}
                 onMouseLeave={onCanvasMouseUp}
                 onMouseMove={onCanvasMouseMove}
                 onMouseUp={onCanvasMouseUp}
+                onWheel={onCanvasWheel}
+                ref={graphCanvasRef}
+                tabIndex={0}
               >
-                <svg className="edge-layer">
-                  {edgeLines.map((line) => (
-                    <line
-                      key={line.key}
-                      stroke="#70848a"
-                      strokeWidth={2}
-                      x1={line.x1}
-                      x2={line.x2}
-                      y1={line.y1}
-                      y2={line.y2}
-                    />
-                  ))}
-                </svg>
+                <div className="canvas-overlay">
+                  <div className="canvas-left-tools">
+                    <button type="button">□</button>
+                    <button type="button">✦</button>
+                    <button type="button">⌁</button>
+                    <button type="button">⚙</button>
+                  </div>
 
-                {graph.nodes.map((node) => {
-                  const keyword = headerSearch.trim().toLowerCase();
-                  if (
-                    keyword &&
-                    !node.id.toLowerCase().includes(keyword) &&
-                    !nodeTypeLabel(node.type).toLowerCase().includes(keyword)
-                  ) {
-                    return null;
-                  }
-                  const runState = nodeStates[node.id];
-                  const nodeStatus = runState?.status ?? "idle";
-                  return (
-                    <div
-                      className={`graph-node node-${node.type} ${selectedNodeId === node.id ? "selected" : ""}`}
-                      key={node.id}
-                      onClick={() => setSelectedNodeId(node.id)}
-                      style={{ left: node.position.x, top: node.position.y }}
+                  <div className="canvas-runbar">
+                    <button
+                      className="play"
+                      disabled={isGraphRunning || graph.nodes.length === 0}
+                      onClick={onRunGraph}
+                      type="button"
                     >
-                      <div className="node-head" onMouseDown={(e) => onNodeDragStart(e, node.id)}>
-                        <strong>{nodeTypeLabel(node.type)}</strong>
-                        <button onClick={() => deleteNode(node.id)} type="button">
-                          삭제
-                        </button>
-                      </div>
-                      <div className="node-body">
-                        <div className="node-id">{node.id}</div>
-                        <div className={`status-pill status-${nodeStatus}`}>
-                          {nodeStatusLabel(nodeStatus)}
-                        </div>
-                        <div>{nodeCardSummary(node)}</div>
-                      </div>
-                      <div className="node-ports">
-                        <button onClick={() => onPortInClick(node.id)} type="button">
-                          입력
-                        </button>
-                        <button onClick={() => onPortOutClick(node.id)} type="button">
-                          {connectFromNodeId === node.id ? "출력*" : "출력"}
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-
-                <div className="canvas-left-tools">
-                  <button type="button">□</button>
-                  <button type="button">✦</button>
-                  <button type="button">⌁</button>
-                  <button type="button">⚙</button>
+                      실행
+                    </button>
+                    <button disabled={!isGraphRunning} onClick={onCancelGraphRun} type="button">
+                      중지
+                    </button>
+                    <button type="button">되돌리기</button>
+                    <button type="button">다시하기</button>
+                  </div>
                 </div>
 
-                <div className="canvas-zoom-controls">
-                  <button type="button">+</button>
-                  <button type="button">−</button>
-                </div>
-
-                <div className="canvas-runbar">
-                  <button
-                    className="play"
-                    disabled={isGraphRunning || graph.nodes.length === 0}
-                    onClick={onRunGraph}
-                    type="button"
+                <div
+                  className="graph-stage-shell"
+                  style={{
+                    width: Math.round(GRAPH_STAGE_WIDTH * canvasZoom),
+                    height: Math.round(GRAPH_STAGE_HEIGHT * canvasZoom),
+                  }}
+                >
+                  <div
+                    className="graph-stage"
+                    style={{
+                      transform: `scale(${canvasZoom})`,
+                      width: GRAPH_STAGE_WIDTH,
+                      height: GRAPH_STAGE_HEIGHT,
+                    }}
                   >
-                    실행
-                  </button>
-                  <button disabled={!isGraphRunning} onClick={onCancelGraphRun} type="button">
-                    중지
-                  </button>
-                  <button type="button">되돌리기</button>
-                  <button type="button">다시하기</button>
+                    <svg className="edge-layer">
+                      <defs>
+                        <marker
+                          id="edge-arrow"
+                          markerHeight="6"
+                          markerUnits="userSpaceOnUse"
+                          markerWidth="6"
+                          orient="auto"
+                          refX="5"
+                          refY="3"
+                        >
+                          <path d="M0 0 L6 3 L0 6 Z" fill="#70848a" />
+                        </marker>
+                      </defs>
+                      {edgeLines.map((line) => (
+                        <path
+                          d={line.path}
+                          fill="none"
+                          key={line.key}
+                          markerEnd="url(#edge-arrow)"
+                          stroke="#70848a"
+                          strokeWidth={2}
+                        />
+                      ))}
+                    </svg>
+
+                    {graph.nodes.map((node) => {
+                      const keyword = headerSearch.trim().toLowerCase();
+                      if (
+                        keyword &&
+                        !node.id.toLowerCase().includes(keyword) &&
+                        !nodeTypeLabel(node.type).toLowerCase().includes(keyword)
+                      ) {
+                        return null;
+                      }
+                      const runState = nodeStates[node.id];
+                      const nodeStatus = runState?.status ?? "idle";
+                      return (
+                        <div
+                          className={`graph-node node-${node.type} ${selectedNodeId === node.id ? "selected" : ""}`}
+                          key={node.id}
+                          onClick={() => setSelectedNodeId(node.id)}
+                          style={{ left: node.position.x, top: node.position.y }}
+                        >
+                          <div className="node-head" onMouseDown={(e) => onNodeDragStart(e, node.id)}>
+                            <strong>{nodeTypeLabel(node.type)}</strong>
+                            <button onClick={() => deleteNode(node.id)} type="button">
+                              삭제
+                            </button>
+                          </div>
+                          <div className="node-body">
+                            <div className="node-id">{node.id}</div>
+                            <div className={`status-pill status-${nodeStatus}`}>
+                              {nodeStatusLabel(nodeStatus)}
+                            </div>
+                            <div>{nodeCardSummary(node)}</div>
+                          </div>
+                          <div className="node-ports">
+                            <button onClick={() => onPortInClick(node.id)} type="button">
+                              입력
+                            </button>
+                            <button onClick={() => onPortOutClick(node.id)} type="button">
+                              {connectFromNodeId === node.id ? "출력*" : "출력"}
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
 
