@@ -358,6 +358,156 @@ function nodeCardSummary(node: GraphNode): string {
   return `decisionPath=${String(config.decisionPath ?? "decision")}`;
 }
 
+function makePresetNode(
+  id: string,
+  type: NodeType,
+  x: number,
+  y: number,
+  config: Record<string, unknown>,
+): GraphNode {
+  return {
+    id,
+    type,
+    position: { x, y },
+    config,
+  };
+}
+
+function buildValidationPreset(): GraphData {
+  const nodes: GraphNode[] = [
+    makePresetNode("turn-intake", "turn", 120, 120, {
+      model: "gpt-5-mini",
+      cwd: ".",
+      promptTemplate:
+        "질문을 분석하고 검증 계획을 3개 불릿으로 요약해줘. 입력 질문: {{input}}",
+    }),
+    makePresetNode("turn-search-a", "turn", 420, 40, {
+      model: "gpt-5-mini",
+      cwd: ".",
+      promptTemplate:
+        "입력 내용을 바탕으로 찬성 근거를 조사해 JSON으로 정리해줘. {{input}}",
+    }),
+    makePresetNode("turn-search-b", "turn", 420, 220, {
+      model: "gpt-5-mini",
+      cwd: ".",
+      promptTemplate:
+        "입력 내용을 바탕으로 반대 근거/한계를 조사해 JSON으로 정리해줘. {{input}}",
+    }),
+    makePresetNode("turn-judge", "turn", 720, 120, {
+      model: "gpt-5-codex",
+      cwd: ".",
+      promptTemplate:
+        "근거를 종합해 엄격한 JSON만 출력해라: {\"decision\":\"PASS|REJECT\",\"finalDraft\":\"...\",\"why\":\"...\"}. 입력: {{input}}",
+    }),
+    makePresetNode("gate-decision", "gate", 1020, 120, {
+      decisionPath: "decision",
+      passNodeId: "turn-final",
+      rejectNodeId: "transform-reject",
+      schemaJson: "{\"type\":\"object\",\"required\":[\"decision\"]}",
+    }),
+    makePresetNode("turn-final", "turn", 1320, 40, {
+      model: "gpt-5-codex",
+      cwd: ".",
+      promptTemplate:
+        "decision=PASS로 가정하고 finalDraft와 근거를 정리해 최종 답변을 한국어로 작성해줘. {{input}}",
+    }),
+    makePresetNode("transform-reject", "transform", 1320, 220, {
+      mode: "template",
+      template: "검증 결과 REJECT. 추가 조사 필요. 원본: {{input}}",
+    }),
+  ];
+
+  const edges: GraphEdge[] = [
+    { from: { nodeId: "turn-intake", port: "out" }, to: { nodeId: "turn-search-a", port: "in" } },
+    { from: { nodeId: "turn-intake", port: "out" }, to: { nodeId: "turn-search-b", port: "in" } },
+    { from: { nodeId: "turn-search-a", port: "out" }, to: { nodeId: "turn-judge", port: "in" } },
+    { from: { nodeId: "turn-search-b", port: "out" }, to: { nodeId: "turn-judge", port: "in" } },
+    { from: { nodeId: "turn-judge", port: "out" }, to: { nodeId: "gate-decision", port: "in" } },
+    { from: { nodeId: "gate-decision", port: "out" }, to: { nodeId: "turn-final", port: "in" } },
+    { from: { nodeId: "gate-decision", port: "out" }, to: { nodeId: "transform-reject", port: "in" } },
+  ];
+
+  return { version: 1, nodes, edges };
+}
+
+function buildDevelopmentPreset(): GraphData {
+  const nodes: GraphNode[] = [
+    makePresetNode("turn-requirements", "turn", 120, 120, {
+      model: "gpt-5-mini",
+      cwd: ".",
+      promptTemplate:
+        "요구사항을 기능/비기능으로 분해하고 우선순위를 매겨줘. 질문: {{input}}",
+    }),
+    makePresetNode("turn-architecture", "turn", 420, 40, {
+      model: "gpt-5-mini",
+      cwd: ".",
+      promptTemplate:
+        "입력을 바탕으로 풀스택 아키텍처를 제안해 JSON으로 출력해줘. {{input}}",
+    }),
+    makePresetNode("turn-implementation", "turn", 420, 220, {
+      model: "gpt-5-mini",
+      cwd: ".",
+      promptTemplate:
+        "구현 단계 계획(파일 단위 포함)을 작성해줘. 입력: {{input}}",
+    }),
+    makePresetNode("turn-evaluator", "turn", 720, 120, {
+      model: "gpt-5-codex",
+      cwd: ".",
+      promptTemplate:
+        "계획을 검토하고 JSON만 출력: {\"decision\":\"PASS|REJECT\",\"finalDraft\":\"...\",\"risk\":\"...\"}. 입력: {{input}}",
+    }),
+    makePresetNode("gate-quality", "gate", 1020, 120, {
+      decisionPath: "decision",
+      passNodeId: "turn-final-dev",
+      rejectNodeId: "transform-rework",
+      schemaJson: "{\"type\":\"object\",\"required\":[\"decision\"]}",
+    }),
+    makePresetNode("turn-final-dev", "turn", 1320, 40, {
+      model: "gpt-5-codex",
+      cwd: ".",
+      promptTemplate:
+        "실행 가능한 최종 개발 가이드를 산출해줘. 코드/테스트/배포 체크리스트 포함. {{input}}",
+    }),
+    makePresetNode("transform-rework", "transform", 1320, 220, {
+      mode: "template",
+      template: "REJECT - requirements/architecture 재검토 필요. 입력: {{input}}",
+    }),
+  ];
+
+  const edges: GraphEdge[] = [
+    {
+      from: { nodeId: "turn-requirements", port: "out" },
+      to: { nodeId: "turn-architecture", port: "in" },
+    },
+    {
+      from: { nodeId: "turn-requirements", port: "out" },
+      to: { nodeId: "turn-implementation", port: "in" },
+    },
+    {
+      from: { nodeId: "turn-architecture", port: "out" },
+      to: { nodeId: "turn-evaluator", port: "in" },
+    },
+    {
+      from: { nodeId: "turn-implementation", port: "out" },
+      to: { nodeId: "turn-evaluator", port: "in" },
+    },
+    {
+      from: { nodeId: "turn-evaluator", port: "out" },
+      to: { nodeId: "gate-quality", port: "in" },
+    },
+    {
+      from: { nodeId: "gate-quality", port: "out" },
+      to: { nodeId: "turn-final-dev", port: "in" },
+    },
+    {
+      from: { nodeId: "gate-quality", port: "out" },
+      to: { nodeId: "transform-rework", port: "in" },
+    },
+  ];
+
+  return { version: 1, nodes, edges };
+}
+
 function normalizeGraph(input: unknown): GraphData {
   if (!input || typeof input !== "object") {
     return { version: 1, nodes: [], edges: [] };
@@ -800,6 +950,19 @@ function App() {
         nodes: [...prev.nodes, node],
       };
     });
+  }
+
+  function applyPreset(kind: "validation" | "development") {
+    const preset = kind === "validation" ? buildValidationPreset() : buildDevelopmentPreset();
+    setGraph(preset);
+    setSelectedNodeId(preset.nodes[0]?.id ?? "");
+    setNodeStates({});
+    setConnectFromNodeId("");
+    setStatus(
+      kind === "validation"
+        ? "validation preset loaded (5-agent)"
+        : "development preset loaded (5-agent)",
+    );
   }
 
   function deleteNode(nodeId: string) {
@@ -1549,6 +1712,12 @@ function App() {
                 </button>
                 <button disabled={!connectFromNodeId} onClick={() => setConnectFromNodeId("")} type="button">
                   Cancel Connect
+                </button>
+                <button onClick={() => applyPreset("validation")} type="button">
+                  Load 검증형 5-Agent
+                </button>
+                <button onClick={() => applyPreset("development")} type="button">
+                  Load 개발형 5-Agent
                 </button>
               </div>
 
