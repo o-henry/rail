@@ -42,13 +42,13 @@ type EngineApprovalRequestEvent = {
 
 type PendingApproval = {
   requestId: number;
-  source: "remote" | "localCommand";
+  source: "remote";
   method: string;
   params: unknown;
 };
 
 type WorkspaceTab = "workflow" | "history" | "settings" | "dev";
-type NodeType = "turn" | "transform" | "gate" | "search" | "command";
+type NodeType = "turn" | "transform" | "gate";
 type PortType = "in" | "out";
 
 type GraphNode = {
@@ -122,19 +122,6 @@ type TurnConfig = {
   promptTemplate?: string;
 };
 
-type SearchConfig = {
-  queryTemplate?: string;
-  fallbackUrls?: string;
-  resultLimit?: string;
-};
-
-type CommandConfig = {
-  command?: string;
-  cwd?: string;
-  timeoutSec?: string;
-  failOnNonZero?: string;
-};
-
 type TransformMode = "pick" | "merge" | "template";
 
 type TransformConfig = {
@@ -149,14 +136,6 @@ type GateConfig = {
   passNodeId?: string;
   rejectNodeId?: string;
   schemaJson?: string;
-};
-
-type ShellCommandResult = {
-  exitCode: number;
-  stdout: string;
-  stderr: string;
-  timedOut: boolean;
-  durationMs: number;
 };
 
 const APPROVAL_DECISIONS: ApprovalDecision[] = ["accept", "acceptForSession", "decline", "cancel"];
@@ -335,10 +314,6 @@ function replaceInputPlaceholder(template: string, value: string): string {
   return template.split("{{input}}").join(value);
 }
 
-function shellQuote(input: string): string {
-  return `'${input.replace(/'/g, `'\"'\"'`)}'`;
-}
-
 function makeNodeId(type: NodeType): string {
   const suffix = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
   return `${type}-${suffix}`;
@@ -350,23 +325,6 @@ function defaultNodeConfig(type: NodeType): Record<string, unknown> {
       model: "gpt-5-codex",
       cwd: ".",
       promptTemplate: "{{input}}",
-    };
-  }
-
-  if (type === "search") {
-    return {
-      queryTemplate: "{{input}}",
-      fallbackUrls: "",
-      resultLimit: "5",
-    };
-  }
-
-  if (type === "command") {
-    return {
-      command: "npm run test",
-      cwd: ".",
-      timeoutSec: "120",
-      failOnNonZero: "true",
     };
   }
 
@@ -401,48 +359,6 @@ function normalizeGraph(input: unknown): GraphData {
     nodes: nodes.filter(Boolean) as GraphNode[],
     edges: edges.filter(Boolean) as GraphEdge[],
   };
-}
-
-function tryParseJsonFromText(text: string): unknown | null {
-  const trimmed = text.trim();
-  if (!trimmed) {
-    return null;
-  }
-
-  try {
-    return JSON.parse(trimmed);
-  } catch {
-    // continue
-  }
-
-  const first = trimmed.indexOf("{");
-  const last = trimmed.lastIndexOf("}");
-  if (first >= 0 && last > first) {
-    const slice = trimmed.slice(first, last + 1);
-    try {
-      return JSON.parse(slice);
-    } catch {
-      return null;
-    }
-  }
-
-  return null;
-}
-
-function parseBooleanFlag(value: unknown, defaultValue: boolean): boolean {
-  if (typeof value === "boolean") {
-    return value;
-  }
-  if (typeof value === "string") {
-    const normalized = value.trim().toLowerCase();
-    if (normalized === "true") {
-      return true;
-    }
-    if (normalized === "false") {
-      return false;
-    }
-  }
-  return defaultValue;
 }
 
 function validateSimpleSchema(schema: unknown, data: unknown, path = "$"): string[] {
@@ -569,8 +485,6 @@ function App() {
   const activeTurnNodeIdRef = useRef<string>("");
   const turnTerminalResolverRef = useRef<((terminal: TurnTerminal) => void) | null>(null);
   const activeRunDeltaRef = useRef<Record<string, string>>({});
-  const localApprovalResolversRef = useRef<Record<number, (decision: ApprovalDecision) => void>>({});
-  const localApprovalCounterRef = useRef(1);
 
   const activeApproval = pendingApprovals[0];
   const selectedNode = graph.nodes.find((node) => node.id === selectedNodeId) ?? null;
@@ -710,9 +624,6 @@ function App() {
             setLoginCompleted(false);
             setPendingApprovals([]);
             setApprovalSubmitting(false);
-            const pendingResolvers = localApprovalResolversRef.current;
-            localApprovalResolversRef.current = {};
-            Object.values(pendingResolvers).forEach((resolver) => resolver("cancel"));
           }
         },
       );
@@ -791,7 +702,6 @@ function App() {
   async function onStopEngine() {
     setError("");
     try {
-      resolveAllLocalApprovals("cancel");
       await invoke("engine_stop");
       setEngineStarted(false);
       setStatus("stopped");
@@ -842,82 +752,18 @@ function App() {
     setError("");
     setApprovalSubmitting(true);
     try {
-      if (activeApproval.source === "remote") {
-        await invoke("approval_respond", {
-          requestId: activeApproval.requestId,
-          result: {
-            decision,
-          },
-        });
-      } else {
-        const resolver = localApprovalResolversRef.current[activeApproval.requestId];
-        if (resolver) {
-          delete localApprovalResolversRef.current[activeApproval.requestId];
-          resolver(decision);
-        }
-      }
+      await invoke("approval_respond", {
+        requestId: activeApproval.requestId,
+        result: {
+          decision,
+        },
+      });
       setPendingApprovals((prev) => prev.slice(1));
       setStatus(`approval response sent (${decision})`);
     } catch (e) {
       setError(String(e));
     } finally {
       setApprovalSubmitting(false);
-    }
-  }
-
-  function resolveAllLocalApprovals(decision: ApprovalDecision) {
-    const resolvers = localApprovalResolversRef.current;
-    localApprovalResolversRef.current = {};
-    Object.values(resolvers).forEach((resolver) => resolver(decision));
-  }
-
-  async function requestLocalCommandApproval(
-    method: string,
-    params: Record<string, unknown>,
-  ): Promise<ApprovalDecision> {
-    return new Promise<ApprovalDecision>((resolve) => {
-      const requestId = localApprovalCounterRef.current;
-      localApprovalCounterRef.current += 1;
-
-      localApprovalResolversRef.current[requestId] = resolve;
-      setPendingApprovals((prev) => [
-        ...prev,
-        {
-          requestId,
-          source: "localCommand",
-          method,
-          params,
-        },
-      ]);
-    });
-  }
-
-  async function runCommandWithApproval(
-    nodeId: string,
-    command: string,
-    commandCwd: string,
-    timeoutSec: number,
-  ): Promise<{ ok: boolean; result?: ShellCommandResult; error?: string }> {
-    const decision = await requestLocalCommandApproval("local/commandExecution/requestApproval", {
-      nodeId,
-      cwd: commandCwd,
-      command,
-      timeoutSec,
-    });
-
-    if (decision === "decline" || decision === "cancel") {
-      return { ok: false, error: `command approval ${decision}` };
-    }
-
-    try {
-      const result = await invoke<ShellCommandResult>("command_exec", {
-        cwd: commandCwd,
-        command,
-        timeoutSec,
-      });
-      return { ok: true, result };
-    } catch (e) {
-      return { ok: false, error: String(e) };
     }
   }
 
@@ -1327,147 +1173,6 @@ function App() {
     };
   }
 
-  async function executeSearchNode(
-    node: GraphNode,
-    input: unknown,
-  ): Promise<{ ok: boolean; output?: unknown; error?: string; threadId?: string; turnId?: string }> {
-    const config = node.config as SearchConfig;
-    const queryTemplate = String(config.queryTemplate ?? "{{input}}");
-    const query = replaceInputPlaceholder(queryTemplate, stringifyInput(input)).trim();
-    const resultLimit = Number(config.resultLimit ?? "5") || 5;
-
-    const searchPrompt = [
-      "You are a web research agent.",
-      `Find up to ${resultLimit} results for the query below.`,
-      "Return strict JSON only with this shape:",
-      "{\"query\":\"...\",\"findings\":[{\"title\":\"...\",\"url\":\"https://...\",\"snippet\":\"...\"}]}",
-      "Do not include markdown fences.",
-      "",
-      `Query: ${query}`,
-    ].join("\n");
-
-    const turnLikeNode: GraphNode = {
-      ...node,
-      config: {
-        model,
-        cwd,
-        promptTemplate: searchPrompt,
-      },
-    };
-
-    const turnResult = await executeTurnNode(turnLikeNode, null);
-    if (turnResult.ok && turnResult.output) {
-      const text = extractStringByPaths(turnResult.output, ["text", "completion.text"]) ?? "";
-      const parsed = tryParseJsonFromText(text);
-      if (parsed && typeof parsed === "object") {
-        const findings = (parsed as Record<string, unknown>).findings;
-        if (Array.isArray(findings) && findings.length > 0) {
-          return {
-            ok: true,
-            output: parsed,
-            threadId: turnResult.threadId,
-            turnId: turnResult.turnId,
-          };
-        }
-      }
-    }
-
-    const fallbackUrls = String(config.fallbackUrls ?? "")
-      .split("\n")
-      .map((item) => item.trim())
-      .filter((item) => item.length > 0);
-
-    if (fallbackUrls.length === 0) {
-      return {
-        ok: false,
-        error: turnResult.error ?? "search failed and no fallback urls configured",
-        threadId: turnResult.threadId,
-        turnId: turnResult.turnId,
-      };
-    }
-
-    const findings: Array<{ title: string; url: string; snippet: string }> = [];
-    for (const url of fallbackUrls.slice(0, resultLimit)) {
-      const cmd = `curl -L --silent --max-time 20 ${shellQuote(url)}`;
-      const commandResult = await runCommandWithApproval(node.id, cmd, cwd, 45);
-      if (!commandResult.ok || !commandResult.result) {
-        addNodeLog(node.id, `fallback fetch failed: ${url} (${commandResult.error ?? "error"})`);
-        continue;
-      }
-
-      const raw = commandResult.result.stdout;
-      const snippet = raw.replace(/\\s+/g, " ").slice(0, 280);
-      findings.push({
-        title: url,
-        url,
-        snippet,
-      });
-      addNodeLog(node.id, `fallback fetched: ${url}`);
-    }
-
-    if (findings.length === 0) {
-      return {
-        ok: false,
-        error: "search fallback failed (no URL evidence fetched)",
-        threadId: turnResult.threadId,
-        turnId: turnResult.turnId,
-      };
-    }
-
-    return {
-      ok: true,
-      output: {
-        query,
-        findings,
-        source: "url-fallback",
-      },
-      threadId: turnResult.threadId,
-      turnId: turnResult.turnId,
-    };
-  }
-
-  async function executeCommandNode(
-    node: GraphNode,
-    input: unknown,
-  ): Promise<{ ok: boolean; output?: unknown; error?: string }> {
-    const config = node.config as CommandConfig;
-    const commandTemplate = String(config.command ?? "").trim();
-    if (!commandTemplate) {
-      return { ok: false, error: "command is empty" };
-    }
-
-    const command = replaceInputPlaceholder(commandTemplate, stringifyInput(input));
-    const commandCwd = String(config.cwd ?? cwd).trim() || cwd;
-    const timeoutSec = Number(config.timeoutSec ?? "120") || 120;
-    const failOnNonZero = parseBooleanFlag(config.failOnNonZero, true);
-
-    const commandResult = await runCommandWithApproval(node.id, command, commandCwd, timeoutSec);
-    if (!commandResult.ok || !commandResult.result) {
-      return { ok: false, error: commandResult.error ?? "command execution failed" };
-    }
-
-    const result = commandResult.result;
-    addNodeLog(node.id, `command exit=${result.exitCode}, timeout=${String(result.timedOut)}`);
-    if (result.stdout) {
-      addNodeLog(node.id, `[stdout]\\n${result.stdout.slice(0, 4000)}`);
-    }
-    if (result.stderr) {
-      addNodeLog(node.id, `[stderr]\\n${result.stderr.slice(0, 4000)}`);
-    }
-
-    if (failOnNonZero && result.exitCode !== 0) {
-      return {
-        ok: false,
-        error: `command failed with exitCode=${result.exitCode}`,
-      };
-    }
-
-    return {
-      ok: true,
-      output: result,
-    };
-  }
-
   async function onRunGraph() {
     if (isGraphRunning) {
       return;
@@ -1575,32 +1280,6 @@ function App() {
               turnId: result.turnId,
             };
             transition(runRecord, nodeId, "done", "turn completed");
-          } else if (node.type === "search") {
-            const result = await executeSearchNode(node, input);
-            if (!result.ok) {
-              setNodeStatus(nodeId, "failed", result.error ?? "search failed");
-              setNodeRuntimeFields(nodeId, {
-                error: result.error,
-                threadId: result.threadId,
-                turnId: result.turnId,
-              });
-              transition(runRecord, nodeId, "failed", result.error ?? "search failed");
-              break;
-            }
-
-            outputs[nodeId] = result.output;
-            setNodeRuntimeFields(nodeId, {
-              status: "done",
-              output: result.output,
-              threadId: result.threadId,
-              turnId: result.turnId,
-            });
-            setNodeStatus(nodeId, "done", "search completed");
-            runRecord.threadTurnMap[nodeId] = {
-              threadId: result.threadId,
-              turnId: result.turnId,
-            };
-            transition(runRecord, nodeId, "done", "search completed");
           } else if (node.type === "transform") {
             const result = await executeTransformNode(node, input);
             if (!result.ok) {
@@ -1617,22 +1296,6 @@ function App() {
             });
             setNodeStatus(nodeId, "done", "transform completed");
             transition(runRecord, nodeId, "done", "transform completed");
-          } else if (node.type === "command") {
-            const result = await executeCommandNode(node, input);
-            if (!result.ok) {
-              setNodeStatus(nodeId, "failed", result.error ?? "command failed");
-              setNodeRuntimeFields(nodeId, { error: result.error });
-              transition(runRecord, nodeId, "failed", result.error ?? "command failed");
-              break;
-            }
-
-            outputs[nodeId] = result.output;
-            setNodeRuntimeFields(nodeId, {
-              status: "done",
-              output: result.output,
-            });
-            setNodeStatus(nodeId, "done", "command completed");
-            transition(runRecord, nodeId, "done", "command completed");
           } else {
             const result = executeGateNode(node, input, skipSet);
             if (!result.ok) {
@@ -1849,14 +1512,8 @@ function App() {
                 <button onClick={() => addNode("turn")} type="button">
                   + TurnNode
                 </button>
-                <button onClick={() => addNode("search")} type="button">
-                  + SearchNode
-                </button>
                 <button onClick={() => addNode("transform")} type="button">
                   + TransformNode
-                </button>
-                <button onClick={() => addNode("command")} type="button">
-                  + CommandNode
                 </button>
                 <button onClick={() => addNode("gate")} type="button">
                   + GateNode
@@ -2005,34 +1662,6 @@ function App() {
                     </div>
                   )}
 
-                  {selectedNode.type === "search" && (
-                    <div className="form-grid">
-                      <label>
-                        queryTemplate
-                        <textarea
-                          onChange={(e) => updateSelectedNodeConfig("queryTemplate", e.currentTarget.value)}
-                          rows={3}
-                          value={String((selectedNode.config as SearchConfig).queryTemplate ?? "{{input}}")}
-                        />
-                      </label>
-                      <label>
-                        resultLimit
-                        <input
-                          onChange={(e) => updateSelectedNodeConfig("resultLimit", e.currentTarget.value)}
-                          value={String((selectedNode.config as SearchConfig).resultLimit ?? "5")}
-                        />
-                      </label>
-                      <label>
-                        fallbackUrls
-                        <textarea
-                          onChange={(e) => updateSelectedNodeConfig("fallbackUrls", e.currentTarget.value)}
-                          rows={4}
-                          value={String((selectedNode.config as SearchConfig).fallbackUrls ?? "")}
-                        />
-                      </label>
-                    </div>
-                  )}
-
                   {selectedNode.type === "transform" && (
                     <div className="form-grid">
                       <label>
@@ -2067,40 +1696,6 @@ function App() {
                           onChange={(e) => updateSelectedNodeConfig("template", e.currentTarget.value)}
                           rows={3}
                           value={String((selectedNode.config as TransformConfig).template ?? "{{input}}")}
-                        />
-                      </label>
-                    </div>
-                  )}
-
-                  {selectedNode.type === "command" && (
-                    <div className="form-grid">
-                      <label>
-                        command
-                        <textarea
-                          onChange={(e) => updateSelectedNodeConfig("command", e.currentTarget.value)}
-                          rows={3}
-                          value={String((selectedNode.config as CommandConfig).command ?? "")}
-                        />
-                      </label>
-                      <label>
-                        cwd
-                        <input
-                          onChange={(e) => updateSelectedNodeConfig("cwd", e.currentTarget.value)}
-                          value={String((selectedNode.config as CommandConfig).cwd ?? cwd)}
-                        />
-                      </label>
-                      <label>
-                        timeoutSec
-                        <input
-                          onChange={(e) => updateSelectedNodeConfig("timeoutSec", e.currentTarget.value)}
-                          value={String((selectedNode.config as CommandConfig).timeoutSec ?? "120")}
-                        />
-                      </label>
-                      <label>
-                        failOnNonZero (true/false)
-                        <input
-                          onChange={(e) => updateSelectedNodeConfig("failOnNonZero", e.currentTarget.value)}
-                          value={String((selectedNode.config as CommandConfig).failOnNonZero ?? "true")}
                         />
                       </label>
                     </div>
