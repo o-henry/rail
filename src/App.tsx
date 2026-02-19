@@ -155,6 +155,7 @@ const GRAPH_STAGE_WIDTH = 2600;
 const GRAPH_STAGE_HEIGHT = 1800;
 const MIN_CANVAS_ZOOM = 0.6;
 const MAX_CANVAS_ZOOM = 1.8;
+const TURN_MODEL_OPTIONS = ["gpt-5-codex", "gpt-5-mini"] as const;
 
 function formatUnknown(value: unknown): string {
   try {
@@ -162,6 +163,13 @@ function formatUnknown(value: unknown): string {
   } catch {
     return String(value);
   }
+}
+
+function toErrorText(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return String(error);
 }
 
 function extractDeltaText(input: unknown, depth = 0): string {
@@ -336,7 +344,7 @@ function makeNodeId(type: NodeType): string {
 function defaultNodeConfig(type: NodeType): Record<string, unknown> {
   if (type === "turn") {
     return {
-      model: "gpt-5-codex",
+      model: TURN_MODEL_OPTIONS[0],
       cwd: ".",
       promptTemplate: "{{input}}",
     };
@@ -362,7 +370,7 @@ function defaultNodeConfig(type: NodeType): Record<string, unknown> {
 function nodeCardSummary(node: GraphNode): string {
   if (node.type === "turn") {
     const config = node.config as TurnConfig;
-    return `모델: ${String(config.model ?? "gpt-5-codex")}`;
+    return `모델: ${String(config.model ?? TURN_MODEL_OPTIONS[0])}`;
   }
   if (node.type === "transform") {
     const config = node.config as TransformConfig;
@@ -485,6 +493,22 @@ function authModeLabel(mode: AuthMode): string {
     return "API 키";
   }
   return "미확인";
+}
+
+function loginStateLabel(engineStarted: boolean, loginCompleted: boolean, authMode: AuthMode): string {
+  if (!engineStarted) {
+    return "엔진 꺼짐";
+  }
+  if (loginCompleted) {
+    return `로그인 완료 (${authModeLabel(authMode)})`;
+  }
+  if (authMode === "apikey") {
+    return "API 키 모드";
+  }
+  if (authMode === "chatgpt") {
+    return "세션 확인 중";
+  }
+  return "로그인 필요";
 }
 
 function completedStatusLabel(status: string): string {
@@ -776,7 +800,7 @@ function App() {
   const [inspectorTab, setInspectorTab] = useState<"config" | "layers">("config");
 
   const [cwd, setCwd] = useState(defaultCwd);
-  const [model, setModel] = useState("gpt-5-codex");
+  const [model, setModel] = useState<string>(TURN_MODEL_OPTIONS[0]);
   const [workflowQuestion, setWorkflowQuestion] = useState(
     "언어 학습에서 AI가 기존 학습 패러다임을 어떻게 개선할 수 있는지 분석해줘.",
   );
@@ -870,6 +894,28 @@ function App() {
     });
   }
 
+  function reportSoftError(prefix: string, error: unknown) {
+    const message = `${prefix}: ${toErrorText(error)}`;
+    console.error(message, error);
+    setError(message);
+  }
+
+  useEffect(() => {
+    const onUnhandledRejection = (event: PromiseRejectionEvent) => {
+      event.preventDefault();
+      reportSoftError("unhandled rejection", event.reason);
+    };
+    const onWindowError = (event: ErrorEvent) => {
+      reportSoftError("runtime error", event.error ?? event.message);
+    };
+    window.addEventListener("unhandledrejection", onUnhandledRejection);
+    window.addEventListener("error", onWindowError);
+    return () => {
+      window.removeEventListener("unhandledrejection", onUnhandledRejection);
+      window.removeEventListener("error", onWindowError);
+    };
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
 
@@ -877,50 +923,54 @@ function App() {
       const unlistenNotification = await listen<EngineNotificationEvent>(
         "engine://notification",
         (event) => {
-          const payload = event.payload;
-          const now = new Date().toLocaleTimeString();
-          const line = `[${now}] ${payload.method} ${formatUnknown(payload.params)}`;
+          try {
+            const payload = event.payload;
+            const now = new Date().toLocaleTimeString();
+            const line = `[${now}] ${payload.method} ${formatUnknown(payload.params)}`;
 
-          setEvents((prev) => [line, ...prev].slice(0, 200));
+            setEvents((prev) => [line, ...prev].slice(0, 200));
 
-          if (payload.method === "item/agentMessage/delta") {
-            const delta = extractDeltaText(payload.params);
-            const activeNodeId = activeTurnNodeIdRef.current;
-            if (activeNodeId && delta) {
-              activeRunDeltaRef.current[activeNodeId] =
-                (activeRunDeltaRef.current[activeNodeId] ?? "") + delta;
-              addNodeLog(activeNodeId, delta);
+            if (payload.method === "item/agentMessage/delta") {
+              const delta = extractDeltaText(payload.params);
+              const activeNodeId = activeTurnNodeIdRef.current;
+              if (activeNodeId && delta) {
+                activeRunDeltaRef.current[activeNodeId] =
+                  (activeRunDeltaRef.current[activeNodeId] ?? "") + delta;
+                addNodeLog(activeNodeId, delta);
+              }
+              if (delta) {
+                setStreamText((prev) => prev + delta);
+              }
             }
-            if (delta) {
-              setStreamText((prev) => prev + delta);
+
+            if (payload.method === "account/login/completed") {
+              setLoginCompleted(true);
+              setStatus("로그인 완료 이벤트 수신");
             }
-          }
 
-          if (payload.method === "account/login/completed") {
-            setLoginCompleted(true);
-            setStatus("로그인 완료 이벤트 수신");
-          }
-
-          if (payload.method === "account/updated") {
-            const mode = extractAuthMode(payload.params);
-            if (mode) {
-              setAuthMode(mode);
-              setStatus(`계정 상태 갱신 수신 (인증 모드=${mode})`);
-            } else {
-              setStatus("계정 상태 갱신 수신 (인증 모드 미확인)");
+            if (payload.method === "account/updated") {
+              const mode = extractAuthMode(payload.params);
+              if (mode) {
+                setAuthMode(mode);
+                setStatus(`계정 상태 갱신 수신 (인증 모드=${mode})`);
+              } else {
+                setStatus("계정 상태 갱신 수신 (인증 모드 미확인)");
+              }
             }
-          }
 
-          if (payload.method === "item/completed") {
-            const completedStatus = extractCompletedStatus(payload.params) ?? "unknown";
-            setLastCompletedStatus(completedStatus);
-          }
+            if (payload.method === "item/completed") {
+              const completedStatus = extractCompletedStatus(payload.params) ?? "unknown";
+              setLastCompletedStatus(completedStatus);
+            }
 
-          const terminal = isTurnTerminalEvent(payload.method, payload.params);
-          if (terminal && turnTerminalResolverRef.current) {
-            const resolve = turnTerminalResolverRef.current;
-            turnTerminalResolverRef.current = null;
-            resolve(terminal);
+            const terminal = isTurnTerminalEvent(payload.method, payload.params);
+            if (terminal && turnTerminalResolverRef.current) {
+              const resolve = turnTerminalResolverRef.current;
+              turnTerminalResolverRef.current = null;
+              resolve(terminal);
+            }
+          } catch (handlerError) {
+            reportSoftError("notification handler failed", handlerError);
           }
         },
       );
@@ -928,43 +978,51 @@ function App() {
       const unlistenApprovalRequest = await listen<EngineApprovalRequestEvent>(
         "engine://approval_request",
         (event) => {
-          const payload = event.payload;
-          setPendingApprovals((prev) => {
-            if (prev.some((item) => item.requestId === payload.requestId)) {
-              return prev;
-            }
-            return [
-              ...prev,
-              {
-                requestId: payload.requestId,
-                source: "remote",
-                method: payload.method,
-                params: payload.params,
-              },
-            ];
-          });
-          setStatus(`승인 요청 수신 (${payload.method})`);
+          try {
+            const payload = event.payload;
+            setPendingApprovals((prev) => {
+              if (prev.some((item) => item.requestId === payload.requestId)) {
+                return prev;
+              }
+              return [
+                ...prev,
+                {
+                  requestId: payload.requestId,
+                  source: "remote",
+                  method: payload.method,
+                  params: payload.params,
+                },
+              ];
+            });
+            setStatus(`승인 요청 수신 (${payload.method})`);
+          } catch (handlerError) {
+            reportSoftError("approval handler failed", handlerError);
+          }
         },
       );
 
       const unlistenLifecycle = await listen<EngineLifecycleEvent>(
         "engine://lifecycle",
         (event) => {
-          const payload = event.payload;
-          const msg = payload.message ? ` (${payload.message})` : "";
-          setStatus(`${lifecycleStateLabel(payload.state)}${msg}`);
+          try {
+            const payload = event.payload;
+            const msg = payload.message ? ` (${payload.message})` : "";
+            setStatus(`${lifecycleStateLabel(payload.state)}${msg}`);
 
-          if (payload.state === "ready") {
-            setEngineStarted(true);
-          }
-          if (payload.state === "stopped" || payload.state === "disconnected") {
-            setEngineStarted(false);
-            setAuthMode("unknown");
-            setLoginCompleted(false);
-            setUsageSourceMethod("");
-            setUsageInfoText("");
-            setPendingApprovals([]);
-            setApprovalSubmitting(false);
+            if (payload.state === "ready") {
+              setEngineStarted(true);
+            }
+            if (payload.state === "stopped" || payload.state === "disconnected") {
+              setEngineStarted(false);
+              setAuthMode("unknown");
+              setLoginCompleted(false);
+              setUsageSourceMethod("");
+              setUsageInfoText("");
+              setPendingApprovals([]);
+              setApprovalSubmitting(false);
+            }
+          } catch (handlerError) {
+            reportSoftError("lifecycle handler failed", handlerError);
           }
         },
       );
@@ -988,7 +1046,7 @@ function App() {
         detach = fn;
       })
       .catch((e) => {
-        setError(`event listen failed: ${String(e)}`);
+        reportSoftError("event listen failed", e);
       });
 
     return () => {
@@ -1973,7 +2031,13 @@ function App() {
         </label>
         <label>
           모델
-          <input value={model} onChange={(e) => setModel(e.currentTarget.value)} />
+          <select value={model} onChange={(e) => setModel(e.currentTarget.value)}>
+            {TURN_MODEL_OPTIONS.map((option) => (
+              <option key={option} value={option}>
+                {option}
+              </option>
+            ))}
+          </select>
         </label>
         <div className="button-row">
           <button onClick={onStartEngine} disabled={running || isGraphRunning} type="button">
@@ -2116,6 +2180,7 @@ function App() {
             />
           </div>
           <div className="header-actions">
+            <span className="chip">로그인: {loginStateLabel(engineStarted, loginCompleted, authMode)}</span>
             <span className="chip">인증: {authModeLabel(authMode)}</span>
             <span className="chip">실행 {runFiles.length}</span>
             <button className="primary-action" type="button">
@@ -2362,178 +2427,188 @@ function App() {
                   →
                 </button>
               </div>
+              <div className="inspector-content">
+                {inspectorTab === "config" && (
+                  <div className="inspector-section">
+                    <h2>노드 설정</h2>
+                    {!selectedNode && <div className="inspector-empty">노드를 선택하세요.</div>}
+                    {selectedNode && (
+                      <>
+                        <section className="inspector-block inspector-summary">
+                          <div>
+                            <strong>{selectedNode.id}</strong>
+                          </div>
+                          <div>유형: {nodeTypeLabel(selectedNode.type)}</div>
+                          <div className={`status-pill status-${selectedNodeState?.status ?? "idle"}`}>
+                            상태: {nodeStatusLabel(selectedNodeState?.status ?? "idle")}
+                          </div>
+                        </section>
 
-              {inspectorTab === "config" && (
-                <>
-                  <h2>설정 패널</h2>
-                  {!selectedNode && <div>노드를 선택하세요.</div>}
-                  {selectedNode && (
-                    <>
-                      <div>
-                        <strong>{selectedNode.id}</strong>
-                      </div>
-                      <div>유형: {nodeTypeLabel(selectedNode.type)}</div>
-                      <div className={`status-pill status-${selectedNodeState?.status ?? "idle"}`}>
-                        상태: {nodeStatusLabel(selectedNodeState?.status ?? "idle")}
-                      </div>
+                        {selectedNode.type === "turn" && (
+                          <section className="inspector-block form-grid">
+                            <h3>모델 설정</h3>
+                            <label>
+                              모델
+                              <select
+                                onChange={(e) => updateSelectedNodeConfig("model", e.currentTarget.value)}
+                                value={String((selectedNode.config as TurnConfig).model ?? model)}
+                              >
+                                {TURN_MODEL_OPTIONS.map((option) => (
+                                  <option key={option} value={option}>
+                                    {option}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                            <label>
+                              작업 경로
+                              <input
+                                onChange={(e) => updateSelectedNodeConfig("cwd", e.currentTarget.value)}
+                                value={String((selectedNode.config as TurnConfig).cwd ?? cwd)}
+                              />
+                            </label>
+                            <label>
+                              프롬프트 템플릿
+                              <textarea
+                                onChange={(e) =>
+                                  updateSelectedNodeConfig("promptTemplate", e.currentTarget.value)
+                                }
+                                rows={3}
+                                value={String((selectedNode.config as TurnConfig).promptTemplate ?? "{{input}}")}
+                              />
+                            </label>
+                          </section>
+                        )}
 
-                      {selectedNode.type === "turn" && (
-                        <div className="form-grid">
-                          <h3>모델 설정</h3>
-                          <label>
-                            모델
-                            <input
-                              onChange={(e) => updateSelectedNodeConfig("model", e.currentTarget.value)}
-                              value={String((selectedNode.config as TurnConfig).model ?? model)}
-                            />
-                          </label>
-                          <label>
-                            작업 경로
-                            <input
-                              onChange={(e) => updateSelectedNodeConfig("cwd", e.currentTarget.value)}
-                              value={String((selectedNode.config as TurnConfig).cwd ?? cwd)}
-                            />
-                          </label>
-                          <label>
-                            프롬프트 템플릿
-                            <textarea
-                              onChange={(e) =>
-                                updateSelectedNodeConfig("promptTemplate", e.currentTarget.value)
-                              }
-                              rows={3}
-                              value={String((selectedNode.config as TurnConfig).promptTemplate ?? "{{input}}")}
-                            />
-                          </label>
-                        </div>
-                      )}
+                        {selectedNode.type === "transform" && (
+                          <section className="inspector-block form-grid">
+                            <h3>변환 규칙</h3>
+                            <label>
+                              변환 모드
+                              <select
+                                onChange={(e) => updateSelectedNodeConfig("mode", e.currentTarget.value)}
+                                value={String((selectedNode.config as TransformConfig).mode ?? "pick")}
+                              >
+                                <option value="pick">필드 선택</option>
+                                <option value="merge">병합</option>
+                                <option value="template">문자열 템플릿</option>
+                              </select>
+                            </label>
+                            <label>
+                              pick 경로
+                              <input
+                                onChange={(e) => updateSelectedNodeConfig("pickPath", e.currentTarget.value)}
+                                value={String((selectedNode.config as TransformConfig).pickPath ?? "")}
+                              />
+                            </label>
+                            <label>
+                              merge JSON
+                              <textarea
+                                onChange={(e) => updateSelectedNodeConfig("mergeJson", e.currentTarget.value)}
+                                rows={3}
+                                value={String((selectedNode.config as TransformConfig).mergeJson ?? "{}")}
+                              />
+                            </label>
+                            <label>
+                              템플릿
+                              <textarea
+                                onChange={(e) => updateSelectedNodeConfig("template", e.currentTarget.value)}
+                                rows={3}
+                                value={String((selectedNode.config as TransformConfig).template ?? "{{input}}")}
+                              />
+                            </label>
+                          </section>
+                        )}
 
-                      {selectedNode.type === "transform" && (
-                        <div className="form-grid">
-                          <h3>변환 규칙</h3>
-                          <label>
-                            변환 모드
-                            <select
-                              onChange={(e) => updateSelectedNodeConfig("mode", e.currentTarget.value)}
-                              value={String((selectedNode.config as TransformConfig).mode ?? "pick")}
-                            >
-                              <option value="pick">필드 선택</option>
-                              <option value="merge">병합</option>
-                              <option value="template">문자열 템플릿</option>
-                            </select>
-                          </label>
-                          <label>
-                            pick 경로
-                            <input
-                              onChange={(e) => updateSelectedNodeConfig("pickPath", e.currentTarget.value)}
-                              value={String((selectedNode.config as TransformConfig).pickPath ?? "")}
-                            />
-                          </label>
-                          <label>
-                            merge JSON
-                            <textarea
-                              onChange={(e) => updateSelectedNodeConfig("mergeJson", e.currentTarget.value)}
-                              rows={3}
-                              value={String((selectedNode.config as TransformConfig).mergeJson ?? "{}")}
-                            />
-                          </label>
-                          <label>
-                            템플릿
-                            <textarea
-                              onChange={(e) => updateSelectedNodeConfig("template", e.currentTarget.value)}
-                              rows={3}
-                              value={String((selectedNode.config as TransformConfig).template ?? "{{input}}")}
-                            />
-                          </label>
-                        </div>
-                      )}
+                        {selectedNode.type === "gate" && (
+                          <section className="inspector-block form-grid">
+                            <h3>분기 설정</h3>
+                            <label>
+                              분기 경로(decisionPath)
+                              <input
+                                onChange={(e) => updateSelectedNodeConfig("decisionPath", e.currentTarget.value)}
+                                value={String((selectedNode.config as GateConfig).decisionPath ?? "decision")}
+                              />
+                            </label>
+                            <label>
+                              PASS 대상 노드
+                              <select
+                                onChange={(e) => updateSelectedNodeConfig("passNodeId", e.currentTarget.value)}
+                                value={String((selectedNode.config as GateConfig).passNodeId ?? "")}
+                              >
+                                <option value="">(없음)</option>
+                                {outgoingFromSelected.map((nodeId) => (
+                                  <option key={nodeId} value={nodeId}>
+                                    {nodeId}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                            <label>
+                              REJECT 대상 노드
+                              <select
+                                onChange={(e) => updateSelectedNodeConfig("rejectNodeId", e.currentTarget.value)}
+                                value={String((selectedNode.config as GateConfig).rejectNodeId ?? "")}
+                              >
+                                <option value="">(없음)</option>
+                                {outgoingFromSelected.map((nodeId) => (
+                                  <option key={nodeId} value={nodeId}>
+                                    {nodeId}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                            <label>
+                              스키마 JSON (선택)
+                              <textarea
+                                onChange={(e) => updateSelectedNodeConfig("schemaJson", e.currentTarget.value)}
+                                rows={4}
+                                value={String((selectedNode.config as GateConfig).schemaJson ?? "")}
+                              />
+                            </label>
+                          </section>
+                        )}
 
-                      {selectedNode.type === "gate" && (
-                        <div className="form-grid">
-                          <h3>분기 설정</h3>
-                          <label>
-                            분기 경로(decisionPath)
-                            <input
-                              onChange={(e) =>
-                                updateSelectedNodeConfig("decisionPath", e.currentTarget.value)
-                              }
-                              value={String((selectedNode.config as GateConfig).decisionPath ?? "decision")}
-                            />
-                          </label>
-                          <label>
-                            PASS 대상 노드
-                            <select
-                              onChange={(e) => updateSelectedNodeConfig("passNodeId", e.currentTarget.value)}
-                              value={String((selectedNode.config as GateConfig).passNodeId ?? "")}
-                            >
-                              <option value="">(없음)</option>
-                              {outgoingFromSelected.map((nodeId) => (
-                                <option key={nodeId} value={nodeId}>
-                                  {nodeId}
-                                </option>
-                              ))}
-                            </select>
-                          </label>
-                          <label>
-                            REJECT 대상 노드
-                            <select
-                              onChange={(e) =>
-                                updateSelectedNodeConfig("rejectNodeId", e.currentTarget.value)
-                              }
-                              value={String((selectedNode.config as GateConfig).rejectNodeId ?? "")}
-                            >
-                              <option value="">(없음)</option>
-                              {outgoingFromSelected.map((nodeId) => (
-                                <option key={nodeId} value={nodeId}>
-                                  {nodeId}
-                                </option>
-                              ))}
-                            </select>
-                          </label>
-                          <label>
-                            스키마 JSON (선택)
-                            <textarea
-                              onChange={(e) => updateSelectedNodeConfig("schemaJson", e.currentTarget.value)}
-                              rows={4}
-                              value={String((selectedNode.config as GateConfig).schemaJson ?? "")}
-                            />
-                          </label>
-                        </div>
-                      )}
+                        <section className="inspector-block">
+                          <h3>노드 로그</h3>
+                          <pre>{(selectedNodeState?.logs ?? []).join("\n") || "(로그 없음)"}</pre>
+                        </section>
 
-                      <h3>노드 로그</h3>
-                      <pre>{(selectedNodeState?.logs ?? []).join("\n") || "(로그 없음)"}</pre>
-                      <h3>노드 출력</h3>
-                      <pre>{formatUnknown(selectedNodeState?.output) || "(출력 없음)"}</pre>
-                    </>
-                  )}
+                        <section className="inspector-block">
+                          <h3>노드 출력</h3>
+                          <pre>{formatUnknown(selectedNodeState?.output) || "(출력 없음)"}</pre>
+                        </section>
+                      </>
+                    )}
 
-                  {renderSettingsPanel(true)}
-                </>
-              )}
+                    <section className="inspector-block">{renderSettingsPanel(true)}</section>
+                  </div>
+                )}
 
-              {inspectorTab === "layers" && (
-                <div className="layer-list">
-                  <h2>그래프 레이어</h2>
-                  <h3>노드 ({graph.nodes.length})</h3>
-                  <ul>
-                    {graph.nodes.map((node) => (
-                      <li key={`layer-node-${node.id}`}>
-                        <button onClick={() => setSelectedNodeId(node.id)} type="button">
-                          {nodeTypeLabel(node.type)} · {node.id}
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                  <h3>엣지 ({graph.edges.length})</h3>
-                  <ul>
-                    {graph.edges.map((edge, index) => (
-                      <li key={`layer-edge-${index}`}>
-                        {edge.from.nodeId} → {edge.to.nodeId}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
+                {inspectorTab === "layers" && (
+                  <div className="layer-list inspector-section">
+                    <h2>그래프 레이어</h2>
+                    <h3>노드 ({graph.nodes.length})</h3>
+                    <ul>
+                      {graph.nodes.map((node) => (
+                        <li key={`layer-node-${node.id}`}>
+                          <button onClick={() => setSelectedNodeId(node.id)} type="button">
+                            {nodeTypeLabel(node.type)} · {node.id}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                    <h3>엣지 ({graph.edges.length})</h3>
+                    <ul>
+                      {graph.edges.map((edge, index) => (
+                        <li key={`layer-edge-${index}`}>
+                          {edge.from.nodeId} → {edge.to.nodeId}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
             </aside>
           </div>
         )}
