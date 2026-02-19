@@ -312,6 +312,12 @@ p {
   gap: 8px;
 }
 
+.settings-compact {
+  margin-top: 8px;
+  padding-top: 10px;
+  border-top: 1px solid #dbe5ea;
+}
+
 pre {
   margin: 0;
   max-height: 280px;

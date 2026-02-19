@@ -889,6 +889,36 @@ function App() {
     refreshRunFiles();
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    const boot = async () => {
+      try {
+        await ensureEngineStarted();
+        if (!cancelled) {
+          setStatus("ready");
+        }
+      } catch (e) {
+        const message = String(e);
+        if (message.includes("already started")) {
+          if (!cancelled) {
+            setEngineStarted(true);
+            setStatus("ready");
+          }
+          return;
+        }
+        if (!cancelled) {
+          setStatus(`auto-start failed (${message})`);
+        }
+      }
+    };
+
+    boot();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   async function ensureEngineStarted() {
     if (engineStarted) {
       return;
@@ -1668,6 +1698,48 @@ function App() {
     }
   }
 
+  function renderSettingsPanel(compact = false) {
+    return (
+      <section className={`controls ${compact ? "settings-compact" : ""}`}>
+        <h2>Engine Settings</h2>
+        <label>
+          CWD
+          <input value={cwd} onChange={(e) => setCwd(e.currentTarget.value)} />
+        </label>
+        <label>
+          Model
+          <input value={model} onChange={(e) => setModel(e.currentTarget.value)} />
+        </label>
+        <div className="button-row">
+          <button onClick={onStartEngine} disabled={running || isGraphRunning} type="button">
+            Engine Start
+          </button>
+          <button onClick={onStopEngine} type="button">
+            Engine Stop
+          </button>
+          <button onClick={onLoginChatgpt} disabled={running || isGraphRunning} type="button">
+            Login ChatGPT
+          </button>
+        </div>
+        <div className="meta">
+          <div>authMode: {authMode}</div>
+          <div>engineStarted: {String(engineStarted)}</div>
+          <div>loginCompleted: {String(loginCompleted)}</div>
+          <div>pendingApprovals: {pendingApprovals.length}</div>
+          <div>last item/completed status: {lastCompletedStatus}</div>
+          {authUrl && (
+            <div>
+              authUrl: <code>{authUrl}</code>{" "}
+              <button onClick={onCopyAuthUrl} type="button">
+                Copy
+              </button>
+            </div>
+          )}
+        </div>
+      </section>
+    );
+  }
+
   const edgeLines = graph.edges
     .map((edge, index) => {
       const fromNode = graph.nodes.find((node) => node.id === edge.from.nodeId);
@@ -2031,6 +2103,8 @@ function App() {
                   Cancel Run
                 </button>
               </div>
+
+              {renderSettingsPanel(true)}
             </aside>
           </div>
         )}
@@ -2082,42 +2156,9 @@ function App() {
         )}
 
         {workspaceTab === "settings" && (
-          <section className="panel-card controls">
-            <h2>Engine Settings</h2>
-            <label>
-              CWD
-              <input value={cwd} onChange={(e) => setCwd(e.currentTarget.value)} />
-            </label>
-            <label>
-              Model
-              <input value={model} onChange={(e) => setModel(e.currentTarget.value)} />
-            </label>
-            <div className="button-row">
-              <button onClick={onStartEngine} disabled={running || isGraphRunning} type="button">
-                Engine Start
-              </button>
-              <button onClick={onStopEngine} type="button">
-                Engine Stop
-              </button>
-              <button onClick={onLoginChatgpt} disabled={running || isGraphRunning} type="button">
-                Login ChatGPT
-              </button>
-            </div>
-            <div className="meta">
-              <div>engineStarted: {String(engineStarted)}</div>
-              <div>loginCompleted: {String(loginCompleted)}</div>
-              <div>pendingApprovals: {pendingApprovals.length}</div>
-              <div>last item/completed status: {lastCompletedStatus}</div>
-              {lastSavedRunFile && <div>last run file: {lastSavedRunFile}</div>}
-              {authUrl && (
-                <div>
-                  authUrl: <code>{authUrl}</code>{" "}
-                  <button onClick={onCopyAuthUrl} type="button">
-                    Copy
-                  </button>
-                </div>
-              )}
-            </div>
+          <section className="panel-card">
+            {renderSettingsPanel()}
+            {lastSavedRunFile && <div>last run file: {lastSavedRunFile}</div>}
           </section>
         )}
 
