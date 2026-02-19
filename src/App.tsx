@@ -2496,12 +2496,34 @@ function App() {
         .filter((value, index, arr) => arr.indexOf(value) === index)
     : [];
   const isActiveTab = (tab: WorkspaceTab): boolean => workspaceTab === tab;
+  const navTransition = "240ms cubic-bezier(0.22, 1, 0.36, 1)";
+  const appShellStyle = canvasFullscreen
+    ? undefined
+    : {
+        gridTemplateColumns: `${isNavClosed ? 0 : 82}px minmax(0, 1fr)`,
+        gap: 0,
+        transition: `grid-template-columns ${navTransition}`,
+      };
+  const leftNavStyle = {
+    width: isNavClosed ? 0 : 68,
+    minWidth: isNavClosed ? 0 : 68,
+    padding: isNavClosed ? 0 : undefined,
+    border: isNavClosed ? 0 : undefined,
+    opacity: isNavClosed ? 0 : 1,
+    overflow: "hidden",
+    pointerEvents: isNavClosed ? "none" : "auto",
+    transform: isNavClosed ? "translateX(-8px)" : "translateX(0)",
+    transition: [
+      `width ${navTransition}`,
+      `min-width ${navTransition}`,
+      `opacity 180ms ease`,
+      `transform ${navTransition}`,
+      `padding ${navTransition}`,
+    ].join(", "),
+  } as const;
 
   return (
-    <main
-      className={`app-shell ${canvasFullscreen ? "canvas-fullscreen-mode" : ""}`}
-      style={isNavClosed ? { gridTemplateColumns: "0 minmax(0, 1fr)", gap: 0 } : undefined}
-    >
+    <main className={`app-shell ${canvasFullscreen ? "canvas-fullscreen-mode" : ""}`} style={appShellStyle}>
       {isNavClosed && (
         <button
           onClick={() => setIsNavClosed(false)}
@@ -2524,22 +2546,7 @@ function App() {
           <img alt="" aria-hidden="true" src="/nav-open.svg" style={{ width: 16, height: 16 }} />
         </button>
       )}
-      <aside
-        className="left-nav"
-        style={
-          isNavClosed
-            ? {
-                width: 0,
-                minWidth: 0,
-                padding: 0,
-                border: 0,
-                opacity: 0,
-                overflow: "hidden",
-                pointerEvents: "none",
-              }
-            : undefined
-        }
-      >
+      <aside className="left-nav" style={leftNavStyle}>
         <button
           onClick={() => setIsNavClosed(true)}
           style={{
