@@ -26,17 +26,8 @@
 }
 
 @font-face {
-  font-family: "DMMono";
-  src: url("/fonts/dm-mono-light.ttf") format("truetype");
-  font-weight: 300;
-  font-style: normal;
-  font-display: swap;
-  unicode-range: U+0000-00FF, U+0100-024F, U+1E00-1EFF;
-}
-
-@font-face {
-  font-family: "DMMono";
-  src: url("/fonts/dm-mono-regular.ttf") format("truetype");
+  font-family: "BasicallyAMono";
+  src: url("/fonts/basically-a-mono-medium.otf") format("opentype");
   font-weight: 400;
   font-style: normal;
   font-display: swap;
@@ -44,16 +35,33 @@
 }
 
 @font-face {
-  font-family: "DMMono";
-  src: url("/fonts/dm-mono-medium.ttf") format("truetype");
-  font-weight: 500;
+  font-family: "BasicallyAMono";
+  src: url("/fonts/basically-a-mono-semibold.otf") format("opentype");
+  font-weight: 600;
   font-style: normal;
   font-display: swap;
   unicode-range: U+0000-00FF, U+0100-024F, U+1E00-1EFF;
 }
 
+@font-face {
+  font-family: "BasicallyAMono";
+  src: url("/fonts/basically-a-mono-bold.otf") format("opentype");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+0000-00FF, U+0100-024F, U+1E00-1EFF;
+}
+
+@font-face {
+  font-family: "DNFBitBitV2";
+  src: url("/fonts/dnf-bitbit-v2.otf") format("opentype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
 :root {
-  font-family: "1984DialogueBody", "DMMono", "IBM Plex Sans", "Noto Sans KR", sans-serif;
+  font-family: "1984DialogueBody", "BasicallyAMono", "IBM Plex Sans", "Noto Sans KR", sans-serif;
   letter-spacing: -0.7px;
   color: #1b2229;
   background: #d9dbe0;
@@ -119,8 +127,21 @@ label {
 h1,
 h2,
 h3,
+h4,
+h5,
+h6,
 p {
   margin: 0;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: "DNFBitBitV2", "1984DialogueBody", sans-serif;
+  letter-spacing: -0.7px;
 }
 
 .app-shell {
@@ -134,7 +155,7 @@ p {
 
 .left-nav {
   border: 1px solid #cfd4dc;
-  border-radius: 5px;
+  border-radius: 12px;
   background: #f6f7f9;
   padding: 10px 8px;
   display: grid;
@@ -143,7 +164,7 @@ p {
 }
 
 .brand-spacer {
-  height: 10px;
+  /* height: 10px; */
 }
 
 .nav-list {
@@ -157,10 +178,11 @@ p {
   height: 54px;
   border-color: transparent;
   background: transparent;
+  border-radius: 500px;
   display: grid;
   justify-items: center;
   gap: 2px;
-  padding: 8px 4px;
+  padding: 4px 4px;
 }
 
 .nav-list button.is-active {
@@ -397,7 +419,7 @@ p {
 .node-id {
   color: #63707d;
   font-size: 0.72rem;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-family: "BasicallyAMono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 
 .status-pill {
