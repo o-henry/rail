@@ -175,6 +175,8 @@ const NODE_WIDTH = 240;
 const NODE_HEIGHT = 136;
 const DEFAULT_STAGE_WIDTH = 1400;
 const DEFAULT_STAGE_HEIGHT = 900;
+const STAGE_GROW_MARGIN = 240;
+const STAGE_GROW_LIMIT = 1200;
 const MAX_STAGE_WIDTH = 4200;
 const MAX_STAGE_HEIGHT = 3200;
 const GRAPH_STAGE_INSET = 8;
@@ -1028,6 +1030,8 @@ function App() {
   const dragBoundsRef = useRef<{ maxX: number; maxY: number } | null>(null);
   const dragPointerRef = useRef<PointerState | null>(null);
   const dragAutoPanFrameRef = useRef<number | null>(null);
+  const dragWindowMoveHandlerRef = useRef<((event: MouseEvent) => void) | null>(null);
+  const dragWindowUpHandlerRef = useRef<((event: MouseEvent) => void) | null>(null);
   const dragStartSnapshotRef = useRef<GraphData | null>(null);
   const cancelRequestedRef = useRef(false);
   const activeTurnNodeIdRef = useRef<string>("");
@@ -1470,7 +1474,11 @@ function App() {
     }
   }
 
-  function centerCanvasOnPosition(logicalX: number, logicalY: number) {
+  function centerCanvasOnPositionWithBehavior(
+    logicalX: number,
+    logicalY: number,
+    behavior: ScrollBehavior,
+  ) {
     const canvas = graphCanvasRef.current;
     if (!canvas) {
       return;
@@ -1484,7 +1492,7 @@ function App() {
     canvas.scrollTo({
       left: Math.max(0, Math.min(maxLeft, nextLeft)),
       top: Math.max(0, Math.min(maxTop, nextTop)),
-      behavior: "smooth",
+      behavior,
     });
   }
 
@@ -1509,7 +1517,11 @@ function App() {
 
     setSelectedNodeId(node.id);
     requestAnimationFrame(() => {
-      centerCanvasOnPosition(node.position.x + NODE_WIDTH / 2, node.position.y + NODE_HEIGHT / 2);
+      centerCanvasOnPositionWithBehavior(
+        node.position.x + NODE_WIDTH / 2,
+        node.position.y + NODE_HEIGHT / 2,
+        "auto",
+      );
     });
   }
 
@@ -1727,6 +1739,22 @@ function App() {
     };
     dragPointerRef.current = { clientX: e.clientX, clientY: e.clientY };
     ensureDragAutoPanLoop();
+    if (!dragWindowMoveHandlerRef.current) {
+      dragWindowMoveHandlerRef.current = (event: MouseEvent) => {
+        if (!dragRef.current) {
+          return;
+        }
+        dragPointerRef.current = { clientX: event.clientX, clientY: event.clientY };
+        applyDragPosition(event.clientX, event.clientY);
+      };
+      window.addEventListener("mousemove", dragWindowMoveHandlerRef.current);
+    }
+    if (!dragWindowUpHandlerRef.current) {
+      dragWindowUpHandlerRef.current = () => {
+        onCanvasMouseUp();
+      };
+      window.addEventListener("mouseup", dragWindowUpHandlerRef.current);
+    }
 
     dragRef.current = {
       nodeId,
@@ -1760,6 +1788,14 @@ function App() {
     if (dragAutoPanFrameRef.current != null) {
       cancelAnimationFrame(dragAutoPanFrameRef.current);
       dragAutoPanFrameRef.current = null;
+    }
+    if (dragWindowMoveHandlerRef.current) {
+      window.removeEventListener("mousemove", dragWindowMoveHandlerRef.current);
+      dragWindowMoveHandlerRef.current = null;
+    }
+    if (dragWindowUpHandlerRef.current) {
+      window.removeEventListener("mouseup", dragWindowUpHandlerRef.current);
+      dragWindowUpHandlerRef.current = null;
     }
     const dragSnapshot = dragStartSnapshotRef.current;
     if (dragSnapshot && !graphEquals(dragSnapshot, graph)) {
@@ -1978,6 +2014,20 @@ function App() {
   useEffect(() => {
     syncCanvasLogicalViewport();
   }, [graph.nodes, canvasZoom]);
+
+  useEffect(() => {
+    return () => {
+      if (dragAutoPanFrameRef.current != null) {
+        cancelAnimationFrame(dragAutoPanFrameRef.current);
+      }
+      if (dragWindowMoveHandlerRef.current) {
+        window.removeEventListener("mousemove", dragWindowMoveHandlerRef.current);
+      }
+      if (dragWindowUpHandlerRef.current) {
+        window.removeEventListener("mouseup", dragWindowUpHandlerRef.current);
+      }
+    };
+  }, []);
 
   async function saveRunRecord(runRecord: RunRecord) {
     const fileName = `run-${runRecord.runId}.json`;
@@ -2653,13 +2703,19 @@ function App() {
         .filter((value, index, arr) => arr.indexOf(value) === index)
     : [];
   const isActiveTab = (tab: WorkspaceTab): boolean => workspaceTab === tab;
+  const viewportWidth = Math.ceil(canvasLogicalViewport.width);
+  const viewportHeight = Math.ceil(canvasLogicalViewport.height);
+  const maxNodeRight = graph.nodes.reduce((max, node) => Math.max(max, node.position.x + NODE_WIDTH), 0);
+  const maxNodeBottom = graph.nodes.reduce((max, node) => Math.max(max, node.position.y + NODE_HEIGHT), 0);
+  const softMaxWidth = viewportWidth + STAGE_GROW_LIMIT;
+  const softMaxHeight = viewportHeight + STAGE_GROW_LIMIT;
   const stageWidth = Math.max(
-    Math.ceil(canvasLogicalViewport.width),
-    graph.nodes.reduce((max, node) => Math.max(max, node.position.x + NODE_WIDTH + 120), 0),
+    viewportWidth + STAGE_GROW_MARGIN,
+    Math.min(softMaxWidth, maxNodeRight + STAGE_GROW_MARGIN),
   );
   const stageHeight = Math.max(
-    Math.ceil(canvasLogicalViewport.height),
-    graph.nodes.reduce((max, node) => Math.max(max, node.position.y + NODE_HEIGHT + 120), 0),
+    viewportHeight + STAGE_GROW_MARGIN,
+    Math.min(softMaxHeight, maxNodeBottom + STAGE_GROW_MARGIN),
   );
   const boundedStageWidth = Math.min(stageWidth, MAX_STAGE_WIDTH);
   const boundedStageHeight = Math.min(stageHeight, MAX_STAGE_HEIGHT);
@@ -2681,7 +2737,7 @@ function App() {
         <nav
           className="nav-list"
           style={{
-            alignContent: "center",
+            // alignContent: "center",
             height: "100%",
             display: "grid",
           }}
@@ -2745,7 +2801,6 @@ function App() {
                 className={`graph-canvas ${panMode ? "pan-mode" : ""}`}
                 onKeyDown={onCanvasKeyDown}
                 onMouseDown={onCanvasMouseDown}
-                onMouseLeave={onCanvasMouseUp}
                 onMouseMove={onCanvasMouseMove}
                 onMouseUp={onCanvasMouseUp}
                 onWheel={onCanvasWheel}
