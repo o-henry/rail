@@ -888,10 +888,14 @@ function FancySelect({
       return;
     }
 
+    const minBottomGap = 16;
+    const previousGap = container.style.getPropertyValue("--dropdown-open-gap");
+    const requiredGap = Math.max(0, Math.ceil(menu.offsetHeight + minBottomGap + 8));
+    container.style.setProperty("--dropdown-open-gap", `${requiredGap}px`);
+
     const frame = window.requestAnimationFrame(() => {
       const menuRect = menu.getBoundingClientRect();
       const containerRect = container.getBoundingClientRect();
-      const minBottomGap = 16;
       const overflow = menuRect.bottom + minBottomGap - containerRect.bottom;
       if (overflow <= 0) {
         return;
@@ -900,7 +904,14 @@ function FancySelect({
       container.scrollTop = Math.min(maxScrollTop, container.scrollTop + overflow);
     });
 
-    return () => window.cancelAnimationFrame(frame);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      if (previousGap) {
+        container.style.setProperty("--dropdown-open-gap", previousGap);
+      } else {
+        container.style.removeProperty("--dropdown-open-gap");
+      }
+    };
   }, [isOpen]);
 
   return (
