@@ -1474,36 +1474,34 @@ function App() {
     }
   }
 
-  function centerCanvasOnPositionWithBehavior(
-    logicalX: number,
-    logicalY: number,
-    behavior: ScrollBehavior,
-  ) {
+  function getCanvasViewportCenterLogical(): { x: number; y: number } | null {
     const canvas = graphCanvasRef.current;
     if (!canvas) {
-      return;
+      return null;
     }
-    const targetX = GRAPH_STAGE_INSET + logicalX * canvasZoom;
-    const targetY = GRAPH_STAGE_INSET + logicalY * canvasZoom;
-    const nextLeft = targetX - canvas.clientWidth / 2;
-    const nextTop = targetY - canvas.clientHeight / 2;
-    const maxLeft = Math.max(0, canvas.scrollWidth - canvas.clientWidth);
-    const maxTop = Math.max(0, canvas.scrollHeight - canvas.clientHeight);
-    canvas.scrollTo({
-      left: Math.max(0, Math.min(maxLeft, nextLeft)),
-      top: Math.max(0, Math.min(maxTop, nextTop)),
-      behavior,
-    });
+    return {
+      x: (canvas.scrollLeft + canvas.clientWidth / 2 - GRAPH_STAGE_INSET) / canvasZoom,
+      y: (canvas.scrollTop + canvas.clientHeight / 2 - GRAPH_STAGE_INSET) / canvasZoom,
+    };
   }
 
   function addNode(type: NodeType) {
-    const index = graph.nodes.length;
+    const center = getCanvasViewportCenterLogical();
+    const fallbackIndex = graph.nodes.length;
+    const maxX = Math.max(-GRAPH_STAGE_INSET, boundedStageWidth - NODE_WIDTH);
+    const maxY = Math.max(-GRAPH_STAGE_INSET, boundedStageHeight - NODE_HEIGHT);
+    const baseX = center
+      ? Math.round(center.x - NODE_WIDTH / 2)
+      : 40 + (fallbackIndex % 4) * 280;
+    const baseY = center
+      ? Math.round(center.y - NODE_HEIGHT / 2)
+      : 40 + Math.floor(fallbackIndex / 4) * 180;
     const node: GraphNode = {
       id: makeNodeId(type),
       type,
       position: {
-        x: 40 + (index % 4) * 280,
-        y: 40 + Math.floor(index / 4) * 180,
+        x: Math.min(maxX, Math.max(-GRAPH_STAGE_INSET, baseX)),
+        y: Math.min(maxY, Math.max(-GRAPH_STAGE_INSET, baseY)),
       },
       config: defaultNodeConfig(type),
     };
@@ -1516,13 +1514,6 @@ function App() {
     });
 
     setSelectedNodeId(node.id);
-    requestAnimationFrame(() => {
-      centerCanvasOnPositionWithBehavior(
-        node.position.x + NODE_WIDTH / 2,
-        node.position.y + NODE_HEIGHT / 2,
-        "auto",
-      );
-    });
   }
 
   function applyPreset(kind: "validation" | "development") {
