@@ -90,6 +90,11 @@ button {
   cursor: pointer;
 }
 
+button:focus,
+button:focus-visible {
+  outline: none;
+}
+
 button:disabled {
   /* opacity: 0.5; */
   cursor: not-allowed;
@@ -472,8 +477,15 @@ h3 {
 
 .fancy-select.is-open .fancy-select-trigger {
   background: #e8eef9;
-  border-color: #b7c7e6;
-  box-shadow: 0 0 0 2px rgba(49, 112, 221, 0.18);
+  border-color: transparent;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.54), 0 1px 2px rgba(18, 27, 35, 0.08);
+}
+
+.fancy-select-trigger:focus,
+.fancy-select-trigger:focus-visible {
+  outline: none;
+  border-color: transparent;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.54), 0 1px 2px rgba(18, 27, 35, 0.08);
 }
 
 .fancy-select-value {
