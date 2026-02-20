@@ -148,6 +148,11 @@ type PointerState = {
   clientY: number;
 };
 
+type LogicalPoint = {
+  x: number;
+  y: number;
+};
+
 type TurnConfig = {
   model?: string;
   cwd?: string;
@@ -175,11 +180,11 @@ const NODE_WIDTH = 240;
 const NODE_HEIGHT = 136;
 const DEFAULT_STAGE_WIDTH = 1400;
 const DEFAULT_STAGE_HEIGHT = 900;
-const STAGE_GROW_MARGIN = 240;
-const STAGE_GROW_LIMIT = 1200;
+const STAGE_GROW_MARGIN = 120;
+const STAGE_GROW_LIMIT = 720;
 const MAX_STAGE_WIDTH = 4200;
 const MAX_STAGE_HEIGHT = 3200;
-const GRAPH_STAGE_INSET = 8;
+const GRAPH_STAGE_INSET = 0;
 const MIN_CANVAS_ZOOM = 0.6;
 const MAX_CANVAS_ZOOM = 1.8;
 const QUESTION_INPUT_MAX_HEIGHT = 132;
@@ -501,6 +506,43 @@ function cloneGraph(input: GraphData): GraphData {
 
 function graphEquals(a: GraphData, b: GraphData): boolean {
   return JSON.stringify(a) === JSON.stringify(b);
+}
+
+function buildRoundedEdgePath(
+  x1: number,
+  y1: number,
+  x2: number,
+  y2: number,
+  withArrow: boolean,
+): string {
+  const direction = x2 >= x1 ? 1 : -1;
+  const arrowLeadX = withArrow ? x2 - 12 * direction : x2;
+  const horizontalGap = Math.max(64, Math.min(180, Math.abs(arrowLeadX - x1) * 0.5));
+  const bendX = x1 + horizontalGap * direction;
+  const verticalDelta = y2 - y1;
+
+  if (Math.abs(verticalDelta) < 1) {
+    return withArrow
+      ? `M ${x1} ${y1} L ${arrowLeadX} ${y1} L ${x2} ${y1}`
+      : `M ${x1} ${y1} L ${x2} ${y1}`;
+  }
+
+  const verticalSign = verticalDelta >= 0 ? 1 : -1;
+  const corner1 = Math.min(4, Math.abs(bendX - x1) / 2, Math.abs(verticalDelta) / 2);
+  const corner2 = Math.min(4, Math.abs(arrowLeadX - bendX) / 2, Math.abs(verticalDelta) / 2);
+  const pathParts = [
+    `M ${x1} ${y1}`,
+    `L ${bendX - direction * corner1} ${y1}`,
+    `Q ${bendX} ${y1} ${bendX} ${y1 + verticalSign * corner1}`,
+    `L ${bendX} ${y2 - verticalSign * corner2}`,
+    `Q ${bendX} ${y2} ${bendX + direction * corner2} ${y2}`,
+    `L ${arrowLeadX} ${y2}`,
+  ];
+
+  if (withArrow) {
+    pathParts.push(`L ${x2} ${y2}`);
+  }
+  return pathParts.join(" ");
 }
 
 function makeNodeId(type: NodeType): string {
@@ -1005,6 +1047,8 @@ function App() {
   const [graph, setGraph] = useState<GraphData>({ version: 1, nodes: [], edges: [] });
   const [selectedNodeId, setSelectedNodeId] = useState<string>("");
   const [connectFromNodeId, setConnectFromNodeId] = useState<string>("");
+  const [connectPreviewPoint, setConnectPreviewPoint] = useState<LogicalPoint | null>(null);
+  const [isConnectingDrag, setIsConnectingDrag] = useState(false);
   const [graphFileName, setGraphFileName] = useState("sample.json");
   const [graphFiles, setGraphFiles] = useState<string[]>([]);
   const [runFiles, setRunFiles] = useState<string[]>([]);
@@ -1549,25 +1593,55 @@ function App() {
     setConnectFromNodeId(nodeId);
   }
 
-  function onPortInClick(targetNodeId: string) {
-    if (!connectFromNodeId || connectFromNodeId === targetNodeId) {
+  function createEdgeConnection(fromNodeId: string, toNodeId: string) {
+    if (!fromNodeId || !toNodeId || fromNodeId === toNodeId) {
       return;
     }
 
     applyGraphChange((prev) => {
       const exists = prev.edges.some(
-        (edge) => edge.from.nodeId === connectFromNodeId && edge.to.nodeId === targetNodeId,
+        (edge) => edge.from.nodeId === fromNodeId && edge.to.nodeId === toNodeId,
       );
       if (exists) {
         return prev;
       }
       const edge: GraphEdge = {
-        from: { nodeId: connectFromNodeId, port: "out" },
-        to: { nodeId: targetNodeId, port: "in" },
+        from: { nodeId: fromNodeId, port: "out" },
+        to: { nodeId: toNodeId, port: "in" },
       };
       return { ...prev, edges: [...prev.edges, edge] };
     });
+  }
+
+  function onPortOutDragStart(e: ReactMouseEvent<HTMLButtonElement>, nodeId: string) {
+    e.preventDefault();
+    e.stopPropagation();
+    const point = clientToLogicalPoint(e.clientX, e.clientY);
+    setConnectFromNodeId(nodeId);
+    setIsConnectingDrag(true);
+    setConnectPreviewPoint(point);
+  }
+
+  function onPortInDrop(e: ReactMouseEvent<HTMLButtonElement>, targetNodeId: string) {
+    if (!connectFromNodeId) {
+      return;
+    }
+    e.preventDefault();
+    e.stopPropagation();
+    createEdgeConnection(connectFromNodeId, targetNodeId);
     setConnectFromNodeId("");
+    setConnectPreviewPoint(null);
+    setIsConnectingDrag(false);
+  }
+
+  function onPortInClick(targetNodeId: string) {
+    if (!connectFromNodeId || connectFromNodeId === targetNodeId) {
+      return;
+    }
+    createEdgeConnection(connectFromNodeId, targetNodeId);
+    setConnectFromNodeId("");
+    setConnectPreviewPoint(null);
+    setIsConnectingDrag(false);
   }
 
   function clampCanvasZoom(nextZoom: number): number {
@@ -1764,6 +1838,14 @@ function App() {
       return;
     }
 
+    if (isConnectingDrag && connectFromNodeId) {
+      const point = clientToLogicalPoint(e.clientX, e.clientY);
+      if (point) {
+        setConnectPreviewPoint(point);
+      }
+      return;
+    }
+
     if (!dragRef.current) {
       return;
     }
@@ -1774,6 +1856,13 @@ function App() {
 
   function onCanvasMouseUp() {
     panRef.current = null;
+
+    if (isConnectingDrag) {
+      setIsConnectingDrag(false);
+      setConnectPreviewPoint(null);
+      setConnectFromNodeId("");
+    }
+
     dragBoundsRef.current = null;
     dragPointerRef.current = null;
     if (dragAutoPanFrameRef.current != null) {
@@ -2019,6 +2108,29 @@ function App() {
       }
     };
   }, []);
+
+  useEffect(() => {
+    if (!isConnectingDrag || !connectFromNodeId) {
+      return;
+    }
+    const onWindowMove = (event: MouseEvent) => {
+      const point = clientToLogicalPoint(event.clientX, event.clientY);
+      if (point) {
+        setConnectPreviewPoint(point);
+      }
+    };
+    const onWindowUp = () => {
+      setIsConnectingDrag(false);
+      setConnectPreviewPoint(null);
+      setConnectFromNodeId("");
+    };
+    window.addEventListener("mousemove", onWindowMove);
+    window.addEventListener("mouseup", onWindowUp);
+    return () => {
+      window.removeEventListener("mousemove", onWindowMove);
+      window.removeEventListener("mouseup", onWindowUp);
+    };
+  }, [isConnectingDrag, connectFromNodeId, canvasZoom]);
 
   async function saveRunRecord(runRecord: RunRecord) {
     const fileName = `run-${runRecord.runId}.json`;
@@ -2673,11 +2785,7 @@ function App() {
       const y1 = fromNode.position.y + NODE_HEIGHT / 2;
       const x2 = toNode.position.x;
       const y2 = toNode.position.y + NODE_HEIGHT / 2;
-      const direction = x2 >= x1 ? 1 : -1;
-      const horizontalGap = Math.max(64, Math.min(180, Math.abs(x2 - x1) * 0.5));
-      const bendX = x1 + horizontalGap * direction;
-      const arrowLeadX = x2 - 12 * direction;
-      const path = `M ${x1} ${y1} L ${bendX} ${y1} L ${bendX} ${y2} L ${arrowLeadX} ${y2} L ${x2} ${y2}`;
+      const path = buildRoundedEdgePath(x1, y1, x2, y2, true);
 
       return {
         key: `${edge.from.nodeId}-${edge.to.nodeId}-${index}`,
@@ -2685,6 +2793,18 @@ function App() {
       };
     })
     .filter(Boolean) as Array<{ key: string; path: string }>;
+  const connectPreviewLine = (() => {
+    if (!connectFromNodeId || !connectPreviewPoint) {
+      return null;
+    }
+    const fromNode = graph.nodes.find((node) => node.id === connectFromNodeId);
+    if (!fromNode) {
+      return null;
+    }
+    const x1 = fromNode.position.x + NODE_WIDTH;
+    const y1 = fromNode.position.y + NODE_HEIGHT / 2;
+    return buildRoundedEdgePath(x1, y1, connectPreviewPoint.x, connectPreviewPoint.y, false);
+  })();
 
   const selectedNodeState = selectedNodeId ? nodeStates[selectedNodeId] : undefined;
   const outgoingFromSelected = selectedNode
@@ -2696,17 +2816,18 @@ function App() {
   const isActiveTab = (tab: WorkspaceTab): boolean => workspaceTab === tab;
   const viewportWidth = Math.ceil(canvasLogicalViewport.width);
   const viewportHeight = Math.ceil(canvasLogicalViewport.height);
+  const stagePadding = graph.nodes.length > 0 ? STAGE_GROW_MARGIN : 0;
   const maxNodeRight = graph.nodes.reduce((max, node) => Math.max(max, node.position.x + NODE_WIDTH), 0);
   const maxNodeBottom = graph.nodes.reduce((max, node) => Math.max(max, node.position.y + NODE_HEIGHT), 0);
   const softMaxWidth = viewportWidth + STAGE_GROW_LIMIT;
   const softMaxHeight = viewportHeight + STAGE_GROW_LIMIT;
   const stageWidth = Math.max(
-    viewportWidth + STAGE_GROW_MARGIN,
-    Math.min(softMaxWidth, maxNodeRight + STAGE_GROW_MARGIN),
+    viewportWidth,
+    Math.min(softMaxWidth, Math.max(viewportWidth, maxNodeRight + stagePadding)),
   );
   const stageHeight = Math.max(
-    viewportHeight + STAGE_GROW_MARGIN,
-    Math.min(softMaxHeight, maxNodeBottom + STAGE_GROW_MARGIN),
+    viewportHeight,
+    Math.min(softMaxHeight, Math.max(viewportHeight, maxNodeBottom + stagePadding)),
   );
   const boundedStageWidth = Math.min(stageWidth, MAX_STAGE_WIDTH);
   const boundedStageHeight = Math.min(stageHeight, MAX_STAGE_HEIGHT);
@@ -2788,16 +2909,133 @@ function App() {
             }`}
           >
             <section className="canvas-pane">
-              <div
-                className={`graph-canvas ${panMode ? "pan-mode" : ""}`}
-                onKeyDown={onCanvasKeyDown}
-                onMouseDown={onCanvasMouseDown}
-                onMouseMove={onCanvasMouseMove}
-                onMouseUp={onCanvasMouseUp}
-                onWheel={onCanvasWheel}
-                ref={graphCanvasRef}
-                tabIndex={0}
-              >
+              <div className="graph-canvas-shell">
+                <div
+                  className={`graph-canvas ${panMode ? "pan-mode" : ""}`}
+                  onKeyDown={onCanvasKeyDown}
+                  onMouseDown={onCanvasMouseDown}
+                  onMouseMove={onCanvasMouseMove}
+                  onMouseUp={onCanvasMouseUp}
+                  onWheel={onCanvasWheel}
+                  ref={graphCanvasRef}
+                  tabIndex={-1}
+                >
+                <div
+                  className="graph-stage-shell"
+                  style={{
+                    width: Math.round(boundedStageWidth * canvasZoom + GRAPH_STAGE_INSET * 2),
+                    height: Math.round(boundedStageHeight * canvasZoom + GRAPH_STAGE_INSET * 2),
+                  }}
+                >
+                  <div
+                    className="graph-stage"
+                    style={{
+                      left: GRAPH_STAGE_INSET,
+                      top: GRAPH_STAGE_INSET,
+                      transform: `scale(${canvasZoom})`,
+                      width: boundedStageWidth,
+                      height: boundedStageHeight,
+                    }}
+                  >
+                    <svg className="edge-layer">
+                      <defs>
+                        <marker
+                          id="edge-arrow"
+                          markerHeight="6"
+                          markerUnits="userSpaceOnUse"
+                          markerWidth="6"
+                          orient="auto"
+                          refX="5"
+                          refY="3"
+                        >
+                          <path d="M0 0 L6 3 L0 6 Z" fill="#70848a" />
+                        </marker>
+                      </defs>
+                      {edgeLines.map((line) => (
+                        <path
+                          d={line.path}
+                          fill="none"
+                          key={line.key}
+                          markerEnd="url(#edge-arrow)"
+                          stroke="#70848a"
+                          strokeLinejoin="round"
+                          strokeLinecap="round"
+                          strokeWidth={2}
+                        />
+                      ))}
+                      {connectPreviewLine && (
+                        <path
+                          d={connectPreviewLine}
+                          fill="none"
+                          stroke="#5b8cff"
+                          strokeDasharray="5 4"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                        />
+                      )}
+                    </svg>
+
+                    {graph.nodes.map((node) => {
+                      const runState = nodeStates[node.id];
+                      const nodeStatus = runState?.status ?? "idle";
+                      return (
+                        <div
+                          className={`graph-node node-${node.type} ${selectedNodeId === node.id ? "selected" : ""}`}
+                          key={node.id}
+                          onClick={() => setSelectedNodeId(node.id)}
+                          style={{ left: node.position.x, top: node.position.y }}
+                        >
+                          <div className="node-head" onMouseDown={(e) => onNodeDragStart(e, node.id)}>
+                            <strong>{nodeTypeLabel(node.type)}</strong>
+                            <button onClick={() => deleteNode(node.id)} type="button">
+                              삭제
+                            </button>
+                          </div>
+                          <div className="node-body">
+                            <div className="node-id">{node.id}</div>
+                            <div className={`status-pill status-${nodeStatus}`}>
+                              {nodeStatusLabel(nodeStatus)}
+                            </div>
+                            <div>{nodeCardSummary(node)}</div>
+                            <div className="node-runtime-meta">
+                              <div>완료 여부: {nodeStatus === "done" ? "완료" : nodeStatus === "failed" ? "실패" : "대기"}</div>
+                              <div>생성 시간: {formatDuration(runState?.durationMs)}</div>
+                              <div>사용량: {formatUsage(runState?.usage)}</div>
+                            </div>
+                            <div className="node-snippet">
+                              {String(
+                                extractFinalAnswer(runState?.output) ||
+                                  (runState?.logs ?? []).slice(-1)[0] ||
+                                  "아직 실행 로그가 없습니다.",
+                              ).slice(0, 180)}
+                            </div>
+                          </div>
+                          <div className="node-ports">
+                            <button
+                              className="node-port-btn"
+                              onClick={() => onPortInClick(node.id)}
+                              onMouseUp={(e) => onPortInDrop(e, node.id)}
+                              type="button"
+                            >
+                              입력
+                            </button>
+                            <button
+                              className="node-port-btn"
+                              onClick={() => onPortOutClick(node.id)}
+                              onMouseDown={(e) => onPortOutDragStart(e, node.id)}
+                              type="button"
+                            >
+                              {connectFromNodeId === node.id ? "출력*" : "출력"}
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+                </div>
+
                 <div className="canvas-overlay">
                   <div className="canvas-zoom-controls">
                     <div className="canvas-zoom-group">
@@ -2875,98 +3113,6 @@ function App() {
                     </button>
                   </div>
                 </div>
-
-                <div
-                  className="graph-stage-shell"
-                  style={{
-                    width: Math.round(boundedStageWidth * canvasZoom + GRAPH_STAGE_INSET * 2),
-                    height: Math.round(boundedStageHeight * canvasZoom + GRAPH_STAGE_INSET * 2),
-                  }}
-                >
-                  <div
-                    className="graph-stage"
-                    style={{
-                      left: GRAPH_STAGE_INSET,
-                      top: GRAPH_STAGE_INSET,
-                      transform: `scale(${canvasZoom})`,
-                      width: boundedStageWidth,
-                      height: boundedStageHeight,
-                    }}
-                  >
-                    <svg className="edge-layer">
-                      <defs>
-                        <marker
-                          id="edge-arrow"
-                          markerHeight="6"
-                          markerUnits="userSpaceOnUse"
-                          markerWidth="6"
-                          orient="auto"
-                          refX="5"
-                          refY="3"
-                        >
-                          <path d="M0 0 L6 3 L0 6 Z" fill="#70848a" />
-                        </marker>
-                      </defs>
-                      {edgeLines.map((line) => (
-                        <path
-                          d={line.path}
-                          fill="none"
-                          key={line.key}
-                          markerEnd="url(#edge-arrow)"
-                          stroke="#70848a"
-                          strokeWidth={2}
-                        />
-                      ))}
-                    </svg>
-
-                    {graph.nodes.map((node) => {
-                      const runState = nodeStates[node.id];
-                      const nodeStatus = runState?.status ?? "idle";
-                      return (
-                        <div
-                          className={`graph-node node-${node.type} ${selectedNodeId === node.id ? "selected" : ""}`}
-                          key={node.id}
-                          onClick={() => setSelectedNodeId(node.id)}
-                          style={{ left: node.position.x, top: node.position.y }}
-                        >
-                          <div className="node-head" onMouseDown={(e) => onNodeDragStart(e, node.id)}>
-                            <strong>{nodeTypeLabel(node.type)}</strong>
-                            <button onClick={() => deleteNode(node.id)} type="button">
-                              삭제
-                            </button>
-                          </div>
-                          <div className="node-body">
-                            <div className="node-id">{node.id}</div>
-                            <div className={`status-pill status-${nodeStatus}`}>
-                              {nodeStatusLabel(nodeStatus)}
-                            </div>
-                            <div>{nodeCardSummary(node)}</div>
-                            <div className="node-runtime-meta">
-                              <div>완료 여부: {nodeStatus === "done" ? "완료" : nodeStatus === "failed" ? "실패" : "대기"}</div>
-                              <div>생성 시간: {formatDuration(runState?.durationMs)}</div>
-                              <div>사용량: {formatUsage(runState?.usage)}</div>
-                            </div>
-                            <div className="node-snippet">
-                              {String(
-                                extractFinalAnswer(runState?.output) ||
-                                  (runState?.logs ?? []).slice(-1)[0] ||
-                                  "아직 실행 로그가 없습니다.",
-                              ).slice(0, 180)}
-                            </div>
-                          </div>
-                          <div className="node-ports">
-                            <button onClick={() => onPortInClick(node.id)} type="button">
-                              입력
-                            </button>
-                            <button onClick={() => onPortOutClick(node.id)} type="button">
-                              {connectFromNodeId === node.id ? "출력*" : "출력"}
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
               </div>
 
               <div className="canvas-topbar">
@@ -3015,7 +3161,15 @@ function App() {
                       <button onClick={() => addNode("gate")} type="button">
                         + 분기
                       </button>
-                      <button disabled={!connectFromNodeId} onClick={() => setConnectFromNodeId("")} type="button">
+                      <button
+                        disabled={!connectFromNodeId}
+                        onClick={() => {
+                          setConnectFromNodeId("");
+                          setConnectPreviewPoint(null);
+                          setIsConnectingDrag(false);
+                        }}
+                        type="button"
+                      >
                         연결 취소
                       </button>
                     </div>

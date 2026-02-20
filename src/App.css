@@ -353,6 +353,13 @@ h3 {
   overflow: hidden;
 }
 
+.graph-canvas-shell {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+}
+
 .canvas-only-layout .canvas-pane {
   padding: 0;
   border-radius: 8px;
@@ -475,6 +482,12 @@ h3 {
   scrollbar-width: none;
 }
 
+.graph-canvas:focus,
+.graph-canvas:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+
 .graph-canvas.pan-mode {
   cursor: grab;
 }
@@ -512,15 +525,16 @@ h3 {
   position: absolute;
   width: 238px;
   min-height: 132px;
-  border: 1px solid #d8dde3;
-  border-radius: 5px;
+  border: 0px solid #d8dde3;
+  border-radius: 10px;
   background: #ffffff;
   box-shadow: 0 2px 10px rgba(20, 30, 39, 0.08);
 }
 
 .graph-node.selected {
-  border-color: #5b8cff;
-  box-shadow: 0 0 0 2px rgba(91, 140, 255, 0.18);
+  /* border-color: #5b8cff; */
+  /* box-shadow: 0 0 0 1px rgba(91, 140, 255, 0.18); */
+  box-shadow: 0 6px 14px rgba(20, 30, 39, 0.08);
 }
 
 .node-head {
@@ -528,7 +542,7 @@ h3 {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 8px;
+  padding: 12px;
   border-bottom: 1px solid #eceff3;
   cursor: move;
 }
@@ -555,10 +569,13 @@ h3 {
 }
 
 .node-body {
-  padding: 8px;
+  padding: 12px;
   display: grid;
+  background: rgb(246, 246, 246);
   gap: 5px;
   font-size: 0.82rem;
+  margin: 12px 8px 0px 8px;
+  border-radius: 8px;
 }
 
 .node-runtime-meta {
@@ -628,6 +645,10 @@ h3 {
   font-size: 0.74rem;
 }
 
+.node-port-btn {
+  cursor: crosshair;
+}
+
 .canvas-overlay {
   position: absolute;
   inset: 0;
@@ -652,16 +673,21 @@ h3 {
 .canvas-zoom-group {
   display: grid;
   gap: 8px;
+  padding: 8px;
+  border-radius: 14px;
+  background: #ffffff;
+  box-shadow: 0 8px 18px rgba(18, 28, 36, 0.14);
 }
 
 .canvas-zoom-single {
   pointer-events: auto;
+  box-shadow: 0 8px 16px rgba(18, 28, 36, 0.13);
 }
 
 .canvas-zoom-controls button,
 .canvas-runbar button {
-  width: 30px;
-  height: 30px;
+  width: 34px;
+  height: 34px;
   border-radius: 10px;
   background: #ffffff;
   pointer-events: auto;
@@ -680,16 +706,17 @@ h3 {
 
 .canvas-runbar {
   position: absolute;
-  left: 14px;
-  top: 14px;
-  display: grid;
+  left: 50%;
+  bottom: 14px;
+  transform: translateX(-50%);
+  display: flex;
   gap: 7px;
   padding: 8px;
   border: 0;
-  border-radius: 10px;
+  border-radius: 14px;
   /* background: rgba(232, 237, 245, 0.92); */
   background: #ffffff;
-  box-shadow: 0 14px 14px rgba(24, 33, 41, 0.08);
+  box-shadow: 0 10px 20px rgba(24, 33, 41, 0.14);
   z-index: 10;
   pointer-events: auto;
 }
@@ -701,10 +728,10 @@ h3 {
 }
 
 .canvas-runbar button {
-  width: 30px;
-  min-width: 30px;
-  height: 30px;
-  min-height: 30px;
+  width: 34px;
+  min-width: 34px;
+  height: 34px;
+  min-height: 34px;
   font-size: 15px;
   font-weight: 700;
   line-height: 1;
