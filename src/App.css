@@ -90,7 +90,7 @@ button {
 }
 
 button:disabled {
-  opacity: 0.5;
+  /* opacity: 0.5; */
   cursor: not-allowed;
 }
 
@@ -172,8 +172,8 @@ h3 {
   /* box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.56), 0 12px 28px rgba(24, 34, 45, 0.1); */
   /* padding: 14px 8px; */
   display: grid;
-  /* grid-template-rows: auto 1fr; */
-  /* gap: 12px; */
+  grid-template-rows: auto 1fr;
+  gap: 12px;
 }
 
 .brand-spacer {
@@ -193,7 +193,8 @@ h3 {
   min-height: 36px;
   height: 36px;
   border-color: transparent;
-  background: rgba(255, 255, 255, 0.5);
+  /* background: rgba(255, 255, 255, 0.5); */
+  background: var(--surface);
   border-radius: 50%;
   display: inline-grid;
   place-items: center;
@@ -201,8 +202,9 @@ h3 {
 }
 
 .nav-list button.is-active {
-  background: rgba(255, 255, 255, 0.96);
-  border: 1px solid rgba(194, 205, 222, 0.95);
+  /* background: rgba(255, 255, 255, 0.96); */
+  background: var(--surface);
+  /* border: 1px solid rgba(194, 205, 222, 0.95); */
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72), 0 4px 10px rgba(16, 23, 31, 0.08);
 }
 
@@ -232,7 +234,7 @@ h3 {
   position: relative;
   border: 0;
   border-radius: 12px;
-  background: var(--surface);
+  /* background: var(--surface); */
   height: 100%;
   width: 100%;
   min-width: 0;
@@ -408,8 +410,9 @@ h3 {
   position: relative;
   min-height: 0;
   height: 100%;
-  border: 0;
-  border-radius: 5px;
+  /* border: 0; */
+  /* border: 4px solid white; */
+  border-radius: 12px;
   background-color: var(--surface);
   background-image: radial-gradient(#d4d9df 1px, transparent 1px);
   background-size: 16px 16px;
@@ -589,7 +592,7 @@ h3 {
   gap: 8px;
   padding: 8px;
   border: 0;
-  border-radius: 5px;
+  border-radius: 16px;
   background: white;
   box-shadow: 0 4px 14px rgba(21, 31, 39, 0.08);
   z-index: 11;
@@ -597,9 +600,9 @@ h3 {
 
 .canvas-zoom-controls button,
 .canvas-runbar button {
-  width: 34px;
-  height: 34px;
-  border-radius: 5px;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
   background: #F6F6F6;
   pointer-events: auto;
 }
@@ -618,24 +621,25 @@ h3 {
   gap: 8px;
   padding: 8px;
   border: 0;
-  border-radius: 5px;
-  background: rgba(232, 237, 245, 0.92);
-  box-shadow: 0 4px 14px rgba(24, 33, 41, 0.08);
+  border-radius: 16px;
+  /* background: rgba(232, 237, 245, 0.92); */
+  background: white;
+  box-shadow: 0 14px 14px rgba(24, 33, 41, 0.08);
   z-index: 10;
   pointer-events: auto;
 }
 
 .canvas-runbar .play {
-  background: #2f80ff;
+  background: #39a6ff;
   color: #ffffff;
-  border-color: #2f80ff;
+  border-color: #39a6ff;
 }
 
 .canvas-runbar button {
-  width: 34px;
-  min-width: 34px;
-  height: 34px;
-  min-height: 34px;
+  width: 40px;
+  min-width: 36px;
+  height: 40px;
+  min-height: 36px;
   padding: 0;
   display: inline-grid;
   place-items: center;
