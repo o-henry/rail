@@ -1015,7 +1015,10 @@ function App() {
   const [canvasZoom, setCanvasZoom] = useState(1);
   const [panMode, setPanMode] = useState(false);
   const [canvasFullscreen, setCanvasFullscreen] = useState(false);
-  const [isNavClosed, setIsNavClosed] = useState(false);
+  const [canvasLogicalViewport, setCanvasLogicalViewport] = useState({
+    width: DEFAULT_STAGE_WIDTH,
+    height: DEFAULT_STAGE_HEIGHT,
+  });
   const [undoStack, setUndoStack] = useState<GraphData[]>([]);
   const [redoStack, setRedoStack] = useState<GraphData[]>([]);
   const [minimapViewport, setMinimapViewport] = useState<MinimapViewport>({
@@ -1568,6 +1571,12 @@ function App() {
     const visibleTop = Math.max(0, (canvas.scrollTop - GRAPH_STAGE_INSET) / canvasZoom);
     const visibleWidth = canvas.clientWidth / canvasZoom;
     const visibleHeight = canvas.clientHeight / canvasZoom;
+    setCanvasLogicalViewport((prev) => {
+      if (Math.abs(prev.width - visibleWidth) < 0.5 && Math.abs(prev.height - visibleHeight) < 0.5) {
+        return prev;
+      }
+      return { width: visibleWidth, height: visibleHeight };
+    });
     const clampedLeft = Math.min(stageWidth, visibleLeft);
     const clampedTop = Math.min(stageHeight, visibleTop);
     const clampedWidth = Math.max(0, Math.min(visibleWidth, stageWidth - clampedLeft));
@@ -1644,6 +1653,8 @@ function App() {
     if (panMode) {
       return;
     }
+    e.preventDefault();
+    e.stopPropagation();
 
     const node = graph.nodes.find((item) => item.id === nodeId);
     if (!node) {
@@ -1684,8 +1695,8 @@ function App() {
     }
 
     const { nodeId, offsetX, offsetY } = dragRef.current;
-    const x = Math.max(-GRAPH_STAGE_INSET, canvasPoint.x - offsetX);
-    const y = Math.max(-GRAPH_STAGE_INSET, canvasPoint.y - offsetY);
+    const x = Math.max(0, canvasPoint.x - offsetX);
+    const y = Math.max(0, canvasPoint.y - offsetY);
 
     setGraph((prev) => ({
       ...prev,
@@ -1910,6 +1921,10 @@ function App() {
       window.removeEventListener("resize", onScrollOrResize);
     };
   }, [canvasZoom, canvasFullscreen, workspaceTab]);
+
+  useEffect(() => {
+    updateMinimapViewport();
+  }, [graph.nodes, canvasZoom]);
 
   async function saveRunRecord(runRecord: RunRecord) {
     const fileName = `run-${runRecord.runId}.json`;
@@ -2586,12 +2601,12 @@ function App() {
     : [];
   const isActiveTab = (tab: WorkspaceTab): boolean => workspaceTab === tab;
   const stageWidth = Math.max(
-    DEFAULT_STAGE_WIDTH,
-    graph.nodes.reduce((max, node) => Math.max(max, node.position.x + NODE_WIDTH + 180), 0),
+    Math.ceil(canvasLogicalViewport.width),
+    graph.nodes.reduce((max, node) => Math.max(max, node.position.x + NODE_WIDTH + 120), 0),
   );
   const stageHeight = Math.max(
-    DEFAULT_STAGE_HEIGHT,
-    graph.nodes.reduce((max, node) => Math.max(max, node.position.y + NODE_HEIGHT + 180), 0),
+    Math.ceil(canvasLogicalViewport.height),
+    graph.nodes.reduce((max, node) => Math.max(max, node.position.y + NODE_HEIGHT + 120), 0),
   );
   const minimapScale = MINIMAP_WIDTH / stageWidth;
   const minimapHeight = Math.round(stageHeight * minimapScale);
@@ -2604,7 +2619,6 @@ function App() {
   const keyboardFocusStyle = `
     button:focus-visible,
     input:focus-visible,
-    textarea:focus-visible,
     select:focus-visible {
       outline: 2px solid #111111;
       outline-offset: 1px;
@@ -2612,92 +2626,17 @@ function App() {
       box-shadow: none;
     }
   `;
-  const navTransition = "240ms cubic-bezier(0.22, 1, 0.36, 1)";
-  const appShellStyle = canvasFullscreen
-    ? undefined
-    : {
-        gridTemplateColumns: `${isNavClosed ? 0 : 64}px minmax(0, 1fr)`,
-        gap: 0,
-        transition: `grid-template-columns ${navTransition}`,
-      };
-  const leftNavStyle = {
-    width: isNavClosed ? 0 : 52,
-    minWidth: isNavClosed ? 0 : 52,
-    padding: isNavClosed ? 0 : undefined,
-    border: isNavClosed ? 0 : undefined,
-    opacity: isNavClosed ? 0 : 1,
-    overflow: "hidden",
-    pointerEvents: isNavClosed ? "none" : "auto",
-    transform: isNavClosed ? "translateX(-8px)" : "translateX(0)",
-    transition: [
-      `width ${navTransition}`,
-      `min-width ${navTransition}`,
-      `opacity 180ms ease`,
-      `transform ${navTransition}`,
-      `padding ${navTransition}`,
-    ].join(", "),
-  } as const;
 
   return (
-    <main className={`app-shell ${canvasFullscreen ? "canvas-fullscreen-mode" : ""}`} style={appShellStyle}>
+    <main className={`app-shell ${canvasFullscreen ? "canvas-fullscreen-mode" : ""}`}>
       <style>{keyboardFocusStyle}</style>
-      {isNavClosed && (
-        <button
-          onClick={() => setIsNavClosed(false)}
-          style={{
-            position: "fixed",
-            top: 15,
-            left: 15,
-            zIndex: 60,
-            width: 34,
-            height: 34,
-            padding: 0,
-            borderRadius: "50%",
-            background: "rgba(255,255,255,0.94)",
-            // border: "1px solid rgba(205,212,224,0.95)",
-            boxShadow: "0 4px 10px rgba(16, 23, 31, 0.14)",
-            display: "inline-grid",
-            placeItems: "center",
-            lineHeight: 0,
-          }}
-          title="왼쪽 메뉴 열기"
-          type="button"
-        >
-          <img alt="" aria-hidden="true" src="/open.svg" style={{ width: 16, height: 16, display: "block" }} />
-        </button>
-      )}
-      <aside className="left-nav" style={leftNavStyle}>
-        <button
-          onClick={() => setIsNavClosed(true)}
-          style={{
-            width: 34,
-            height: 34,
-            padding: 0,
-            borderRadius: "50%",
-            justifySelf: "center",
-            background: "#F6F6F6",
-            // border: "1px solid rgba(205,212,224,0.95)",
-            // boxShadow: "0 2px 8px rgba(16, 23, 31, 0.12)",
-            display: isNavClosed ? "none" : "inline-grid",
-            placeItems: "center",
-            lineHeight: 0,
-          }}
-          title="왼쪽 메뉴 닫기"
-          type="button"
-        >
-          <img
-            alt=""
-            aria-hidden="true"
-            src="/close.svg"
-            style={{ width: 16, height: 16, display: "block" }}
-          />
-        </button>
+      <aside className="left-nav">
         <nav
           className="nav-list"
           style={{
             alignContent: "center",
             height: "100%",
-            display: isNavClosed ? "none" : "grid",
+            display: "grid",
           }}
         >
           <button
@@ -2768,11 +2707,11 @@ function App() {
               >
                 <div className="canvas-overlay">
                   <div className="canvas-zoom-controls">
-                    <button onClick={onCanvasZoomIn} type="button">
-                      +
+                    <button onClick={onCanvasZoomIn} title="확대" type="button">
+                      <img alt="" aria-hidden="true" className="canvas-control-icon" src="/plus.svg" />
                     </button>
-                    <button onClick={onCanvasZoomOut} type="button">
-                      −
+                    <button onClick={onCanvasZoomOut} title="축소" type="button">
+                      <img alt="" aria-hidden="true" className="canvas-control-icon" src="/minus.svg" />
                     </button>
                     <button
                       onClick={() => setCanvasFullscreen((prev) => !prev)}
@@ -2793,7 +2732,7 @@ function App() {
                       title="캔버스 이동"
                       type="button"
                     >
-                      ↕
+                      <img alt="" aria-hidden="true" className="canvas-control-icon" src="/scroll.svg" />
                     </button>
                   </div>
 
