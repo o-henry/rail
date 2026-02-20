@@ -203,7 +203,8 @@ const STAGE_GROW_MARGIN = 120;
 const STAGE_GROW_LIMIT = 720;
 const MAX_STAGE_WIDTH = 4200;
 const MAX_STAGE_HEIGHT = 3200;
-const GRAPH_STAGE_INSET = 90;
+const GRAPH_STAGE_INSET_X = 90;
+const GRAPH_STAGE_INSET_Y = 150;
 const MIN_CANVAS_ZOOM = 0.6;
 const MAX_CANVAS_ZOOM = 1.8;
 const QUESTION_INPUT_MAX_HEIGHT = 132;
@@ -1795,8 +1796,8 @@ function App() {
       return null;
     }
     return {
-      x: (canvas.scrollLeft + canvas.clientWidth / 2 - GRAPH_STAGE_INSET) / canvasZoom,
-      y: (canvas.scrollTop + canvas.clientHeight / 2 - GRAPH_STAGE_INSET) / canvasZoom,
+      x: (canvas.scrollLeft + canvas.clientWidth / 2 - GRAPH_STAGE_INSET_X) / canvasZoom,
+      y: (canvas.scrollTop + canvas.clientHeight / 2 - GRAPH_STAGE_INSET_Y) / canvasZoom,
     };
   }
 
@@ -2032,10 +2033,11 @@ function App() {
       return null;
     }
     const rect = canvas.getBoundingClientRect();
-    const stageOffset = GRAPH_STAGE_INSET;
+    const stageOffsetX = GRAPH_STAGE_INSET_X;
+    const stageOffsetY = GRAPH_STAGE_INSET_Y;
     return {
-      x: (clientX - rect.left + canvas.scrollLeft - stageOffset) / zoomValue,
-      y: (clientY - rect.top + canvas.scrollTop - stageOffset) / zoomValue,
+      x: (clientX - rect.left + canvas.scrollLeft - stageOffsetX) / zoomValue,
+      y: (clientY - rect.top + canvas.scrollTop - stageOffsetY) / zoomValue,
     };
   }
 
@@ -2047,11 +2049,12 @@ function App() {
     }
 
     const rect = canvas.getBoundingClientRect();
-    const stageOffset = GRAPH_STAGE_INSET;
+    const stageOffsetX = GRAPH_STAGE_INSET_X;
+    const stageOffsetY = GRAPH_STAGE_INSET_Y;
     const pointerX = clientX - rect.left + canvas.scrollLeft;
     const pointerY = clientY - rect.top + canvas.scrollTop;
-    const logicalX = (pointerX - stageOffset) / canvasZoom;
-    const logicalY = (pointerY - stageOffset) / canvasZoom;
+    const logicalX = (pointerX - stageOffsetX) / canvasZoom;
+    const logicalY = (pointerY - stageOffsetY) / canvasZoom;
 
     setCanvasZoom(nextZoom);
     requestAnimationFrame(() => {
@@ -2059,8 +2062,8 @@ function App() {
       if (!currentCanvas) {
         return;
       }
-      currentCanvas.scrollLeft = logicalX * nextZoom + stageOffset - (clientX - rect.left);
-      currentCanvas.scrollTop = logicalY * nextZoom + stageOffset - (clientY - rect.top);
+      currentCanvas.scrollLeft = logicalX * nextZoom + stageOffsetX - (clientX - rect.left);
+      currentCanvas.scrollTop = logicalY * nextZoom + stageOffsetY - (clientY - rect.top);
     });
   }
 
@@ -3614,15 +3617,15 @@ function App() {
                 <div
                   className="graph-stage-shell"
                   style={{
-                    width: Math.round(boundedStageWidth * canvasZoom + GRAPH_STAGE_INSET * 2),
-                    height: Math.round(boundedStageHeight * canvasZoom + GRAPH_STAGE_INSET * 2),
+                    width: Math.round(boundedStageWidth * canvasZoom + GRAPH_STAGE_INSET_X * 2),
+                    height: Math.round(boundedStageHeight * canvasZoom + GRAPH_STAGE_INSET_Y * 2),
                   }}
                 >
                   <div
                     className="graph-stage"
                     style={{
-                      left: GRAPH_STAGE_INSET,
-                      top: GRAPH_STAGE_INSET,
+                      left: GRAPH_STAGE_INSET_X,
+                      top: GRAPH_STAGE_INSET_Y,
                       transform: `scale(${canvasZoom})`,
                       width: boundedStageWidth,
                       height: boundedStageHeight,
