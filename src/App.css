@@ -360,14 +360,49 @@ h3 {
   gap: 8px;
 }
 
-.canvas-topbar-actions {
-  display: flex;
-  justify-content: flex-end;
+.question-input {
+  border-radius: 5px;
+  background: #fbfcfe;
+  overflow: hidden;
 }
 
 .question-input textarea {
-  min-height: 72px;
-  background: #fbfcfe;
+  width: 100%;
+  min-height: 48px;
+  max-height: 132px;
+  border-radius: 0;
+  border: 0;
+  background: transparent;
+  resize: none;
+  overflow-y: auto;
+  line-height: 1.45;
+}
+
+.question-input-footer {
+  min-height: 38px;
+  padding: 6px 8px;
+  border-top: 1px solid #e5eaf0;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+}
+
+.question-create-button {
+  width: 30px;
+  min-width: 30px;
+  height: 30px;
+  min-height: 30px;
+  border-radius: 5px;
+  padding: 0;
+  display: inline-grid;
+  place-items: center;
+}
+
+.question-create-icon {
+  width: 16px;
+  height: 16px;
+  display: block;
+  object-fit: contain;
 }
 
 .button-row,
@@ -605,6 +640,11 @@ h3 {
   border-radius: 12px;
   background: #F6F6F6;
   pointer-events: auto;
+  display: inline-grid;
+  place-items: center;
+  padding: 0;
+  line-height: 1;
+  text-align: center;
 }
 
 .canvas-zoom-controls button.is-active {
@@ -614,11 +654,10 @@ h3 {
 
 .canvas-runbar {
   position: absolute;
-  left: 50%;
-  bottom: 14px;
-  transform: translateX(-50%);
-  display: flex;
-  gap: 8px;
+  left: 14px;
+  top: 14px;
+  display: grid;
+  gap: 7px;
   padding: 8px;
   border: 0;
   border-radius: 16px;
@@ -637,12 +676,9 @@ h3 {
 
 .canvas-runbar button {
   width: 40px;
-  min-width: 36px;
+  min-width: 40px;
   height: 40px;
-  min-height: 36px;
-  padding: 0;
-  display: inline-grid;
-  place-items: center;
+  min-height: 40px;
   font-size: 15px;
   font-weight: 700;
   line-height: 1;
@@ -653,8 +689,8 @@ h3 {
 }
 
 .canvas-control-icon {
-  width: 14px;
-  height: 14px;
+  width: 16px;
+  height: 16px;
   display: block;
   object-fit: contain;
 }

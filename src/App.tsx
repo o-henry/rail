@@ -177,7 +177,6 @@ const NODE_WIDTH = 240;
 const NODE_HEIGHT = 136;
 const GRAPH_STAGE_WIDTH = 2600;
 const GRAPH_STAGE_HEIGHT = 1800;
-const GRAPH_PAN_PADDING = 900;
 const GRAPH_STAGE_INSET = 24;
 const MIN_CANVAS_ZOOM = 0.6;
 const MAX_CANVAS_ZOOM = 1.8;
@@ -1569,11 +1568,15 @@ function App() {
     const visibleTop = Math.max(0, (canvas.scrollTop - GRAPH_STAGE_INSET) / canvasZoom);
     const visibleWidth = canvas.clientWidth / canvasZoom;
     const visibleHeight = canvas.clientHeight / canvasZoom;
+    const clampedLeft = Math.min(GRAPH_STAGE_WIDTH, visibleLeft);
+    const clampedTop = Math.min(GRAPH_STAGE_HEIGHT, visibleTop);
+    const clampedWidth = Math.max(0, Math.min(visibleWidth, GRAPH_STAGE_WIDTH - clampedLeft));
+    const clampedHeight = Math.max(0, Math.min(visibleHeight, GRAPH_STAGE_HEIGHT - clampedTop));
     setMinimapViewport({
-      left: visibleLeft,
-      top: visibleTop,
-      width: Math.max(0, visibleWidth),
-      height: Math.max(0, visibleHeight),
+      left: clampedLeft,
+      top: clampedTop,
+      width: clampedWidth,
+      height: clampedHeight,
     });
   }
 
@@ -2585,10 +2588,10 @@ function App() {
   const minimapScale = MINIMAP_WIDTH / GRAPH_STAGE_WIDTH;
   const minimapHeight = Math.round(GRAPH_STAGE_HEIGHT * minimapScale);
   const minimapViewportStyle = {
-    left: `${Math.max(0, Math.min(GRAPH_STAGE_WIDTH, minimapViewport.left)) * minimapScale}px`,
-    top: `${Math.max(0, Math.min(GRAPH_STAGE_HEIGHT, minimapViewport.top)) * minimapScale}px`,
-    width: `${Math.min(GRAPH_STAGE_WIDTH, minimapViewport.width) * minimapScale}px`,
-    height: `${Math.min(GRAPH_STAGE_HEIGHT, minimapViewport.height) * minimapScale}px`,
+    left: `${minimapViewport.left * minimapScale}px`,
+    top: `${minimapViewport.top * minimapScale}px`,
+    width: `${minimapViewport.width * minimapScale}px`,
+    height: `${minimapViewport.height * minimapScale}px`,
   };
   const keyboardFocusStyle = `
     button:focus-visible,
@@ -2896,8 +2899,8 @@ function App() {
                 <div
                   className="graph-stage-shell"
                   style={{
-                    width: Math.round(GRAPH_STAGE_WIDTH * canvasZoom + GRAPH_PAN_PADDING),
-                    height: Math.round(GRAPH_STAGE_HEIGHT * canvasZoom + GRAPH_PAN_PADDING),
+                    width: Math.round(GRAPH_STAGE_WIDTH * canvasZoom + GRAPH_STAGE_INSET * 2),
+                    height: Math.round(GRAPH_STAGE_HEIGHT * canvasZoom + GRAPH_STAGE_INSET * 2),
                   }}
                 >
                   <div
@@ -2987,12 +2990,7 @@ function App() {
               </div>
 
               <div className="canvas-topbar">
-                <div
-                  className="question-input"
-                  style={{
-                    position: "relative",
-                  }}
-                >
+                <div className="question-input">
                   <textarea
                     onChange={(e) => {
                       setWorkflowQuestion(e.currentTarget.value);
@@ -3000,33 +2998,13 @@ function App() {
                     placeholder="질문 입력"
                     ref={questionInputRef}
                     rows={1}
-                    style={{
-                      width: "100%",
-                      minHeight: 44,
-                      maxHeight: QUESTION_INPUT_MAX_HEIGHT,
-                      paddingRight: 92,
-                      paddingBottom: 10,
-                      background: "#fbfcfe",
-                      resize: "none",
-                      overflowY: "auto",
-                      lineHeight: 1.45,
-                    }}
                     value={workflowQuestion}
                   />
-                  <button
-                    className="primary-action"
-                    style={{
-                      position: "absolute",
-                      right: 8,
-                      bottom: 8,
-                      minWidth: 72,
-                      height: 30,
-                      padding: "0 12px",
-                    }}
-                    type="button"
-                  >
-                    생성
-                  </button>
+                  <div className="question-input-footer">
+                    <button className="primary-action question-create-button" type="button">
+                      <img alt="" aria-hidden="true" className="question-create-icon" src="/create_2.svg" />
+                    </button>
+                  </div>
                 </div>
               </div>
             </section>
