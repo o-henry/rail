@@ -143,6 +143,11 @@ type PanState = {
   scrollTop: number;
 };
 
+type PointerState = {
+  clientX: number;
+  clientY: number;
+};
+
 type TurnConfig = {
   model?: string;
   cwd?: string;
@@ -170,6 +175,8 @@ const NODE_WIDTH = 240;
 const NODE_HEIGHT = 136;
 const DEFAULT_STAGE_WIDTH = 1400;
 const DEFAULT_STAGE_HEIGHT = 900;
+const MAX_STAGE_WIDTH = 4200;
+const MAX_STAGE_HEIGHT = 3200;
 const GRAPH_STAGE_INSET = 8;
 const MIN_CANVAS_ZOOM = 0.6;
 const MAX_CANVAS_ZOOM = 1.8;
@@ -1019,6 +1026,8 @@ function App() {
   const questionInputRef = useRef<HTMLTextAreaElement | null>(null);
   const panRef = useRef<PanState | null>(null);
   const dragBoundsRef = useRef<{ maxX: number; maxY: number } | null>(null);
+  const dragPointerRef = useRef<PointerState | null>(null);
+  const dragAutoPanFrameRef = useRef<number | null>(null);
   const dragStartSnapshotRef = useRef<GraphData | null>(null);
   const cancelRequestedRef = useRef(false);
   const activeTurnNodeIdRef = useRef<string>("");
@@ -1573,7 +1582,7 @@ function App() {
     input.style.overflowY = input.scrollHeight > QUESTION_INPUT_MAX_HEIGHT ? "auto" : "hidden";
   }
 
-  function updateMinimapViewport() {
+  function syncCanvasLogicalViewport() {
     const canvas = graphCanvasRef.current;
     if (!canvas) {
       return;
@@ -1588,7 +1597,7 @@ function App() {
     });
   }
 
-  function clientToCanvasPoint(clientX: number, clientY: number): { x: number; y: number } | null {
+  function clientToLogicalPoint(clientX: number, clientY: number, zoomValue = canvasZoom): { x: number; y: number } | null {
     const canvas = graphCanvasRef.current;
     if (!canvas) {
       return null;
@@ -1596,8 +1605,8 @@ function App() {
     const rect = canvas.getBoundingClientRect();
     const stageOffset = GRAPH_STAGE_INSET;
     return {
-      x: (clientX - rect.left + canvas.scrollLeft - stageOffset) / canvasZoom,
-      y: (clientY - rect.top + canvas.scrollTop - stageOffset) / canvasZoom,
+      x: (clientX - rect.left + canvas.scrollLeft - stageOffset) / zoomValue,
+      y: (clientY - rect.top + canvas.scrollTop - stageOffset) / zoomValue,
     };
   }
 
@@ -1626,6 +1635,74 @@ function App() {
     });
   }
 
+  function applyDragPosition(clientX: number, clientY: number) {
+    if (!dragRef.current) {
+      return;
+    }
+    const logicalPoint = clientToLogicalPoint(clientX, clientY);
+    if (!logicalPoint) {
+      return;
+    }
+
+    const { nodeId, offsetX, offsetY } = dragRef.current;
+    const bounds = dragBoundsRef.current;
+    const maxX = bounds?.maxX ?? Math.max(0, boundedStageWidth - NODE_WIDTH);
+    const maxY = bounds?.maxY ?? Math.max(0, boundedStageHeight - NODE_HEIGHT);
+    const x = Math.min(maxX, Math.max(-GRAPH_STAGE_INSET, logicalPoint.x - offsetX));
+    const y = Math.min(maxY, Math.max(-GRAPH_STAGE_INSET, logicalPoint.y - offsetY));
+
+    setGraph((prev) => ({
+      ...prev,
+      nodes: prev.nodes.map((node) => (node.id === nodeId ? { ...node, position: { x, y } } : node)),
+    }));
+  }
+
+  function ensureDragAutoPanLoop() {
+    if (dragAutoPanFrameRef.current != null) {
+      return;
+    }
+
+    const tick = () => {
+      if (!dragRef.current) {
+        dragAutoPanFrameRef.current = null;
+        return;
+      }
+
+      const pointer = dragPointerRef.current;
+      const canvas = graphCanvasRef.current;
+      if (pointer && canvas) {
+        const rect = canvas.getBoundingClientRect();
+        const edge = 30;
+        const maxSpeed = 14;
+        let dx = 0;
+        let dy = 0;
+
+        if (pointer.clientX < rect.left + edge) {
+          dx = -Math.ceil(((rect.left + edge - pointer.clientX) / edge) * maxSpeed);
+        } else if (pointer.clientX > rect.right - edge) {
+          dx = Math.ceil(((pointer.clientX - (rect.right - edge)) / edge) * maxSpeed);
+        }
+        if (pointer.clientY < rect.top + edge) {
+          dy = -Math.ceil(((rect.top + edge - pointer.clientY) / edge) * maxSpeed);
+        } else if (pointer.clientY > rect.bottom - edge) {
+          dy = Math.ceil(((pointer.clientY - (rect.bottom - edge)) / edge) * maxSpeed);
+        }
+
+        if (dx !== 0 || dy !== 0) {
+          const maxLeft = Math.max(0, canvas.scrollWidth - canvas.clientWidth);
+          const maxTop = Math.max(0, canvas.scrollHeight - canvas.clientHeight);
+          canvas.scrollLeft = Math.max(0, Math.min(maxLeft, canvas.scrollLeft + dx));
+          canvas.scrollTop = Math.max(0, Math.min(maxTop, canvas.scrollTop + dy));
+          applyDragPosition(pointer.clientX, pointer.clientY);
+        }
+      }
+
+      dragAutoPanFrameRef.current = requestAnimationFrame(tick);
+    };
+
+    dragAutoPanFrameRef.current = requestAnimationFrame(tick);
+  }
+
   function onNodeDragStart(e: ReactMouseEvent<HTMLDivElement>, nodeId: string) {
     if (panMode) {
       return;
@@ -1638,16 +1715,18 @@ function App() {
       return;
     }
 
-    const canvasPoint = clientToCanvasPoint(e.clientX, e.clientY);
+    const canvasPoint = clientToLogicalPoint(e.clientX, e.clientY);
     if (!canvasPoint) {
       return;
     }
 
     dragStartSnapshotRef.current = cloneGraph(graph);
     dragBoundsRef.current = {
-      maxX: Math.max(0, stageWidth - NODE_WIDTH),
-      maxY: Math.max(0, stageHeight - NODE_HEIGHT),
+      maxX: Math.max(0, boundedStageWidth - NODE_WIDTH),
+      maxY: Math.max(0, boundedStageHeight - NODE_HEIGHT),
     };
+    dragPointerRef.current = { clientX: e.clientX, clientY: e.clientY };
+    ensureDragAutoPanLoop();
 
     dragRef.current = {
       nodeId,
@@ -1670,46 +1749,18 @@ function App() {
       return;
     }
 
-    const canvas = graphCanvasRef.current;
-    if (canvas) {
-      const rect = canvas.getBoundingClientRect();
-      const edge = 32;
-      const speed = 16;
-      if (e.clientY < rect.top + edge) {
-        canvas.scrollTop = Math.max(0, canvas.scrollTop - speed);
-      } else if (e.clientY > rect.bottom - edge) {
-        canvas.scrollTop = Math.min(canvas.scrollHeight - canvas.clientHeight, canvas.scrollTop + speed);
-      }
-      if (e.clientX < rect.left + edge) {
-        canvas.scrollLeft = Math.max(0, canvas.scrollLeft - speed);
-      } else if (e.clientX > rect.right - edge) {
-        canvas.scrollLeft = Math.min(canvas.scrollWidth - canvas.clientWidth, canvas.scrollLeft + speed);
-      }
-    }
-
-    const canvasPoint = clientToCanvasPoint(e.clientX, e.clientY);
-    if (!canvasPoint) {
-      return;
-    }
-
-    const { nodeId, offsetX, offsetY } = dragRef.current;
-    const bounds = dragBoundsRef.current;
-    const maxX = bounds?.maxX ?? Math.max(0, stageWidth - NODE_WIDTH);
-    const maxY = bounds?.maxY ?? Math.max(0, stageHeight - NODE_HEIGHT);
-    const x = Math.min(maxX, Math.max(-GRAPH_STAGE_INSET, canvasPoint.x - offsetX));
-    const y = Math.min(maxY, Math.max(-GRAPH_STAGE_INSET, canvasPoint.y - offsetY));
-
-    setGraph((prev) => ({
-      ...prev,
-      nodes: prev.nodes.map((node) =>
-        node.id === nodeId ? { ...node, position: { x, y } } : node,
-      ),
-    }));
+    dragPointerRef.current = { clientX: e.clientX, clientY: e.clientY };
+    applyDragPosition(e.clientX, e.clientY);
   }
 
   function onCanvasMouseUp() {
     panRef.current = null;
     dragBoundsRef.current = null;
+    dragPointerRef.current = null;
+    if (dragAutoPanFrameRef.current != null) {
+      cancelAnimationFrame(dragAutoPanFrameRef.current);
+      dragAutoPanFrameRef.current = null;
+    }
     const dragSnapshot = dragStartSnapshotRef.current;
     if (dragSnapshot && !graphEquals(dragSnapshot, graph)) {
       setUndoStack((stack) => [...stack.slice(-79), cloneGraph(dragSnapshot)]);
@@ -1910,12 +1961,12 @@ function App() {
   }, [workflowQuestion]);
 
   useEffect(() => {
-    updateMinimapViewport();
+    syncCanvasLogicalViewport();
     const canvas = graphCanvasRef.current;
     if (!canvas) {
       return;
     }
-    const onScrollOrResize = () => updateMinimapViewport();
+    const onScrollOrResize = () => syncCanvasLogicalViewport();
     canvas.addEventListener("scroll", onScrollOrResize, { passive: true });
     window.addEventListener("resize", onScrollOrResize);
     return () => {
@@ -1925,7 +1976,7 @@ function App() {
   }, [canvasZoom, canvasFullscreen, workspaceTab]);
 
   useEffect(() => {
-    updateMinimapViewport();
+    syncCanvasLogicalViewport();
   }, [graph.nodes, canvasZoom]);
 
   async function saveRunRecord(runRecord: RunRecord) {
@@ -2610,6 +2661,8 @@ function App() {
     Math.ceil(canvasLogicalViewport.height),
     graph.nodes.reduce((max, node) => Math.max(max, node.position.y + NODE_HEIGHT + 120), 0),
   );
+  const boundedStageWidth = Math.min(stageWidth, MAX_STAGE_WIDTH);
+  const boundedStageHeight = Math.min(stageHeight, MAX_STAGE_HEIGHT);
   const keyboardFocusStyle = `
     button:focus-visible,
     input:focus-visible,
@@ -2777,8 +2830,8 @@ function App() {
                 <div
                   className="graph-stage-shell"
                   style={{
-                    width: Math.round(stageWidth * canvasZoom + GRAPH_STAGE_INSET * 2),
-                    height: Math.round(stageHeight * canvasZoom + GRAPH_STAGE_INSET * 2),
+                    width: Math.round(boundedStageWidth * canvasZoom + GRAPH_STAGE_INSET * 2),
+                    height: Math.round(boundedStageHeight * canvasZoom + GRAPH_STAGE_INSET * 2),
                   }}
                 >
                   <div
@@ -2787,8 +2840,8 @@ function App() {
                       left: GRAPH_STAGE_INSET,
                       top: GRAPH_STAGE_INSET,
                       transform: `scale(${canvasZoom})`,
-                      width: stageWidth,
-                      height: stageHeight,
+                      width: boundedStageWidth,
+                      height: boundedStageHeight,
                     }}
                   >
                     <svg className="edge-layer">
