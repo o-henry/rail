@@ -123,6 +123,15 @@ type RunRecord = {
   summaryLogs: string[];
   nodeLogs?: Record<string, string[]>;
   threadTurnMap: Record<string, { threadId?: string; turnId?: string }>;
+  providerTrace?: Array<{
+    nodeId: string;
+    executor: TurnExecutor;
+    provider: string;
+    status: "done" | "failed" | "cancelled";
+    startedAt: string;
+    finishedAt: string;
+    summary?: string;
+  }>;
 };
 
 type TurnTerminal = {
@@ -3286,6 +3295,8 @@ function App() {
     threadId?: string;
     turnId?: string;
     usage?: UsageStats;
+    executor: TurnExecutor;
+    provider: string;
   }> {
     const config = node.config as TurnConfig;
     const executor = getTurnExecutor(config);
@@ -3316,11 +3327,15 @@ function App() {
             text,
             raw,
           },
+          executor,
+          provider: "ollama",
         };
       } catch (error) {
         return {
           ok: false,
           error: `Ollama 실행 실패: ${String(error)}`,
+          executor,
+          provider: "ollama",
         };
       }
     }
@@ -3344,7 +3359,11 @@ function App() {
         webProvider,
         textToSend,
         config.webResultMode ?? "manualPasteText",
-      );
+      ).then((result) => ({
+        ...result,
+        executor,
+        provider: webProvider,
+      }));
     }
 
     let activeThreadId = extractStringByPaths(nodeStates[node.id], ["threadId"]);
@@ -3395,6 +3414,8 @@ function App() {
         ok: false,
         error: String(e),
         threadId: activeThreadId,
+        executor: "codex",
+        provider: "codex",
       };
     }
 
@@ -3417,6 +3438,8 @@ function App() {
         threadId: activeThreadId,
         turnId: turnId ?? undefined,
         usage,
+        executor: "codex",
+        provider: "codex",
       };
     }
 
@@ -3429,6 +3452,8 @@ function App() {
       threadId: activeThreadId,
       turnId: turnId ?? undefined,
       usage,
+      executor: "codex",
+      provider: "codex",
     };
   }
 
@@ -3465,6 +3490,7 @@ function App() {
       summaryLogs: [],
       nodeLogs: {},
       threadTurnMap: {},
+      providerTrace: [],
     };
 
     try {
@@ -3556,6 +3582,15 @@ function App() {
                 finishedAt: finishedAtIso,
                 durationMs: Date.now() - startedAtMs,
               });
+              runRecord.providerTrace?.push({
+                nodeId,
+                executor: result.executor,
+                provider: result.provider,
+                status: cancelRequestedRef.current ? "cancelled" : "failed",
+                startedAt: startedAtIso,
+                finishedAt: finishedAtIso,
+                summary: result.error ?? "턴 실행 실패",
+              });
               transition(runRecord, nodeId, "failed", result.error ?? "턴 실행 실패");
               break;
             }
@@ -3576,6 +3611,15 @@ function App() {
               threadId: result.threadId,
               turnId: result.turnId,
             };
+            runRecord.providerTrace?.push({
+              nodeId,
+              executor: result.executor,
+              provider: result.provider,
+              status: "done",
+              startedAt: startedAtIso,
+              finishedAt: finishedAtIso,
+              summary: "턴 실행 완료",
+            });
             transition(runRecord, nodeId, "done", "턴 실행 완료");
             lastDoneNodeId = nodeId;
           } else if (node.type === "transform") {
@@ -4617,6 +4661,8 @@ function App() {
                   <pre>{selectedRunDetail.summaryLogs.join("\n") || "(없음)"}</pre>
                   <h3>상태 전이</h3>
                   <pre>{formatUnknown(selectedRunDetail.transitions)}</pre>
+                  <h3>Provider Trace</h3>
+                  <pre>{formatUnknown(selectedRunDetail.providerTrace ?? [])}</pre>
                   <h3>노드 로그</h3>
                   <pre>{formatUnknown(selectedRunDetail.nodeLogs ?? {})}</pre>
                 </>
