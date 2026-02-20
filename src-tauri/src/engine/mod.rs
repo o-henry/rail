@@ -733,3 +733,45 @@ pub async fn provider_window_close(app: AppHandle, provider: String) -> Result<(
         .map_err(|e| format!("failed to close provider window: {e}"))?;
     Ok(())
 }
+
+#[tauri::command]
+pub async fn ollama_generate(model: String, prompt: String) -> Result<Value, String> {
+    let trimmed_model = model.trim();
+    let trimmed_prompt = prompt.trim();
+    if trimmed_model.is_empty() {
+        return Err("ollama model is required".to_string());
+    }
+    if trimmed_prompt.is_empty() {
+        return Err("ollama prompt is required".to_string());
+    }
+
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(120))
+        .build()
+        .map_err(|e| format!("failed to build ollama client: {e}"))?;
+
+    let response = client
+        .post("http://127.0.0.1:11434/api/generate")
+        .json(&json!({
+            "model": trimmed_model,
+            "prompt": trimmed_prompt,
+            "stream": false
+        }))
+        .send()
+        .await
+        .map_err(|e| format!("failed to call ollama api: {e}"))?;
+
+    let status = response.status();
+    if !status.is_success() {
+        let body = response
+            .text()
+            .await
+            .unwrap_or_else(|_| "<unreadable body>".to_string());
+        return Err(format!("ollama api returned {status}: {body}"));
+    }
+
+    response
+        .json::<Value>()
+        .await
+        .map_err(|e| format!("invalid ollama response json: {e}"))
+}

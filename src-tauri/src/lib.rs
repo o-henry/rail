@@ -17,6 +17,7 @@ pub fn run() {
             engine::approval_respond,
             engine::provider_window_open,
             engine::provider_window_close,
+            engine::ollama_generate,
             storage::graph_list,
             storage::graph_save,
             storage::graph_load,
