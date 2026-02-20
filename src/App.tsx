@@ -143,6 +143,13 @@ type PanState = {
   scrollTop: number;
 };
 
+type MinimapViewport = {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+};
+
 type TurnConfig = {
   model?: string;
   cwd?: string;
@@ -171,8 +178,11 @@ const NODE_HEIGHT = 136;
 const GRAPH_STAGE_WIDTH = 2600;
 const GRAPH_STAGE_HEIGHT = 1800;
 const GRAPH_PAN_PADDING = 900;
+const GRAPH_STAGE_INSET = 24;
 const MIN_CANVAS_ZOOM = 0.6;
 const MAX_CANVAS_ZOOM = 1.8;
+const QUESTION_INPUT_MAX_HEIGHT = 132;
+const MINIMAP_WIDTH = 188;
 const TURN_MODEL_OPTIONS = [
   "gpt-5.3-codex",
   "gpt-5.3-codex-spark",
@@ -1009,9 +1019,16 @@ function App() {
   const [isNavClosed, setIsNavClosed] = useState(false);
   const [undoStack, setUndoStack] = useState<GraphData[]>([]);
   const [redoStack, setRedoStack] = useState<GraphData[]>([]);
+  const [minimapViewport, setMinimapViewport] = useState<MinimapViewport>({
+    left: 0,
+    top: 0,
+    width: 0,
+    height: 0,
+  });
 
   const dragRef = useRef<DragState | null>(null);
   const graphCanvasRef = useRef<HTMLDivElement | null>(null);
+  const questionInputRef = useRef<HTMLTextAreaElement | null>(null);
   const panRef = useRef<PanState | null>(null);
   const dragStartSnapshotRef = useRef<GraphData | null>(null);
   const cancelRequestedRef = useRef(false);
@@ -1532,13 +1549,63 @@ function App() {
     return Math.max(MIN_CANVAS_ZOOM, Math.min(MAX_CANVAS_ZOOM, nextZoom));
   }
 
+  function syncQuestionInputHeight() {
+    const input = questionInputRef.current;
+    if (!input) {
+      return;
+    }
+    input.style.height = "auto";
+    const nextHeight = Math.min(QUESTION_INPUT_MAX_HEIGHT, input.scrollHeight);
+    input.style.height = `${nextHeight}px`;
+    input.style.overflowY = input.scrollHeight > QUESTION_INPUT_MAX_HEIGHT ? "auto" : "hidden";
+  }
+
+  function updateMinimapViewport() {
+    const canvas = graphCanvasRef.current;
+    if (!canvas) {
+      return;
+    }
+    const visibleLeft = Math.max(0, (canvas.scrollLeft - GRAPH_STAGE_INSET) / canvasZoom);
+    const visibleTop = Math.max(0, (canvas.scrollTop - GRAPH_STAGE_INSET) / canvasZoom);
+    const visibleWidth = canvas.clientWidth / canvasZoom;
+    const visibleHeight = canvas.clientHeight / canvasZoom;
+    setMinimapViewport({
+      left: visibleLeft,
+      top: visibleTop,
+      width: Math.max(0, visibleWidth),
+      height: Math.max(0, visibleHeight),
+    });
+  }
+
+  function centerCanvasOnNode(nodeId: string) {
+    const target = graph.nodes.find((node) => node.id === nodeId);
+    const canvas = graphCanvasRef.current;
+    if (!target || !canvas) {
+      return;
+    }
+
+    const targetX = GRAPH_STAGE_INSET + (target.position.x + NODE_WIDTH / 2) * canvasZoom;
+    const targetY = GRAPH_STAGE_INSET + (target.position.y + NODE_HEIGHT / 2) * canvasZoom;
+    const nextLeft = targetX - canvas.clientWidth / 2;
+    const nextTop = targetY - canvas.clientHeight / 2;
+    const maxLeft = Math.max(0, canvas.scrollWidth - canvas.clientWidth);
+    const maxTop = Math.max(0, canvas.scrollHeight - canvas.clientHeight);
+
+    canvas.scrollTo({
+      left: Math.max(0, Math.min(maxLeft, nextLeft)),
+      top: Math.max(0, Math.min(maxTop, nextTop)),
+      behavior: "smooth",
+    });
+    setSelectedNodeId(nodeId);
+  }
+
   function clientToCanvasPoint(clientX: number, clientY: number): { x: number; y: number } | null {
     const canvas = graphCanvasRef.current;
     if (!canvas) {
       return null;
     }
     const rect = canvas.getBoundingClientRect();
-    const stageOffset = GRAPH_PAN_PADDING / 2;
+    const stageOffset = GRAPH_STAGE_INSET;
     return {
       x: (clientX - rect.left + canvas.scrollLeft - stageOffset) / canvasZoom,
       y: (clientY - rect.top + canvas.scrollTop - stageOffset) / canvasZoom,
@@ -1553,7 +1620,7 @@ function App() {
     }
 
     const rect = canvas.getBoundingClientRect();
-    const stageOffset = GRAPH_PAN_PADDING / 2;
+    const stageOffset = GRAPH_STAGE_INSET;
     const pointerX = clientX - rect.left + canvas.scrollLeft;
     const pointerY = clientY - rect.top + canvas.scrollTop;
     const logicalX = (pointerX - stageOffset) / canvasZoom;
@@ -1645,7 +1712,7 @@ function App() {
       return;
     }
     const target = e.target as HTMLElement;
-    if (target.closest(".canvas-zoom-controls, .canvas-runbar")) {
+    if (target.closest(".canvas-zoom-controls, .canvas-runbar, .canvas-minimap")) {
       return;
     }
     e.preventDefault();
@@ -1821,6 +1888,25 @@ function App() {
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [canvasFullscreen]);
+
+  useEffect(() => {
+    syncQuestionInputHeight();
+  }, [workflowQuestion]);
+
+  useEffect(() => {
+    updateMinimapViewport();
+    const canvas = graphCanvasRef.current;
+    if (!canvas) {
+      return;
+    }
+    const onScrollOrResize = () => updateMinimapViewport();
+    canvas.addEventListener("scroll", onScrollOrResize, { passive: true });
+    window.addEventListener("resize", onScrollOrResize);
+    return () => {
+      canvas.removeEventListener("scroll", onScrollOrResize);
+      window.removeEventListener("resize", onScrollOrResize);
+    };
+  }, [canvasZoom, canvasFullscreen, workspaceTab]);
 
   async function saveRunRecord(runRecord: RunRecord) {
     const fileName = `run-${runRecord.runId}.json`;
@@ -2496,6 +2582,25 @@ function App() {
         .filter((value, index, arr) => arr.indexOf(value) === index)
     : [];
   const isActiveTab = (tab: WorkspaceTab): boolean => workspaceTab === tab;
+  const minimapScale = MINIMAP_WIDTH / GRAPH_STAGE_WIDTH;
+  const minimapHeight = Math.round(GRAPH_STAGE_HEIGHT * minimapScale);
+  const minimapViewportStyle = {
+    left: `${Math.max(0, Math.min(GRAPH_STAGE_WIDTH, minimapViewport.left)) * minimapScale}px`,
+    top: `${Math.max(0, Math.min(GRAPH_STAGE_HEIGHT, minimapViewport.top)) * minimapScale}px`,
+    width: `${Math.min(GRAPH_STAGE_WIDTH, minimapViewport.width) * minimapScale}px`,
+    height: `${Math.min(GRAPH_STAGE_HEIGHT, minimapViewport.height) * minimapScale}px`,
+  };
+  const keyboardFocusStyle = `
+    button:focus-visible,
+    input:focus-visible,
+    textarea:focus-visible,
+    select:focus-visible {
+      outline: 2px solid #111111;
+      outline-offset: 1px;
+      border-radius: 4px;
+      box-shadow: none;
+    }
+  `;
   const navTransition = "240ms cubic-bezier(0.22, 1, 0.36, 1)";
   const appShellStyle = canvasFullscreen
     ? undefined
@@ -2524,6 +2629,7 @@ function App() {
 
   return (
     <main className={`app-shell ${canvasFullscreen ? "canvas-fullscreen-mode" : ""}`} style={appShellStyle}>
+      <style>{keyboardFocusStyle}</style>
       {isNavClosed && (
         <button
           onClick={() => setIsNavClosed(false)}
@@ -2537,7 +2643,7 @@ function App() {
             padding: 0,
             borderRadius: "50%",
             background: "rgba(255,255,255,0.94)",
-            border: "1px solid rgba(205,212,224,0.95)",
+            // border: "1px solid rgba(205,212,224,0.95)",
             boxShadow: "0 4px 10px rgba(16, 23, 31, 0.14)",
             display: "inline-grid",
             placeItems: "center",
@@ -2558,9 +2664,9 @@ function App() {
             padding: 0,
             borderRadius: "50%",
             justifySelf: "center",
-            background: "rgba(255,255,255,0.94)",
-            border: "1px solid rgba(205,212,224,0.95)",
-            boxShadow: "0 2px 8px rgba(16, 23, 31, 0.12)",
+            background: "#F6F6F6",
+            // border: "1px solid rgba(205,212,224,0.95)",
+            // boxShadow: "0 2px 8px rgba(16, 23, 31, 0.12)",
             display: isNavClosed ? "none" : "inline-grid",
             placeItems: "center",
             lineHeight: 0,
@@ -2680,6 +2786,69 @@ function App() {
                     </button>
                   </div>
 
+                  <div
+                    className="canvas-minimap"
+                    style={{
+                      position: "absolute",
+                      right: 14,
+                      top: 14,
+                      width: MINIMAP_WIDTH,
+                      height: minimapHeight,
+                      padding: 7,
+                      borderRadius: 10,
+                      background: "rgba(255, 255, 255, 0.95)",
+                      boxShadow: "0 4px 14px rgba(21, 31, 39, 0.1)",
+                      zIndex: 11,
+                      pointerEvents: "auto",
+                    }}
+                  >
+                    <div
+                      className="canvas-minimap-stage"
+                      style={{
+                        position: "relative",
+                        width: "100%",
+                        height: "100%",
+                        borderRadius: 6,
+                        background: "#eff3f8",
+                        overflow: "hidden",
+                      }}
+                    >
+                      {graph.nodes.map((node) => (
+                        <button
+                          aria-label={`${node.id} 위치로 이동`}
+                          className={`canvas-minimap-node ${selectedNodeId === node.id ? "selected" : ""}`}
+                          key={`mini-${node.id}`}
+                          onClick={() => centerCanvasOnNode(node.id)}
+                          style={{
+                            left: `${node.position.x * minimapScale}px`,
+                            top: `${node.position.y * minimapScale}px`,
+                            width: `${Math.max(10, NODE_WIDTH * minimapScale)}px`,
+                            height: `${Math.max(8, NODE_HEIGHT * minimapScale)}px`,
+                            position: "absolute",
+                            padding: 0,
+                            border: `1px solid ${selectedNodeId === node.id ? "#2f79ff" : "#8ea0b5"}`,
+                            background:
+                              selectedNodeId === node.id ? "rgba(47, 121, 255, 0.35)" : "rgba(130, 151, 175, 0.28)",
+                            borderRadius: 4,
+                            cursor: "pointer",
+                          }}
+                          type="button"
+                        />
+                      ))}
+                      <div
+                        className="canvas-minimap-viewport"
+                        style={{
+                          ...minimapViewportStyle,
+                          position: "absolute",
+                          border: "1.5px solid #2a3037",
+                          borderRadius: 3,
+                          background: "rgba(42, 48, 55, 0.1)",
+                          pointerEvents: "none",
+                        }}
+                      />
+                    </div>
+                  </div>
+
                   <div className="canvas-runbar">
                     <button
                       aria-label="실행"
@@ -2734,8 +2903,8 @@ function App() {
                   <div
                     className="graph-stage"
                     style={{
-                      left: GRAPH_PAN_PADDING / 2,
-                      top: GRAPH_PAN_PADDING / 2,
+                      left: GRAPH_STAGE_INSET,
+                      top: GRAPH_STAGE_INSET,
                       transform: `scale(${canvasZoom})`,
                       width: GRAPH_STAGE_WIDTH,
                       height: GRAPH_STAGE_HEIGHT,
@@ -2818,16 +2987,44 @@ function App() {
               </div>
 
               <div className="canvas-topbar">
-                <label className="question-input">
-                  질문 입력
+                <div
+                  className="question-input"
+                  style={{
+                    position: "relative",
+                  }}
+                >
                   <textarea
-                    onChange={(e) => setWorkflowQuestion(e.currentTarget.value)}
-                    rows={3}
+                    onChange={(e) => {
+                      setWorkflowQuestion(e.currentTarget.value);
+                    }}
+                    placeholder="질문 입력"
+                    ref={questionInputRef}
+                    rows={1}
+                    style={{
+                      width: "100%",
+                      minHeight: 44,
+                      maxHeight: QUESTION_INPUT_MAX_HEIGHT,
+                      paddingRight: 92,
+                      paddingBottom: 10,
+                      background: "#fbfcfe",
+                      resize: "none",
+                      overflowY: "auto",
+                      lineHeight: 1.45,
+                    }}
                     value={workflowQuestion}
                   />
-                </label>
-                <div className="canvas-topbar-actions">
-                  <button className="primary-action" type="button">
+                  <button
+                    className="primary-action"
+                    style={{
+                      position: "absolute",
+                      right: 8,
+                      bottom: 8,
+                      minWidth: 72,
+                      height: 30,
+                      padding: "0 12px",
+                    }}
+                    type="button"
+                  >
                     생성
                   </button>
                 </div>
