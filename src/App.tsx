@@ -175,9 +175,9 @@ type GateConfig = {
 const APPROVAL_DECISIONS: ApprovalDecision[] = ["accept", "acceptForSession", "decline", "cancel"];
 const NODE_WIDTH = 240;
 const NODE_HEIGHT = 136;
-const GRAPH_STAGE_WIDTH = 2600;
-const GRAPH_STAGE_HEIGHT = 1800;
-const GRAPH_STAGE_INSET = 24;
+const DEFAULT_STAGE_WIDTH = 1400;
+const DEFAULT_STAGE_HEIGHT = 900;
+const GRAPH_STAGE_INSET = 8;
 const MIN_CANVAS_ZOOM = 0.6;
 const MAX_CANVAS_ZOOM = 1.8;
 const QUESTION_INPUT_MAX_HEIGHT = 132;
@@ -1568,10 +1568,10 @@ function App() {
     const visibleTop = Math.max(0, (canvas.scrollTop - GRAPH_STAGE_INSET) / canvasZoom);
     const visibleWidth = canvas.clientWidth / canvasZoom;
     const visibleHeight = canvas.clientHeight / canvasZoom;
-    const clampedLeft = Math.min(GRAPH_STAGE_WIDTH, visibleLeft);
-    const clampedTop = Math.min(GRAPH_STAGE_HEIGHT, visibleTop);
-    const clampedWidth = Math.max(0, Math.min(visibleWidth, GRAPH_STAGE_WIDTH - clampedLeft));
-    const clampedHeight = Math.max(0, Math.min(visibleHeight, GRAPH_STAGE_HEIGHT - clampedTop));
+    const clampedLeft = Math.min(stageWidth, visibleLeft);
+    const clampedTop = Math.min(stageHeight, visibleTop);
+    const clampedWidth = Math.max(0, Math.min(visibleWidth, stageWidth - clampedLeft));
+    const clampedHeight = Math.max(0, Math.min(visibleHeight, stageHeight - clampedTop));
     setMinimapViewport({
       left: clampedLeft,
       top: clampedTop,
@@ -1684,8 +1684,8 @@ function App() {
     }
 
     const { nodeId, offsetX, offsetY } = dragRef.current;
-    const x = Math.max(0, canvasPoint.x - offsetX);
-    const y = Math.max(0, canvasPoint.y - offsetY);
+    const x = Math.max(-GRAPH_STAGE_INSET, canvasPoint.x - offsetX);
+    const y = Math.max(-GRAPH_STAGE_INSET, canvasPoint.y - offsetY);
 
     setGraph((prev) => ({
       ...prev,
@@ -2585,8 +2585,16 @@ function App() {
         .filter((value, index, arr) => arr.indexOf(value) === index)
     : [];
   const isActiveTab = (tab: WorkspaceTab): boolean => workspaceTab === tab;
-  const minimapScale = MINIMAP_WIDTH / GRAPH_STAGE_WIDTH;
-  const minimapHeight = Math.round(GRAPH_STAGE_HEIGHT * minimapScale);
+  const stageWidth = Math.max(
+    DEFAULT_STAGE_WIDTH,
+    graph.nodes.reduce((max, node) => Math.max(max, node.position.x + NODE_WIDTH + 180), 0),
+  );
+  const stageHeight = Math.max(
+    DEFAULT_STAGE_HEIGHT,
+    graph.nodes.reduce((max, node) => Math.max(max, node.position.y + NODE_HEIGHT + 180), 0),
+  );
+  const minimapScale = MINIMAP_WIDTH / stageWidth;
+  const minimapHeight = Math.round(stageHeight * minimapScale);
   const minimapViewportStyle = {
     left: `${minimapViewport.left * minimapScale}px`,
     top: `${minimapViewport.top * minimapScale}px`,
@@ -2608,13 +2616,13 @@ function App() {
   const appShellStyle = canvasFullscreen
     ? undefined
     : {
-        gridTemplateColumns: `${isNavClosed ? 0 : 82}px minmax(0, 1fr)`,
+        gridTemplateColumns: `${isNavClosed ? 0 : 64}px minmax(0, 1fr)`,
         gap: 0,
         transition: `grid-template-columns ${navTransition}`,
       };
   const leftNavStyle = {
-    width: isNavClosed ? 0 : 68,
-    minWidth: isNavClosed ? 0 : 68,
+    width: isNavClosed ? 0 : 52,
+    minWidth: isNavClosed ? 0 : 52,
     padding: isNavClosed ? 0 : undefined,
     border: isNavClosed ? 0 : undefined,
     opacity: isNavClosed ? 0 : 1,
@@ -2655,7 +2663,7 @@ function App() {
           title="왼쪽 메뉴 열기"
           type="button"
         >
-          <img alt="" aria-hidden="true" src="/nav-open.svg" style={{ width: 16, height: 16, display: "block" }} />
+          <img alt="" aria-hidden="true" src="/open.svg" style={{ width: 16, height: 16, display: "block" }} />
         </button>
       )}
       <aside className="left-nav" style={leftNavStyle}>
@@ -2680,7 +2688,7 @@ function App() {
           <img
             alt=""
             aria-hidden="true"
-            src="/nav-closed.svg"
+            src="/close.svg"
             style={{ width: 16, height: 16, display: "block" }}
           />
         </button>
@@ -2823,8 +2831,8 @@ function App() {
                           key={`mini-${node.id}`}
                           onClick={() => centerCanvasOnNode(node.id)}
                           style={{
-                            left: `${node.position.x * minimapScale}px`,
-                            top: `${node.position.y * minimapScale}px`,
+                            left: `${Math.max(0, node.position.x) * minimapScale}px`,
+                            top: `${Math.max(0, node.position.y) * minimapScale}px`,
                             width: `${Math.max(10, NODE_WIDTH * minimapScale)}px`,
                             height: `${Math.max(8, NODE_HEIGHT * minimapScale)}px`,
                             position: "absolute",
@@ -2899,8 +2907,8 @@ function App() {
                 <div
                   className="graph-stage-shell"
                   style={{
-                    width: Math.round(GRAPH_STAGE_WIDTH * canvasZoom + GRAPH_STAGE_INSET * 2),
-                    height: Math.round(GRAPH_STAGE_HEIGHT * canvasZoom + GRAPH_STAGE_INSET * 2),
+                    width: Math.round(stageWidth * canvasZoom + GRAPH_STAGE_INSET * 2),
+                    height: Math.round(stageHeight * canvasZoom + GRAPH_STAGE_INSET * 2),
                   }}
                 >
                   <div
@@ -2909,8 +2917,8 @@ function App() {
                       left: GRAPH_STAGE_INSET,
                       top: GRAPH_STAGE_INSET,
                       transform: `scale(${canvasZoom})`,
-                      width: GRAPH_STAGE_WIDTH,
-                      height: GRAPH_STAGE_HEIGHT,
+                      width: stageWidth,
+                      height: stageHeight,
                     }}
                   >
                     <svg className="edge-layer">
@@ -3002,7 +3010,7 @@ function App() {
                   />
                   <div className="question-input-footer">
                     <button className="primary-action question-create-button" type="button">
-                      <img alt="" aria-hidden="true" className="question-create-icon" src="/create_2.svg" />
+                      <img alt="" aria-hidden="true" className="question-create-icon" src="/up.svg" />
                     </button>
                   </div>
                 </div>

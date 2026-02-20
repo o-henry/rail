@@ -141,9 +141,9 @@ h3 {
 .app-shell {
   height: 100vh;
   min-height: 760px;
-  padding: 8px;
+  padding: 6px;
   display: grid;
-  grid-template-columns: 82px minmax(0, 1fr);
+  grid-template-columns: 64px minmax(0, 1fr);
   /* gap: 10px; */
   background: #ffffff;
 }
@@ -162,7 +162,7 @@ h3 {
   /* top: 16px; */
   align-self: start;
   height: calc(100vh - 32px);
-  width: 68px;
+  width: 52px;
   min-height: 0;
   /* border-radius: 22px; */
   /* border: 1px solid rgba(255, 255, 255, 0.72); */
@@ -361,6 +361,7 @@ h3 {
 }
 
 .question-input {
+  position: relative;
   border-radius: 5px;
   background: #fbfcfe;
   overflow: hidden;
@@ -370,6 +371,7 @@ h3 {
   width: 100%;
   min-height: 48px;
   max-height: 132px;
+  padding-bottom: 44px;
   border-radius: 0;
   border: 0;
   background: transparent;
@@ -379,12 +381,14 @@ h3 {
 }
 
 .question-input-footer {
-  min-height: 38px;
-  padding: 6px 8px;
-  border-top: 1px solid #e5eaf0;
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 8px;
   display: flex;
   justify-content: flex-end;
   align-items: center;
+  pointer-events: none;
 }
 
 .question-create-button {
@@ -396,13 +400,15 @@ h3 {
   padding: 0;
   display: inline-grid;
   place-items: center;
+  pointer-events: auto;
 }
 
 .question-create-icon {
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  height: 14px;
   display: block;
   object-fit: contain;
+  filter: brightness(0) invert(1);
 }
 
 .button-row,
@@ -452,7 +458,7 @@ h3 {
   background-image: radial-gradient(#d4d9df 1px, transparent 1px);
   background-size: 16px 16px;
   overflow: auto;
-  padding: 14px;
+  padding: 0;
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
@@ -640,8 +646,9 @@ h3 {
   border-radius: 12px;
   background: #F6F6F6;
   pointer-events: auto;
-  display: inline-grid;
-  place-items: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   padding: 0;
   line-height: 1;
   text-align: center;
@@ -693,6 +700,7 @@ h3 {
   height: 16px;
   display: block;
   object-fit: contain;
+  margin: auto;
 }
 
 .canvas-icon-image {
@@ -700,6 +708,7 @@ h3 {
   height: 15px;
   display: block;
   object-fit: contain;
+  margin: auto;
 }
 
 .canvas-runbar .play .canvas-icon-image {
