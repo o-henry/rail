@@ -2800,13 +2800,16 @@ function App() {
               >
                 <div className="canvas-overlay">
                   <div className="canvas-zoom-controls">
-                    <button onClick={onCanvasZoomIn} title="확대" type="button">
-                      <img alt="" aria-hidden="true" className="canvas-control-icon" src="/plus.svg" />
-                    </button>
-                    <button onClick={onCanvasZoomOut} title="축소" type="button">
-                      <img alt="" aria-hidden="true" className="canvas-control-icon" src="/minus.svg" />
-                    </button>
+                    <div className="canvas-zoom-group">
+                      <button onClick={onCanvasZoomIn} title="확대" type="button">
+                        <img alt="" aria-hidden="true" className="canvas-control-icon" src="/plus.svg" />
+                      </button>
+                      <button onClick={onCanvasZoomOut} title="축소" type="button">
+                        <img alt="" aria-hidden="true" className="canvas-control-icon" src="/minus.svg" />
+                      </button>
+                    </div>
                     <button
+                      className="canvas-zoom-single"
                       onClick={() => setCanvasFullscreen((prev) => !prev)}
                       title={canvasFullscreen ? "캔버스 기본 보기" : "캔버스 전체 보기"}
                       type="button"
@@ -2820,7 +2823,7 @@ function App() {
                     </button>
                     <button
                       aria-label="이동"
-                      className={panMode ? "is-active" : ""}
+                      className={`canvas-zoom-single ${panMode ? "is-active" : ""}`}
                       onClick={() => setPanMode((prev) => !prev)}
                       title="캔버스 이동"
                       type="button"
