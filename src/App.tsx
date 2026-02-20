@@ -153,6 +153,8 @@ type LogicalPoint = {
   y: number;
 };
 
+type NodeAnchorSide = "top" | "right" | "bottom" | "left";
+
 type TurnConfig = {
   model?: string;
   cwd?: string;
@@ -197,6 +199,7 @@ const TURN_MODEL_OPTIONS = [
   "gpt-5.1-codex-mini",
 ] as const;
 const TRUSTED_AUTH_HOSTS = ["chatgpt.com", "openai.com", "auth.openai.com"] as const;
+const NODE_ANCHOR_SIDES: NodeAnchorSide[] = ["top", "right", "bottom", "left"];
 
 function formatUnknown(value: unknown): string {
   try {
@@ -211,6 +214,17 @@ function toErrorText(error: unknown): string {
     return error.message;
   }
   return String(error);
+}
+
+function isEditableTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) {
+    return false;
+  }
+  const tag = target.tagName.toLowerCase();
+  if (tag === "input" || tag === "textarea" || tag === "select") {
+    return true;
+  }
+  return Boolean(target.closest("[contenteditable='true']"));
 }
 
 function extractDeltaText(input: unknown, depth = 0): string {
@@ -543,6 +557,19 @@ function buildRoundedEdgePath(
     pathParts.push(`L ${x2} ${y2}`);
   }
   return pathParts.join(" ");
+}
+
+function getNodeAnchorPoint(node: GraphNode, side: NodeAnchorSide): LogicalPoint {
+  if (side === "top") {
+    return { x: node.position.x + NODE_WIDTH / 2, y: node.position.y };
+  }
+  if (side === "right") {
+    return { x: node.position.x + NODE_WIDTH, y: node.position.y + NODE_HEIGHT / 2 };
+  }
+  if (side === "bottom") {
+    return { x: node.position.x + NODE_WIDTH / 2, y: node.position.y + NODE_HEIGHT };
+  }
+  return { x: node.position.x, y: node.position.y + NODE_HEIGHT / 2 };
 }
 
 function makeNodeId(type: NodeType): string {
@@ -1047,6 +1074,7 @@ function App() {
   const [graph, setGraph] = useState<GraphData>({ version: 1, nodes: [], edges: [] });
   const [selectedNodeId, setSelectedNodeId] = useState<string>("");
   const [connectFromNodeId, setConnectFromNodeId] = useState<string>("");
+  const [connectPreviewStartPoint, setConnectPreviewStartPoint] = useState<LogicalPoint | null>(null);
   const [connectPreviewPoint, setConnectPreviewPoint] = useState<LogicalPoint | null>(null);
   const [isConnectingDrag, setIsConnectingDrag] = useState(false);
   const [graphFileName, setGraphFileName] = useState("sample.json");
@@ -1077,6 +1105,7 @@ function App() {
   const dragWindowMoveHandlerRef = useRef<((event: MouseEvent) => void) | null>(null);
   const dragWindowUpHandlerRef = useRef<((event: MouseEvent) => void) | null>(null);
   const dragStartSnapshotRef = useRef<GraphData | null>(null);
+  const zoomStatusTimerRef = useRef<number | null>(null);
   const cancelRequestedRef = useRef(false);
   const activeTurnNodeIdRef = useRef<string>("");
   const turnTerminalResolverRef = useRef<((terminal: TurnTerminal) => void) | null>(null);
@@ -1568,6 +1597,9 @@ function App() {
     setSelectedNodeId(preset.nodes[0]?.id ?? "");
     setNodeStates({});
     setConnectFromNodeId("");
+    setConnectPreviewStartPoint(null);
+    setConnectPreviewPoint(null);
+    setIsConnectingDrag(false);
     setStatus(
       kind === "validation"
         ? "검증형 5-에이전트 프리셋 로드됨"
@@ -1587,10 +1619,19 @@ function App() {
       delete next[nodeId];
       return next;
     });
+    if (connectFromNodeId === nodeId) {
+      setConnectFromNodeId("");
+      setConnectPreviewStartPoint(null);
+      setConnectPreviewPoint(null);
+      setIsConnectingDrag(false);
+    }
   }
 
   function onPortOutClick(nodeId: string) {
     setConnectFromNodeId(nodeId);
+    setConnectPreviewStartPoint(null);
+    setConnectPreviewPoint(null);
+    setIsConnectingDrag(false);
   }
 
   function createEdgeConnection(fromNodeId: string, toNodeId: string) {
@@ -1616,10 +1657,57 @@ function App() {
   function onPortOutDragStart(e: ReactMouseEvent<HTMLButtonElement>, nodeId: string) {
     e.preventDefault();
     e.stopPropagation();
-    const point = clientToLogicalPoint(e.clientX, e.clientY);
+    const sourceNode = graph.nodes.find((node) => node.id === nodeId);
+    if (!sourceNode) {
+      return;
+    }
+    const point = getNodeAnchorPoint(sourceNode, "right");
     setConnectFromNodeId(nodeId);
+    setConnectPreviewStartPoint(point);
     setIsConnectingDrag(true);
     setConnectPreviewPoint(point);
+  }
+
+  function onNodeAnchorDragStart(
+    e: ReactMouseEvent<HTMLButtonElement>,
+    nodeId: string,
+    side: NodeAnchorSide,
+  ) {
+    e.preventDefault();
+    e.stopPropagation();
+    const sourceNode = graph.nodes.find((node) => node.id === nodeId);
+    if (!sourceNode) {
+      return;
+    }
+    const point = getNodeAnchorPoint(sourceNode, side);
+    setConnectFromNodeId(nodeId);
+    setConnectPreviewStartPoint(point);
+    setConnectPreviewPoint(point);
+    setIsConnectingDrag(true);
+  }
+
+  function onNodeAnchorDrop(e: ReactMouseEvent<HTMLButtonElement>, targetNodeId: string) {
+    if (!connectFromNodeId) {
+      return;
+    }
+    e.preventDefault();
+    e.stopPropagation();
+    createEdgeConnection(connectFromNodeId, targetNodeId);
+    setConnectFromNodeId("");
+    setConnectPreviewStartPoint(null);
+    setConnectPreviewPoint(null);
+    setIsConnectingDrag(false);
+  }
+
+  function onNodeConnectDrop(targetNodeId: string) {
+    if (!connectFromNodeId || connectFromNodeId === targetNodeId) {
+      return;
+    }
+    createEdgeConnection(connectFromNodeId, targetNodeId);
+    setConnectFromNodeId("");
+    setConnectPreviewStartPoint(null);
+    setConnectPreviewPoint(null);
+    setIsConnectingDrag(false);
   }
 
   function onPortInDrop(e: ReactMouseEvent<HTMLButtonElement>, targetNodeId: string) {
@@ -1630,6 +1718,7 @@ function App() {
     e.stopPropagation();
     createEdgeConnection(connectFromNodeId, targetNodeId);
     setConnectFromNodeId("");
+    setConnectPreviewStartPoint(null);
     setConnectPreviewPoint(null);
     setIsConnectingDrag(false);
   }
@@ -1640,12 +1729,23 @@ function App() {
     }
     createEdgeConnection(connectFromNodeId, targetNodeId);
     setConnectFromNodeId("");
+    setConnectPreviewStartPoint(null);
     setConnectPreviewPoint(null);
     setIsConnectingDrag(false);
   }
 
   function clampCanvasZoom(nextZoom: number): number {
     return Math.max(MIN_CANVAS_ZOOM, Math.min(MAX_CANVAS_ZOOM, nextZoom));
+  }
+
+  function scheduleZoomStatus(nextZoom: number) {
+    if (zoomStatusTimerRef.current != null) {
+      window.clearTimeout(zoomStatusTimerRef.current);
+    }
+    zoomStatusTimerRef.current = window.setTimeout(() => {
+      setStatus(`그래프 배율 ${Math.round(nextZoom * 100)}%`);
+      zoomStatusTimerRef.current = null;
+    }, 120);
   }
 
   function syncQuestionInputHeight() {
@@ -1859,6 +1959,7 @@ function App() {
 
     if (isConnectingDrag) {
       setIsConnectingDrag(false);
+      setConnectPreviewStartPoint(null);
       setConnectPreviewPoint(null);
       setConnectFromNodeId("");
     }
@@ -1918,7 +2019,7 @@ function App() {
       return;
     }
     zoomAtClientPoint(nextZoom, e.clientX, e.clientY);
-    setStatus(`그래프 배율 ${Math.round(nextZoom * 100)}%`);
+    scheduleZoomStatus(nextZoom);
   }
 
   function zoomAtCanvasCenter(nextZoom: number) {
@@ -1937,7 +2038,7 @@ function App() {
       return;
     }
     zoomAtCanvasCenter(nextZoom);
-    setStatus(`그래프 배율 ${Math.round(nextZoom * 100)}%`);
+    scheduleZoomStatus(nextZoom);
   }
 
   function onCanvasZoomOut() {
@@ -1946,7 +2047,7 @@ function App() {
       return;
     }
     zoomAtCanvasCenter(nextZoom);
-    setStatus(`그래프 배율 ${Math.round(nextZoom * 100)}%`);
+    scheduleZoomStatus(nextZoom);
   }
 
   function onCanvasKeyDown(e: ReactKeyboardEvent<HTMLDivElement>) {
@@ -1967,7 +2068,7 @@ function App() {
       e.preventDefault();
       const nextZoom = clampCanvasZoom(canvasZoom * 1.08);
       zoomAtClientPoint(nextZoom, centerX, centerY);
-      setStatus(`그래프 배율 ${Math.round(nextZoom * 100)}%`);
+      scheduleZoomStatus(nextZoom);
       return;
     }
 
@@ -1975,14 +2076,14 @@ function App() {
       e.preventDefault();
       const nextZoom = clampCanvasZoom(canvasZoom * 0.92);
       zoomAtClientPoint(nextZoom, centerX, centerY);
-      setStatus(`그래프 배율 ${Math.round(nextZoom * 100)}%`);
+      scheduleZoomStatus(nextZoom);
       return;
     }
 
     if (e.key === "0") {
       e.preventDefault();
       zoomAtClientPoint(1, centerX, centerY);
-      setStatus("그래프 배율 100%");
+      scheduleZoomStatus(1);
     }
   }
 
@@ -2036,6 +2137,10 @@ function App() {
       setRedoStack([]);
       setSelectedNodeId(normalized.nodes[0]?.id ?? "");
       setNodeStates({});
+      setConnectFromNodeId("");
+      setConnectPreviewStartPoint(null);
+      setConnectPreviewPoint(null);
+      setIsConnectingDrag(false);
       setStatus(`그래프 불러오기 완료 (${target})`);
       setGraphFileName(target);
     } catch (e) {
@@ -2073,6 +2178,31 @@ function App() {
   }, [canvasFullscreen]);
 
   useEffect(() => {
+    if (workspaceTab !== "workflow") {
+      return;
+    }
+    const onWindowKeyDown = (event: KeyboardEvent) => {
+      if (event.repeat || event.metaKey || event.ctrlKey || event.altKey) {
+        return;
+      }
+      if (event.key.toLowerCase() !== "h") {
+        return;
+      }
+      if (isEditableTarget(event.target)) {
+        return;
+      }
+      event.preventDefault();
+      setPanMode((prev) => {
+        const next = !prev;
+        setStatus(next ? "캔버스 이동 모드 켜짐 (H)" : "캔버스 이동 모드 꺼짐 (H)");
+        return next;
+      });
+    };
+    window.addEventListener("keydown", onWindowKeyDown);
+    return () => window.removeEventListener("keydown", onWindowKeyDown);
+  }, [workspaceTab]);
+
+  useEffect(() => {
     syncQuestionInputHeight();
   }, [workflowQuestion]);
 
@@ -2106,6 +2236,9 @@ function App() {
       if (dragWindowUpHandlerRef.current) {
         window.removeEventListener("mouseup", dragWindowUpHandlerRef.current);
       }
+      if (zoomStatusTimerRef.current != null) {
+        window.clearTimeout(zoomStatusTimerRef.current);
+      }
     };
   }, []);
 
@@ -2121,6 +2254,7 @@ function App() {
     };
     const onWindowUp = () => {
       setIsConnectingDrag(false);
+      setConnectPreviewStartPoint(null);
       setConnectPreviewPoint(null);
       setConnectFromNodeId("");
     };
@@ -2797,13 +2931,20 @@ function App() {
     if (!connectFromNodeId || !connectPreviewPoint) {
       return null;
     }
-    const fromNode = graph.nodes.find((node) => node.id === connectFromNodeId);
-    if (!fromNode) {
+    const startPoint = (() => {
+      if (connectPreviewStartPoint) {
+        return connectPreviewStartPoint;
+      }
+      const fromNode = graph.nodes.find((node) => node.id === connectFromNodeId);
+      if (!fromNode) {
+        return null;
+      }
+      return getNodeAnchorPoint(fromNode, "right");
+    })();
+    if (!startPoint) {
       return null;
     }
-    const x1 = fromNode.position.x + NODE_WIDTH;
-    const y1 = fromNode.position.y + NODE_HEIGHT / 2;
-    return buildRoundedEdgePath(x1, y1, connectPreviewPoint.x, connectPreviewPoint.y, false);
+    return buildRoundedEdgePath(startPoint.x, startPoint.y, connectPreviewPoint.x, connectPreviewPoint.y, false);
   })();
 
   const selectedNodeState = selectedNodeId ? nodeStates[selectedNodeId] : undefined;
@@ -2979,11 +3120,19 @@ function App() {
                     {graph.nodes.map((node) => {
                       const runState = nodeStates[node.id];
                       const nodeStatus = runState?.status ?? "idle";
+                      const showNodeAnchors = selectedNodeId === node.id || isConnectingDrag;
                       return (
                         <div
                           className={`graph-node node-${node.type} ${selectedNodeId === node.id ? "selected" : ""}`}
                           key={node.id}
                           onClick={() => setSelectedNodeId(node.id)}
+                          onMouseUp={(e) => {
+                            if (!isConnectingDrag) {
+                              return;
+                            }
+                            e.stopPropagation();
+                            onNodeConnectDrop(node.id);
+                          }}
                           style={{ left: node.position.x, top: node.position.y }}
                         >
                           <div className="node-head" onMouseDown={(e) => onNodeDragStart(e, node.id)}>
@@ -3011,6 +3160,20 @@ function App() {
                               ).slice(0, 180)}
                             </div>
                           </div>
+                          {showNodeAnchors && (
+                            <div className="node-anchors">
+                              {NODE_ANCHOR_SIDES.map((side) => (
+                                <button
+                                  aria-label={`연결 ${side}`}
+                                  className={`node-anchor node-anchor-${side}`}
+                                  key={`${node.id}-${side}`}
+                                  onMouseDown={(e) => onNodeAnchorDragStart(e, node.id, side)}
+                                  onMouseUp={(e) => onNodeAnchorDrop(e, node.id)}
+                                  type="button"
+                                />
+                              ))}
+                            </div>
+                          )}
                           <div className="node-ports">
                             <button
                               className="node-port-btn"
@@ -3165,6 +3328,7 @@ function App() {
                         disabled={!connectFromNodeId}
                         onClick={() => {
                           setConnectFromNodeId("");
+                          setConnectPreviewStartPoint(null);
                           setConnectPreviewPoint(null);
                           setIsConnectingDrag(false);
                         }}
