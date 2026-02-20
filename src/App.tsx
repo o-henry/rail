@@ -847,6 +847,7 @@ function FancySelect({
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
   const selected = options.find((option) => option.value === value) ?? null;
 
   useEffect(() => {
@@ -870,6 +871,37 @@ function FancySelect({
       window.removeEventListener("keydown", onWindowKeyDown);
     };
   }, []);
+
+  useEffect(() => {
+    if (!isOpen) {
+      return;
+    }
+
+    const root = rootRef.current;
+    const menu = menuRef.current;
+    if (!root || !menu) {
+      return;
+    }
+
+    const container = root.closest(".inspector-content");
+    if (!(container instanceof HTMLElement)) {
+      return;
+    }
+
+    const frame = window.requestAnimationFrame(() => {
+      const menuRect = menu.getBoundingClientRect();
+      const containerRect = container.getBoundingClientRect();
+      const minBottomGap = 16;
+      const overflow = menuRect.bottom + minBottomGap - containerRect.bottom;
+      if (overflow <= 0) {
+        return;
+      }
+      const maxScrollTop = Math.max(0, container.scrollHeight - container.clientHeight);
+      container.scrollTop = Math.min(maxScrollTop, container.scrollTop + overflow);
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [isOpen]);
 
   return (
     <div className={`fancy-select ${className ?? ""} ${isOpen ? "is-open" : ""}`} ref={rootRef}>
@@ -899,7 +931,7 @@ function FancySelect({
         </span>
       </button>
       {isOpen && (
-        <div className="fancy-select-menu" role="listbox">
+        <div className="fancy-select-menu" ref={menuRef} role="listbox">
           {options.length === 0 && <div className="fancy-select-empty">{emptyMessage}</div>}
           {options.map((option) => (
             <button
