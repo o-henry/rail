@@ -15,6 +15,8 @@ pub fn run() {
             engine::turn_start,
             engine::turn_interrupt,
             engine::approval_respond,
+            engine::provider_window_open,
+            engine::provider_window_close,
             storage::graph_list,
             storage::graph_save,
             storage::graph_load,

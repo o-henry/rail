@@ -7,7 +7,7 @@ use std::{
         Arc,
     },
 };
-use tauri::{AppHandle, Emitter, State};
+use tauri::{AppHandle, Emitter, Manager, State, WebviewUrl, WebviewWindowBuilder};
 use tokio::{
     io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
     process::{Child, ChildStdin, Command},
@@ -484,6 +484,16 @@ fn emit_lifecycle(app: &AppHandle, state: &str, message: Option<String>) {
     let _ = app.emit(EVENT_ENGINE_LIFECYCLE, payload);
 }
 
+fn provider_url(provider: &str) -> Option<&'static str> {
+    match provider {
+        "gemini" => Some("https://gemini.google.com/"),
+        "grok" => Some("https://grok.com/"),
+        "perplexity" => Some("https://www.perplexity.ai/"),
+        "claude" => Some("https://claude.ai/"),
+        _ => None,
+    }
+}
+
 async fn current_runtime(state: &EngineManager) -> Result<Arc<EngineRuntime>, String> {
     state
         .runtime
@@ -682,4 +692,44 @@ pub async fn approval_respond(
 ) -> Result<(), String> {
     let runtime = current_runtime(&state).await?;
     runtime.respond_server_request(request_id, result).await
+}
+
+#[tauri::command]
+pub async fn provider_window_open(app: AppHandle, provider: String) -> Result<(), String> {
+    let provider_key = provider.trim().to_lowercase();
+    let url = provider_url(&provider_key)
+        .ok_or_else(|| format!("unsupported provider: {provider}"))?;
+    let window_id = format!("provider-{provider_key}");
+
+    if let Some(window) = app.get_webview_window(&window_id) {
+        let _ = window.show();
+        let _ = window.set_focus();
+        return Ok(());
+    }
+
+    let external = url
+        .parse()
+        .map_err(|e| format!("invalid provider url ({url}): {e}"))?;
+    WebviewWindowBuilder::new(&app, &window_id, WebviewUrl::External(external))
+        .title(&format!("{provider_key} - rail"))
+        .inner_size(1280.0, 860.0)
+        .min_inner_size(1024.0, 700.0)
+        .center()
+        .build()
+        .map_err(|e| format!("failed to open provider window: {e}"))?;
+
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn provider_window_close(app: AppHandle, provider: String) -> Result<(), String> {
+    let provider_key = provider.trim().to_lowercase();
+    let window_id = format!("provider-{provider_key}");
+    let window = app
+        .get_webview_window(&window_id)
+        .ok_or_else(|| format!("provider window not found: {provider_key}"))?;
+    window
+        .close()
+        .map_err(|e| format!("failed to close provider window: {e}"))?;
+    Ok(())
 }
