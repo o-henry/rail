@@ -1046,7 +1046,6 @@ function App() {
   const defaultCwd = useMemo(() => ".", []);
 
   const [workspaceTab, setWorkspaceTab] = useState<WorkspaceTab>("workflow");
-  const [isInspectorWide, setIsInspectorWide] = useState(false);
 
   const [cwd, setCwd] = useState(defaultCwd);
   const [model, setModel] = useState<string>(TURN_MODEL_OPTIONS[0]);
@@ -3044,11 +3043,7 @@ function App() {
         {error && <div className="error">오류: {error}</div>}
 
         {workspaceTab === "workflow" && (
-          <div
-            className={`workflow-layout ${isInspectorWide ? "inspector-wide" : ""} ${
-              canvasFullscreen ? "canvas-only-layout" : ""
-            }`}
-          >
+          <div className={`workflow-layout ${canvasFullscreen ? "canvas-only-layout" : ""}`}>
             <section className="canvas-pane">
               <div className="graph-canvas-shell">
                 <div
@@ -3301,14 +3296,6 @@ function App() {
             {!canvasFullscreen && <aside className="inspector-pane">
               <div className="inspector-head">
                 <div className="inspector-title-chip">노드 설정</div>
-                <button
-                  className="inspector-resize"
-                  onClick={() => setIsInspectorWide((prev) => !prev)}
-                  title={isInspectorWide ? "패널 폭 줄이기" : "패널 폭 넓히기"}
-                  type="button"
-                >
-                  ↔
-                </button>
               </div>
               <div className="inspector-content">
                 <div className="inspector-section">

@@ -330,10 +330,6 @@ h3 {
   overflow: hidden;
 }
 
-.workflow-layout.inspector-wide {
-  grid-template-columns: minmax(0, 1fr) 420px;
-}
-
 .workflow-layout.canvas-only-layout {
   grid-template-columns: minmax(0, 1fr);
   height: 100%;
@@ -844,16 +840,6 @@ h3 {
   padding: 8px 12px;
   font-weight: 600;
   letter-spacing: -0.4px;
-}
-
-.inspector-resize {
-  width: 34px;
-  height: 34px;
-  display: inline-grid;
-  place-items: center;
-  padding: 0;
-  line-height: 1;
-  background: #dfe5ee;
 }
 
 .inspector-pane h2 {
