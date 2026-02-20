@@ -3532,20 +3532,8 @@ function App() {
   );
   const boundedStageWidth = Math.min(stageWidth, MAX_STAGE_WIDTH);
   const boundedStageHeight = Math.min(stageHeight, MAX_STAGE_HEIGHT);
-  const keyboardFocusStyle = `
-    button:focus-visible,
-    input:focus-visible,
-    select:focus-visible {
-      outline: 2px solid #111111;
-      outline-offset: 1px;
-      border-radius: 4px;
-      box-shadow: none;
-    }
-  `;
-
   return (
     <main className={`app-shell ${canvasFullscreen ? "canvas-fullscreen-mode" : ""}`}>
-      <style>{keyboardFocusStyle}</style>
       <aside className="left-nav">
         <nav
           className="nav-list"
