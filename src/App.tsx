@@ -66,8 +66,8 @@ type GraphNode = {
 };
 
 type GraphEdge = {
-  from: { nodeId: string; port: PortType };
-  to: { nodeId: string; port: PortType };
+  from: { nodeId: string; port: PortType; side?: NodeAnchorSide };
+  to: { nodeId: string; port: PortType; side?: NodeAnchorSide };
 };
 
 type GraphData = {
@@ -575,6 +575,30 @@ function getNodeAnchorPoint(node: GraphNode, side: NodeAnchorSide): LogicalPoint
     return { x: node.position.x + NODE_WIDTH / 2, y: node.position.y + NODE_HEIGHT };
   }
   return { x: node.position.x, y: node.position.y + NODE_HEIGHT / 2 };
+}
+
+function getAutoConnectionSides(fromNode: GraphNode, toNode: GraphNode): {
+  fromSide: NodeAnchorSide;
+  toSide: NodeAnchorSide;
+} {
+  const fromCenterX = fromNode.position.x + NODE_WIDTH / 2;
+  const fromCenterY = fromNode.position.y + NODE_HEIGHT / 2;
+  const toCenterX = toNode.position.x + NODE_WIDTH / 2;
+  const toCenterY = toNode.position.y + NODE_HEIGHT / 2;
+  const dx = toCenterX - fromCenterX;
+  const dy = toCenterY - fromCenterY;
+
+  if (Math.abs(dx) >= Math.abs(dy)) {
+    if (dx >= 0) {
+      return { fromSide: "right", toSide: "left" };
+    }
+    return { fromSide: "left", toSide: "right" };
+  }
+
+  if (dy >= 0) {
+    return { fromSide: "bottom", toSide: "top" };
+  }
+  return { fromSide: "top", toSide: "bottom" };
 }
 
 function makeNodeId(type: NodeType): string {
@@ -1175,6 +1199,7 @@ function App() {
   const [graph, setGraph] = useState<GraphData>({ version: 1, nodes: [], edges: [] });
   const [selectedNodeId, setSelectedNodeId] = useState<string>("");
   const [connectFromNodeId, setConnectFromNodeId] = useState<string>("");
+  const [connectFromSide, setConnectFromSide] = useState<NodeAnchorSide | null>(null);
   const [connectPreviewStartPoint, setConnectPreviewStartPoint] = useState<LogicalPoint | null>(null);
   const [connectPreviewPoint, setConnectPreviewPoint] = useState<LogicalPoint | null>(null);
   const [isConnectingDrag, setIsConnectingDrag] = useState(false);
@@ -1698,6 +1723,7 @@ function App() {
     setSelectedNodeId(preset.nodes[0]?.id ?? "");
     setNodeStates({});
     setConnectFromNodeId("");
+    setConnectFromSide(null);
     setConnectPreviewStartPoint(null);
     setConnectPreviewPoint(null);
     setIsConnectingDrag(false);
@@ -1722,6 +1748,7 @@ function App() {
     });
     if (connectFromNodeId === nodeId) {
       setConnectFromNodeId("");
+      setConnectFromSide(null);
       setConnectPreviewStartPoint(null);
       setConnectPreviewPoint(null);
       setIsConnectingDrag(false);
@@ -1730,15 +1757,31 @@ function App() {
 
   function onPortOutClick(nodeId: string) {
     setConnectFromNodeId(nodeId);
+    setConnectFromSide(null);
     setConnectPreviewStartPoint(null);
     setConnectPreviewPoint(null);
     setIsConnectingDrag(false);
   }
 
-  function createEdgeConnection(fromNodeId: string, toNodeId: string) {
+  function createEdgeConnection(
+    fromNodeId: string,
+    toNodeId: string,
+    fromSide?: NodeAnchorSide,
+    toSide?: NodeAnchorSide,
+  ) {
     if (!fromNodeId || !toNodeId || fromNodeId === toNodeId) {
       return;
     }
+
+    const fromNode = graph.nodes.find((node) => node.id === fromNodeId);
+    const toNode = graph.nodes.find((node) => node.id === toNodeId);
+    if (!fromNode || !toNode) {
+      return;
+    }
+
+    const auto = getAutoConnectionSides(fromNode, toNode);
+    const resolvedFromSide = fromSide ?? auto.fromSide;
+    const resolvedToSide = toSide ?? auto.toSide;
 
     applyGraphChange((prev) => {
       const exists = prev.edges.some(
@@ -1748,8 +1791,8 @@ function App() {
         return prev;
       }
       const edge: GraphEdge = {
-        from: { nodeId: fromNodeId, port: "out" },
-        to: { nodeId: toNodeId, port: "in" },
+        from: { nodeId: fromNodeId, port: "out", side: resolvedFromSide },
+        to: { nodeId: toNodeId, port: "in", side: resolvedToSide },
       };
       return { ...prev, edges: [...prev.edges, edge] };
     });
@@ -1764,6 +1807,7 @@ function App() {
     }
     const point = getNodeAnchorPoint(sourceNode, "right");
     setConnectFromNodeId(nodeId);
+    setConnectFromSide("right");
     setConnectPreviewStartPoint(point);
     setIsConnectingDrag(true);
     setConnectPreviewPoint(point);
@@ -1782,19 +1826,25 @@ function App() {
     }
     const point = getNodeAnchorPoint(sourceNode, side);
     setConnectFromNodeId(nodeId);
+    setConnectFromSide(side);
     setConnectPreviewStartPoint(point);
     setConnectPreviewPoint(point);
     setIsConnectingDrag(true);
   }
 
-  function onNodeAnchorDrop(e: ReactMouseEvent<HTMLButtonElement>, targetNodeId: string) {
+  function onNodeAnchorDrop(
+    e: ReactMouseEvent<HTMLButtonElement>,
+    targetNodeId: string,
+    targetSide: NodeAnchorSide,
+  ) {
     if (!connectFromNodeId) {
       return;
     }
     e.preventDefault();
     e.stopPropagation();
-    createEdgeConnection(connectFromNodeId, targetNodeId);
+    createEdgeConnection(connectFromNodeId, targetNodeId, connectFromSide ?? undefined, targetSide);
     setConnectFromNodeId("");
+    setConnectFromSide(null);
     setConnectPreviewStartPoint(null);
     setConnectPreviewPoint(null);
     setIsConnectingDrag(false);
@@ -1804,8 +1854,9 @@ function App() {
     if (!connectFromNodeId || connectFromNodeId === targetNodeId) {
       return;
     }
-    createEdgeConnection(connectFromNodeId, targetNodeId);
+    createEdgeConnection(connectFromNodeId, targetNodeId, connectFromSide ?? undefined);
     setConnectFromNodeId("");
+    setConnectFromSide(null);
     setConnectPreviewStartPoint(null);
     setConnectPreviewPoint(null);
     setIsConnectingDrag(false);
@@ -1817,8 +1868,9 @@ function App() {
     }
     e.preventDefault();
     e.stopPropagation();
-    createEdgeConnection(connectFromNodeId, targetNodeId);
+    createEdgeConnection(connectFromNodeId, targetNodeId, connectFromSide ?? undefined);
     setConnectFromNodeId("");
+    setConnectFromSide(null);
     setConnectPreviewStartPoint(null);
     setConnectPreviewPoint(null);
     setIsConnectingDrag(false);
@@ -1828,8 +1880,9 @@ function App() {
     if (!connectFromNodeId || connectFromNodeId === targetNodeId) {
       return;
     }
-    createEdgeConnection(connectFromNodeId, targetNodeId);
+    createEdgeConnection(connectFromNodeId, targetNodeId, connectFromSide ?? undefined);
     setConnectFromNodeId("");
+    setConnectFromSide(null);
     setConnectPreviewStartPoint(null);
     setConnectPreviewPoint(null);
     setIsConnectingDrag(false);
@@ -2063,6 +2116,7 @@ function App() {
       setConnectPreviewStartPoint(null);
       setConnectPreviewPoint(null);
       setConnectFromNodeId("");
+      setConnectFromSide(null);
     }
 
     dragBoundsRef.current = null;
@@ -2239,6 +2293,7 @@ function App() {
       setSelectedNodeId(normalized.nodes[0]?.id ?? "");
       setNodeStates({});
       setConnectFromNodeId("");
+      setConnectFromSide(null);
       setConnectPreviewStartPoint(null);
       setConnectPreviewPoint(null);
       setIsConnectingDrag(false);
@@ -2358,6 +2413,7 @@ function App() {
       setConnectPreviewStartPoint(null);
       setConnectPreviewPoint(null);
       setConnectFromNodeId("");
+      setConnectFromSide(null);
     };
     window.addEventListener("mousemove", onWindowMove);
     window.addEventListener("mouseup", onWindowUp);
@@ -3016,15 +3072,13 @@ function App() {
         return null;
       }
 
-      const x1 = fromNode.position.x + NODE_WIDTH;
-      const y1 = fromNode.position.y + NODE_HEIGHT / 2;
-      const x2 = toNode.position.x;
-      const y2 = toNode.position.y + NODE_HEIGHT / 2;
-      const path = buildRoundedEdgePath(x1, y1, x2, y2, true);
+      const auto = getAutoConnectionSides(fromNode, toNode);
+      const fromPoint = getNodeAnchorPoint(fromNode, edge.from.side ?? auto.fromSide);
+      const toPoint = getNodeAnchorPoint(toNode, edge.to.side ?? auto.toSide);
 
       return {
         key: `${edge.from.nodeId}-${edge.to.nodeId}-${index}`,
-        path,
+        path: buildRoundedEdgePath(fromPoint.x, fromPoint.y, toPoint.x, toPoint.y, true),
       };
     })
     .filter(Boolean) as Array<{ key: string; path: string }>;
@@ -3040,7 +3094,7 @@ function App() {
       if (!fromNode) {
         return null;
       }
-      return getNodeAnchorPoint(fromNode, "right");
+      return getNodeAnchorPoint(fromNode, connectFromSide ?? "right");
     })();
     if (!startPoint) {
       return null;
@@ -3265,7 +3319,7 @@ function App() {
                                   className={`node-anchor node-anchor-${side}`}
                                   key={`${node.id}-${side}`}
                                   onMouseDown={(e) => onNodeAnchorDragStart(e, node.id, side)}
-                                  onMouseUp={(e) => onNodeAnchorDrop(e, node.id)}
+                                  onMouseUp={(e) => onNodeAnchorDrop(e, node.id, side)}
                                   type="button"
                                 />
                               ))}
@@ -3417,6 +3471,7 @@ function App() {
                         disabled={!connectFromNodeId}
                         onClick={() => {
                           setConnectFromNodeId("");
+                          setConnectFromSide(null);
                           setConnectPreviewStartPoint(null);
                           setConnectPreviewPoint(null);
                           setIsConnectingDrag(false);
