@@ -249,6 +249,12 @@ const TURN_EXECUTOR_LABELS: Record<TurnExecutor, string> = {
   web_claude: "Web / Claude",
   ollama: "Ollama (로컬)",
 };
+const WEB_PROVIDER_OPTIONS: ReadonlyArray<WebProvider> = [
+  "gemini",
+  "grok",
+  "perplexity",
+  "claude",
+];
 const TURN_MODEL_OPTIONS = [
   "gpt-5.3-codex",
   "gpt-5.3-codex-spark",
@@ -765,6 +771,19 @@ function getWebProviderFromExecutor(executor: TurnExecutor): WebProvider | null 
     return "claude";
   }
   return null;
+}
+
+function webProviderLabel(provider: WebProvider): string {
+  if (provider === "gemini") {
+    return "Gemini";
+  }
+  if (provider === "grok") {
+    return "Grok";
+  }
+  if (provider === "perplexity") {
+    return "Perplexity";
+  }
+  return "Claude";
 }
 
 function turnRoleLabel(node: GraphNode): string {
@@ -1925,6 +1944,24 @@ function App() {
     }
     try {
       await invoke("provider_window_open", { provider: pendingWebTurn.provider });
+    } catch (error) {
+      setError(String(error));
+    }
+  }
+
+  async function onOpenProviderWindow(provider: WebProvider) {
+    try {
+      await invoke("provider_window_open", { provider });
+      setStatus(`${webProviderLabel(provider)} 창 열림`);
+    } catch (error) {
+      setError(String(error));
+    }
+  }
+
+  async function onCloseProviderWindow(provider: WebProvider) {
+    try {
+      await invoke("provider_window_close", { provider });
+      setStatus(`${webProviderLabel(provider)} 창 닫힘`);
     } catch (error) {
       setError(String(error));
     }
@@ -3789,6 +3826,25 @@ function App() {
             <h3>사용량 조회 결과</h3>
             <pre>{usageInfoText}</pre>
           </div>
+        )}
+        {!compact && (
+          <section className="provider-hub">
+            <h3>Provider Hub</h3>
+            <div className="button-row">
+              {WEB_PROVIDER_OPTIONS.map((provider) => (
+                <button key={provider} onClick={() => onOpenProviderWindow(provider)} type="button">
+                  {webProviderLabel(provider)} 열기
+                </button>
+              ))}
+            </div>
+            <div className="button-row">
+              {WEB_PROVIDER_OPTIONS.map((provider) => (
+                <button key={`close-${provider}`} onClick={() => onCloseProviderWindow(provider)} type="button">
+                  {webProviderLabel(provider)} 닫기
+                </button>
+              ))}
+            </div>
+          </section>
         )}
       </section>
     );

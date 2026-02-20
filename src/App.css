@@ -1143,6 +1143,14 @@ h3 {
   gap: 6px;
 }
 
+.provider-hub {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border-radius: 5px;
+  background: #dbe2ed;
+}
+
 .panel-card {
   border: 0;
   border-radius: 5px;
