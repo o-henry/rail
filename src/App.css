@@ -514,7 +514,7 @@ h3 {
   border: 1px solid #d2dbe8;
   background: #f8fafd;
   box-shadow: 0 16px 28px rgba(15, 24, 34, 0.16);
-  padding: 7px 7px 18px;
+  padding: 7px 7px 10px;
   max-height: 250px;
   overflow-y: auto;
 }
@@ -1092,6 +1092,7 @@ h3 {
 .settings-compact {
   margin-top: 0;
   padding-top: 0;
+  padding-bottom: 22px;
   border-top: 0;
 }
 
@@ -1176,8 +1177,6 @@ h3 {
 .settings-view {
   margin: 12px;
   height: calc(100% - 24px);
-  box-sizing: border-box;
-  padding-bottom: 28px;
 }
 
 .dev-layout {
