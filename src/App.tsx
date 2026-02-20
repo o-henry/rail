@@ -3387,19 +3387,21 @@ function App() {
     }
   }
 
-  function renderSettingsPanel(compact = false) {
+  function renderSettingsPanel(compact = false, hideThreeEngineButtons = false) {
     return (
       <section className={`controls ${compact ? "settings-compact" : ""}`}>
         <h2>엔진 및 계정</h2>
-        <div className="settings-badges">
-          <span className={`status-tag ${engineStarted ? "on" : "off"}`}>
-            {engineStarted ? "엔진 연결됨" : "엔진 대기"}
-          </span>
-          <span className={`status-tag ${loginCompleted ? "on" : "off"}`}>
-            {loginCompleted ? "로그인 완료" : "로그인 필요"}
-          </span>
-          <span className="status-tag neutral">인증: {authModeLabel(authMode)}</span>
-        </div>
+        {!compact && (
+          <div className="settings-badges">
+            <span className={`status-tag ${engineStarted ? "on" : "off"}`}>
+              {engineStarted ? "엔진 연결됨" : "엔진 대기"}
+            </span>
+            <span className={`status-tag ${loginCompleted ? "on" : "off"}`}>
+              {loginCompleted ? "로그인 완료" : "로그인 필요"}
+            </span>
+            <span className="status-tag neutral">인증: {authModeLabel(authMode)}</span>
+          </div>
+        )}
         <label>
           작업 경로(CWD)
           <input value={cwd} onChange={(e) => setCwd(e.currentTarget.value)} />
@@ -3417,15 +3419,19 @@ function App() {
         </label>
         {!compact && (
           <div className="button-row">
-            <button onClick={onStartEngine} disabled={running || isGraphRunning} type="button">
-              엔진 시작
-            </button>
-            <button onClick={onStopEngine} type="button">
-              엔진 중지
-            </button>
-            <button onClick={onLoginChatgpt} disabled={running || isGraphRunning} type="button">
-              ChatGPT 로그인
-            </button>
+            {!hideThreeEngineButtons && (
+              <>
+                <button onClick={onStartEngine} disabled={running || isGraphRunning} type="button">
+                  엔진 시작
+                </button>
+                <button onClick={onStopEngine} type="button">
+                  엔진 중지
+                </button>
+                <button onClick={onLoginChatgpt} disabled={running || isGraphRunning} type="button">
+                  ChatGPT 로그인
+                </button>
+              </>
+            )}
             <button onClick={onCheckUsage} disabled={running || isGraphRunning} type="button">
               사용량 확인
             </button>
@@ -4181,7 +4187,7 @@ function App() {
 
         {workspaceTab === "settings" && (
           <section className="panel-card settings-view">
-            {renderSettingsPanel()}
+            {renderSettingsPanel(false, true)}
             <section className="workflow-runtime-status">
               <h3>워크플로우 상태</h3>
               <div className="settings-badges">
