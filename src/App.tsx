@@ -577,6 +577,10 @@ function getNodeAnchorPoint(node: GraphNode, side: NodeAnchorSide): LogicalPoint
   return { x: node.position.x, y: node.position.y + NODE_HEIGHT / 2 };
 }
 
+function getGraphEdgeKey(edge: GraphEdge): string {
+  return `${edge.from.nodeId}:${edge.from.port}->${edge.to.nodeId}:${edge.to.port}`;
+}
+
 function getAutoConnectionSides(fromNode: GraphNode, toNode: GraphNode): {
   fromSide: NodeAnchorSide;
   toSide: NodeAnchorSide;
@@ -1198,6 +1202,7 @@ function App() {
 
   const [graph, setGraph] = useState<GraphData>({ version: 1, nodes: [], edges: [] });
   const [selectedNodeId, setSelectedNodeId] = useState<string>("");
+  const [selectedEdgeKey, setSelectedEdgeKey] = useState<string>("");
   const [connectFromNodeId, setConnectFromNodeId] = useState<string>("");
   const [connectFromSide, setConnectFromSide] = useState<NodeAnchorSide | null>(null);
   const [connectPreviewStartPoint, setConnectPreviewStartPoint] = useState<LogicalPoint | null>(null);
@@ -1713,6 +1718,7 @@ function App() {
     });
 
     setSelectedNodeId(node.id);
+    setSelectedEdgeKey("");
   }
 
   function applyPreset(kind: "validation" | "development") {
@@ -1721,6 +1727,7 @@ function App() {
     setUndoStack([]);
     setRedoStack([]);
     setSelectedNodeId(preset.nodes[0]?.id ?? "");
+    setSelectedEdgeKey("");
     setNodeStates({});
     setConnectFromNodeId("");
     setConnectFromSide(null);
@@ -1741,6 +1748,7 @@ function App() {
       edges: prev.edges.filter((e) => e.from.nodeId !== nodeId && e.to.nodeId !== nodeId),
     }));
     setSelectedNodeId((prev) => (prev === nodeId ? "" : prev));
+    setSelectedEdgeKey("");
     setNodeStates((prev) => {
       const next = { ...prev };
       delete next[nodeId];
@@ -1757,6 +1765,7 @@ function App() {
 
   function onPortOutClick(nodeId: string) {
     setConnectFromNodeId(nodeId);
+    setSelectedEdgeKey("");
     setConnectFromSide(null);
     setConnectPreviewStartPoint(null);
     setConnectPreviewPoint(null);
@@ -2143,6 +2152,12 @@ function App() {
   }
 
   function onCanvasMouseDown(e: ReactMouseEvent<HTMLDivElement>) {
+    const target = e.target as HTMLElement;
+    if (!target.closest(".graph-node, .edge-path, .canvas-overlay, .node-anchors, .node-ports")) {
+      setSelectedNodeId("");
+      setSelectedEdgeKey("");
+    }
+
     if (!panMode) {
       return;
     }
@@ -2150,8 +2165,10 @@ function App() {
     if (!canvas) {
       return;
     }
-    const target = e.target as HTMLElement;
     if (target.closest(".canvas-zoom-controls, .canvas-runbar")) {
+      return;
+    }
+    if (target.closest(".edge-path")) {
       return;
     }
     e.preventDefault();
@@ -2291,6 +2308,7 @@ function App() {
       setUndoStack([]);
       setRedoStack([]);
       setSelectedNodeId(normalized.nodes[0]?.id ?? "");
+      setSelectedEdgeKey("");
       setNodeStates({});
       setConnectFromNodeId("");
       setConnectFromSide(null);
@@ -2313,6 +2331,16 @@ function App() {
       setSelectedNodeId("");
     }
   }, [graph.nodes, selectedNodeId]);
+
+  useEffect(() => {
+    if (!selectedEdgeKey) {
+      return;
+    }
+    const exists = graph.edges.some((edge) => getGraphEdgeKey(edge) === selectedEdgeKey);
+    if (!exists) {
+      setSelectedEdgeKey("");
+    }
+  }, [graph.edges, selectedEdgeKey]);
 
   useEffect(() => {
     if (workspaceTab !== "workflow" && canvasFullscreen) {
@@ -2357,6 +2385,44 @@ function App() {
     window.addEventListener("keydown", onWindowKeyDown);
     return () => window.removeEventListener("keydown", onWindowKeyDown);
   }, [workspaceTab]);
+
+  useEffect(() => {
+    if (workspaceTab !== "workflow") {
+      return;
+    }
+
+    const onDeleteSelectedEdge = (event: KeyboardEvent) => {
+      if (event.repeat || event.metaKey || event.ctrlKey || event.altKey) {
+        return;
+      }
+      if (isEditableTarget(event.target)) {
+        return;
+      }
+      if (event.key !== "Backspace" && event.key !== "Delete") {
+        return;
+      }
+      if (!selectedEdgeKey) {
+        return;
+      }
+
+      const hasTarget = graph.edges.some((edge) => getGraphEdgeKey(edge) === selectedEdgeKey);
+      if (!hasTarget) {
+        setSelectedEdgeKey("");
+        return;
+      }
+
+      event.preventDefault();
+      applyGraphChange((prev) => ({
+        ...prev,
+        edges: prev.edges.filter((edge) => getGraphEdgeKey(edge) !== selectedEdgeKey),
+      }));
+      setSelectedEdgeKey("");
+      setStatus("연결선 삭제됨");
+    };
+
+    window.addEventListener("keydown", onDeleteSelectedEdge);
+    return () => window.removeEventListener("keydown", onDeleteSelectedEdge);
+  }, [workspaceTab, selectedEdgeKey, graph.edges]);
 
   useEffect(() => {
     syncQuestionInputHeight();
@@ -3075,13 +3141,15 @@ function App() {
       const auto = getAutoConnectionSides(fromNode, toNode);
       const fromPoint = getNodeAnchorPoint(fromNode, edge.from.side ?? auto.fromSide);
       const toPoint = getNodeAnchorPoint(toNode, edge.to.side ?? auto.toSide);
+      const edgeKey = getGraphEdgeKey(edge);
 
       return {
-        key: `${edge.from.nodeId}-${edge.to.nodeId}-${index}`,
+        key: `${edgeKey}-${index}`,
+        edgeKey,
         path: buildRoundedEdgePath(fromPoint.x, fromPoint.y, toPoint.x, toPoint.y, true),
       };
     })
-    .filter(Boolean) as Array<{ key: string; path: string }>;
+    .filter(Boolean) as Array<{ key: string; edgeKey: string; path: string }>;
   const connectPreviewLine = (() => {
     if (!connectFromNodeId || !connectPreviewPoint) {
       return null;
@@ -3245,20 +3313,28 @@ function App() {
                       </defs>
                       {edgeLines.map((line) => (
                         <path
+                          className={selectedEdgeKey === line.edgeKey ? "edge-path selected" : "edge-path"}
                           d={line.path}
                           fill="none"
                           key={line.key}
                           markerEnd="url(#edge-arrow)"
-                          stroke="#70848a"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedNodeId("");
+                            setSelectedEdgeKey(line.edgeKey);
+                          }}
+                          pointerEvents="stroke"
+                          stroke={selectedEdgeKey === line.edgeKey ? "#4f83ff" : "#70848a"}
                           strokeLinejoin="round"
                           strokeLinecap="round"
-                          strokeWidth={2}
+                          strokeWidth={selectedEdgeKey === line.edgeKey ? 3 : 2}
                         />
                       ))}
                       {connectPreviewLine && (
                         <path
                           d={connectPreviewLine}
                           fill="none"
+                          pointerEvents="none"
                           stroke="#5b8cff"
                           strokeDasharray="5 4"
                           strokeLinecap="round"
@@ -3276,7 +3352,10 @@ function App() {
                         <div
                           className={`graph-node node-${node.type} ${selectedNodeId === node.id ? "selected" : ""}`}
                           key={node.id}
-                          onClick={() => setSelectedNodeId(node.id)}
+                          onClick={() => {
+                            setSelectedNodeId(node.id);
+                            setSelectedEdgeKey("");
+                          }}
                           onMouseUp={(e) => {
                             if (!isConnectingDrag) {
                               return;
