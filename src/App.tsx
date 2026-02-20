@@ -1971,6 +1971,7 @@ function App() {
     }
     try {
       await invoke("provider_window_open", { provider: pendingWebTurn.provider });
+      setProviderWindowOpen((prev) => ({ ...prev, [pendingWebTurn.provider]: true }));
     } catch (error) {
       setError(String(error));
     }
