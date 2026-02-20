@@ -362,7 +362,8 @@ h3 {
 }
 
 .question-input {
-  position: relative;
+  display: grid;
+  grid-template-rows: auto auto;
   border-radius: 5px;
   background: #fbfcfe;
   overflow: hidden;
@@ -372,7 +373,7 @@ h3 {
   width: 100%;
   min-height: 48px;
   max-height: 132px;
-  padding-bottom: 44px;
+  padding: 10px 12px;
   border-radius: 0;
   border: 0;
   background: transparent;
@@ -393,14 +394,12 @@ h3 {
 }
 
 .question-input-footer {
-  position: absolute;
-  left: 8px;
-  right: 8px;
-  bottom: 8px;
+  min-height: 42px;
+  padding: 6px 8px;
+  border-top: 1px solid #e5eaf0;
   display: flex;
   justify-content: flex-end;
   align-items: center;
-  pointer-events: none;
 }
 
 .question-create-button {
@@ -412,7 +411,6 @@ h3 {
   padding: 0;
   display: inline-grid;
   place-items: center;
-  pointer-events: auto;
 }
 
 .question-create-icon {
