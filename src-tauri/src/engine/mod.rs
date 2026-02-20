@@ -721,7 +721,7 @@ pub async fn provider_window_open(app: AppHandle, provider: String) -> Result<()
         .parse()
         .map_err(|e| format!("invalid provider url ({url}): {e}"))?;
     WebviewWindowBuilder::new(&app, &window_id, WebviewUrl::External(external))
-        .title(&format!("{provider_key} - rail"))
+        .title(format!("{provider_key} - rail"))
         .inner_size(1280.0, 860.0)
         .min_inner_size(1024.0, 700.0)
         .center()
