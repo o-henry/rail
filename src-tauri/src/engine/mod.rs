@@ -7,7 +7,8 @@ use std::{
         Arc,
     },
 };
-use tauri::{AppHandle, Emitter, Manager, State, WebviewUrl, WebviewWindowBuilder};
+use tauri::webview::WebviewBuilder;
+use tauri::{AppHandle, Emitter, Manager, State, WebviewUrl, WebviewWindowBuilder, Window};
 use tokio::{
     io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
     process::{Child, ChildStdin, Command},
@@ -20,6 +21,11 @@ const EVENT_ENGINE_NOTIFICATION: &str = "engine://notification";
 const EVENT_ENGINE_LIFECYCLE: &str = "engine://lifecycle";
 const EVENT_ENGINE_APPROVAL_REQUEST: &str = "engine://approval_request";
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(90);
+const CHILD_VIEW_LABEL_PREFIX: &str = "provider-child-";
+const CHILD_VIEW_MIN_WIDTH: u32 = 840;
+const CHILD_VIEW_MIN_HEIGHT: u32 = 520;
+const CHILD_VIEW_MARGIN_X: u32 = 180;
+const CHILD_VIEW_MARGIN_Y: u32 = 112;
 
 #[derive(Default)]
 pub struct EngineManager {
@@ -494,6 +500,10 @@ fn provider_url(provider: &str) -> Option<&'static str> {
     }
 }
 
+fn provider_child_view_label(provider_key: &str) -> String {
+    format!("{CHILD_VIEW_LABEL_PREFIX}{provider_key}")
+}
+
 async fn current_runtime(state: &EngineManager) -> Result<Arc<EngineRuntime>, String> {
     state
         .runtime
@@ -731,6 +741,60 @@ pub async fn provider_window_close(app: AppHandle, provider: String) -> Result<(
     window
         .close()
         .map_err(|e| format!("failed to close provider window: {e}"))?;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn provider_child_view_open(window: Window, provider: String) -> Result<(), String> {
+    let provider_key = provider.trim().to_lowercase();
+    let url = provider_url(&provider_key)
+        .ok_or_else(|| format!("unsupported provider: {provider}"))?;
+    let child_label = provider_child_view_label(&provider_key);
+
+    if let Some(webview) = window.app_handle().get_webview(&child_label) {
+        let _ = webview.set_focus();
+        return Ok(());
+    }
+
+    let size = window
+        .inner_size()
+        .map_err(|e| format!("failed to read parent window size: {e}"))?;
+    let width = size
+        .width
+        .saturating_sub(CHILD_VIEW_MARGIN_X)
+        .max(CHILD_VIEW_MIN_WIDTH);
+    let height = size
+        .height
+        .saturating_sub(CHILD_VIEW_MARGIN_Y)
+        .max(CHILD_VIEW_MIN_HEIGHT);
+    let x = (size.width.saturating_sub(width)) / 2;
+    let y = (size.height.saturating_sub(height)) / 2;
+
+    let external = url
+        .parse()
+        .map_err(|e| format!("invalid provider url ({url}): {e}"))?;
+
+    window
+        .add_child(
+            WebviewBuilder::new(child_label, WebviewUrl::External(external)).auto_resize(),
+            tauri::LogicalPosition::new(f64::from(x), f64::from(y)),
+            tauri::LogicalSize::new(f64::from(width), f64::from(height)),
+        )
+        .map_err(|e| format!("failed to open provider child view: {e}"))?;
+
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn provider_child_view_close(app: AppHandle, provider: String) -> Result<(), String> {
+    let provider_key = provider.trim().to_lowercase();
+    let child_label = provider_child_view_label(&provider_key);
+    let webview = app
+        .get_webview(&child_label)
+        .ok_or_else(|| format!("provider child view not found: {provider_key}"))?;
+    webview
+        .close()
+        .map_err(|e| format!("failed to close provider child view: {e}"))?;
     Ok(())
 }
 

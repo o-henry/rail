@@ -1241,6 +1241,13 @@ h3 {
   height: calc(100% - 24px);
 }
 
+.childview-view {
+  margin: 12px;
+  height: calc(100% - 24px);
+  align-content: start;
+  gap: 10px;
+}
+
 .dev-layout {
   margin-left: 0;
 }
@@ -1347,6 +1354,7 @@ pre {
   }
 
   .history-layout,
+  .childview-view,
   .settings-view,
   .dev-layout {
     margin-left: 12px;

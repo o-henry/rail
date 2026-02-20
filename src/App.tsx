@@ -54,7 +54,7 @@ type PendingApproval = {
   params: unknown;
 };
 
-type WorkspaceTab = "workflow" | "history" | "settings" | "dev";
+type WorkspaceTab = "workflow" | "history" | "childview" | "settings" | "dev";
 type NodeType = "turn" | "transform" | "gate";
 type PortType = "in" | "out";
 
@@ -906,6 +906,14 @@ function NavIcon({ tab }: { tab: WorkspaceTab }) {
       </svg>
     );
   }
+  if (tab === "childview") {
+    return (
+      <svg aria-hidden="true" fill="none" height="20" viewBox="0 0 24 24" width="20">
+        <rect height="14" rx="2.2" stroke="currentColor" strokeWidth="1.8" width="18" x="3" y="5" />
+        <path d="M8 19v2M16 19v2M8 21h8" stroke="currentColor" strokeLinecap="round" strokeWidth="1.8" />
+      </svg>
+    );
+  }
   if (tab === "dev") {
     return (
       <svg aria-hidden="true" fill="none" height="20" viewBox="0 0 24 24" width="20">
@@ -1468,6 +1476,13 @@ function App() {
     perplexity: false,
     claude: false,
   });
+  const [childViewProvider, setChildViewProvider] = useState<WebProvider>("gemini");
+  const [providerChildViewOpen, setProviderChildViewOpen] = useState<Record<WebProvider, boolean>>({
+    gemini: false,
+    grok: false,
+    perplexity: false,
+    claude: false,
+  });
 
   const [graph, setGraph] = useState<GraphData>({
     version: GRAPH_SCHEMA_VERSION,
@@ -2009,6 +2024,40 @@ function App() {
       return;
     }
     await onOpenProviderWindow(provider);
+  }
+
+  async function onOpenProviderChildView(provider: WebProvider) {
+    try {
+      await invoke("provider_child_view_open", { provider });
+      setProviderChildViewOpen((prev) => ({ ...prev, [provider]: true }));
+      setStatus(`${webProviderLabel(provider)} child view 열림`);
+    } catch (error) {
+      setError(String(error));
+    }
+  }
+
+  async function onCloseProviderChildView(provider: WebProvider) {
+    try {
+      await invoke("provider_child_view_close", { provider });
+      setProviderChildViewOpen((prev) => ({ ...prev, [provider]: false }));
+      setStatus(`${webProviderLabel(provider)} child view 닫힘`);
+    } catch (error) {
+      const message = String(error);
+      if (message.includes("provider child view not found")) {
+        setProviderChildViewOpen((prev) => ({ ...prev, [provider]: false }));
+        setStatus(`${webProviderLabel(provider)} child view 닫힘`);
+        return;
+      }
+      setError(message);
+    }
+  }
+
+  async function onToggleProviderChildView(provider: WebProvider) {
+    if (providerChildViewOpen[provider]) {
+      await onCloseProviderChildView(provider);
+      return;
+    }
+    await onOpenProviderChildView(provider);
   }
 
   async function onCopyPendingWebPrompt() {
@@ -3383,6 +3432,8 @@ function App() {
         return {
           ok: false,
           error: `웹 서비스 창 열기 실패(${webProvider}): ${String(error)}`,
+          executor,
+          provider: webProvider,
         };
       }
       setNodeStatus(node.id, "waiting_user", `${webProvider} 응답 입력 대기`);
@@ -3411,7 +3462,7 @@ function App() {
     }
 
     if (!activeThreadId) {
-      return { ok: false, error: "threadId를 가져오지 못했습니다." };
+      return { ok: false, error: "threadId를 가져오지 못했습니다.", executor, provider: "codex" };
     }
 
     setNodeRuntimeFields(node.id, { threadId: activeThreadId });
@@ -4038,6 +4089,16 @@ function App() {
           >
             <span className="nav-icon"><NavIcon tab="history" /></span>
             <span className="nav-label">기록</span>
+          </button>
+          <button
+            className={isActiveTab("childview") ? "is-active" : ""}
+            onClick={() => setWorkspaceTab("childview")}
+            aria-label="웹뷰"
+            title="웹뷰"
+            type="button"
+          >
+            <span className="nav-icon"><NavIcon tab="childview" /></span>
+            <span className="nav-label">웹</span>
           </button>
           <button
             className={isActiveTab("dev") ? "is-active" : ""}
@@ -4715,6 +4776,46 @@ function App() {
                 </>
               )}
             </article>
+          </section>
+        )}
+
+        {workspaceTab === "childview" && (
+          <section className="panel-card childview-view">
+            <h2>Child View 테스트</h2>
+            <p>앱 내부 child view로 provider 웹 앱을 띄우는 화면입니다.</p>
+            <label>
+              Provider 선택
+              <FancySelect
+                ariaLabel="Child View Provider"
+                className="modern-select"
+                hideCheckmark
+                onChange={(next) => setChildViewProvider(next as WebProvider)}
+                options={WEB_PROVIDER_OPTIONS.map((provider) => ({
+                  value: provider,
+                  label: webProviderLabel(provider),
+                }))}
+                value={childViewProvider}
+              />
+            </label>
+            <div className="button-row">
+              <button onClick={() => onOpenProviderChildView(childViewProvider)} type="button">
+                Child View 열기
+              </button>
+              <button onClick={() => onCloseProviderChildView(childViewProvider)} type="button">
+                Child View 닫기
+              </button>
+              <button onClick={() => onToggleProviderChildView(childViewProvider)} type="button">
+                토글
+              </button>
+            </div>
+            <div className="settings-badges">
+              <span className={`status-tag ${providerChildViewOpen[childViewProvider] ? "on" : "off"}`}>
+                {providerChildViewOpen[childViewProvider] ? "열림" : "닫힘"}
+              </span>
+              <span className="status-tag neutral">
+                현재 Provider: {webProviderLabel(childViewProvider)}
+              </span>
+            </div>
           </section>
         )}
 
