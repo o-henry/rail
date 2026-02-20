@@ -814,6 +814,7 @@ function FancySelect({
   className,
   disabled = false,
   emptyMessage = "항목이 없습니다.",
+  hideCheckmark = false,
   onChange,
   options,
   placeholder = "선택",
@@ -823,6 +824,7 @@ function FancySelect({
   className?: string;
   disabled?: boolean;
   emptyMessage?: string;
+  hideCheckmark?: boolean;
   onChange: (nextValue: string) => void;
   options: FancySelectOption[];
   placeholder?: string;
@@ -901,7 +903,7 @@ function FancySelect({
               type="button"
             >
               <span>{option.label}</span>
-              {option.value === value && <span className="fancy-select-check">✓</span>}
+              {!hideCheckmark && option.value === value && <span className="fancy-select-check">✓</span>}
             </button>
           ))}
         </div>
@@ -3369,6 +3371,7 @@ function App() {
           <FancySelect
             ariaLabel="기본 모델"
             className="modern-select"
+            hideCheckmark
             onChange={setModel}
             options={TURN_MODEL_OPTIONS.map((option) => ({ value: option, label: option }))}
             value={model}
