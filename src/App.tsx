@@ -154,6 +154,11 @@ type LogicalPoint = {
 };
 
 type NodeAnchorSide = "top" | "right" | "bottom" | "left";
+type FancySelectOption = {
+  value: string;
+  label: string;
+  disabled?: boolean;
+};
 
 type TurnConfig = {
   model?: string;
@@ -716,6 +721,103 @@ function NavIcon({ tab }: { tab: WorkspaceTab }) {
       />
       <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="1.8" />
     </svg>
+  );
+}
+
+function FancySelect({
+  ariaLabel,
+  className,
+  disabled = false,
+  emptyMessage = "항목이 없습니다.",
+  onChange,
+  options,
+  placeholder = "선택",
+  value,
+}: {
+  ariaLabel?: string;
+  className?: string;
+  disabled?: boolean;
+  emptyMessage?: string;
+  onChange: (nextValue: string) => void;
+  options: FancySelectOption[];
+  placeholder?: string;
+  value: string;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const selected = options.find((option) => option.value === value) ?? null;
+
+  useEffect(() => {
+    const onWindowMouseDown = (event: MouseEvent) => {
+      if (!rootRef.current) {
+        return;
+      }
+      if (!rootRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    const onWindowKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsOpen(false);
+      }
+    };
+    window.addEventListener("mousedown", onWindowMouseDown);
+    window.addEventListener("keydown", onWindowKeyDown);
+    return () => {
+      window.removeEventListener("mousedown", onWindowMouseDown);
+      window.removeEventListener("keydown", onWindowKeyDown);
+    };
+  }, []);
+
+  return (
+    <div className={`fancy-select ${className ?? ""} ${isOpen ? "is-open" : ""}`} ref={rootRef}>
+      <button
+        aria-expanded={isOpen}
+        aria-haspopup="listbox"
+        aria-label={ariaLabel}
+        className="fancy-select-trigger"
+        disabled={disabled}
+        onClick={() => {
+          if (disabled) {
+            return;
+          }
+          setIsOpen((prev) => !prev);
+        }}
+        type="button"
+      >
+        <span className={`fancy-select-value ${selected ? "" : "is-placeholder"}`}>
+          {selected ? selected.label : placeholder}
+        </span>
+        <span aria-hidden="true" className="fancy-select-chevron">
+          ▾
+        </span>
+      </button>
+      {isOpen && (
+        <div className="fancy-select-menu" role="listbox">
+          {options.length === 0 && <div className="fancy-select-empty">{emptyMessage}</div>}
+          {options.map((option) => (
+            <button
+              aria-selected={option.value === value}
+              className={`fancy-select-option ${option.value === value ? "is-selected" : ""}`}
+              disabled={option.disabled}
+              key={option.value}
+              onClick={() => {
+                if (option.disabled) {
+                  return;
+                }
+                onChange(option.value);
+                setIsOpen(false);
+              }}
+              role="option"
+              type="button"
+            >
+              <span>{option.label}</span>
+              {option.value === value && <span className="fancy-select-check">✓</span>}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -2860,13 +2962,13 @@ function App() {
         </label>
         <label>
           기본 모델
-          <select className="modern-select" value={model} onChange={(e) => setModel(e.currentTarget.value)}>
-            {TURN_MODEL_OPTIONS.map((option) => (
-              <option key={option} value={option}>
-                {option}
-              </option>
-            ))}
-          </select>
+          <FancySelect
+            ariaLabel="기본 모델"
+            className="modern-select"
+            onChange={setModel}
+            options={TURN_MODEL_OPTIONS.map((option) => ({ value: option, label: option }))}
+            value={model}
+          />
         </label>
         <div className="button-row">
           <button onClick={onStartEngine} disabled={running || isGraphRunning} type="button">
@@ -3349,23 +3451,19 @@ function App() {
                       <button onClick={refreshGraphFiles} type="button">
                         새로고침
                       </button>
-                      <select
+                      <FancySelect
+                        ariaLabel="그래프 파일 선택"
                         className="graph-file-select modern-select"
-                        onChange={(e) => {
-                          const value = e.currentTarget.value;
+                        emptyMessage="저장된 그래프가 없습니다."
+                        onChange={(value) => {
                           if (value) {
                             loadGraph(value);
                           }
                         }}
+                        options={graphFiles.map((file) => ({ value: file, label: file }))}
+                        placeholder="그래프 파일 선택"
                         value=""
-                      >
-                        <option value="">그래프 파일 선택</option>
-                        {graphFiles.map((file) => (
-                          <option key={file} value={file}>
-                            {file}
-                          </option>
-                        ))}
-                      </select>
+                      />
                     </div>
                   </section>
 
@@ -3391,17 +3489,13 @@ function App() {
                           <h3>모델 설정</h3>
                           <label>
                             모델
-                            <select
+                            <FancySelect
+                              ariaLabel="노드 모델"
                               className="modern-select"
-                              onChange={(e) => updateSelectedNodeConfig("model", e.currentTarget.value)}
+                              onChange={(next) => updateSelectedNodeConfig("model", next)}
+                              options={TURN_MODEL_OPTIONS.map((option) => ({ value: option, label: option }))}
                               value={String((selectedNode.config as TurnConfig).model ?? model)}
-                            >
-                              {TURN_MODEL_OPTIONS.map((option) => (
-                                <option key={option} value={option}>
-                                  {option}
-                                </option>
-                              ))}
-                            </select>
+                            />
                           </label>
                           <label>
                             작업 경로
@@ -3428,15 +3522,17 @@ function App() {
                           <h3>변환 규칙</h3>
                           <label>
                             변환 모드
-                            <select
+                            <FancySelect
+                              ariaLabel="변환 모드"
                               className="modern-select"
-                              onChange={(e) => updateSelectedNodeConfig("mode", e.currentTarget.value)}
+                              onChange={(next) => updateSelectedNodeConfig("mode", next)}
+                              options={[
+                                { value: "pick", label: "필드 선택" },
+                                { value: "merge", label: "병합" },
+                                { value: "template", label: "문자열 템플릿" },
+                              ]}
                               value={String((selectedNode.config as TransformConfig).mode ?? "pick")}
-                            >
-                              <option value="pick">필드 선택</option>
-                              <option value="merge">병합</option>
-                              <option value="template">문자열 템플릿</option>
-                            </select>
+                            />
                           </label>
                           <label>
                             pick 경로
@@ -3476,33 +3572,29 @@ function App() {
                           </label>
                           <label>
                             PASS 대상 노드
-                            <select
+                            <FancySelect
+                              ariaLabel="PASS 대상 노드"
                               className="modern-select"
-                              onChange={(e) => updateSelectedNodeConfig("passNodeId", e.currentTarget.value)}
+                              onChange={(next) => updateSelectedNodeConfig("passNodeId", next)}
+                              options={[
+                                { value: "", label: "(없음)" },
+                                ...outgoingFromSelected.map((nodeId) => ({ value: nodeId, label: nodeId })),
+                              ]}
                               value={String((selectedNode.config as GateConfig).passNodeId ?? "")}
-                            >
-                              <option value="">(없음)</option>
-                              {outgoingFromSelected.map((nodeId) => (
-                                <option key={nodeId} value={nodeId}>
-                                  {nodeId}
-                                </option>
-                              ))}
-                            </select>
+                            />
                           </label>
                           <label>
                             REJECT 대상 노드
-                            <select
+                            <FancySelect
+                              ariaLabel="REJECT 대상 노드"
                               className="modern-select"
-                              onChange={(e) => updateSelectedNodeConfig("rejectNodeId", e.currentTarget.value)}
+                              onChange={(next) => updateSelectedNodeConfig("rejectNodeId", next)}
+                              options={[
+                                { value: "", label: "(없음)" },
+                                ...outgoingFromSelected.map((nodeId) => ({ value: nodeId, label: nodeId })),
+                              ]}
                               value={String((selectedNode.config as GateConfig).rejectNodeId ?? "")}
-                            >
-                              <option value="">(없음)</option>
-                              {outgoingFromSelected.map((nodeId) => (
-                                <option key={nodeId} value={nodeId}>
-                                  {nodeId}
-                                </option>
-                              ))}
-                            </select>
+                            />
                           </label>
                           <label>
                             스키마 JSON (선택)
