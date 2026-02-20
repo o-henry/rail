@@ -3377,20 +3377,22 @@ function App() {
             value={model}
           />
         </label>
-        <div className="button-row">
-          <button onClick={onStartEngine} disabled={running || isGraphRunning} type="button">
-            엔진 시작
-          </button>
-          <button onClick={onStopEngine} type="button">
-            엔진 중지
-          </button>
-          <button onClick={onLoginChatgpt} disabled={running || isGraphRunning} type="button">
-            ChatGPT 로그인
-          </button>
-          <button onClick={onCheckUsage} disabled={running || isGraphRunning} type="button">
-            사용량 확인
-          </button>
-        </div>
+        {!compact && (
+          <div className="button-row">
+            <button onClick={onStartEngine} disabled={running || isGraphRunning} type="button">
+              엔진 시작
+            </button>
+            <button onClick={onStopEngine} type="button">
+              엔진 중지
+            </button>
+            <button onClick={onLoginChatgpt} disabled={running || isGraphRunning} type="button">
+              ChatGPT 로그인
+            </button>
+            <button onClick={onCheckUsage} disabled={running || isGraphRunning} type="button">
+              사용량 확인
+            </button>
+          </div>
+        )}
         {authUrl && (
           <div className="auth-url-box">
             <span>인증 URL</span>
