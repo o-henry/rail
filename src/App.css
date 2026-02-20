@@ -578,6 +578,15 @@ h3 {
 .fancy-select.graph-file-select .fancy-select-trigger {
   background: #d8e0ec;
   min-height: 38px;
+  line-height: 1.4;
+  padding-top: 10px;
+  padding-bottom: 10px;
+}
+
+.fancy-select.graph-file-select .fancy-select-value {
+  line-height: 1.4;
+  display: inline-flex;
+  align-items: center;
 }
 
 .graph-canvas {
