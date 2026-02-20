@@ -744,6 +744,7 @@ pub async fn provider_window_close(app: AppHandle, provider: String) -> Result<(
     Ok(())
 }
 
+#[cfg(desktop)]
 #[tauri::command]
 pub async fn provider_child_view_open(window: Window, provider: String) -> Result<(), String> {
     let provider_key = provider.trim().to_lowercase();
@@ -785,6 +786,13 @@ pub async fn provider_child_view_open(window: Window, provider: String) -> Resul
     Ok(())
 }
 
+#[cfg(not(desktop))]
+#[tauri::command]
+pub async fn provider_child_view_open(_provider: String) -> Result<(), String> {
+    Err("provider child view is only supported on desktop".to_string())
+}
+
+#[cfg(desktop)]
 #[tauri::command]
 pub async fn provider_child_view_close(app: AppHandle, provider: String) -> Result<(), String> {
     let provider_key = provider.trim().to_lowercase();
@@ -796,6 +804,12 @@ pub async fn provider_child_view_close(app: AppHandle, provider: String) -> Resu
         .close()
         .map_err(|e| format!("failed to close provider child view: {e}"))?;
     Ok(())
+}
+
+#[cfg(not(desktop))]
+#[tauri::command]
+pub async fn provider_child_view_close(_provider: String) -> Result<(), String> {
+    Err("provider child view is only supported on desktop".to_string())
 }
 
 #[tauri::command]
