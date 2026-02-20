@@ -247,6 +247,20 @@ function isEditableTarget(target: EventTarget | null): boolean {
   return Boolean(target.closest("[contenteditable='true']"));
 }
 
+function isNodeDragAllowedTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) {
+    return false;
+  }
+  if (
+    target.closest(
+      "button, input, textarea, select, a, .node-anchor, .node-ports, .node-port-btn, .fancy-select, .fancy-select-menu",
+    )
+  ) {
+    return false;
+  }
+  return true;
+}
+
 function extractDeltaText(input: unknown, depth = 0): string {
   if (depth > 3 || input == null) {
     return "";
@@ -2625,6 +2639,30 @@ function App() {
     if (workspaceTab !== "workflow") {
       return;
     }
+    const onSelectAll = (event: KeyboardEvent) => {
+      if (!(event.metaKey || event.ctrlKey) || event.altKey) {
+        return;
+      }
+      if (event.key.toLowerCase() !== "a") {
+        return;
+      }
+      if (isEditableTarget(event.target)) {
+        return;
+      }
+      event.preventDefault();
+      const allNodeIds = graph.nodes.map((node) => node.id);
+      setNodeSelection(allNodeIds, allNodeIds[0]);
+      setSelectedEdgeKey("");
+      setStatus(allNodeIds.length > 0 ? `노드 ${allNodeIds.length}개 선택됨` : "선택할 노드가 없습니다");
+    };
+    window.addEventListener("keydown", onSelectAll);
+    return () => window.removeEventListener("keydown", onSelectAll);
+  }, [workspaceTab, graph.nodes]);
+
+  useEffect(() => {
+    if (workspaceTab !== "workflow") {
+      return;
+    }
 
     const onDeleteSelection = (event: KeyboardEvent) => {
       if (event.repeat || event.metaKey || event.ctrlKey || event.altKey) {
@@ -3680,9 +3718,18 @@ function App() {
                             e.stopPropagation();
                             onNodeConnectDrop(node.id);
                           }}
+                          onMouseDown={(event) => {
+                            if (!isNodeDragAllowedTarget(event.target)) {
+                              return;
+                            }
+                            if (event.button !== 0 || isConnectingDrag) {
+                              return;
+                            }
+                            onNodeDragStart(event, node.id);
+                          }}
                           style={{ left: node.position.x, top: node.position.y }}
                         >
-                          <div className="node-head" onMouseDown={(e) => onNodeDragStart(e, node.id)}>
+                          <div className="node-head">
                             <div className="node-head-main">
                               {node.type === "turn" ? (
                                 <>

@@ -663,6 +663,11 @@ h3 {
   background: #ffffff;
   box-shadow: 0 2px 10px rgba(20, 30, 39, 0.08);
   overflow: visible;
+  cursor: grab;
+}
+
+.graph-node:active {
+  cursor: grabbing;
 }
 
 .graph-node.selected {
@@ -723,6 +728,7 @@ h3 {
 .node-head button {
   padding: 4px 7px;
   font-size: 0.74rem;
+  cursor: pointer;
 }
 
 .node-body {
