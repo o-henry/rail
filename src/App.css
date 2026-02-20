@@ -105,6 +105,16 @@ select {
   padding: 8px 10px;
 }
 
+select {
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("/down-arrow.svg");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  background-size: 12px 12px;
+  padding-right: 34px;
+}
+
 textarea {
   resize: vertical;
 }
@@ -479,14 +489,16 @@ h3 {
 }
 
 .fancy-select-chevron {
-  font-size: 0.78rem;
-  color: #6d7888;
-  transition: transform 140ms ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   flex-shrink: 0;
 }
 
-.fancy-select.is-open .fancy-select-chevron {
-  transform: rotate(180deg);
+.fancy-select-chevron-icon {
+  width: 12px;
+  height: 12px;
+  display: block;
 }
 
 .fancy-select-menu {

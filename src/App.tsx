@@ -817,7 +817,11 @@ function FancySelect({
           {selected ? selected.label : placeholder}
         </span>
         <span aria-hidden="true" className="fancy-select-chevron">
-          ▾
+          <img
+            alt=""
+            className="fancy-select-chevron-icon"
+            src={isOpen ? "/up-arrow.svg" : "/down-arrow.svg"}
+          />
         </span>
       </button>
       {isOpen && (
