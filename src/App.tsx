@@ -996,7 +996,7 @@ function FancySelect({
 
     const minBottomGap = 16;
     const previousGap = container.style.getPropertyValue("--dropdown-open-gap");
-    const requiredGap = Math.max(0, Math.ceil(menu.offsetHeight + minBottomGap + 8));
+    const requiredGap = 160;
     container.style.setProperty("--dropdown-open-gap", `${requiredGap}px`);
 
     const frame = window.requestAnimationFrame(() => {
@@ -1447,7 +1447,9 @@ function App() {
   const [engineStarted, setEngineStarted] = useState(false);
   const [status, setStatus] = useState("대기 중");
   const [running, setRunning] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setErrorState] = useState("");
+  const [errorLogs, setErrorLogs] = useState<string[]>([]);
+  const [showErrorLogs, setShowErrorLogs] = useState(false);
 
   const [authUrl, setAuthUrl] = useState("");
   const [usageSourceMethod, setUsageSourceMethod] = useState("");
@@ -1460,6 +1462,12 @@ function App() {
   const [approvalSubmitting, setApprovalSubmitting] = useState(false);
   const [pendingWebTurn, setPendingWebTurn] = useState<PendingWebTurn | null>(null);
   const [webResponseDraft, setWebResponseDraft] = useState("");
+  const [providerWindowOpen, setProviderWindowOpen] = useState<Record<WebProvider, boolean>>({
+    gemini: false,
+    grok: false,
+    perplexity: false,
+    claude: false,
+  });
 
   const [graph, setGraph] = useState<GraphData>({
     version: GRAPH_SCHEMA_VERSION,
@@ -1517,6 +1525,16 @@ function App() {
 
   const activeApproval = pendingApprovals[0];
   const selectedNode = graph.nodes.find((node) => node.id === selectedNodeId) ?? null;
+
+  function setError(next: string) {
+    setErrorState(next);
+    const trimmed = next.trim();
+    if (!trimmed) {
+      return;
+    }
+    const at = new Date().toISOString();
+    setErrorLogs((prev) => [`[${at}] ${trimmed}`, ...prev].slice(0, 600));
+  }
 
   function getNodeVisualSize(nodeId: string): NodeVisualSize {
     return nodeSizeMapRef.current[nodeId] ?? { width: NODE_WIDTH, height: NODE_HEIGHT };
@@ -1961,6 +1979,7 @@ function App() {
   async function onOpenProviderWindow(provider: WebProvider) {
     try {
       await invoke("provider_window_open", { provider });
+      setProviderWindowOpen((prev) => ({ ...prev, [provider]: true }));
       setStatus(`${webProviderLabel(provider)} 창 열림`);
     } catch (error) {
       setError(String(error));
@@ -1970,10 +1989,25 @@ function App() {
   async function onCloseProviderWindow(provider: WebProvider) {
     try {
       await invoke("provider_window_close", { provider });
+      setProviderWindowOpen((prev) => ({ ...prev, [provider]: false }));
       setStatus(`${webProviderLabel(provider)} 창 닫힘`);
     } catch (error) {
-      setError(String(error));
+      const message = String(error);
+      if (message.includes("provider window not found")) {
+        setProviderWindowOpen((prev) => ({ ...prev, [provider]: false }));
+        setStatus(`${webProviderLabel(provider)} 창 닫힘`);
+        return;
+      }
+      setError(message);
     }
+  }
+
+  async function onToggleProviderWindow(provider: WebProvider) {
+    if (providerWindowOpen[provider]) {
+      await onCloseProviderWindow(provider);
+      return;
+    }
+    await onOpenProviderWindow(provider);
   }
 
   async function onCopyPendingWebPrompt() {
@@ -3874,18 +3908,18 @@ function App() {
         {!compact && (
           <section className="provider-hub">
             <h3>Provider Hub</h3>
-            <div className="button-row">
+            <div className="provider-hub-list">
               {WEB_PROVIDER_OPTIONS.map((provider) => (
-                <button key={provider} onClick={() => onOpenProviderWindow(provider)} type="button">
-                  {webProviderLabel(provider)} 열기
-                </button>
-              ))}
-            </div>
-            <div className="button-row">
-              {WEB_PROVIDER_OPTIONS.map((provider) => (
-                <button key={`close-${provider}`} onClick={() => onCloseProviderWindow(provider)} type="button">
-                  {webProviderLabel(provider)} 닫기
-                </button>
+                <div className="provider-hub-row" key={provider}>
+                  <span>{webProviderLabel(provider)}</span>
+                  <button
+                    className={providerWindowOpen[provider] ? "is-active" : ""}
+                    onClick={() => onToggleProviderWindow(provider)}
+                    type="button"
+                  >
+                    {providerWindowOpen[provider] ? "닫기" : "열기"}
+                  </button>
+                </div>
               ))}
             </div>
           </section>
@@ -4030,7 +4064,19 @@ function App() {
       <section className={`workspace ${canvasFullscreen ? "canvas-fullscreen-active" : ""}`}>
         {!canvasFullscreen && <header className="workspace-header workspace-header-spacer" />}
 
-        {error && <div className="error">오류: {error}</div>}
+        {error && (
+          <div className="error">
+            <span>오류: {error}</span>
+            <button
+              aria-label="오류 닫기"
+              className="error-close"
+              onClick={() => setError("")}
+              type="button"
+            >
+              ×
+            </button>
+          </div>
+        )}
 
         {workspaceTab === "workflow" && (
           <div className={`workflow-layout ${canvasFullscreen ? "canvas-only-layout" : ""}`}>
@@ -4687,6 +4733,18 @@ function App() {
                 <span className="status-tag neutral">상태: {status}</span>
                 <span className="status-tag neutral">기록: {runFiles.length}</span>
               </div>
+            </section>
+            <section className="panel-card error-log-section">
+              <button
+                className="error-log-link"
+                onClick={() => setShowErrorLogs((prev) => !prev)}
+                type="button"
+              >
+                오류 로그 {showErrorLogs ? "숨기기" : "보기"}
+              </button>
+              {showErrorLogs && (
+                <pre>{errorLogs.length > 0 ? errorLogs.join("\n") : "(기록된 오류 없음)"}</pre>
+              )}
             </section>
             {lastSavedRunFile && <div>최근 실행 파일: {lastSavedRunFile}</div>}
           </section>
