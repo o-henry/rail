@@ -80,6 +80,7 @@ type NodeExecutionStatus =
   | "idle"
   | "queued"
   | "running"
+  | "waiting_user"
   | "done"
   | "failed"
   | "skipped"
@@ -172,10 +173,19 @@ type FancySelectOption = {
 };
 
 type TurnConfig = {
+  executor?:
+    | "codex"
+    | "web_gemini"
+    | "web_grok"
+    | "web_perplexity"
+    | "web_claude"
+    | "ollama";
   model?: string;
   role?: string;
   cwd?: string;
   promptTemplate?: string;
+  webResultMode?: "manualPasteJson" | "manualPasteText";
+  ollamaModel?: string;
 };
 
 type TransformMode = "pick" | "merge" | "template";
@@ -211,6 +221,15 @@ const QUESTION_INPUT_MAX_HEIGHT = 132;
 const NODE_DRAG_MARGIN = 60;
 const NODE_ANCHOR_OFFSET = 15;
 const FALLBACK_TURN_ROLE = "GENERAL AGENT";
+const GRAPH_SCHEMA_VERSION = 2;
+const TURN_EXECUTOR_OPTIONS = [
+  "codex",
+  "web_gemini",
+  "web_grok",
+  "web_perplexity",
+  "web_claude",
+  "ollama",
+] as const;
 const TURN_MODEL_OPTIONS = [
   "gpt-5.3-codex",
   "gpt-5.3-codex-spark",
@@ -650,6 +669,7 @@ function makeNodeId(type: NodeType): string {
 function defaultNodeConfig(type: NodeType): Record<string, unknown> {
   if (type === "turn") {
     return {
+      executor: "codex",
       model: TURN_MODEL_OPTIONS[0],
       role: "",
       cwd: ".",
@@ -677,6 +697,10 @@ function defaultNodeConfig(type: NodeType): Record<string, unknown> {
 function nodeCardSummary(node: GraphNode): string {
   if (node.type === "turn") {
     const config = node.config as TurnConfig;
+    const executor = String(config.executor ?? "codex");
+    if (executor !== "codex") {
+      return `실행기: ${executor}`;
+    }
     return `모델: ${String(config.model ?? TURN_MODEL_OPTIONS[0])}`;
   }
   if (node.type === "transform") {
@@ -740,6 +764,9 @@ function nodeStatusLabel(status: NodeExecutionStatus): string {
   }
   if (status === "running") {
     return "실행 중";
+  }
+  if (status === "waiting_user") {
+    return "사용자 입력 대기";
   }
   if (status === "done") {
     return "완료";
@@ -1116,7 +1143,7 @@ function buildValidationPreset(): GraphData {
     { from: { nodeId: "gate-decision", port: "out" }, to: { nodeId: "transform-reject", port: "in" } },
   ];
 
-  return { version: 1, nodes, edges };
+  return { version: GRAPH_SCHEMA_VERSION, nodes, edges };
 }
 
 function buildDevelopmentPreset(): GraphData {
@@ -1199,21 +1226,43 @@ function buildDevelopmentPreset(): GraphData {
     },
   ];
 
-  return { version: 1, nodes, edges };
+  return { version: GRAPH_SCHEMA_VERSION, nodes, edges };
 }
 
 function normalizeGraph(input: unknown): GraphData {
   if (!input || typeof input !== "object") {
-    return { version: 1, nodes: [], edges: [] };
+    return { version: GRAPH_SCHEMA_VERSION, nodes: [], edges: [] };
   }
 
   const data = input as Record<string, unknown>;
   const nodes = Array.isArray(data.nodes) ? data.nodes : [];
   const edges = Array.isArray(data.edges) ? data.edges : [];
+  const version = typeof data.version === "number" ? data.version : 1;
+
+  const normalizedNodes = nodes
+    .filter((node): node is GraphNode => Boolean(node))
+    .map((node) => {
+      if (node.type !== "turn") {
+        return node;
+      }
+      const config = (node.config ?? {}) as Record<string, unknown>;
+      const rawExecutor = typeof config.executor === "string" ? config.executor : "codex";
+      const executor = TURN_EXECUTOR_OPTIONS.includes(rawExecutor as (typeof TURN_EXECUTOR_OPTIONS)[number])
+        ? rawExecutor
+        : "codex";
+      const normalizedConfig = {
+        ...config,
+        executor,
+      };
+      return {
+        ...node,
+        config: normalizedConfig,
+      };
+    });
 
   return {
-    version: typeof data.version === "number" ? data.version : 1,
-    nodes: nodes.filter(Boolean) as GraphNode[],
+    version: Math.max(version, GRAPH_SCHEMA_VERSION),
+    nodes: normalizedNodes,
     edges: edges.filter(Boolean) as GraphEdge[],
   };
 }
@@ -1331,7 +1380,11 @@ function App() {
   const [pendingApprovals, setPendingApprovals] = useState<PendingApproval[]>([]);
   const [approvalSubmitting, setApprovalSubmitting] = useState(false);
 
-  const [graph, setGraph] = useState<GraphData>({ version: 1, nodes: [], edges: [] });
+  const [graph, setGraph] = useState<GraphData>({
+    version: GRAPH_SCHEMA_VERSION,
+    nodes: [],
+    edges: [],
+  });
   const [selectedNodeId, setSelectedNodeId] = useState<string>("");
   const [selectedNodeIds, setSelectedNodeIds] = useState<string[]>([]);
   const [selectedEdgeKey, setSelectedEdgeKey] = useState<string>("");
