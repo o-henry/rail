@@ -625,6 +625,10 @@ h3 {
 }
 
 .edge-path {
+  pointer-events: none;
+}
+
+.edge-path-hit {
   pointer-events: stroke;
   cursor: pointer;
 }
@@ -648,10 +652,10 @@ h3 {
 
 .node-head {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 8px;
-  padding: 12px;
+  padding: 13px 12px 10px;
   border-bottom: 1px solid #eceff3;
   cursor: move;
 }
@@ -676,7 +680,9 @@ h3 {
 
 .node-head strong {
   font-size: 0.82rem;
-  line-height: 1.2;
+  line-height: 1.35;
+  display: block;
+  padding-top: 1px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -794,10 +800,11 @@ h3 {
 
 .node-anchor {
   position: absolute;
-  width: 14px;
-  height: 14px;
+  width: 10px;
+  height: 10px;
   border-radius: 999px;
-  border: 2px solid #63b9ff;
+  /* border: 2px solid #63b9ff; */
+  border: 1px solid #7e8082;
   background: #ffffff;
   box-shadow: 0 2px 8px rgba(30, 52, 66, 0.22);
   transform: translate(-50%, -50%);
@@ -807,22 +814,31 @@ h3 {
 
 .node-anchor-top {
   left: 50%;
-  top: -10px;
+  top: -15px;
 }
 
 .node-anchor-right {
-  left: calc(100% + 10px);
+  left: calc(100% + 15px);
   top: 50%;
 }
 
 .node-anchor-bottom {
   left: 50%;
-  top: calc(100% + 10px);
+  top: calc(100% + 15px);
 }
 
 .node-anchor-left {
-  left: -10px;
+  left: -15px;
   top: 50%;
+}
+
+.marquee-selection {
+  position: absolute;
+  border: 1px solid rgba(79, 131, 255, 0.9);
+  background: rgba(79, 131, 255, 0.14);
+  border-radius: 4px;
+  pointer-events: none;
+  z-index: 4;
 }
 
 .canvas-overlay {
@@ -864,7 +880,8 @@ h3 {
 .canvas-runbar button {
   width: 34px;
   height: 34px;
-  border-radius: 4px;
+  /* border-radius: 4px; */
+  border-radius: 999px;
   background: #ffffff;
   pointer-events: auto;
   display: flex;

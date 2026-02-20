@@ -131,9 +131,9 @@ type TurnTerminal = {
 };
 
 type DragState = {
-  nodeId: string;
-  offsetX: number;
-  offsetY: number;
+  nodeIds: string[];
+  pointerStart: LogicalPoint;
+  startPositions: Record<string, { x: number; y: number }>;
 };
 
 type PanState = {
@@ -156,6 +156,12 @@ type LogicalPoint = {
 type NodeVisualSize = {
   width: number;
   height: number;
+};
+
+type MarqueeSelection = {
+  start: LogicalPoint;
+  current: LogicalPoint;
+  append: boolean;
 };
 
 type NodeAnchorSide = "top" | "right" | "bottom" | "left";
@@ -197,12 +203,12 @@ const STAGE_GROW_MARGIN = 120;
 const STAGE_GROW_LIMIT = 720;
 const MAX_STAGE_WIDTH = 4200;
 const MAX_STAGE_HEIGHT = 3200;
-const GRAPH_STAGE_INSET = 0;
+const GRAPH_STAGE_INSET = 30;
 const MIN_CANVAS_ZOOM = 0.6;
 const MAX_CANVAS_ZOOM = 1.8;
 const QUESTION_INPUT_MAX_HEIGHT = 132;
 const NODE_DRAG_MARGIN = 30;
-const NODE_ANCHOR_OFFSET = 10;
+const NODE_ANCHOR_OFFSET = 15;
 const FALLBACK_TURN_ROLE = "GENERAL AGENT";
 const TURN_MODEL_OPTIONS = [
   "gpt-5.3-codex",
@@ -697,13 +703,7 @@ function turnRoleLabel(node: GraphNode): string {
   if (signal.includes("implementation")) {
     return "IMPLEMENTATION AGENT";
   }
-  const dynamicFromId = node.id
-    .replace(/^turn-?/i, "")
-    .replace(/[^a-z0-9]+/gi, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 14)
-    .toUpperCase();
-  return dynamicFromId ? `${dynamicFromId} AGENT` : FALLBACK_TURN_ROLE;
+  return FALLBACK_TURN_ROLE;
 }
 
 function nodeTypeLabel(type: NodeType): string {
@@ -1273,6 +1273,7 @@ function App() {
 
   const [graph, setGraph] = useState<GraphData>({ version: 1, nodes: [], edges: [] });
   const [selectedNodeId, setSelectedNodeId] = useState<string>("");
+  const [selectedNodeIds, setSelectedNodeIds] = useState<string[]>([]);
   const [selectedEdgeKey, setSelectedEdgeKey] = useState<string>("");
   const [connectFromNodeId, setConnectFromNodeId] = useState<string>("");
   const [connectFromSide, setConnectFromSide] = useState<NodeAnchorSide | null>(null);
@@ -1297,13 +1298,13 @@ function App() {
   const [undoStack, setUndoStack] = useState<GraphData[]>([]);
   const [redoStack, setRedoStack] = useState<GraphData[]>([]);
   const [, setNodeSizeVersion] = useState(0);
+  const [marqueeSelection, setMarqueeSelection] = useState<MarqueeSelection | null>(null);
 
   const dragRef = useRef<DragState | null>(null);
   const graphCanvasRef = useRef<HTMLDivElement | null>(null);
   const nodeSizeMapRef = useRef<Record<string, NodeVisualSize>>({});
   const questionInputRef = useRef<HTMLTextAreaElement | null>(null);
   const panRef = useRef<PanState | null>(null);
-  const dragBoundsRef = useRef<{ maxX: number; maxY: number } | null>(null);
   const dragPointerRef = useRef<PointerState | null>(null);
   const dragAutoPanFrameRef = useRef<number | null>(null);
   const dragWindowMoveHandlerRef = useRef<((event: MouseEvent) => void) | null>(null);
@@ -1322,6 +1323,23 @@ function App() {
 
   function getNodeVisualSize(nodeId: string): NodeVisualSize {
     return nodeSizeMapRef.current[nodeId] ?? { width: NODE_WIDTH, height: NODE_HEIGHT };
+  }
+
+  function setNodeSelection(nextIds: string[], primaryId?: string) {
+    const deduped = nextIds.filter((id, index, arr) => arr.indexOf(id) === index);
+    setSelectedNodeIds(deduped);
+    if (deduped.length === 0) {
+      setSelectedNodeId("");
+      return;
+    }
+    if (primaryId && deduped.includes(primaryId)) {
+      setSelectedNodeId(primaryId);
+      return;
+    }
+    if (selectedNodeId && deduped.includes(selectedNodeId)) {
+      return;
+    }
+    setSelectedNodeId(deduped[deduped.length - 1]);
   }
 
   function addNodeLog(nodeId: string, message: string) {
@@ -1795,7 +1813,7 @@ function App() {
       };
     });
 
-    setSelectedNodeId(node.id);
+    setNodeSelection([node.id], node.id);
     setSelectedEdgeKey("");
   }
 
@@ -1804,7 +1822,7 @@ function App() {
     setGraph(cloneGraph(preset));
     setUndoStack([]);
     setRedoStack([]);
-    setSelectedNodeId(preset.nodes[0]?.id ?? "");
+    setNodeSelection(preset.nodes.map((node) => node.id).slice(0, 1), preset.nodes[0]?.id);
     setSelectedEdgeKey("");
     setNodeStates({});
     setConnectFromNodeId("");
@@ -1812,6 +1830,7 @@ function App() {
     setConnectPreviewStartPoint(null);
     setConnectPreviewPoint(null);
     setIsConnectingDrag(false);
+    setMarqueeSelection(null);
     setStatus(
       kind === "validation"
         ? "검증형 5-에이전트 프리셋 로드됨"
@@ -1819,26 +1838,38 @@ function App() {
     );
   }
 
-  function deleteNode(nodeId: string) {
+  function deleteNodes(nodeIds: string[]) {
+    const targets = nodeIds.filter((id, index, arr) => arr.indexOf(id) === index);
+    if (targets.length === 0) {
+      return;
+    }
+    const targetSet = new Set(targets);
     applyGraphChange((prev) => ({
       ...prev,
-      nodes: prev.nodes.filter((n) => n.id !== nodeId),
-      edges: prev.edges.filter((e) => e.from.nodeId !== nodeId && e.to.nodeId !== nodeId),
+      nodes: prev.nodes.filter((n) => !targetSet.has(n.id)),
+      edges: prev.edges.filter((e) => !targetSet.has(e.from.nodeId) && !targetSet.has(e.to.nodeId)),
     }));
-    setSelectedNodeId((prev) => (prev === nodeId ? "" : prev));
+    setNodeSelection(selectedNodeIds.filter((id) => !targetSet.has(id)));
     setSelectedEdgeKey("");
     setNodeStates((prev) => {
       const next = { ...prev };
-      delete next[nodeId];
+      for (const nodeId of targetSet) {
+        delete next[nodeId];
+      }
       return next;
     });
-    if (connectFromNodeId === nodeId) {
+    if (connectFromNodeId && targetSet.has(connectFromNodeId)) {
       setConnectFromNodeId("");
       setConnectFromSide(null);
       setConnectPreviewStartPoint(null);
       setConnectPreviewPoint(null);
       setIsConnectingDrag(false);
+      setMarqueeSelection(null);
     }
+  }
+
+  function deleteNode(nodeId: string) {
+    deleteNodes([nodeId]);
   }
 
   function createEdgeConnection(
@@ -2026,17 +2057,36 @@ function App() {
       return;
     }
 
-    const { nodeId, offsetX, offsetY } = dragRef.current;
-    const bounds = dragBoundsRef.current;
+    const { nodeIds, pointerStart, startPositions } = dragRef.current;
+    if (nodeIds.length === 0) {
+      return;
+    }
+    const dx = logicalPoint.x - pointerStart.x;
+    const dy = logicalPoint.y - pointerStart.y;
     const minPos = -NODE_DRAG_MARGIN;
-    const maxX = bounds?.maxX ?? Math.max(minPos, boundedStageWidth - NODE_WIDTH + NODE_DRAG_MARGIN);
-    const maxY = bounds?.maxY ?? Math.max(minPos, boundedStageHeight - NODE_HEIGHT + NODE_DRAG_MARGIN);
-    const x = Math.min(maxX, Math.max(minPos, logicalPoint.x - offsetX));
-    const y = Math.min(maxY, Math.max(minPos, logicalPoint.y - offsetY));
+    const nodeIdSet = new Set(nodeIds);
 
     setGraph((prev) => ({
       ...prev,
-      nodes: prev.nodes.map((node) => (node.id === nodeId ? { ...node, position: { x, y } } : node)),
+      nodes: prev.nodes.map((node) => {
+        if (!nodeIdSet.has(node.id)) {
+          return node;
+        }
+        const start = startPositions[node.id];
+        if (!start) {
+          return node;
+        }
+        const size = getNodeVisualSize(node.id);
+        const maxX = Math.max(minPos, boundedStageWidth - size.width + NODE_DRAG_MARGIN);
+        const maxY = Math.max(minPos, boundedStageHeight - size.height + NODE_DRAG_MARGIN);
+        return {
+          ...node,
+          position: {
+            x: Math.min(maxX, Math.max(minPos, start.x + dx)),
+            y: Math.min(maxY, Math.max(minPos, start.y + dy)),
+          },
+        };
+      }),
     }));
   }
 
@@ -2103,11 +2153,21 @@ function App() {
       return;
     }
 
+    const activeNodeIds = selectedNodeIds.includes(nodeId) ? selectedNodeIds : [nodeId];
+    if (!selectedNodeIds.includes(nodeId)) {
+      setNodeSelection([nodeId], nodeId);
+    }
+    const startPositions = Object.fromEntries(
+      graph.nodes
+        .filter((item) => activeNodeIds.includes(item.id))
+        .map((item) => [item.id, { x: item.position.x, y: item.position.y }]),
+    );
+    if (Object.keys(startPositions).length === 0) {
+      return;
+    }
+
     dragStartSnapshotRef.current = cloneGraph(graph);
-    dragBoundsRef.current = {
-      maxX: Math.max(-NODE_DRAG_MARGIN, boundedStageWidth - NODE_WIDTH + NODE_DRAG_MARGIN),
-      maxY: Math.max(-NODE_DRAG_MARGIN, boundedStageHeight - NODE_HEIGHT + NODE_DRAG_MARGIN),
-    };
+    setMarqueeSelection(null);
     dragPointerRef.current = { clientX: e.clientX, clientY: e.clientY };
     ensureDragAutoPanLoop();
     if (!dragWindowMoveHandlerRef.current) {
@@ -2128,9 +2188,9 @@ function App() {
     }
 
     dragRef.current = {
-      nodeId,
-      offsetX: canvasPoint.x - node.position.x,
-      offsetY: canvasPoint.y - node.position.y,
+      nodeIds: activeNodeIds,
+      pointerStart: canvasPoint,
+      startPositions,
     };
   }
 
@@ -2148,6 +2208,14 @@ function App() {
       const point = clientToLogicalPoint(e.clientX, e.clientY);
       if (point) {
         setConnectPreviewPoint(point);
+      }
+      return;
+    }
+
+    if (marqueeSelection) {
+      const point = clientToLogicalPoint(e.clientX, e.clientY);
+      if (point) {
+        setMarqueeSelection((prev) => (prev ? { ...prev, current: point } : prev));
       }
       return;
     }
@@ -2171,7 +2239,29 @@ function App() {
       setConnectFromSide(null);
     }
 
-    dragBoundsRef.current = null;
+    if (marqueeSelection) {
+      const minX = Math.min(marqueeSelection.start.x, marqueeSelection.current.x);
+      const maxX = Math.max(marqueeSelection.start.x, marqueeSelection.current.x);
+      const minY = Math.min(marqueeSelection.start.y, marqueeSelection.current.y);
+      const maxY = Math.max(marqueeSelection.start.y, marqueeSelection.current.y);
+      const selectedByBox = graph.nodes
+        .filter((node) => {
+          const size = getNodeVisualSize(node.id);
+          const nodeLeft = node.position.x;
+          const nodeTop = node.position.y;
+          const nodeRight = node.position.x + size.width;
+          const nodeBottom = node.position.y + size.height;
+          return !(nodeRight < minX || nodeLeft > maxX || nodeBottom < minY || nodeTop > maxY);
+        })
+        .map((node) => node.id);
+      const nextSelected = marqueeSelection.append
+        ? Array.from(new Set([...selectedNodeIds, ...selectedByBox]))
+        : selectedByBox;
+      setNodeSelection(nextSelected, nextSelected[nextSelected.length - 1]);
+      setMarqueeSelection(null);
+      setSelectedEdgeKey("");
+    }
+
     dragPointerRef.current = null;
     if (dragAutoPanFrameRef.current != null) {
       cancelAnimationFrame(dragAutoPanFrameRef.current);
@@ -2196,22 +2286,42 @@ function App() {
 
   function onCanvasMouseDown(e: ReactMouseEvent<HTMLDivElement>) {
     const target = e.target as HTMLElement;
-    if (!target.closest(".graph-node, .edge-path, .canvas-overlay, .node-anchors, .node-ports")) {
-      setSelectedNodeId("");
+    const clickedNodeOrPorts = target.closest(".graph-node, .node-anchors, .node-ports");
+    const clickedEdge = target.closest(".edge-path, .edge-path-hit");
+    const clickedOverlay = target.closest(".canvas-overlay");
+    const clickedControl = target.closest(".canvas-zoom-controls, .canvas-runbar");
+
+    if (!clickedNodeOrPorts && !clickedEdge && !clickedOverlay) {
+      if (!e.shiftKey) {
+        setNodeSelection([]);
+      }
       setSelectedEdgeKey("");
     }
 
     if (!panMode) {
+      if (e.button !== 0 || clickedControl || clickedOverlay || clickedNodeOrPorts || clickedEdge) {
+        return;
+      }
+      const point = clientToLogicalPoint(e.clientX, e.clientY);
+      if (!point) {
+        return;
+      }
+      e.preventDefault();
+      setMarqueeSelection({
+        start: point,
+        current: point,
+        append: e.shiftKey,
+      });
       return;
     }
     const canvas = graphCanvasRef.current;
     if (!canvas) {
       return;
     }
-    if (target.closest(".canvas-zoom-controls, .canvas-runbar")) {
+    if (clickedControl) {
       return;
     }
-    if (target.closest(".edge-path")) {
+    if (clickedEdge) {
       return;
     }
     e.preventDefault();
@@ -2350,7 +2460,7 @@ function App() {
       setGraph(cloneGraph(normalized));
       setUndoStack([]);
       setRedoStack([]);
-      setSelectedNodeId(normalized.nodes[0]?.id ?? "");
+      setNodeSelection(normalized.nodes.map((node) => node.id).slice(0, 1), normalized.nodes[0]?.id);
       setSelectedEdgeKey("");
       setNodeStates({});
       setConnectFromNodeId("");
@@ -2366,14 +2476,26 @@ function App() {
   }
 
   useEffect(() => {
-    if (!selectedNodeId) {
+    const nodeIdSet = new Set(graph.nodes.map((node) => node.id));
+    const filteredSelected = selectedNodeIds.filter((id) => nodeIdSet.has(id));
+    if (filteredSelected.length !== selectedNodeIds.length) {
+      setSelectedNodeIds(filteredSelected);
+    }
+
+    if (selectedNodeId && !nodeIdSet.has(selectedNodeId)) {
+      setSelectedNodeId(filteredSelected[0] ?? "");
       return;
     }
-    const exists = graph.nodes.some((node) => node.id === selectedNodeId);
-    if (!exists) {
-      setSelectedNodeId("");
+
+    if (!selectedNodeId && filteredSelected.length > 0) {
+      setSelectedNodeId(filteredSelected[0]);
+      return;
     }
-  }, [graph.nodes, selectedNodeId]);
+
+    if (selectedNodeId && !filteredSelected.includes(selectedNodeId)) {
+      setSelectedNodeIds((prev) => [...prev, selectedNodeId]);
+    }
+  }, [graph.nodes, selectedNodeIds, selectedNodeId]);
 
   useEffect(() => {
     if (!selectedEdgeKey) {
@@ -2434,6 +2556,74 @@ function App() {
       return;
     }
 
+    const onShiftAlign = (event: KeyboardEvent) => {
+      if (event.repeat || event.metaKey || event.ctrlKey || event.altKey) {
+        return;
+      }
+      if (event.key !== "Shift") {
+        return;
+      }
+      if (isEditableTarget(event.target)) {
+        return;
+      }
+      if (!selectedNodeId) {
+        return;
+      }
+      const current = graph.nodes.find((node) => node.id === selectedNodeId);
+      if (!current) {
+        return;
+      }
+      const others = graph.nodes.filter((node) => node.id !== selectedNodeId);
+      if (others.length === 0) {
+        return;
+      }
+
+      let nearest: GraphNode | null = null;
+      let nearestDistance = Number.POSITIVE_INFINITY;
+      for (const candidate of others) {
+        const dx = candidate.position.x - current.position.x;
+        const dy = candidate.position.y - current.position.y;
+        const distance = Math.hypot(dx, dy);
+        if (distance < nearestDistance) {
+          nearestDistance = distance;
+          nearest = candidate;
+        }
+      }
+
+      if (!nearest) {
+        return;
+      }
+
+      event.preventDefault();
+      const alignByX =
+        Math.abs(nearest.position.x - current.position.x) <= Math.abs(nearest.position.y - current.position.y);
+      applyGraphChange((prev) => ({
+        ...prev,
+        nodes: prev.nodes.map((node) => {
+          if (node.id !== selectedNodeId) {
+            return node;
+          }
+          return {
+            ...node,
+            position: {
+              x: alignByX ? nearest.position.x : node.position.x,
+              y: alignByX ? node.position.y : nearest.position.y,
+            },
+          };
+        }),
+      }));
+      setStatus(alignByX ? "노드 X축 자동 정렬됨 (Shift)" : "노드 Y축 자동 정렬됨 (Shift)");
+    };
+
+    window.addEventListener("keydown", onShiftAlign);
+    return () => window.removeEventListener("keydown", onShiftAlign);
+  }, [workspaceTab, selectedNodeId, graph.nodes]);
+
+  useEffect(() => {
+    if (workspaceTab !== "workflow") {
+      return;
+    }
+
     const onDeleteSelection = (event: KeyboardEvent) => {
       if (event.repeat || event.metaKey || event.ctrlKey || event.altKey) {
         return;
@@ -2461,21 +2651,21 @@ function App() {
         return;
       }
 
-      if (selectedNodeId) {
-        const hasNode = graph.nodes.some((node) => node.id === selectedNodeId);
-        if (!hasNode) {
-          setSelectedNodeId("");
+      if (selectedNodeIds.length > 0) {
+        const targets = selectedNodeIds.filter((id) => graph.nodes.some((node) => node.id === id));
+        if (targets.length === 0) {
+          setNodeSelection([]);
           return;
         }
         event.preventDefault();
-        deleteNode(selectedNodeId);
-        setStatus("노드 삭제됨");
+        deleteNodes(targets);
+        setStatus(targets.length > 1 ? "선택 노드 삭제됨" : "노드 삭제됨");
       }
     };
 
     window.addEventListener("keydown", onDeleteSelection);
     return () => window.removeEventListener("keydown", onDeleteSelection);
-  }, [workspaceTab, selectedEdgeKey, selectedNodeId, graph.edges, graph.nodes]);
+  }, [workspaceTab, selectedEdgeKey, selectedNodeIds, graph.edges, graph.nodes]);
 
   useEffect(() => {
     syncQuestionInputHeight();
@@ -3416,23 +3606,32 @@ function App() {
                         </marker>
                       </defs>
                       {edgeLines.map((line) => (
-                        <path
-                          className={selectedEdgeKey === line.edgeKey ? "edge-path selected" : "edge-path"}
-                          d={line.path}
-                          fill="none"
-                          key={line.key}
-                          markerEnd="url(#edge-arrow)"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedNodeId("");
-                            setSelectedEdgeKey(line.edgeKey);
-                          }}
-                          pointerEvents="stroke"
-                          stroke={selectedEdgeKey === line.edgeKey ? "#4f83ff" : "#70848a"}
-                          strokeLinejoin="round"
-                          strokeLinecap="round"
-                          strokeWidth={selectedEdgeKey === line.edgeKey ? 3 : 2}
-                        />
+                        <g key={line.key}>
+                          <path
+                            className="edge-path-hit"
+                            d={line.path}
+                            fill="none"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setNodeSelection([]);
+                              setSelectedEdgeKey(line.edgeKey);
+                            }}
+                            pointerEvents="stroke"
+                            stroke="transparent"
+                            strokeWidth={(selectedEdgeKey === line.edgeKey ? 3 : 2) + 2}
+                          />
+                          <path
+                            className={selectedEdgeKey === line.edgeKey ? "edge-path selected" : "edge-path"}
+                            d={line.path}
+                            fill="none"
+                            markerEnd="url(#edge-arrow)"
+                            pointerEvents="none"
+                            stroke={selectedEdgeKey === line.edgeKey ? "#4f83ff" : "#70848a"}
+                            strokeLinejoin="round"
+                            strokeLinecap="round"
+                            strokeWidth={selectedEdgeKey === line.edgeKey ? 3 : 2}
+                          />
+                        </g>
                       ))}
                       {connectPreviewLine && (
                         <path
@@ -3451,14 +3650,22 @@ function App() {
                     {graph.nodes.map((node) => {
                       const runState = nodeStates[node.id];
                       const nodeStatus = runState?.status ?? "idle";
+                      const isNodeSelected = selectedNodeIds.includes(node.id);
                       const showNodeAnchors = selectedNodeId === node.id || isConnectingDrag;
                       return (
                         <div
-                          className={`graph-node node-${node.type} ${selectedNodeId === node.id ? "selected" : ""}`}
+                          className={`graph-node node-${node.type} ${isNodeSelected ? "selected" : ""}`}
                           data-node-id={node.id}
                           key={node.id}
-                          onClick={() => {
-                            setSelectedNodeId(node.id);
+                          onClick={(event) => {
+                            if (event.shiftKey) {
+                              const toggled = selectedNodeIds.includes(node.id)
+                                ? selectedNodeIds.filter((id) => id !== node.id)
+                                : [...selectedNodeIds, node.id];
+                              setNodeSelection(toggled, node.id);
+                            } else {
+                              setNodeSelection([node.id], node.id);
+                            }
                             setSelectedEdgeKey("");
                           }}
                           onMouseUp={(e) => {
@@ -3529,6 +3736,17 @@ function App() {
                         </div>
                       );
                     })}
+                    {marqueeSelection && (
+                      <div
+                        className="marquee-selection"
+                        style={{
+                          left: Math.min(marqueeSelection.start.x, marqueeSelection.current.x),
+                          top: Math.min(marqueeSelection.start.y, marqueeSelection.current.y),
+                          width: Math.abs(marqueeSelection.current.x - marqueeSelection.start.x),
+                          height: Math.abs(marqueeSelection.current.y - marqueeSelection.start.y),
+                        }}
+                      />
+                    )}
                   </div>
                 </div>
                 </div>
