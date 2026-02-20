@@ -4084,20 +4084,6 @@ function App() {
                   )}
 
                   <section className="inspector-block">{renderSettingsPanel(true)}</section>
-                  <section className="inspector-block workflow-runtime-status">
-                    <h3>워크플로우 상태</h3>
-                    <div className="settings-badges">
-                      <span className="status-tag neutral">
-                        로그인: {loginStateLabel(engineStarted, loginCompleted, authMode)}
-                      </span>
-                      <span className="status-tag neutral">인증: {authModeLabel(authMode)}</span>
-                      <span className={`status-tag ${isGraphRunning ? "on" : "off"}`}>
-                        실행: {isGraphRunning ? "진행 중" : "대기"}
-                      </span>
-                      <span className="status-tag neutral">상태: {status}</span>
-                      <span className="status-tag neutral">기록: {runFiles.length}</span>
-                    </div>
-                  </section>
                 </div>
               </div>
             </aside>}
@@ -4156,6 +4142,20 @@ function App() {
         {workspaceTab === "settings" && (
           <section className="panel-card settings-view">
             {renderSettingsPanel()}
+            <section className="workflow-runtime-status">
+              <h3>워크플로우 상태</h3>
+              <div className="settings-badges">
+                <span className="status-tag neutral">
+                  로그인: {loginStateLabel(engineStarted, loginCompleted, authMode)}
+                </span>
+                <span className="status-tag neutral">인증: {authModeLabel(authMode)}</span>
+                <span className={`status-tag ${isGraphRunning ? "on" : "off"}`}>
+                  실행: {isGraphRunning ? "진행 중" : "대기"}
+                </span>
+                <span className="status-tag neutral">상태: {status}</span>
+                <span className="status-tag neutral">기록: {runFiles.length}</span>
+              </div>
+            </section>
             {lastSavedRunFile && <div>최근 실행 파일: {lastSavedRunFile}</div>}
           </section>
         )}
