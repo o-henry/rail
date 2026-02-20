@@ -143,13 +143,6 @@ type PanState = {
   scrollTop: number;
 };
 
-type MinimapViewport = {
-  left: number;
-  top: number;
-  width: number;
-  height: number;
-};
-
 type TurnConfig = {
   model?: string;
   cwd?: string;
@@ -181,7 +174,6 @@ const GRAPH_STAGE_INSET = 8;
 const MIN_CANVAS_ZOOM = 0.6;
 const MAX_CANVAS_ZOOM = 1.8;
 const QUESTION_INPUT_MAX_HEIGHT = 132;
-const MINIMAP_WIDTH = 188;
 const TURN_MODEL_OPTIONS = [
   "gpt-5.3-codex",
   "gpt-5.3-codex-spark",
@@ -1021,17 +1013,12 @@ function App() {
   });
   const [undoStack, setUndoStack] = useState<GraphData[]>([]);
   const [redoStack, setRedoStack] = useState<GraphData[]>([]);
-  const [minimapViewport, setMinimapViewport] = useState<MinimapViewport>({
-    left: 0,
-    top: 0,
-    width: 0,
-    height: 0,
-  });
 
   const dragRef = useRef<DragState | null>(null);
   const graphCanvasRef = useRef<HTMLDivElement | null>(null);
   const questionInputRef = useRef<HTMLTextAreaElement | null>(null);
   const panRef = useRef<PanState | null>(null);
+  const dragBoundsRef = useRef<{ maxX: number; maxY: number } | null>(null);
   const dragStartSnapshotRef = useRef<GraphData | null>(null);
   const cancelRequestedRef = useRef(false);
   const activeTurnNodeIdRef = useRef<string>("");
@@ -1474,22 +1461,46 @@ function App() {
     }
   }
 
+  function centerCanvasOnPosition(logicalX: number, logicalY: number) {
+    const canvas = graphCanvasRef.current;
+    if (!canvas) {
+      return;
+    }
+    const targetX = GRAPH_STAGE_INSET + logicalX * canvasZoom;
+    const targetY = GRAPH_STAGE_INSET + logicalY * canvasZoom;
+    const nextLeft = targetX - canvas.clientWidth / 2;
+    const nextTop = targetY - canvas.clientHeight / 2;
+    const maxLeft = Math.max(0, canvas.scrollWidth - canvas.clientWidth);
+    const maxTop = Math.max(0, canvas.scrollHeight - canvas.clientHeight);
+    canvas.scrollTo({
+      left: Math.max(0, Math.min(maxLeft, nextLeft)),
+      top: Math.max(0, Math.min(maxTop, nextTop)),
+      behavior: "smooth",
+    });
+  }
+
   function addNode(type: NodeType) {
+    const index = graph.nodes.length;
+    const node: GraphNode = {
+      id: makeNodeId(type),
+      type,
+      position: {
+        x: 40 + (index % 4) * 280,
+        y: 40 + Math.floor(index / 4) * 180,
+      },
+      config: defaultNodeConfig(type),
+    };
+
     applyGraphChange((prev) => {
-      const index = prev.nodes.length;
-      const node: GraphNode = {
-        id: makeNodeId(type),
-        type,
-        position: {
-          x: 40 + (index % 4) * 280,
-          y: 40 + Math.floor(index / 4) * 180,
-        },
-        config: defaultNodeConfig(type),
-      };
       return {
         ...prev,
         nodes: [...prev.nodes, node],
       };
+    });
+
+    setSelectedNodeId(node.id);
+    requestAnimationFrame(() => {
+      centerCanvasOnPosition(node.position.x + NODE_WIDTH / 2, node.position.y + NODE_HEIGHT / 2);
     });
   }
 
@@ -1567,8 +1578,6 @@ function App() {
     if (!canvas) {
       return;
     }
-    const visibleLeft = Math.max(0, (canvas.scrollLeft - GRAPH_STAGE_INSET) / canvasZoom);
-    const visibleTop = Math.max(0, (canvas.scrollTop - GRAPH_STAGE_INSET) / canvasZoom);
     const visibleWidth = canvas.clientWidth / canvasZoom;
     const visibleHeight = canvas.clientHeight / canvasZoom;
     setCanvasLogicalViewport((prev) => {
@@ -1577,38 +1586,6 @@ function App() {
       }
       return { width: visibleWidth, height: visibleHeight };
     });
-    const clampedLeft = Math.min(stageWidth, visibleLeft);
-    const clampedTop = Math.min(stageHeight, visibleTop);
-    const clampedWidth = Math.max(0, Math.min(visibleWidth, stageWidth - clampedLeft));
-    const clampedHeight = Math.max(0, Math.min(visibleHeight, stageHeight - clampedTop));
-    setMinimapViewport({
-      left: clampedLeft,
-      top: clampedTop,
-      width: clampedWidth,
-      height: clampedHeight,
-    });
-  }
-
-  function centerCanvasOnNode(nodeId: string) {
-    const target = graph.nodes.find((node) => node.id === nodeId);
-    const canvas = graphCanvasRef.current;
-    if (!target || !canvas) {
-      return;
-    }
-
-    const targetX = GRAPH_STAGE_INSET + (target.position.x + NODE_WIDTH / 2) * canvasZoom;
-    const targetY = GRAPH_STAGE_INSET + (target.position.y + NODE_HEIGHT / 2) * canvasZoom;
-    const nextLeft = targetX - canvas.clientWidth / 2;
-    const nextTop = targetY - canvas.clientHeight / 2;
-    const maxLeft = Math.max(0, canvas.scrollWidth - canvas.clientWidth);
-    const maxTop = Math.max(0, canvas.scrollHeight - canvas.clientHeight);
-
-    canvas.scrollTo({
-      left: Math.max(0, Math.min(maxLeft, nextLeft)),
-      top: Math.max(0, Math.min(maxTop, nextTop)),
-      behavior: "smooth",
-    });
-    setSelectedNodeId(nodeId);
   }
 
   function clientToCanvasPoint(clientX: number, clientY: number): { x: number; y: number } | null {
@@ -1667,6 +1644,10 @@ function App() {
     }
 
     dragStartSnapshotRef.current = cloneGraph(graph);
+    dragBoundsRef.current = {
+      maxX: Math.max(0, stageWidth - NODE_WIDTH),
+      maxY: Math.max(0, stageHeight - NODE_HEIGHT),
+    };
 
     dragRef.current = {
       nodeId,
@@ -1689,14 +1670,34 @@ function App() {
       return;
     }
 
+    const canvas = graphCanvasRef.current;
+    if (canvas) {
+      const rect = canvas.getBoundingClientRect();
+      const edge = 32;
+      const speed = 16;
+      if (e.clientY < rect.top + edge) {
+        canvas.scrollTop = Math.max(0, canvas.scrollTop - speed);
+      } else if (e.clientY > rect.bottom - edge) {
+        canvas.scrollTop = Math.min(canvas.scrollHeight - canvas.clientHeight, canvas.scrollTop + speed);
+      }
+      if (e.clientX < rect.left + edge) {
+        canvas.scrollLeft = Math.max(0, canvas.scrollLeft - speed);
+      } else if (e.clientX > rect.right - edge) {
+        canvas.scrollLeft = Math.min(canvas.scrollWidth - canvas.clientWidth, canvas.scrollLeft + speed);
+      }
+    }
+
     const canvasPoint = clientToCanvasPoint(e.clientX, e.clientY);
     if (!canvasPoint) {
       return;
     }
 
     const { nodeId, offsetX, offsetY } = dragRef.current;
-    const x = Math.max(0, canvasPoint.x - offsetX);
-    const y = Math.max(0, canvasPoint.y - offsetY);
+    const bounds = dragBoundsRef.current;
+    const maxX = bounds?.maxX ?? Math.max(0, stageWidth - NODE_WIDTH);
+    const maxY = bounds?.maxY ?? Math.max(0, stageHeight - NODE_HEIGHT);
+    const x = Math.min(maxX, Math.max(-GRAPH_STAGE_INSET, canvasPoint.x - offsetX));
+    const y = Math.min(maxY, Math.max(-GRAPH_STAGE_INSET, canvasPoint.y - offsetY));
 
     setGraph((prev) => ({
       ...prev,
@@ -1708,6 +1709,7 @@ function App() {
 
   function onCanvasMouseUp() {
     panRef.current = null;
+    dragBoundsRef.current = null;
     const dragSnapshot = dragStartSnapshotRef.current;
     if (dragSnapshot && !graphEquals(dragSnapshot, graph)) {
       setUndoStack((stack) => [...stack.slice(-79), cloneGraph(dragSnapshot)]);
@@ -1726,7 +1728,7 @@ function App() {
       return;
     }
     const target = e.target as HTMLElement;
-    if (target.closest(".canvas-zoom-controls, .canvas-runbar, .canvas-minimap")) {
+    if (target.closest(".canvas-zoom-controls, .canvas-runbar")) {
       return;
     }
     e.preventDefault();
@@ -2608,14 +2610,6 @@ function App() {
     Math.ceil(canvasLogicalViewport.height),
     graph.nodes.reduce((max, node) => Math.max(max, node.position.y + NODE_HEIGHT + 120), 0),
   );
-  const minimapScale = MINIMAP_WIDTH / stageWidth;
-  const minimapHeight = Math.round(stageHeight * minimapScale);
-  const minimapViewportStyle = {
-    left: `${minimapViewport.left * minimapScale}px`,
-    top: `${minimapViewport.top * minimapScale}px`,
-    width: `${minimapViewport.width * minimapScale}px`,
-    height: `${minimapViewport.height * minimapScale}px`,
-  };
   const keyboardFocusStyle = `
     button:focus-visible,
     input:focus-visible,
@@ -2734,69 +2728,6 @@ function App() {
                     >
                       <img alt="" aria-hidden="true" className="canvas-control-icon" src="/scroll.svg" />
                     </button>
-                  </div>
-
-                  <div
-                    className="canvas-minimap"
-                    style={{
-                      position: "absolute",
-                      right: 14,
-                      top: 14,
-                      width: MINIMAP_WIDTH,
-                      height: minimapHeight,
-                      padding: 7,
-                      borderRadius: 10,
-                      background: "rgba(255, 255, 255, 0.95)",
-                      boxShadow: "0 4px 14px rgba(21, 31, 39, 0.1)",
-                      zIndex: 11,
-                      pointerEvents: "auto",
-                    }}
-                  >
-                    <div
-                      className="canvas-minimap-stage"
-                      style={{
-                        position: "relative",
-                        width: "100%",
-                        height: "100%",
-                        borderRadius: 6,
-                        background: "#eff3f8",
-                        overflow: "hidden",
-                      }}
-                    >
-                      {graph.nodes.map((node) => (
-                        <button
-                          aria-label={`${node.id} 위치로 이동`}
-                          className={`canvas-minimap-node ${selectedNodeId === node.id ? "selected" : ""}`}
-                          key={`mini-${node.id}`}
-                          onClick={() => centerCanvasOnNode(node.id)}
-                          style={{
-                            left: `${Math.max(0, node.position.x) * minimapScale}px`,
-                            top: `${Math.max(0, node.position.y) * minimapScale}px`,
-                            width: `${Math.max(10, NODE_WIDTH * minimapScale)}px`,
-                            height: `${Math.max(8, NODE_HEIGHT * minimapScale)}px`,
-                            position: "absolute",
-                            padding: 0,
-                            border: `1px solid ${selectedNodeId === node.id ? "#2f79ff" : "#8ea0b5"}`,
-                            background:
-                              selectedNodeId === node.id ? "rgba(47, 121, 255, 0.35)" : "rgba(130, 151, 175, 0.28)",
-                            borderRadius: 4,
-                            cursor: "pointer",
-                          }}
-                          type="button"
-                        />
-                      ))}
-                      <div
-                        className="canvas-minimap-viewport"
-                        style={{
-                          ...minimapViewportStyle,
-                          position: "absolute",
-                          border: "1.5px solid #2a3037",
-                          borderRadius: 3,
-                          background: "rgba(42, 48, 55, 0.1)",
-                          pointerEvents: "none",
-                        }}
-                      />
-                    </div>
                   </div>
 
                   <div className="canvas-runbar">
