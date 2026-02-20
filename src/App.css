@@ -1176,6 +1176,8 @@ h3 {
 .settings-view {
   margin: 12px;
   height: calc(100% - 24px);
+  box-sizing: border-box;
+  padding-bottom: 28px;
 }
 
 .dev-layout {
