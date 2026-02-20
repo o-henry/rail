@@ -4187,7 +4187,7 @@ function App() {
 
         {workspaceTab === "settings" && (
           <section className="panel-card settings-view">
-            {renderSettingsPanel(false, true)}
+            {renderSettingsPanel(false)}
             <section className="workflow-runtime-status">
               <h3>워크플로우 상태</h3>
               <div className="settings-badges">
