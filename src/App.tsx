@@ -172,20 +172,31 @@ type FancySelectOption = {
   disabled?: boolean;
 };
 
+type TurnExecutor =
+  | "codex"
+  | "web_gemini"
+  | "web_grok"
+  | "web_perplexity"
+  | "web_claude"
+  | "ollama";
+type WebResultMode = "manualPasteJson" | "manualPasteText";
+type WebProvider = "gemini" | "grok" | "perplexity" | "claude";
+
 type TurnConfig = {
-  executor?:
-    | "codex"
-    | "web_gemini"
-    | "web_grok"
-    | "web_perplexity"
-    | "web_claude"
-    | "ollama";
+  executor?: TurnExecutor;
   model?: string;
   role?: string;
   cwd?: string;
   promptTemplate?: string;
-  webResultMode?: "manualPasteJson" | "manualPasteText";
+  webResultMode?: WebResultMode;
   ollamaModel?: string;
+};
+
+type PendingWebTurn = {
+  nodeId: string;
+  provider: WebProvider;
+  prompt: string;
+  mode: WebResultMode;
 };
 
 type TransformMode = "pick" | "merge" | "template";
@@ -230,6 +241,14 @@ const TURN_EXECUTOR_OPTIONS = [
   "web_claude",
   "ollama",
 ] as const;
+const TURN_EXECUTOR_LABELS: Record<TurnExecutor, string> = {
+  codex: "Codex",
+  web_gemini: "Web / Gemini",
+  web_grok: "Web / Grok",
+  web_perplexity: "Web / Perplexity",
+  web_claude: "Web / Claude",
+  ollama: "Ollama (로컬)",
+};
 const TURN_MODEL_OPTIONS = [
   "gpt-5.3-codex",
   "gpt-5.3-codex-spark",
@@ -697,9 +716,9 @@ function defaultNodeConfig(type: NodeType): Record<string, unknown> {
 function nodeCardSummary(node: GraphNode): string {
   if (node.type === "turn") {
     const config = node.config as TurnConfig;
-    const executor = String(config.executor ?? "codex");
+    const executor = getTurnExecutor(config);
     if (executor !== "codex") {
-      return `실행기: ${executor}`;
+      return `실행기: ${turnExecutorLabel(executor)}`;
     }
     return `모델: ${String(config.model ?? TURN_MODEL_OPTIONS[0])}`;
   }
@@ -713,7 +732,39 @@ function nodeCardSummary(node: GraphNode): string {
 
 function turnModelLabel(node: GraphNode): string {
   const config = node.config as TurnConfig;
+  const executor = getTurnExecutor(config);
+  if (executor === "ollama") {
+    return `Ollama · ${String(config.ollamaModel ?? "llama3.1:8b")}`;
+  }
+  if (executor !== "codex") {
+    return turnExecutorLabel(executor);
+  }
   return String(config.model ?? TURN_MODEL_OPTIONS[0]);
+}
+
+function getTurnExecutor(config: TurnConfig): TurnExecutor {
+  const raw = typeof config.executor === "string" ? config.executor : "codex";
+  return TURN_EXECUTOR_OPTIONS.includes(raw as TurnExecutor) ? (raw as TurnExecutor) : "codex";
+}
+
+function turnExecutorLabel(executor: TurnExecutor): string {
+  return TURN_EXECUTOR_LABELS[executor];
+}
+
+function getWebProviderFromExecutor(executor: TurnExecutor): WebProvider | null {
+  if (executor === "web_gemini") {
+    return "gemini";
+  }
+  if (executor === "web_grok") {
+    return "grok";
+  }
+  if (executor === "web_perplexity") {
+    return "perplexity";
+  }
+  if (executor === "web_claude") {
+    return "claude";
+  }
+  return null;
 }
 
 function turnRoleLabel(node: GraphNode): string {
@@ -1247,7 +1298,7 @@ function normalizeGraph(input: unknown): GraphData {
       }
       const config = (node.config ?? {}) as Record<string, unknown>;
       const rawExecutor = typeof config.executor === "string" ? config.executor : "codex";
-      const executor = TURN_EXECUTOR_OPTIONS.includes(rawExecutor as (typeof TURN_EXECUTOR_OPTIONS)[number])
+      const executor = TURN_EXECUTOR_OPTIONS.includes(rawExecutor as TurnExecutor)
         ? rawExecutor
         : "codex";
       const normalizedConfig = {
@@ -1379,6 +1430,8 @@ function App() {
   const [events, setEvents] = useState<string[]>([]);
   const [pendingApprovals, setPendingApprovals] = useState<PendingApproval[]>([]);
   const [approvalSubmitting, setApprovalSubmitting] = useState(false);
+  const [pendingWebTurn, setPendingWebTurn] = useState<PendingWebTurn | null>(null);
+  const [webResponseDraft, setWebResponseDraft] = useState("");
 
   const [graph, setGraph] = useState<GraphData>({
     version: GRAPH_SCHEMA_VERSION,
@@ -1427,6 +1480,9 @@ function App() {
   const cancelRequestedRef = useRef(false);
   const activeTurnNodeIdRef = useRef<string>("");
   const turnTerminalResolverRef = useRef<((terminal: TurnTerminal) => void) | null>(null);
+  const webTurnResolverRef = useRef<((result: { ok: boolean; output?: unknown; error?: string }) => void) | null>(
+    null,
+  );
   const activeRunDeltaRef = useRef<Record<string, string>>({});
   const collectingRunRef = useRef(false);
   const runLogCollectorRef = useRef<Record<string, string[]>>({});
@@ -1861,6 +1917,49 @@ function App() {
     } catch (e) {
       setError(`clipboard copy failed: ${String(e)}`);
     }
+  }
+
+  async function onOpenPendingProviderWindow() {
+    if (!pendingWebTurn) {
+      return;
+    }
+    try {
+      await invoke("provider_window_open", { provider: pendingWebTurn.provider });
+    } catch (error) {
+      setError(String(error));
+    }
+  }
+
+  async function onCopyPendingWebPrompt() {
+    if (!pendingWebTurn) {
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(pendingWebTurn.prompt);
+      setStatus("웹 프롬프트 복사 완료");
+    } catch (error) {
+      setError(`clipboard copy failed: ${String(error)}`);
+    }
+  }
+
+  function onSubmitPendingWebTurn() {
+    if (!pendingWebTurn) {
+      return;
+    }
+    const normalized = normalizeWebTurnOutput(
+      pendingWebTurn.provider,
+      pendingWebTurn.mode,
+      webResponseDraft,
+    );
+    if (!normalized.ok) {
+      setError(normalized.error ?? "웹 응답 처리 실패");
+      return;
+    }
+    resolvePendingWebTurn({ ok: true, output: normalized.output });
+  }
+
+  function onCancelPendingWebTurn() {
+    resolvePendingWebTurn({ ok: false, error: "사용자 취소" });
   }
 
   async function onRespondApproval(decision: ApprovalDecision) {
@@ -2882,6 +2981,10 @@ function App() {
       if (zoomStatusTimerRef.current != null) {
         window.clearTimeout(zoomStatusTimerRef.current);
       }
+      if (webTurnResolverRef.current) {
+        webTurnResolverRef.current({ ok: false, error: "화면이 닫혀 실행이 취소되었습니다." });
+        webTurnResolverRef.current = null;
+      }
     };
   }, []);
 
@@ -3070,6 +3173,72 @@ function App() {
     };
   }
 
+  function normalizeWebTurnOutput(
+    provider: WebProvider,
+    mode: WebResultMode,
+    rawInput: string,
+  ): { ok: boolean; output?: unknown; error?: string } {
+    const trimmed = rawInput.trim();
+    if (!trimmed) {
+      return { ok: false, error: "웹 응답 입력이 비어 있습니다." };
+    }
+
+    if (mode === "manualPasteJson") {
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(trimmed);
+      } catch (error) {
+        return { ok: false, error: `JSON 파싱 실패: ${String(error)}` };
+      }
+      return {
+        ok: true,
+        output: {
+          provider,
+          timestamp: new Date().toISOString(),
+          data: parsed,
+          text: extractFinalAnswer(parsed),
+        },
+      };
+    }
+
+    return {
+      ok: true,
+      output: {
+        provider,
+        timestamp: new Date().toISOString(),
+        text: trimmed,
+      },
+    };
+  }
+
+  function resolvePendingWebTurn(result: { ok: boolean; output?: unknown; error?: string }) {
+    const resolver = webTurnResolverRef.current;
+    webTurnResolverRef.current = null;
+    setPendingWebTurn(null);
+    setWebResponseDraft("");
+    if (resolver) {
+      resolver(result);
+    }
+  }
+
+  async function requestWebTurnResponse(
+    nodeId: string,
+    provider: WebProvider,
+    prompt: string,
+    mode: WebResultMode,
+  ): Promise<{ ok: boolean; output?: unknown; error?: string }> {
+    setWebResponseDraft("");
+    setPendingWebTurn({
+      nodeId,
+      provider,
+      prompt,
+      mode,
+    });
+    return new Promise((resolve) => {
+      webTurnResolverRef.current = resolve;
+    });
+  }
+
   async function executeTurnNode(
     node: GraphNode,
     input: unknown,
@@ -3082,14 +3251,64 @@ function App() {
     usage?: UsageStats;
   }> {
     const config = node.config as TurnConfig;
+    const executor = getTurnExecutor(config);
     const nodeModel = String(config.model ?? model).trim() || model;
     const nodeCwd = String(config.cwd ?? cwd).trim() || cwd;
     const promptTemplate = String(config.promptTemplate ?? "{{input}}");
+    const nodeOllamaModel = String(config.ollamaModel ?? "llama3.1:8b").trim() || "llama3.1:8b";
 
     const inputText = stringifyInput(input);
     const textToSend = promptTemplate.includes("{{input}}")
       ? replaceInputPlaceholder(promptTemplate, inputText)
       : `${promptTemplate}${inputText ? `\n${inputText}` : ""}`;
+
+    if (executor === "ollama") {
+      try {
+        const raw = await invoke<unknown>("ollama_generate", {
+          model: nodeOllamaModel,
+          prompt: textToSend,
+        });
+        const text =
+          extractStringByPaths(raw, ["response", "message.content", "content"]) ??
+          stringifyInput(raw);
+        return {
+          ok: true,
+          output: {
+            provider: "ollama",
+            timestamp: new Date().toISOString(),
+            text,
+            raw,
+          },
+        };
+      } catch (error) {
+        return {
+          ok: false,
+          error: `Ollama 실행 실패: ${String(error)}`,
+        };
+      }
+    }
+
+    const webProvider = getWebProviderFromExecutor(executor);
+    if (webProvider) {
+      try {
+        await invoke("provider_window_open", { provider: webProvider });
+      } catch (error) {
+        return {
+          ok: false,
+          error: `웹 서비스 창 열기 실패(${webProvider}): ${String(error)}`,
+        };
+      }
+      setNodeStatus(node.id, "waiting_user", `${webProvider} 응답 입력 대기`);
+      setNodeRuntimeFields(node.id, {
+        status: "waiting_user",
+      });
+      return requestWebTurnResponse(
+        node.id,
+        webProvider,
+        textToSend,
+        config.webResultMode ?? "manualPasteText",
+      );
+    }
 
     let activeThreadId = extractStringByPaths(nodeStates[node.id], ["threadId"]);
     if (!activeThreadId) {
@@ -3212,7 +3431,15 @@ function App() {
     };
 
     try {
-      await ensureEngineStarted();
+      const requiresCodexEngine = graph.nodes.some((node) => {
+        if (node.type !== "turn") {
+          return false;
+        }
+        return getTurnExecutor(node.config as TurnConfig) === "codex";
+      });
+      if (requiresCodexEngine) {
+        await ensureEngineStarted();
+      }
 
       const nodeMap = new Map(graph.nodes.map((node) => [node.id, node]));
       const indegree = new Map<string, number>();
@@ -3413,6 +3640,9 @@ function App() {
       setStatus("그래프 실행 실패");
     } finally {
       turnTerminalResolverRef.current = null;
+      webTurnResolverRef.current = null;
+      setPendingWebTurn(null);
+      setWebResponseDraft("");
       activeTurnNodeIdRef.current = "";
       setIsGraphRunning(false);
       cancelRequestedRef.current = false;
@@ -3423,6 +3653,10 @@ function App() {
   async function onCancelGraphRun() {
     cancelRequestedRef.current = true;
     setStatus("취소 요청됨");
+    if (pendingWebTurn) {
+      resolvePendingWebTurn({ ok: false, error: "사용자 취소" });
+      return;
+    }
 
     const activeNodeId = activeTurnNodeIdRef.current;
     if (!activeNodeId) {
@@ -3613,6 +3847,8 @@ function App() {
   })();
 
   const selectedNodeState = selectedNodeId ? nodeStates[selectedNodeId] : undefined;
+  const selectedTurnExecutor: TurnExecutor =
+    selectedNode?.type === "turn" ? getTurnExecutor(selectedNode.config as TurnConfig) : "codex";
   const outgoingFromSelected = selectedNode
     ? graph.edges
         .filter((edge) => edge.from.nodeId === selectedNode.id)
@@ -4087,30 +4323,79 @@ function App() {
 
                       {selectedNode.type === "turn" && (
                         <section className="inspector-block form-grid">
-                          <h3>모델 설정</h3>
+                          <h3>Turn 실행기 설정</h3>
                           <label>
-                            모델
+                            실행기
                             <FancySelect
-                              ariaLabel="노드 모델"
+                              ariaLabel="Turn 실행기"
                               className="modern-select"
-                              onChange={(next) => updateSelectedNodeConfig("model", next)}
-                              options={TURN_MODEL_OPTIONS.map((option) => ({ value: option, label: option }))}
-                              value={String((selectedNode.config as TurnConfig).model ?? model)}
+                              onChange={(next) => updateSelectedNodeConfig("executor", next)}
+                              options={TURN_EXECUTOR_OPTIONS.map((option) => ({
+                                value: option,
+                                label: turnExecutorLabel(option),
+                              }))}
+                              value={selectedTurnExecutor}
                             />
                           </label>
+                          {selectedTurnExecutor === "codex" && (
+                            <label>
+                              모델
+                              <FancySelect
+                                ariaLabel="노드 모델"
+                                className="modern-select"
+                                onChange={(next) => updateSelectedNodeConfig("model", next)}
+                                options={TURN_MODEL_OPTIONS.map((option) => ({ value: option, label: option }))}
+                                value={String((selectedNode.config as TurnConfig).model ?? model)}
+                              />
+                            </label>
+                          )}
+                          {selectedTurnExecutor === "ollama" && (
+                            <label>
+                              Ollama 모델
+                              <input
+                                onChange={(e) => updateSelectedNodeConfig("ollamaModel", e.currentTarget.value)}
+                                placeholder="예: llama3.1:8b"
+                                value={String((selectedNode.config as TurnConfig).ollamaModel ?? "llama3.1:8b")}
+                              />
+                            </label>
+                          )}
+                          {selectedTurnExecutor === "codex" && (
+                            <label>
+                              작업 경로
+                              <input
+                                onChange={(e) => updateSelectedNodeConfig("cwd", e.currentTarget.value)}
+                                value={String((selectedNode.config as TurnConfig).cwd ?? cwd)}
+                              />
+                            </label>
+                          )}
+                          {getWebProviderFromExecutor(selectedTurnExecutor) && (
+                            <>
+                              <label>
+                                웹 결과 모드
+                                <FancySelect
+                                  ariaLabel="웹 결과 모드"
+                                  className="modern-select"
+                                  onChange={(next) => updateSelectedNodeConfig("webResultMode", next)}
+                                  options={[
+                                    { value: "manualPasteText", label: "텍스트 붙여넣기" },
+                                    { value: "manualPasteJson", label: "JSON 붙여넣기" },
+                                  ]}
+                                  value={String(
+                                    (selectedNode.config as TurnConfig).webResultMode ?? "manualPasteText",
+                                  )}
+                                />
+                              </label>
+                              <div className="inspector-empty">
+                                실행 시 서비스 창을 열고, 결과를 수동으로 붙여넣습니다.
+                              </div>
+                            </>
+                          )}
                           <label>
                             역할
                             <input
                               onChange={(e) => updateSelectedNodeConfig("role", e.currentTarget.value)}
                               placeholder={turnRoleLabel(selectedNode)}
                               value={String((selectedNode.config as TurnConfig).role ?? "")}
-                            />
-                          </label>
-                          <label>
-                            작업 경로
-                            <input
-                              onChange={(e) => updateSelectedNodeConfig("cwd", e.currentTarget.value)}
-                              value={String((selectedNode.config as TurnConfig).cwd ?? cwd)}
                             />
                           </label>
                           <label>
@@ -4344,6 +4629,42 @@ function App() {
           </section>
         )}
       </section>
+
+      {pendingWebTurn && (
+        <div className="modal-backdrop">
+          <section className="approval-modal web-turn-modal">
+            <h2>웹 응답 입력 필요</h2>
+            <div>노드: {pendingWebTurn.nodeId}</div>
+            <div>서비스: {pendingWebTurn.provider}</div>
+            <div>수집 모드: {pendingWebTurn.mode === "manualPasteJson" ? "JSON" : "텍스트"}</div>
+            <div className="button-row">
+              <button onClick={onOpenPendingProviderWindow} type="button">
+                서비스 창 열기
+              </button>
+              <button onClick={onCopyPendingWebPrompt} type="button">
+                프롬프트 복사
+              </button>
+            </div>
+            <div className="web-turn-prompt">{pendingWebTurn.prompt}</div>
+            <label>
+              응답 붙여넣기
+              <textarea
+                onChange={(e) => setWebResponseDraft(e.currentTarget.value)}
+                rows={8}
+                value={webResponseDraft}
+              />
+            </label>
+            <div className="button-row">
+              <button onClick={onSubmitPendingWebTurn} type="button">
+                입력 완료
+              </button>
+              <button onClick={onCancelPendingWebTurn} type="button">
+                취소
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
 
       {activeApproval && (
         <div className="modal-backdrop">
