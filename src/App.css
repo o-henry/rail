@@ -656,6 +656,12 @@ h3 {
   cursor: move;
 }
 
+.node-head-main {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
 .node-turn .node-head {
   background: #eef6ff;
 }
@@ -670,6 +676,21 @@ h3 {
 
 .node-head strong {
   font-size: 0.82rem;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.node-head-subtitle {
+  font-size: 0.68rem;
+  letter-spacing: 0.04em;
+  color: #596a78;
+  text-transform: uppercase;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .node-head button {

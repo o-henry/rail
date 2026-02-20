@@ -162,6 +162,7 @@ type FancySelectOption = {
 
 type TurnConfig = {
   model?: string;
+  role?: string;
   cwd?: string;
   promptTemplate?: string;
 };
@@ -195,6 +196,8 @@ const GRAPH_STAGE_INSET = 0;
 const MIN_CANVAS_ZOOM = 0.6;
 const MAX_CANVAS_ZOOM = 1.8;
 const QUESTION_INPUT_MAX_HEIGHT = 132;
+const NODE_ANCHOR_OFFSET = 10;
+const DEFAULT_TURN_ROLE = "DEEP-SEARCH AGENT";
 const TURN_MODEL_OPTIONS = [
   "gpt-5.3-codex",
   "gpt-5.3-codex-spark",
@@ -566,15 +569,15 @@ function buildRoundedEdgePath(
 
 function getNodeAnchorPoint(node: GraphNode, side: NodeAnchorSide): LogicalPoint {
   if (side === "top") {
-    return { x: node.position.x + NODE_WIDTH / 2, y: node.position.y };
+    return { x: node.position.x + NODE_WIDTH / 2, y: node.position.y - NODE_ANCHOR_OFFSET };
   }
   if (side === "right") {
-    return { x: node.position.x + NODE_WIDTH, y: node.position.y + NODE_HEIGHT / 2 };
+    return { x: node.position.x + NODE_WIDTH + NODE_ANCHOR_OFFSET, y: node.position.y + NODE_HEIGHT / 2 };
   }
   if (side === "bottom") {
-    return { x: node.position.x + NODE_WIDTH / 2, y: node.position.y + NODE_HEIGHT };
+    return { x: node.position.x + NODE_WIDTH / 2, y: node.position.y + NODE_HEIGHT + NODE_ANCHOR_OFFSET };
   }
-  return { x: node.position.x, y: node.position.y + NODE_HEIGHT / 2 };
+  return { x: node.position.x - NODE_ANCHOR_OFFSET, y: node.position.y + NODE_HEIGHT / 2 };
 }
 
 function getGraphEdgeKey(edge: GraphEdge): string {
@@ -614,6 +617,7 @@ function defaultNodeConfig(type: NodeType): Record<string, unknown> {
   if (type === "turn") {
     return {
       model: TURN_MODEL_OPTIONS[0],
+      role: DEFAULT_TURN_ROLE,
       cwd: ".",
       promptTemplate: "{{input}}",
     };
@@ -647,6 +651,17 @@ function nodeCardSummary(node: GraphNode): string {
   }
   const config = node.config as GateConfig;
   return `분기 경로: ${String(config.decisionPath ?? "decision")}`;
+}
+
+function turnModelLabel(node: GraphNode): string {
+  const config = node.config as TurnConfig;
+  return String(config.model ?? TURN_MODEL_OPTIONS[0]);
+}
+
+function turnRoleLabel(node: GraphNode): string {
+  const config = node.config as TurnConfig;
+  const raw = String(config.role ?? DEFAULT_TURN_ROLE).trim();
+  return raw || DEFAULT_TURN_ROLE;
 }
 
 function nodeTypeLabel(type: NodeType): string {
@@ -1786,6 +1801,14 @@ function App() {
       return;
     }
 
+    const reverseExistsNow = graph.edges.some(
+      (edge) => edge.from.nodeId === toNodeId && edge.to.nodeId === fromNodeId,
+    );
+    if (reverseExistsNow) {
+      setStatus("양방향 연결은 허용되지 않습니다.");
+      return;
+    }
+
     const fromNode = graph.nodes.find((node) => node.id === fromNodeId);
     const toNode = graph.nodes.find((node) => node.id === toNodeId);
     if (!fromNode || !toNode) {
@@ -1801,6 +1824,12 @@ function App() {
         (edge) => edge.from.nodeId === fromNodeId && edge.to.nodeId === toNodeId,
       );
       if (exists) {
+        return prev;
+      }
+      const reverseExists = prev.edges.some(
+        (edge) => edge.from.nodeId === toNodeId && edge.to.nodeId === fromNodeId,
+      );
+      if (reverseExists) {
         return prev;
       }
       const edge: GraphEdge = {
@@ -3370,7 +3399,16 @@ function App() {
                           style={{ left: node.position.x, top: node.position.y }}
                         >
                           <div className="node-head" onMouseDown={(e) => onNodeDragStart(e, node.id)}>
-                            <strong>{nodeTypeLabel(node.type)}</strong>
+                            <div className="node-head-main">
+                              {node.type === "turn" ? (
+                                <>
+                                  <strong>{turnModelLabel(node)}</strong>
+                                  <span className="node-head-subtitle">{turnRoleLabel(node)}</span>
+                                </>
+                              ) : (
+                                <strong>{nodeTypeLabel(node.type)}</strong>
+                              )}
+                            </div>
                             <button onClick={() => deleteNode(node.id)} type="button">
                               삭제
                             </button>
@@ -3633,6 +3671,13 @@ function App() {
                               onChange={(next) => updateSelectedNodeConfig("model", next)}
                               options={TURN_MODEL_OPTIONS.map((option) => ({ value: option, label: option }))}
                               value={String((selectedNode.config as TurnConfig).model ?? model)}
+                            />
+                          </label>
+                          <label>
+                            역할
+                            <input
+                              onChange={(e) => updateSelectedNodeConfig("role", e.currentTarget.value)}
+                              value={String((selectedNode.config as TurnConfig).role ?? DEFAULT_TURN_ROLE)}
                             />
                           </label>
                           <label>
