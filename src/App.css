@@ -776,7 +776,13 @@ h3 {
 }
 
 .node-port-btn {
-  cursor: crosshair;
+  cursor: default;
+}
+
+.node-port-btn.is-passive,
+.node-port-btn:disabled {
+  opacity: 0.72;
+  cursor: default;
 }
 
 .node-anchors {

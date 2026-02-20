@@ -153,6 +153,11 @@ type LogicalPoint = {
   y: number;
 };
 
+type NodeVisualSize = {
+  width: number;
+  height: number;
+};
+
 type NodeAnchorSide = "top" | "right" | "bottom" | "left";
 type FancySelectOption = {
   value: string;
@@ -196,8 +201,9 @@ const GRAPH_STAGE_INSET = 0;
 const MIN_CANVAS_ZOOM = 0.6;
 const MAX_CANVAS_ZOOM = 1.8;
 const QUESTION_INPUT_MAX_HEIGHT = 132;
+const NODE_DRAG_MARGIN = 30;
 const NODE_ANCHOR_OFFSET = 10;
-const DEFAULT_TURN_ROLE = "DEEP-SEARCH AGENT";
+const FALLBACK_TURN_ROLE = "GENERAL AGENT";
 const TURN_MODEL_OPTIONS = [
   "gpt-5.3-codex",
   "gpt-5.3-codex-spark",
@@ -567,17 +573,24 @@ function buildRoundedEdgePath(
   return pathParts.join(" ");
 }
 
-function getNodeAnchorPoint(node: GraphNode, side: NodeAnchorSide): LogicalPoint {
+function getNodeAnchorPoint(
+  node: GraphNode,
+  side: NodeAnchorSide,
+  size?: NodeVisualSize,
+): LogicalPoint {
+  const width = size?.width ?? NODE_WIDTH;
+  const height = size?.height ?? NODE_HEIGHT;
+
   if (side === "top") {
-    return { x: node.position.x + NODE_WIDTH / 2, y: node.position.y - NODE_ANCHOR_OFFSET };
+    return { x: node.position.x + width / 2, y: node.position.y - NODE_ANCHOR_OFFSET };
   }
   if (side === "right") {
-    return { x: node.position.x + NODE_WIDTH + NODE_ANCHOR_OFFSET, y: node.position.y + NODE_HEIGHT / 2 };
+    return { x: node.position.x + width + NODE_ANCHOR_OFFSET, y: node.position.y + height / 2 };
   }
   if (side === "bottom") {
-    return { x: node.position.x + NODE_WIDTH / 2, y: node.position.y + NODE_HEIGHT + NODE_ANCHOR_OFFSET };
+    return { x: node.position.x + width / 2, y: node.position.y + height + NODE_ANCHOR_OFFSET };
   }
-  return { x: node.position.x - NODE_ANCHOR_OFFSET, y: node.position.y + NODE_HEIGHT / 2 };
+  return { x: node.position.x - NODE_ANCHOR_OFFSET, y: node.position.y + height / 2 };
 }
 
 function getGraphEdgeKey(edge: GraphEdge): string {
@@ -617,7 +630,7 @@ function defaultNodeConfig(type: NodeType): Record<string, unknown> {
   if (type === "turn") {
     return {
       model: TURN_MODEL_OPTIONS[0],
-      role: DEFAULT_TURN_ROLE,
+      role: "",
       cwd: ".",
       promptTemplate: "{{input}}",
     };
@@ -660,8 +673,37 @@ function turnModelLabel(node: GraphNode): string {
 
 function turnRoleLabel(node: GraphNode): string {
   const config = node.config as TurnConfig;
-  const raw = String(config.role ?? DEFAULT_TURN_ROLE).trim();
-  return raw || DEFAULT_TURN_ROLE;
+  const raw = String(config.role ?? "").trim();
+  if (raw) {
+    return raw;
+  }
+
+  const signal = `${node.id} ${String(config.promptTemplate ?? "")}`.toLowerCase();
+  if (signal.includes("search")) {
+    return "SEARCH AGENT";
+  }
+  if (signal.includes("judge") || signal.includes("evaluator") || signal.includes("quality")) {
+    return "EVALUATION AGENT";
+  }
+  if (signal.includes("final") || signal.includes("synth")) {
+    return "SYNTHESIS AGENT";
+  }
+  if (signal.includes("intake") || signal.includes("requirements")) {
+    return "PLANNING AGENT";
+  }
+  if (signal.includes("architect")) {
+    return "ARCHITECTURE AGENT";
+  }
+  if (signal.includes("implementation")) {
+    return "IMPLEMENTATION AGENT";
+  }
+  const dynamicFromId = node.id
+    .replace(/^turn-?/i, "")
+    .replace(/[^a-z0-9]+/gi, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 14)
+    .toUpperCase();
+  return dynamicFromId ? `${dynamicFromId} AGENT` : FALLBACK_TURN_ROLE;
 }
 
 function nodeTypeLabel(type: NodeType): string {
@@ -959,24 +1001,28 @@ function buildValidationPreset(): GraphData {
   const nodes: GraphNode[] = [
     makePresetNode("turn-intake", "turn", 120, 120, {
       model: "gpt-5.1-codex-mini",
+      role: "PLANNING AGENT",
       cwd: ".",
       promptTemplate:
         "질문을 분석하고 검증 계획을 3개 불릿으로 요약해줘. 입력 질문: {{input}}",
     }),
     makePresetNode("turn-search-a", "turn", 420, 40, {
       model: "gpt-5.2",
+      role: "SEARCH AGENT A",
       cwd: ".",
       promptTemplate:
         "입력 내용을 바탕으로 찬성 근거를 조사해 JSON으로 정리해줘. {{input}}",
     }),
     makePresetNode("turn-search-b", "turn", 420, 220, {
       model: "gpt-5.2-codex",
+      role: "SEARCH AGENT B",
       cwd: ".",
       promptTemplate:
         "입력 내용을 바탕으로 반대 근거/한계를 조사해 JSON으로 정리해줘. {{input}}",
     }),
     makePresetNode("turn-judge", "turn", 720, 120, {
       model: "gpt-5.3-codex",
+      role: "EVALUATION AGENT",
       cwd: ".",
       promptTemplate:
         "근거를 종합해 엄격한 JSON만 출력해라: {\"decision\":\"PASS|REJECT\",\"finalDraft\":\"...\",\"why\":\"...\"}. 입력: {{input}}",
@@ -989,6 +1035,7 @@ function buildValidationPreset(): GraphData {
     }),
     makePresetNode("turn-final", "turn", 1320, 40, {
       model: "gpt-5.3-codex",
+      role: "SYNTHESIS AGENT",
       cwd: ".",
       promptTemplate:
         "decision=PASS로 가정하고 finalDraft와 근거를 정리해 최종 답변을 한국어로 작성해줘. {{input}}",
@@ -1016,24 +1063,28 @@ function buildDevelopmentPreset(): GraphData {
   const nodes: GraphNode[] = [
     makePresetNode("turn-requirements", "turn", 120, 120, {
       model: "gpt-5.1-codex-mini",
+      role: "REQUIREMENTS AGENT",
       cwd: ".",
       promptTemplate:
         "요구사항을 기능/비기능으로 분해하고 우선순위를 매겨줘. 질문: {{input}}",
     }),
     makePresetNode("turn-architecture", "turn", 420, 40, {
       model: "gpt-5.2",
+      role: "ARCHITECTURE AGENT",
       cwd: ".",
       promptTemplate:
         "입력을 바탕으로 풀스택 아키텍처를 제안해 JSON으로 출력해줘. {{input}}",
     }),
     makePresetNode("turn-implementation", "turn", 420, 220, {
       model: "gpt-5.2-codex",
+      role: "IMPLEMENTATION AGENT",
       cwd: ".",
       promptTemplate:
         "구현 단계 계획(파일 단위 포함)을 작성해줘. 입력: {{input}}",
     }),
     makePresetNode("turn-evaluator", "turn", 720, 120, {
       model: "gpt-5.3-codex",
+      role: "QUALITY AGENT",
       cwd: ".",
       promptTemplate:
         "계획을 검토하고 JSON만 출력: {\"decision\":\"PASS|REJECT\",\"finalDraft\":\"...\",\"risk\":\"...\"}. 입력: {{input}}",
@@ -1046,6 +1097,7 @@ function buildDevelopmentPreset(): GraphData {
     }),
     makePresetNode("turn-final-dev", "turn", 1320, 40, {
       model: "gpt-5.3-codex",
+      role: "DEV SYNTHESIS AGENT",
       cwd: ".",
       promptTemplate:
         "실행 가능한 최종 개발 가이드를 산출해줘. 코드/테스트/배포 체크리스트 포함. {{input}}",
@@ -1244,9 +1296,11 @@ function App() {
   });
   const [undoStack, setUndoStack] = useState<GraphData[]>([]);
   const [redoStack, setRedoStack] = useState<GraphData[]>([]);
+  const [, setNodeSizeVersion] = useState(0);
 
   const dragRef = useRef<DragState | null>(null);
   const graphCanvasRef = useRef<HTMLDivElement | null>(null);
+  const nodeSizeMapRef = useRef<Record<string, NodeVisualSize>>({});
   const questionInputRef = useRef<HTMLTextAreaElement | null>(null);
   const panRef = useRef<PanState | null>(null);
   const dragBoundsRef = useRef<{ maxX: number; maxY: number } | null>(null);
@@ -1265,6 +1319,10 @@ function App() {
 
   const activeApproval = pendingApprovals[0];
   const selectedNode = graph.nodes.find((node) => node.id === selectedNodeId) ?? null;
+
+  function getNodeVisualSize(nodeId: string): NodeVisualSize {
+    return nodeSizeMapRef.current[nodeId] ?? { width: NODE_WIDTH, height: NODE_HEIGHT };
+  }
 
   function addNodeLog(nodeId: string, message: string) {
     if (collectingRunRef.current) {
@@ -1711,8 +1769,9 @@ function App() {
   function addNode(type: NodeType) {
     const center = getCanvasViewportCenterLogical();
     const fallbackIndex = graph.nodes.length;
-    const maxX = Math.max(-GRAPH_STAGE_INSET, boundedStageWidth - NODE_WIDTH);
-    const maxY = Math.max(-GRAPH_STAGE_INSET, boundedStageHeight - NODE_HEIGHT);
+    const minPos = -NODE_DRAG_MARGIN;
+    const maxX = Math.max(minPos, boundedStageWidth - NODE_WIDTH + NODE_DRAG_MARGIN);
+    const maxY = Math.max(minPos, boundedStageHeight - NODE_HEIGHT + NODE_DRAG_MARGIN);
     const baseX = center
       ? Math.round(center.x - NODE_WIDTH / 2)
       : 40 + (fallbackIndex % 4) * 280;
@@ -1723,8 +1782,8 @@ function App() {
       id: makeNodeId(type),
       type,
       position: {
-        x: Math.min(maxX, Math.max(-GRAPH_STAGE_INSET, baseX)),
-        y: Math.min(maxY, Math.max(-GRAPH_STAGE_INSET, baseY)),
+        x: Math.min(maxX, Math.max(minPos, baseX)),
+        y: Math.min(maxY, Math.max(minPos, baseY)),
       },
       config: defaultNodeConfig(type),
     };
@@ -1782,15 +1841,6 @@ function App() {
     }
   }
 
-  function onPortOutClick(nodeId: string) {
-    setConnectFromNodeId(nodeId);
-    setSelectedEdgeKey("");
-    setConnectFromSide(null);
-    setConnectPreviewStartPoint(null);
-    setConnectPreviewPoint(null);
-    setIsConnectingDrag(false);
-  }
-
   function createEdgeConnection(
     fromNodeId: string,
     toNodeId: string,
@@ -1840,21 +1890,6 @@ function App() {
     });
   }
 
-  function onPortOutDragStart(e: ReactMouseEvent<HTMLButtonElement>, nodeId: string) {
-    e.preventDefault();
-    e.stopPropagation();
-    const sourceNode = graph.nodes.find((node) => node.id === nodeId);
-    if (!sourceNode) {
-      return;
-    }
-    const point = getNodeAnchorPoint(sourceNode, "right");
-    setConnectFromNodeId(nodeId);
-    setConnectFromSide("right");
-    setConnectPreviewStartPoint(point);
-    setIsConnectingDrag(true);
-    setConnectPreviewPoint(point);
-  }
-
   function onNodeAnchorDragStart(
     e: ReactMouseEvent<HTMLButtonElement>,
     nodeId: string,
@@ -1866,7 +1901,7 @@ function App() {
     if (!sourceNode) {
       return;
     }
-    const point = getNodeAnchorPoint(sourceNode, side);
+    const point = getNodeAnchorPoint(sourceNode, side, getNodeVisualSize(sourceNode.id));
     setConnectFromNodeId(nodeId);
     setConnectFromSide(side);
     setConnectPreviewStartPoint(point);
@@ -1893,32 +1928,6 @@ function App() {
   }
 
   function onNodeConnectDrop(targetNodeId: string) {
-    if (!connectFromNodeId || connectFromNodeId === targetNodeId) {
-      return;
-    }
-    createEdgeConnection(connectFromNodeId, targetNodeId, connectFromSide ?? undefined);
-    setConnectFromNodeId("");
-    setConnectFromSide(null);
-    setConnectPreviewStartPoint(null);
-    setConnectPreviewPoint(null);
-    setIsConnectingDrag(false);
-  }
-
-  function onPortInDrop(e: ReactMouseEvent<HTMLButtonElement>, targetNodeId: string) {
-    if (!connectFromNodeId) {
-      return;
-    }
-    e.preventDefault();
-    e.stopPropagation();
-    createEdgeConnection(connectFromNodeId, targetNodeId, connectFromSide ?? undefined);
-    setConnectFromNodeId("");
-    setConnectFromSide(null);
-    setConnectPreviewStartPoint(null);
-    setConnectPreviewPoint(null);
-    setIsConnectingDrag(false);
-  }
-
-  function onPortInClick(targetNodeId: string) {
     if (!connectFromNodeId || connectFromNodeId === targetNodeId) {
       return;
     }
@@ -2019,10 +2028,11 @@ function App() {
 
     const { nodeId, offsetX, offsetY } = dragRef.current;
     const bounds = dragBoundsRef.current;
-    const maxX = bounds?.maxX ?? Math.max(0, boundedStageWidth - NODE_WIDTH);
-    const maxY = bounds?.maxY ?? Math.max(0, boundedStageHeight - NODE_HEIGHT);
-    const x = Math.min(maxX, Math.max(-GRAPH_STAGE_INSET, logicalPoint.x - offsetX));
-    const y = Math.min(maxY, Math.max(-GRAPH_STAGE_INSET, logicalPoint.y - offsetY));
+    const minPos = -NODE_DRAG_MARGIN;
+    const maxX = bounds?.maxX ?? Math.max(minPos, boundedStageWidth - NODE_WIDTH + NODE_DRAG_MARGIN);
+    const maxY = bounds?.maxY ?? Math.max(minPos, boundedStageHeight - NODE_HEIGHT + NODE_DRAG_MARGIN);
+    const x = Math.min(maxX, Math.max(minPos, logicalPoint.x - offsetX));
+    const y = Math.min(maxY, Math.max(minPos, logicalPoint.y - offsetY));
 
     setGraph((prev) => ({
       ...prev,
@@ -2095,8 +2105,8 @@ function App() {
 
     dragStartSnapshotRef.current = cloneGraph(graph);
     dragBoundsRef.current = {
-      maxX: Math.max(0, boundedStageWidth - NODE_WIDTH),
-      maxY: Math.max(0, boundedStageHeight - NODE_HEIGHT),
+      maxX: Math.max(-NODE_DRAG_MARGIN, boundedStageWidth - NODE_WIDTH + NODE_DRAG_MARGIN),
+      maxY: Math.max(-NODE_DRAG_MARGIN, boundedStageHeight - NODE_HEIGHT + NODE_DRAG_MARGIN),
     };
     dragPointerRef.current = { clientX: e.clientX, clientY: e.clientY };
     ensureDragAutoPanLoop();
@@ -2424,7 +2434,7 @@ function App() {
       return;
     }
 
-    const onDeleteSelectedEdge = (event: KeyboardEvent) => {
+    const onDeleteSelection = (event: KeyboardEvent) => {
       if (event.repeat || event.metaKey || event.ctrlKey || event.altKey) {
         return;
       }
@@ -2434,28 +2444,38 @@ function App() {
       if (event.key !== "Backspace" && event.key !== "Delete") {
         return;
       }
-      if (!selectedEdgeKey) {
-        return;
-      }
 
-      const hasTarget = graph.edges.some((edge) => getGraphEdgeKey(edge) === selectedEdgeKey);
-      if (!hasTarget) {
+      if (selectedEdgeKey) {
+        const hasEdge = graph.edges.some((edge) => getGraphEdgeKey(edge) === selectedEdgeKey);
+        if (!hasEdge) {
+          setSelectedEdgeKey("");
+          return;
+        }
+        event.preventDefault();
+        applyGraphChange((prev) => ({
+          ...prev,
+          edges: prev.edges.filter((edge) => getGraphEdgeKey(edge) !== selectedEdgeKey),
+        }));
         setSelectedEdgeKey("");
+        setStatus("연결선 삭제됨");
         return;
       }
 
-      event.preventDefault();
-      applyGraphChange((prev) => ({
-        ...prev,
-        edges: prev.edges.filter((edge) => getGraphEdgeKey(edge) !== selectedEdgeKey),
-      }));
-      setSelectedEdgeKey("");
-      setStatus("연결선 삭제됨");
+      if (selectedNodeId) {
+        const hasNode = graph.nodes.some((node) => node.id === selectedNodeId);
+        if (!hasNode) {
+          setSelectedNodeId("");
+          return;
+        }
+        event.preventDefault();
+        deleteNode(selectedNodeId);
+        setStatus("노드 삭제됨");
+      }
     };
 
-    window.addEventListener("keydown", onDeleteSelectedEdge);
-    return () => window.removeEventListener("keydown", onDeleteSelectedEdge);
-  }, [workspaceTab, selectedEdgeKey, graph.edges]);
+    window.addEventListener("keydown", onDeleteSelection);
+    return () => window.removeEventListener("keydown", onDeleteSelection);
+  }, [workspaceTab, selectedEdgeKey, selectedNodeId, graph.edges, graph.nodes]);
 
   useEffect(() => {
     syncQuestionInputHeight();
@@ -2479,6 +2499,45 @@ function App() {
   useEffect(() => {
     syncCanvasLogicalViewport();
   }, [graph.nodes, canvasZoom]);
+
+  useEffect(() => {
+    if (workspaceTab !== "workflow") {
+      return;
+    }
+    const canvas = graphCanvasRef.current;
+    if (!canvas) {
+      return;
+    }
+
+    const elements = Array.from(canvas.querySelectorAll<HTMLDivElement>(".graph-node[data-node-id]"));
+    const seen = new Set<string>();
+    let changed = false;
+
+    for (const element of elements) {
+      const nodeId = element.dataset.nodeId;
+      if (!nodeId) {
+        continue;
+      }
+      seen.add(nodeId);
+      const nextSize: NodeVisualSize = { width: element.offsetWidth, height: element.offsetHeight };
+      const prevSize = nodeSizeMapRef.current[nodeId];
+      if (!prevSize || prevSize.width !== nextSize.width || prevSize.height !== nextSize.height) {
+        nodeSizeMapRef.current[nodeId] = nextSize;
+        changed = true;
+      }
+    }
+
+    for (const knownId of Object.keys(nodeSizeMapRef.current)) {
+      if (!seen.has(knownId)) {
+        delete nodeSizeMapRef.current[knownId];
+        changed = true;
+      }
+    }
+
+    if (changed) {
+      setNodeSizeVersion((version) => version + 1);
+    }
+  });
 
   useEffect(() => {
     return () => {
@@ -3172,8 +3231,16 @@ function App() {
       }
 
       const auto = getAutoConnectionSides(fromNode, toNode);
-      const fromPoint = getNodeAnchorPoint(fromNode, edge.from.side ?? auto.fromSide);
-      const toPoint = getNodeAnchorPoint(toNode, edge.to.side ?? auto.toSide);
+      const fromPoint = getNodeAnchorPoint(
+        fromNode,
+        edge.from.side ?? auto.fromSide,
+        getNodeVisualSize(fromNode.id),
+      );
+      const toPoint = getNodeAnchorPoint(
+        toNode,
+        edge.to.side ?? auto.toSide,
+        getNodeVisualSize(toNode.id),
+      );
       const edgeKey = getGraphEdgeKey(edge);
 
       return {
@@ -3195,7 +3262,11 @@ function App() {
       if (!fromNode) {
         return null;
       }
-      return getNodeAnchorPoint(fromNode, connectFromSide ?? "right");
+      return getNodeAnchorPoint(
+        fromNode,
+        connectFromSide ?? "right",
+        getNodeVisualSize(fromNode.id),
+      );
     })();
     if (!startPoint) {
       return null;
@@ -3384,6 +3455,7 @@ function App() {
                       return (
                         <div
                           className={`graph-node node-${node.type} ${selectedNodeId === node.id ? "selected" : ""}`}
+                          data-node-id={node.id}
                           key={node.id}
                           onClick={() => {
                             setSelectedNodeId(node.id);
@@ -3447,21 +3519,11 @@ function App() {
                             </div>
                           )}
                           <div className="node-ports">
-                            <button
-                              className="node-port-btn"
-                              onClick={() => onPortInClick(node.id)}
-                              onMouseUp={(e) => onPortInDrop(e, node.id)}
-                              type="button"
-                            >
+                            <button className="node-port-btn is-passive" disabled type="button">
                               입력
                             </button>
-                            <button
-                              className="node-port-btn"
-                              onClick={() => onPortOutClick(node.id)}
-                              onMouseDown={(e) => onPortOutDragStart(e, node.id)}
-                              type="button"
-                            >
-                              {connectFromNodeId === node.id ? "출력*" : "출력"}
+                            <button className="node-port-btn is-passive" disabled type="button">
+                              출력
                             </button>
                           </div>
                         </div>
@@ -3677,7 +3739,8 @@ function App() {
                             역할
                             <input
                               onChange={(e) => updateSelectedNodeConfig("role", e.currentTarget.value)}
-                              value={String((selectedNode.config as TurnConfig).role ?? DEFAULT_TURN_ROLE)}
+                              placeholder={turnRoleLabel(selectedNode)}
+                              value={String((selectedNode.config as TurnConfig).role ?? "")}
                             />
                           </label>
                           <label>
