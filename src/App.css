@@ -1234,8 +1234,8 @@ h3 {
 }
 
 .history-layout {
-  margin: 12px;
-  height: calc(100% - 24px);
+  margin: 0 10px 10px;
+  height: 100%;
   min-height: 0;
   display: grid;
   grid-template-columns: 320px minmax(0, 1fr);
@@ -1253,13 +1253,13 @@ h3 {
 }
 
 .settings-view {
-  margin: 12px;
-  height: calc(100% - 24px);
+  margin: 0 10px 10px;
+  height: 100%;
 }
 
 .childview-view {
-  margin: 12px;
-  height: calc(100% - 24px);
+  margin: 0 10px 10px;
+  height: 100%;
   display: grid;
   align-content: start;
   gap: 10px;
@@ -1383,7 +1383,7 @@ pre {
   .childview-view,
   .settings-view,
   .dev-layout {
-    margin-left: 12px;
+    margin: 0 10px 10px;
     width: auto;
   }
 
