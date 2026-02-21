@@ -1187,6 +1187,19 @@ h3 {
   width: 100%;
 }
 
+.inspector-section input:focus,
+.inspector-section input:focus-visible,
+.inspector-section select:focus,
+.inspector-section select:focus-visible,
+.inspector-section textarea:focus,
+.inspector-section textarea:focus-visible,
+.inspector-section .fancy-select-trigger:focus,
+.inspector-section .fancy-select-trigger:focus-visible {
+  outline: none;
+  border-color: transparent;
+  box-shadow: none;
+}
+
 .inspector-section .save-row input,
 .inspector-section .save-row select {
   min-width: 0;

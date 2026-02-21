@@ -806,7 +806,7 @@ function nodeCardSummary(node: GraphNode): string {
     const config = node.config as TurnConfig;
     const executor = getTurnExecutor(config);
     if (executor !== "codex") {
-      return `실행기: ${turnExecutorLabel(executor)}`;
+      return `에이전트: ${turnExecutorLabel(executor)}`;
     }
     return `모델: ${toTurnModelDisplayName(String(config.model ?? DEFAULT_TURN_MODEL))}`;
   }
@@ -4989,11 +4989,11 @@ function App() {
 
                       {selectedNode.type === "turn" && (
                         <section className="inspector-block form-grid">
-                          <h3>Turn 실행기 설정</h3>
+                          <h3>Turn 에이전트 설정</h3>
                           <label>
-                            실행기
+                            에이전트
                             <FancySelect
-                              ariaLabel="Turn 실행기"
+                              ariaLabel="Turn 에이전트"
                               className="modern-select"
                               onChange={(next) => updateSelectedNodeConfig("executor", next)}
                               options={TURN_EXECUTOR_OPTIONS.map((option) => ({
@@ -5186,12 +5186,12 @@ function App() {
 
                       <section className="inspector-block">
                         <h3>노드 로그</h3>
-                        <pre>{(selectedNodeState?.logs ?? []).join("\n") || "(로그 없음)"}</pre>
+                        <pre>{(selectedNodeState?.logs ?? []).join("\n") || "[로그 없음]"}</pre>
                       </section>
 
                       <section className="inspector-block">
                         <h3>노드 출력</h3>
-                        <pre>{formatUnknown(selectedNodeState?.output) || "(출력 없음)"}</pre>
+                        <pre>{formatUnknown(selectedNodeState?.output) || "[출력 없음]"}</pre>
                       </section>
                     </>
                   )}
