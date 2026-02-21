@@ -188,6 +188,7 @@ type TurnExecutor =
   | "web_perplexity"
   | "web_claude"
   | "ollama";
+type CostPreset = "conservative" | "balanced" | "aggressive";
 type WebAutomationMode = "auto" | "manualPasteJson" | "manualPasteText";
 type WebResultMode = WebAutomationMode;
 type WebProvider = "gemini" | "gpt" | "grok" | "perplexity" | "claude";
@@ -307,6 +308,16 @@ const TURN_MODEL_OPTIONS = [
   "GPT-5.1-Codex-Mini",
 ] as const;
 const DEFAULT_TURN_MODEL = TURN_MODEL_OPTIONS[0];
+const COST_PRESET_OPTIONS: FancySelectOption[] = [
+  { value: "conservative", label: "보수 (품질 우선)" },
+  { value: "balanced", label: "균형 (기본)" },
+  { value: "aggressive", label: "공격 (사용량 절감)" },
+];
+const COST_PRESET_DEFAULT_MODEL: Record<CostPreset, (typeof TURN_MODEL_OPTIONS)[number]> = {
+  conservative: "GPT-5.3-Codex",
+  balanced: "GPT-5.2-Codex",
+  aggressive: "GPT-5.1-Codex-Mini",
+};
 const TURN_MODEL_CANONICAL_PAIRS: Array<{ display: string; engine: string }> = [
   { display: "GPT-5.3-Codex", engine: "gpt-5.3-codex" },
   { display: "GPT-5.3-Codex-Spark", engine: "gpt-5.3-codex-spark" },
@@ -361,6 +372,33 @@ function toTurnModelEngineId(value: string): string {
     return lower;
   }
   return trimmed;
+}
+
+function isCostPreset(value: string): value is CostPreset {
+  return value === "conservative" || value === "balanced" || value === "aggressive";
+}
+
+function costPresetLabel(preset: CostPreset): string {
+  return COST_PRESET_OPTIONS.find((entry) => entry.value === preset)?.label ?? preset;
+}
+
+function isCriticalTurnNode(node: GraphNode): boolean {
+  if (node.type !== "turn") {
+    return false;
+  }
+  const config = node.config as TurnConfig;
+  const signal = `${node.id} ${String(config.role ?? "")} ${String(config.promptTemplate ?? "")}`.toLowerCase();
+  return /final|synth|judge|evaluat|quality|verif|검증|평가|판정|최종|합성/.test(signal);
+}
+
+function getCostPresetTargetModel(preset: CostPreset, isCritical: boolean): (typeof TURN_MODEL_OPTIONS)[number] {
+  if (preset === "conservative") {
+    return "GPT-5.3-Codex";
+  }
+  if (preset === "balanced") {
+    return isCritical ? "GPT-5.3-Codex" : "GPT-5.2-Codex";
+  }
+  return isCritical ? "GPT-5.2-Codex" : "GPT-5.1-Codex-Mini";
 }
 
 function isEditableTarget(target: EventTarget | null): boolean {
@@ -1509,6 +1547,7 @@ function App() {
 
   const [cwd, setCwd] = useState(defaultCwd);
   const [model, setModel] = useState<string>(DEFAULT_TURN_MODEL);
+  const [costPreset, setCostPreset] = useState<CostPreset>("balanced");
   const [workflowQuestion, setWorkflowQuestion] = useState(
     "언어 학습에서 AI가 기존 학습 패러다임을 어떻게 개선할 수 있는지 분석해줘.",
   );
@@ -2453,6 +2492,56 @@ function App() {
         ? "검증형 5-에이전트 프리셋 로드됨"
         : "개발형 5-에이전트 프리셋 로드됨",
     );
+  }
+
+  function applyCostPreset(preset: CostPreset) {
+    const codexTurnNodes = graph.nodes.filter((node) => {
+      if (node.type !== "turn") {
+        return false;
+      }
+      const config = node.config as TurnConfig;
+      return getTurnExecutor(config) === "codex";
+    });
+
+    setCostPreset(preset);
+    setModel(COST_PRESET_DEFAULT_MODEL[preset]);
+
+    if (codexTurnNodes.length === 0) {
+      setStatus(`비용 프리셋(${costPresetLabel(preset)}) 적용 대상이 없습니다.`);
+      return;
+    }
+
+    let changed = 0;
+    const nextNodes = graph.nodes.map((node) => {
+      if (node.type !== "turn") {
+        return node;
+      }
+      const config = node.config as TurnConfig;
+      if (getTurnExecutor(config) !== "codex") {
+        return node;
+      }
+      const targetModel = getCostPresetTargetModel(preset, isCriticalTurnNode(node));
+      const currentModel = toTurnModelDisplayName(String(config.model ?? DEFAULT_TURN_MODEL));
+      if (currentModel === targetModel) {
+        return node;
+      }
+      changed += 1;
+      return {
+        ...node,
+        config: {
+          ...config,
+          model: targetModel,
+        },
+      };
+    });
+
+    if (changed === 0) {
+      setStatus(`비용 프리셋(${costPresetLabel(preset)}) 이미 적용됨`);
+      return;
+    }
+
+    applyGraphChange((prev) => ({ ...prev, nodes: nextNodes }));
+    setStatus(`비용 프리셋(${costPresetLabel(preset)}) 적용: ${changed}/${codexTurnNodes.length}개 노드`);
   }
 
   function deleteNodes(nodeIds: string[]) {
@@ -4926,6 +5015,22 @@ function App() {
                         ]}
                         placeholder="템플릿 선택"
                         value=""
+                      />
+                    </div>
+
+                    <div className="tool-dropdown-group">
+                      <h4>비용 프리셋</h4>
+                      <FancySelect
+                        ariaLabel="비용 프리셋"
+                        className="modern-select"
+                        emptyMessage="선택 가능한 프리셋이 없습니다."
+                        onChange={(value) => {
+                          if (isCostPreset(value)) {
+                            applyCostPreset(value);
+                          }
+                        }}
+                        options={COST_PRESET_OPTIONS}
+                        value={costPreset}
                       />
                     </div>
 
