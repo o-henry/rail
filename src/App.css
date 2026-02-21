@@ -1141,12 +1141,20 @@ h3 {
   padding-top: 10px;
   /* background: var(--surface-strong); */
   display: grid;
-  gap: 8px;
+  gap: 12px;
+}
+
+.inspector-block > h3 {
+  margin-bottom: 2px;
 }
 
 .tool-dropdown-group {
   display: grid;
-  gap: 6px;
+  gap: 10px;
+}
+
+.tool-dropdown-group + .tool-dropdown-group {
+  margin-top: 4px;
 }
 
 .tool-dropdown-group h4 {
@@ -1199,6 +1207,10 @@ h3 {
 .inspector-section select,
 .inspector-section textarea {
   width: 100%;
+}
+
+.inspector-section label {
+  gap: 10px;
 }
 
 .inspector-section input:focus,
