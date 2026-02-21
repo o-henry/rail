@@ -53,7 +53,7 @@ type PendingApproval = {
   params: unknown;
 };
 
-type WorkspaceTab = "workflow" | "history" | "childview" | "settings";
+type WorkspaceTab = "workflow" | "history" | "settings";
 type NodeType = "turn" | "transform" | "gate";
 type PortType = "in" | "out";
 
@@ -1008,14 +1008,6 @@ function NavIcon({ tab }: { tab: WorkspaceTab }) {
       </svg>
     );
   }
-  if (tab === "childview") {
-    return (
-      <svg aria-hidden="true" fill="none" height="20" viewBox="0 0 24 24" width="20">
-        <rect height="14" rx="2.2" stroke="currentColor" strokeWidth="1.8" width="18" x="3" y="5" />
-        <path d="M8 19v2M16 19v2M8 21h8" stroke="currentColor" strokeLinecap="round" strokeWidth="1.8" />
-      </svg>
-    );
-  }
   if (tab === "settings") {
     return <img alt="" aria-hidden="true" className="nav-workflow-image" src="/setting.svg" />;
   }
@@ -1574,7 +1566,6 @@ function App() {
   const [webWorkerBusy, setWebWorkerBusy] = useState(false);
   const [webWorkerStatus, setWebWorkerStatus] = useState("");
   const [showAdvancedWebOps, setShowAdvancedWebOps] = useState(false);
-  const [childViewProvider, setChildViewProvider] = useState<WebProvider>("gemini");
   const [providerChildViewOpen, setProviderChildViewOpen] = useState<Record<WebProvider, boolean>>({
     gemini: false,
     gpt: false,
@@ -2265,16 +2256,8 @@ function App() {
     }
   }
 
-  async function onToggleProviderChildView(provider: WebProvider) {
-    if (providerChildViewOpen[provider]) {
-      await onCloseProviderChildView(provider);
-      return;
-    }
-    await onOpenProviderChildView(provider);
-  }
-
   useEffect(() => {
-    if (workspaceTab === "childview") {
+    if (workspaceTab === "workflow") {
       return;
     }
     const openProviders = WEB_PROVIDER_OPTIONS.filter((provider) => providerChildViewOpen[provider]);
@@ -2282,17 +2265,8 @@ function App() {
       return;
     }
     for (const provider of openProviders) {
-      invoke("provider_child_view_hide", { provider }).catch((error) => {
-        setError(String(error));
-      });
+      onCloseProviderChildView(provider);
     }
-    setProviderChildViewOpen((prev) => {
-      const next = { ...prev };
-      for (const provider of WEB_PROVIDER_OPTIONS) {
-        next[provider] = false;
-      }
-      return next;
-    });
   }, [workspaceTab, providerChildViewOpen]);
 
   async function refreshWebWorkerHealth(silent = false) {
@@ -4605,16 +4579,6 @@ function App() {
             <span className="nav-label">기록</span>
           </button>
           <button
-            className={isActiveTab("childview") ? "is-active" : ""}
-            onClick={() => setWorkspaceTab("childview")}
-            aria-label="웹뷰"
-            title="웹뷰"
-            type="button"
-          >
-            <span className="nav-icon"><NavIcon tab="childview" /></span>
-            <span className="nav-label">웹</span>
-          </button>
-          <button
             className={isActiveTab("settings") ? "is-active" : ""}
             onClick={() => setWorkspaceTab("settings")}
             aria-label="설정"
@@ -5342,42 +5306,6 @@ function App() {
                 </>
               )}
             </article>
-          </section>
-        )}
-
-        {workspaceTab === "childview" && (
-          <section className="childview-view">
-            <section className="panel-card childview-controls-card">
-              <h2>웹 폴백 제어</h2>
-              <p>웹 실행기 수동 폴백을 위한 내장 provider 뷰입니다.</p>
-              <label>
-                Provider 선택
-                <FancySelect
-                  ariaLabel="Child View Provider"
-                  className="modern-select"
-                  onChange={(next) => setChildViewProvider(next as WebProvider)}
-                  options={WEB_PROVIDER_OPTIONS.map((provider) => ({
-                    value: provider,
-                    label: webProviderLabel(provider),
-                  }))}
-                  value={childViewProvider}
-                />
-              </label>
-              <div className="button-row">
-                <button onClick={() => onToggleProviderChildView(childViewProvider)} type="button">
-                  {providerChildViewOpen[childViewProvider] ? "닫기" : "열기"}
-                </button>
-              </div>
-              <div className="settings-badges">
-                <span className={`status-tag ${providerChildViewOpen[childViewProvider] ? "on" : "off"}`}>
-                  {providerChildViewOpen[childViewProvider] ? "열림" : "닫힘"}
-                </span>
-                <span className="status-tag neutral">
-                  현재 Provider: {webProviderLabel(childViewProvider)}
-                </span>
-              </div>
-            </section>
-            <section className="panel-card">{renderWebAutomationPanel()}</section>
           </section>
         )}
 
