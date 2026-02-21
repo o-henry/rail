@@ -1018,6 +1018,18 @@ pub async fn web_provider_run(
 }
 
 #[tauri::command]
+pub async fn web_provider_open_session(
+    app: AppHandle,
+    state: State<'_, EngineManager>,
+    provider: String,
+) -> Result<Value, String> {
+    let runtime = ensure_web_worker_started(&app, &state).await?;
+    runtime
+        .request("provider/openSession", json!({ "provider": provider }))
+        .await
+}
+
+#[tauri::command]
 pub async fn web_provider_reset_session(
     app: AppHandle,
     state: State<'_, EngineManager>,

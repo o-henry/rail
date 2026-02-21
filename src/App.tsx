@@ -228,6 +228,13 @@ type WebWorkerHealth = {
   activeProvider?: string | null;
 };
 
+type WebProviderHealthEntry = {
+  contextOpen?: boolean;
+  profileDir?: string;
+  url?: string | null;
+  sessionState?: string | null;
+};
+
 type PendingWebTurn = {
   nodeId: string;
   provider: WebProvider;
@@ -895,6 +902,37 @@ function webProviderLabel(provider: WebProvider): string {
     return "Perplexity";
   }
   return "Claude";
+}
+
+function toWebProviderHealthMap(raw: unknown): Record<string, WebProviderHealthEntry> {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return {};
+  }
+  const entries = raw as Record<string, unknown>;
+  const next: Record<string, WebProviderHealthEntry> = {};
+  for (const [key, value] of Object.entries(entries)) {
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+      continue;
+    }
+    const row = value as Record<string, unknown>;
+    next[key] = {
+      contextOpen: typeof row.contextOpen === "boolean" ? row.contextOpen : undefined,
+      profileDir: typeof row.profileDir === "string" ? row.profileDir : undefined,
+      url: typeof row.url === "string" ? row.url : row.url == null ? null : undefined,
+      sessionState: typeof row.sessionState === "string" ? row.sessionState : undefined,
+    };
+  }
+  return next;
+}
+
+function providerSessionStateLabel(state?: string | null): string {
+  if (state === "active") {
+    return "로그인 유지(추정)";
+  }
+  if (state === "login_required") {
+    return "로그인 필요";
+  }
+  return "미확인";
 }
 
 function turnRoleLabel(node: GraphNode): string {
@@ -2319,16 +2357,31 @@ function App() {
     }
   }
 
-  async function onResetGeminiSession() {
+  async function onOpenProviderSession(provider: WebProvider) {
     setWebWorkerBusy(true);
     setError("");
     try {
-      await invoke("web_provider_reset_session", { provider: "gemini" });
+      await invoke("web_provider_open_session", { provider });
       await refreshWebWorkerHealth(true);
-      setWebWorkerStatus("Gemini 세션 리셋 완료");
-      setStatus("Gemini 세션 리셋 완료");
+      setWebWorkerStatus(`${webProviderLabel(provider)} 로그인 세션 창 열림`);
+      setStatus(`${webProviderLabel(provider)} 로그인 세션 창 열림`);
     } catch (error) {
-      setError(`Gemini 세션 리셋 실패: ${String(error)}`);
+      setError(`${webProviderLabel(provider)} 로그인 세션 열기 실패: ${String(error)}`);
+    } finally {
+      setWebWorkerBusy(false);
+    }
+  }
+
+  async function onResetProviderSession(provider: WebProvider) {
+    setWebWorkerBusy(true);
+    setError("");
+    try {
+      await invoke("web_provider_reset_session", { provider });
+      await refreshWebWorkerHealth(true);
+      setWebWorkerStatus(`${webProviderLabel(provider)} 세션 리셋 완료`);
+      setStatus(`${webProviderLabel(provider)} 세션 리셋 완료`);
+    } catch (error) {
+      setError(`${webProviderLabel(provider)} 세션 리셋 실패: ${String(error)}`);
     } finally {
       setWebWorkerBusy(false);
     }
@@ -4415,6 +4468,7 @@ function App() {
   }
 
   function renderWebAutomationPanel() {
+    const providerHealthMap = toWebProviderHealthMap(webWorkerHealth.providers);
     const healthProviders = formatUnknown(webWorkerHealth.providers ?? {});
     return (
       <section className="controls web-automation-panel">
@@ -4435,6 +4489,42 @@ function App() {
         >
           고급 제어 {showAdvancedWebOps ? "숨기기" : "보기"}
         </button>
+        <section className="provider-hub">
+          <h3>로그인 유지(세션)</h3>
+          <div className="provider-hub-list">
+            {WEB_PROVIDER_OPTIONS.map((provider) => {
+              const row = providerHealthMap[provider];
+              const hasContext = row?.contextOpen === true;
+              const sessionState = providerSessionStateLabel(row?.sessionState);
+              return (
+                <div className="provider-hub-row" key={`session-${provider}`}>
+                  <span>
+                    {webProviderLabel(provider)} · {sessionState}
+                  </span>
+                  <div className="button-row">
+                    <button
+                      disabled={webWorkerBusy}
+                      onClick={() => onOpenProviderSession(provider)}
+                      type="button"
+                    >
+                      로그인 창 열기
+                    </button>
+                    <button
+                      disabled={webWorkerBusy || !hasContext}
+                      onClick={() => onResetProviderSession(provider)}
+                      type="button"
+                    >
+                      세션 리셋
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <div className="usage-method">
+            세션 데이터는 로컬 프로필에만 저장되며, 토큰/쿠키 값은 UI와 로그에 출력하지 않습니다.
+          </div>
+        </section>
         {showAdvancedWebOps && (
           <div className="button-row">
             <button disabled={webWorkerBusy} onClick={onStartWebWorker} type="button">
@@ -4445,9 +4535,6 @@ function App() {
             </button>
             <button disabled={webWorkerBusy} onClick={() => refreshWebWorkerHealth()} type="button">
               상태 갱신
-            </button>
-            <button disabled={webWorkerBusy} onClick={onResetGeminiSession} type="button">
-              Gemini 세션 리셋
             </button>
             <button onClick={onOpenWebWorkerLog} type="button">
               진단 로그 열기

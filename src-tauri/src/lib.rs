@@ -24,6 +24,7 @@ pub fn run() {
             engine::web_worker_stop,
             engine::web_provider_health,
             engine::web_provider_run,
+            engine::web_provider_open_session,
             engine::web_provider_reset_session,
             engine::web_provider_cancel,
             engine::ollama_generate,

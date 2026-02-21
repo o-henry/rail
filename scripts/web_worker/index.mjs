@@ -109,6 +109,34 @@ function providerProfileDir(provider) {
   return path.join(PROFILE_ROOT, `${provider}-profile`);
 }
 
+function sanitizeUrlForUi(rawUrl) {
+  if (!rawUrl) {
+    return null;
+  }
+  try {
+    const parsed = new URL(rawUrl);
+    return `${parsed.origin}${parsed.pathname}`;
+  } catch {
+    return null;
+  }
+}
+
+function inferSessionState(provider, sanitizedUrl) {
+  if (!sanitizedUrl) {
+    return 'unknown';
+  }
+  const lower = sanitizedUrl.toLowerCase();
+  if (provider === 'gemini') {
+    if (lower.includes('accounts.google.com')) {
+      return 'login_required';
+    }
+    if (lower.includes('gemini.google.com')) {
+      return 'active';
+    }
+  }
+  return 'unknown';
+}
+
 async function ensureProviderContext(provider) {
   if (provider !== 'gemini') {
     throw workerError('UNSUPPORTED_PROVIDER', `지원하지 않는 provider입니다: ${provider}`);
@@ -425,13 +453,41 @@ async function runGemini({ prompt, timeoutMs }) {
   }
 }
 
+async function openProviderSession(provider) {
+  if (provider !== 'gemini') {
+    throw workerError('UNSUPPORTED_PROVIDER', `지원하지 않는 provider입니다: ${provider}`);
+  }
+  const wrapped = await ensureProviderContext(provider);
+  await ensureGeminiPage(wrapped.page);
+  try {
+    await wrapped.page.bringToFront();
+  } catch {
+    // ignore
+  }
+
+  const safeUrl = sanitizeUrlForUi(wrapped.page.url());
+  notify('web/progress', {
+    provider,
+    stage: 'session_open',
+    message: '로그인 세션 창을 열었습니다.',
+  });
+  return {
+    ok: true,
+    provider,
+    url: safeUrl,
+    sessionState: inferSessionState(provider, safeUrl),
+  };
+}
+
 async function getHealthResult() {
   const providerStatuses = {};
   for (const [provider, wrapped] of state.providers.entries()) {
+    const safeUrl = sanitizeUrlForUi(wrapped.page?.url?.() ?? null);
     providerStatuses[provider] = {
       contextOpen: !wrapped.contextClosed,
       profileDir: wrapped.profileDir,
-      url: wrapped.page?.url?.() ?? null,
+      url: safeUrl,
+      sessionState: inferSessionState(provider, safeUrl),
     };
   }
 
@@ -538,6 +594,23 @@ async function handleRpcRequest(message) {
           failedAt: nowIso(),
         },
       });
+    }
+    return;
+  }
+
+  if (method === 'provider/openSession') {
+    const provider = String(params.provider ?? '').trim().toLowerCase();
+    if (!provider) {
+      respond(id, { ok: false, error: 'provider가 비어 있습니다.' });
+      return;
+    }
+    try {
+      const result = await openProviderSession(provider);
+      respond(id, result);
+    } catch (error) {
+      const code = error?.code || 'INTERNAL';
+      const messageText = error?.message || String(error);
+      respond(id, { ok: false, errorCode: code, error: messageText });
     }
     return;
   }
