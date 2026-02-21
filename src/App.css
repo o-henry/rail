@@ -787,6 +787,7 @@ h3 {
 
 .node-head button {
   padding: 4px 7px;
+  border-radius: 3px;
   font-size: 0.74rem;
   cursor: pointer;
 }
@@ -821,6 +822,15 @@ h3 {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+}
+
+.node-summary-row .status-pill {
+  border-radius: 3px;
+}
+
+.node-summary-row .node-status-text {
+  position: relative;
+  top: 1px;
 }
 
 .status-pill {
@@ -1000,9 +1010,9 @@ h3 {
   border: 0;
   /* border-radius: 14px; */
   border-radius: 999px;
-  background: rgba(232, 237, 245, 0.92);
-  background: #ffffff;
-  box-shadow: 0 10px 20px rgba(24, 33, 41, 0.14);
+  /* background: rgba(232, 237, 245, 0.92); */
+  /* background: #ffffff; */
+  /* box-shadow: 0 10px 20px rgba(24, 33, 41, 0.14); */
   z-index: 10;
   pointer-events: auto;
 }

@@ -4723,7 +4723,7 @@ function App() {
                             <div className="node-summary-row">
                               <div>{nodeCardSummary(node)}</div>
                               <div className={`status-pill status-${nodeStatus}`}>
-                                {nodeStatusLabel(nodeStatus)}
+                                <span className="node-status-text">{nodeStatusLabel(nodeStatus)}</span>
                               </div>
                             </div>
                             <div className="node-runtime-meta">
