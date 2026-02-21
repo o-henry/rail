@@ -602,6 +602,8 @@ h3 {
   display: inline-flex;
   align-items: center;
   min-height: 0;
+  position: relative;
+  top: 4px;
 }
 
 .fancy-select.graph-file-select .fancy-select-menu {
@@ -1106,6 +1108,8 @@ h3 {
 .tool-dropdown-group .fancy-select-value {
   line-height: 1.2;
   min-height: 0;
+  position: relative;
+  top: 4px;
 }
 
 .tool-dropdown-group .fancy-select-value.is-placeholder,
