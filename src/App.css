@@ -1023,13 +1023,15 @@ h3 {
   margin: auto;
 }
 
-.canvas-runbar .play .canvas-icon-image {
-  filter: brightness(0) invert(1);
-}
+
 
 .canvas-runbar .canvas-icon-btn:not(.play) .canvas-icon-image {
   filter: grayscale(1);
   opacity: 0.56;
+}
+
+.canvas-runbar .play .canvas-icon-image {
+  /* filter: brightness(0) invert(1); */
 }
 
 .canvas-runbar .stop .canvas-icon-image {
@@ -1061,7 +1063,7 @@ h3 {
 .inspector-title-chip {
   /* background: #dfe5ee; */
   border-radius: 5px;
-  padding: 8px 12px;
+  /* padding: 8px 12px; */
   font-weight: 600;
   letter-spacing: -0.4px;
 }
