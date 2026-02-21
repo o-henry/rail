@@ -309,9 +309,9 @@ const TURN_MODEL_OPTIONS = [
 ] as const;
 const DEFAULT_TURN_MODEL = TURN_MODEL_OPTIONS[0];
 const COST_PRESET_OPTIONS: FancySelectOption[] = [
-  { value: "conservative", label: "고사양" },
-  { value: "balanced", label: "보통" },
-  { value: "aggressive", label: "저사양" },
+  { value: "conservative", label: "고사양 (품질 우선)" },
+  { value: "balanced", label: "보통 (기본)" },
+  { value: "aggressive", label: "저사양 (사용량 절감)" },
 ];
 const COST_PRESET_DEFAULT_MODEL: Record<CostPreset, (typeof TURN_MODEL_OPTIONS)[number]> = {
   conservative: "GPT-5.3-Codex",
