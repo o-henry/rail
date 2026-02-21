@@ -28,6 +28,9 @@ const CHILD_VIEW_MIN_WIDTH: u32 = 840;
 const CHILD_VIEW_MIN_HEIGHT: u32 = 520;
 const CHILD_VIEW_MARGIN_X: u32 = 180;
 const CHILD_VIEW_MARGIN_Y: u32 = 112;
+const CHILD_VIEW_SAFE_MARGIN_X: u32 = 44;
+const CHILD_VIEW_SAFE_MARGIN_TOP: u32 = 212;
+const CHILD_VIEW_SAFE_MARGIN_BOTTOM: u32 = 36;
 
 #[derive(Default)]
 pub struct EngineManager {
@@ -1226,16 +1229,25 @@ pub async fn provider_child_view_open(window: Window, provider: String) -> Resul
     let size = window
         .inner_size()
         .map_err(|e| format!("failed to read parent window size: {e}"))?;
-    let width = size
-        .width
-        .saturating_sub(CHILD_VIEW_MARGIN_X)
-        .max(CHILD_VIEW_MIN_WIDTH);
-    let height = size
+    let desired_width = size.width.saturating_sub(CHILD_VIEW_MARGIN_X);
+    let desired_height = size.height.saturating_sub(CHILD_VIEW_MARGIN_Y);
+
+    let available_width = size.width.saturating_sub(CHILD_VIEW_SAFE_MARGIN_X.saturating_mul(2));
+    let available_height = size
         .height
-        .saturating_sub(CHILD_VIEW_MARGIN_Y)
-        .max(CHILD_VIEW_MIN_HEIGHT);
-    let x = (size.width.saturating_sub(width)) / 2;
-    let y = (size.height.saturating_sub(height)) / 2;
+        .saturating_sub(CHILD_VIEW_SAFE_MARGIN_TOP + CHILD_VIEW_SAFE_MARGIN_BOTTOM);
+
+    let width_ceiling = available_width.max(1);
+    let height_ceiling = available_height.max(1);
+    let width_floor = CHILD_VIEW_MIN_WIDTH.min(width_ceiling);
+    let height_floor = CHILD_VIEW_MIN_HEIGHT.min(height_ceiling);
+    let width = desired_width.clamp(width_floor, width_ceiling);
+    let height = desired_height.clamp(height_floor, height_ceiling);
+
+    let x_start = CHILD_VIEW_SAFE_MARGIN_X.min(size.width.saturating_sub(width));
+    let y_start = CHILD_VIEW_SAFE_MARGIN_TOP.min(size.height.saturating_sub(height));
+    let x = x_start + (available_width.saturating_sub(width) / 2);
+    let y = y_start + (available_height.saturating_sub(height) / 2);
 
     let external = url
         .parse()
@@ -1243,7 +1255,7 @@ pub async fn provider_child_view_open(window: Window, provider: String) -> Resul
 
     window
         .add_child(
-            WebviewBuilder::new(child_label, WebviewUrl::External(external)).auto_resize(),
+            WebviewBuilder::new(child_label, WebviewUrl::External(external)),
             tauri::LogicalPosition::new(f64::from(x), f64::from(y)),
             tauri::LogicalSize::new(f64::from(width), f64::from(height)),
         )
