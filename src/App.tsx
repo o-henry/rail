@@ -4732,7 +4732,6 @@ function App() {
                           </div>
                           <div className="node-body">
                             <div className="node-id-row">
-                              <div className="node-id">{node.id}</div>
                               <div className={`status-pill status-${nodeStatus}`}>
                                 {nodeStatusLabel(nodeStatus)}
                               </div>
@@ -4976,9 +4975,6 @@ function App() {
                   {selectedNode && (
                     <>
                       <section className="inspector-block inspector-summary">
-                        <div>
-                          <strong>{selectedNode.id}</strong>
-                        </div>
                         <div className="inspector-summary-row">
                           <div>유형: {nodeTypeLabel(selectedNode.type)}</div>
                           <div className={`status-pill status-${selectedNodeState?.status ?? "idle"}`}>
