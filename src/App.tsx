@@ -4941,22 +4941,6 @@ function App() {
                       />
                     </div>
 
-                    <div className="button-row">
-                      <button
-                        disabled={!connectFromNodeId}
-                        onClick={() => {
-                          setConnectFromNodeId("");
-                          setConnectFromSide(null);
-                          setConnectPreviewStartPoint(null);
-                          setConnectPreviewPoint(null);
-                          setIsConnectingDrag(false);
-                        }}
-                        type="button"
-                      >
-                        연결 취소
-                      </button>
-                    </div>
-
                     <div className="save-row">
                       <input
                         value={graphFileName}
@@ -5299,8 +5283,8 @@ function App() {
         {workspaceTab === "childview" && (
           <section className="childview-view">
             <section className="panel-card childview-controls-card">
-              <h2>Child View 테스트</h2>
-              <p>앱 내부 child view로 provider 웹 앱을 띄우는 화면입니다.</p>
+              <h2>웹 폴백 제어</h2>
+              <p>웹 실행기 수동 폴백을 위한 내장 provider 뷰입니다.</p>
               <label>
                 Provider 선택
                 <FancySelect
