@@ -298,13 +298,22 @@ const WEB_PROVIDER_OPTIONS: ReadonlyArray<WebProvider> = [
   "claude",
 ];
 const TURN_MODEL_OPTIONS = [
-  "gpt-5.3-codex",
-  "gpt-5.3-codex-spark",
-  "gpt-5.2-codex",
-  "gpt-5.1-codex-max",
-  "gpt-5.2",
-  "gpt-5.1-codex-mini",
+  "GPT-5.3-Codex",
+  "GPT-5.3-Codex-Spark",
+  "GPT-5.2-Codex",
+  "GPT-5.1-Codex-Max",
+  "GPT-5.2",
+  "GPT-5.1-Codex-Mini",
 ] as const;
+const DEFAULT_TURN_MODEL = TURN_MODEL_OPTIONS[0];
+const TURN_MODEL_CANONICAL_PAIRS: Array<{ display: string; engine: string }> = [
+  { display: "GPT-5.3-Codex", engine: "gpt-5.3-codex" },
+  { display: "GPT-5.3-Codex-Spark", engine: "gpt-5.3-codex-spark" },
+  { display: "GPT-5.2-Codex", engine: "gpt-5.2-codex" },
+  { display: "GPT-5.1-Codex-Max", engine: "gpt-5.1-codex-max" },
+  { display: "GPT-5.2", engine: "gpt-5.2" },
+  { display: "GPT-5.1-Codex-Mini", engine: "gpt-5.1-codex-mini" },
+];
 const TRUSTED_AUTH_HOSTS = ["chatgpt.com", "openai.com", "auth.openai.com"] as const;
 const NODE_ANCHOR_SIDES: NodeAnchorSide[] = ["top", "right", "bottom", "left"];
 
@@ -321,6 +330,36 @@ function toErrorText(error: unknown): string {
     return error.message;
   }
   return String(error);
+}
+
+function toTurnModelDisplayName(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return DEFAULT_TURN_MODEL;
+  }
+  const lower = trimmed.toLowerCase();
+  const matched = TURN_MODEL_CANONICAL_PAIRS.find(
+    (entry) => entry.engine === lower || entry.display.toLowerCase() === lower,
+  );
+  return matched?.display ?? trimmed;
+}
+
+function toTurnModelEngineId(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return TURN_MODEL_CANONICAL_PAIRS[0].engine;
+  }
+  const lower = trimmed.toLowerCase();
+  const matched = TURN_MODEL_CANONICAL_PAIRS.find(
+    (entry) => entry.engine === lower || entry.display.toLowerCase() === lower,
+  );
+  if (matched) {
+    return matched.engine;
+  }
+  if (lower.startsWith("gpt-")) {
+    return lower;
+  }
+  return trimmed;
 }
 
 function isEditableTarget(target: EventTarget | null): boolean {
@@ -737,7 +776,7 @@ function defaultNodeConfig(type: NodeType): Record<string, unknown> {
   if (type === "turn") {
     return {
       executor: "codex",
-      model: TURN_MODEL_OPTIONS[0],
+      model: DEFAULT_TURN_MODEL,
       role: "",
       cwd: ".",
       promptTemplate: "{{input}}",
@@ -768,7 +807,7 @@ function nodeCardSummary(node: GraphNode): string {
     if (executor !== "codex") {
       return `실행기: ${turnExecutorLabel(executor)}`;
     }
-    return `모델: ${String(config.model ?? TURN_MODEL_OPTIONS[0])}`;
+    return `모델: ${toTurnModelDisplayName(String(config.model ?? DEFAULT_TURN_MODEL))}`;
   }
   if (node.type === "transform") {
     const config = node.config as TransformConfig;
@@ -787,7 +826,7 @@ function turnModelLabel(node: GraphNode): string {
   if (executor !== "codex") {
     return turnExecutorLabel(executor);
   }
-  return String(config.model ?? TURN_MODEL_OPTIONS[0]);
+  return toTurnModelDisplayName(String(config.model ?? DEFAULT_TURN_MODEL));
 }
 
 function getTurnExecutor(config: TurnConfig): TurnExecutor {
@@ -1207,28 +1246,28 @@ function makePresetNode(
 function buildValidationPreset(): GraphData {
   const nodes: GraphNode[] = [
     makePresetNode("turn-intake", "turn", 120, 120, {
-      model: "gpt-5.1-codex-mini",
+      model: "GPT-5.1-Codex-Mini",
       role: "PLANNING AGENT",
       cwd: ".",
       promptTemplate:
         "질문을 분석하고 검증 계획을 3개 불릿으로 요약해줘. 입력 질문: {{input}}",
     }),
     makePresetNode("turn-search-a", "turn", 420, 40, {
-      model: "gpt-5.2",
+      model: "GPT-5.2",
       role: "SEARCH AGENT A",
       cwd: ".",
       promptTemplate:
         "입력 내용을 바탕으로 찬성 근거를 조사해 JSON으로 정리해줘. {{input}}",
     }),
     makePresetNode("turn-search-b", "turn", 420, 220, {
-      model: "gpt-5.2-codex",
+      model: "GPT-5.2-Codex",
       role: "SEARCH AGENT B",
       cwd: ".",
       promptTemplate:
         "입력 내용을 바탕으로 반대 근거/한계를 조사해 JSON으로 정리해줘. {{input}}",
     }),
     makePresetNode("turn-judge", "turn", 720, 120, {
-      model: "gpt-5.3-codex",
+      model: "GPT-5.3-Codex",
       role: "EVALUATION AGENT",
       cwd: ".",
       promptTemplate:
@@ -1241,7 +1280,7 @@ function buildValidationPreset(): GraphData {
       schemaJson: "{\"type\":\"object\",\"required\":[\"decision\"]}",
     }),
     makePresetNode("turn-final", "turn", 1320, 40, {
-      model: "gpt-5.3-codex",
+      model: "GPT-5.3-Codex",
       role: "SYNTHESIS AGENT",
       cwd: ".",
       promptTemplate:
@@ -1269,28 +1308,28 @@ function buildValidationPreset(): GraphData {
 function buildDevelopmentPreset(): GraphData {
   const nodes: GraphNode[] = [
     makePresetNode("turn-requirements", "turn", 120, 120, {
-      model: "gpt-5.1-codex-mini",
+      model: "GPT-5.1-Codex-Mini",
       role: "REQUIREMENTS AGENT",
       cwd: ".",
       promptTemplate:
         "요구사항을 기능/비기능으로 분해하고 우선순위를 매겨줘. 질문: {{input}}",
     }),
     makePresetNode("turn-architecture", "turn", 420, 40, {
-      model: "gpt-5.2",
+      model: "GPT-5.2",
       role: "ARCHITECTURE AGENT",
       cwd: ".",
       promptTemplate:
         "입력을 바탕으로 풀스택 아키텍처를 제안해 JSON으로 출력해줘. {{input}}",
     }),
     makePresetNode("turn-implementation", "turn", 420, 220, {
-      model: "gpt-5.2-codex",
+      model: "GPT-5.2-Codex",
       role: "IMPLEMENTATION AGENT",
       cwd: ".",
       promptTemplate:
         "구현 단계 계획(파일 단위 포함)을 작성해줘. 입력: {{input}}",
     }),
     makePresetNode("turn-evaluator", "turn", 720, 120, {
-      model: "gpt-5.3-codex",
+      model: "GPT-5.3-Codex",
       role: "QUALITY AGENT",
       cwd: ".",
       promptTemplate:
@@ -1303,7 +1342,7 @@ function buildDevelopmentPreset(): GraphData {
       schemaJson: "{\"type\":\"object\",\"required\":[\"decision\"]}",
     }),
     makePresetNode("turn-final-dev", "turn", 1320, 40, {
-      model: "gpt-5.3-codex",
+      model: "GPT-5.3-Codex",
       role: "DEV SYNTHESIS AGENT",
       cwd: ".",
       promptTemplate:
@@ -1373,6 +1412,7 @@ function normalizeGraph(input: unknown): GraphData {
       const normalizedConfig = {
         ...config,
         executor,
+        model: toTurnModelDisplayName(String(config.model ?? DEFAULT_TURN_MODEL)),
       };
       return {
         ...node,
@@ -1478,7 +1518,7 @@ function App() {
   const [workspaceTab, setWorkspaceTab] = useState<WorkspaceTab>("workflow");
 
   const [cwd, setCwd] = useState(defaultCwd);
-  const [model, setModel] = useState<string>(TURN_MODEL_OPTIONS[0]);
+  const [model, setModel] = useState<string>(DEFAULT_TURN_MODEL);
   const [workflowQuestion, setWorkflowQuestion] = useState(
     "언어 학습에서 AI가 기존 학습 패러다임을 어떻게 개선할 수 있는지 분석해줘.",
   );
@@ -3586,7 +3626,8 @@ function App() {
   }> {
     const config = node.config as TurnConfig;
     const executor = getTurnExecutor(config);
-    const nodeModel = String(config.model ?? model).trim() || model;
+    const nodeModel = toTurnModelDisplayName(String(config.model ?? model).trim() || model);
+    const nodeModelEngine = toTurnModelEngineId(nodeModel);
     const nodeCwd = String(config.cwd ?? cwd).trim() || cwd;
     const promptTemplate = String(config.promptTemplate ?? "{{input}}");
     const nodeOllamaModel = String(config.ollamaModel ?? "llama3.1:8b").trim() || "llama3.1:8b";
@@ -3739,7 +3780,7 @@ function App() {
     let activeThreadId = extractStringByPaths(nodeStates[node.id], ["threadId"]);
     if (!activeThreadId) {
       const threadStart = await invoke<ThreadStartResult>("thread_start", {
-        model: nodeModel,
+        model: nodeModelEngine,
         cwd: nodeCwd,
       });
       activeThreadId = threadStart.threadId;
@@ -4159,7 +4200,7 @@ function App() {
       let activeThreadId = threadId.trim();
       if (!activeThreadId) {
         const result = await invoke<ThreadStartResult>("thread_start", {
-          model,
+          model: toTurnModelEngineId(model),
           cwd,
         });
         activeThreadId = result.threadId;
@@ -4941,7 +4982,9 @@ function App() {
                                 className="modern-select"
                                 onChange={(next) => updateSelectedNodeConfig("model", next)}
                                 options={TURN_MODEL_OPTIONS.map((option) => ({ value: option, label: option }))}
-                                value={String((selectedNode.config as TurnConfig).model ?? model)}
+                                value={toTurnModelDisplayName(
+                                  String((selectedNode.config as TurnConfig).model ?? model),
+                                )}
                               />
                             </label>
                           )}
