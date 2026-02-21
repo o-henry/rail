@@ -71,6 +71,16 @@ fn read_json_file(dir_name: &str, name: &str) -> Result<Value, String> {
     serde_json::from_str(&raw).map_err(|e| format!("invalid JSON in {dir_name} file: {e}"))
 }
 
+fn delete_json_file(dir_name: &str, name: &str) -> Result<(), String> {
+    let normalized_name = normalize_file_name(name)?;
+    let dir = ensure_subdir(dir_name)?;
+    let path = dir.join(normalized_name);
+    if !path.exists() {
+        return Err(format!("{dir_name} file not found"));
+    }
+    fs::remove_file(path).map_err(|e| format!("failed to delete {dir_name} file: {e}"))
+}
+
 #[tauri::command]
 pub fn graph_list() -> Result<Vec<String>, String> {
     list_json_files("graphs")
@@ -99,6 +109,11 @@ pub fn run_list() -> Result<Vec<String>, String> {
 #[tauri::command]
 pub fn run_load(name: String) -> Result<Value, String> {
     read_json_file("runs", &name)
+}
+
+#[tauri::command]
+pub fn run_delete(name: String) -> Result<(), String> {
+    delete_json_file("runs", &name)
 }
 
 #[tauri::command]

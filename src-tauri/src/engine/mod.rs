@@ -822,6 +822,7 @@ fn emit_lifecycle(app: &AppHandle, state: &str, message: Option<String>) {
 fn provider_url(provider: &str) -> Option<&'static str> {
     match provider {
         "gemini" => Some("https://gemini.google.com/"),
+        "gpt" => Some("https://chatgpt.com/"),
         "grok" => Some("https://grok.com/"),
         "perplexity" => Some("https://www.perplexity.ai/"),
         "claude" => Some("https://claude.ai/"),

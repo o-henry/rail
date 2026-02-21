@@ -32,6 +32,7 @@ pub fn run() {
             storage::run_save,
             storage::run_list,
             storage::run_load,
+            storage::run_delete,
             storage::run_directory,
         ])
         .run(tauri::generate_context!())

@@ -190,7 +190,7 @@ type TurnExecutor =
   | "ollama";
 type WebAutomationMode = "auto" | "manualPasteJson" | "manualPasteText";
 type WebResultMode = WebAutomationMode;
-type WebProvider = "gemini" | "grok" | "perplexity" | "claude";
+type WebProvider = "gemini" | "gpt" | "grok" | "perplexity" | "claude";
 
 type TurnConfig = {
   executor?: TurnExecutor;
@@ -293,6 +293,7 @@ const TURN_EXECUTOR_LABELS: Record<TurnExecutor, string> = {
 };
 const WEB_PROVIDER_OPTIONS: ReadonlyArray<WebProvider> = [
   "gemini",
+  "gpt",
   "grok",
   "perplexity",
   "claude",
@@ -858,6 +859,9 @@ function webProviderLabel(provider: WebProvider): string {
   if (provider === "gemini") {
     return "Gemini";
   }
+  if (provider === "gpt") {
+    return "GPT";
+  }
   if (provider === "grok") {
     return "Grok";
   }
@@ -1069,7 +1073,7 @@ function FancySelect({
       return;
     }
 
-    const container = root.closest(".inspector-content");
+    const container = root.closest(".inspector-content, .childview-view");
     if (!(container instanceof HTMLElement)) {
       return;
     }
@@ -1546,6 +1550,7 @@ function App() {
   const [webResponseDraft, setWebResponseDraft] = useState("");
   const [providerWindowOpen, setProviderWindowOpen] = useState<Record<WebProvider, boolean>>({
     gemini: false,
+    gpt: false,
     grok: false,
     perplexity: false,
     claude: false,
@@ -1559,6 +1564,7 @@ function App() {
   const [childViewProvider, setChildViewProvider] = useState<WebProvider>("gemini");
   const [providerChildViewOpen, setProviderChildViewOpen] = useState<Record<WebProvider, boolean>>({
     gemini: false,
+    gpt: false,
     grok: false,
     perplexity: false,
     claude: false,
@@ -1986,6 +1992,25 @@ function App() {
       setSelectedRunDetail(run);
     } catch (e) {
       setError(String(e));
+    }
+  }
+
+  async function onDeleteSelectedRun() {
+    const target = selectedRunFile.trim();
+    if (!target) {
+      return;
+    }
+
+    setError("");
+    try {
+      await invoke("run_delete", { name: target });
+      const files = await invoke<string[]>("run_list");
+      setRunFiles(files);
+      setSelectedRunFile("");
+      setSelectedRunDetail(null);
+      setStatus(`실행 기록 삭제: ${target}`);
+    } catch (e) {
+      setError(`실행 기록 삭제 실패: ${String(e)}`);
     }
   }
 
@@ -5203,22 +5228,46 @@ function App() {
               {!selectedRunDetail && <div>실행 기록을 선택하세요.</div>}
               {selectedRunDetail && (
                 <>
-                  <h2>실행 상세</h2>
+                  <div className="history-detail-head">
+                    <h2>실행 상세</h2>
+                    <button
+                      aria-label="실행 기록 삭제"
+                      className="history-delete-button"
+                      onClick={onDeleteSelectedRun}
+                      type="button"
+                    >
+                      x
+                    </button>
+                  </div>
                   <div>실행 ID: {selectedRunDetail.runId}</div>
                   <div>시작 시간: {selectedRunDetail.startedAt}</div>
                   <div>종료 시간: {selectedRunDetail.finishedAt ?? "-"}</div>
-                  <h3>질문</h3>
-                  <pre>{selectedRunDetail.question || "(비어 있음)"}</pre>
-                  <h3>최종 답변</h3>
-                  <pre>{selectedRunDetail.finalAnswer || "(없음)"}</pre>
-                  <h3>요약 로그</h3>
-                  <pre>{selectedRunDetail.summaryLogs.join("\n") || "(없음)"}</pre>
-                  <h3>상태 전이</h3>
-                  <pre>{formatUnknown(selectedRunDetail.transitions)}</pre>
-                  <h3>Provider Trace</h3>
-                  <pre>{formatUnknown(selectedRunDetail.providerTrace ?? [])}</pre>
-                  <h3>노드 로그</h3>
-                  <pre>{formatUnknown(selectedRunDetail.nodeLogs ?? {})}</pre>
+                  <div className="history-detail-content">
+                    <div className="history-detail-group">
+                      <h3>질문</h3>
+                      <pre>{selectedRunDetail.question || "(비어 있음)"}</pre>
+                    </div>
+                    <div className="history-detail-group">
+                      <h3>최종 답변</h3>
+                      <pre>{selectedRunDetail.finalAnswer || "(없음)"}</pre>
+                    </div>
+                    <div className="history-detail-group">
+                      <h3>요약 로그</h3>
+                      <pre>{selectedRunDetail.summaryLogs.join("\n") || "(없음)"}</pre>
+                    </div>
+                    <div className="history-detail-group">
+                      <h3>상태 전이</h3>
+                      <pre>{formatUnknown(selectedRunDetail.transitions)}</pre>
+                    </div>
+                    <div className="history-detail-group">
+                      <h3>Provider Trace</h3>
+                      <pre>{formatUnknown(selectedRunDetail.providerTrace ?? [])}</pre>
+                    </div>
+                    <div className="history-detail-group">
+                      <h3>노드 로그</h3>
+                      <pre>{formatUnknown(selectedRunDetail.nodeLogs ?? {})}</pre>
+                    </div>
+                  </div>
                 </>
               )}
             </article>
@@ -5227,7 +5276,7 @@ function App() {
 
         {workspaceTab === "childview" && (
           <section className="childview-view">
-            <section className="panel-card">
+            <section className="panel-card childview-controls-card">
               <h2>Child View 테스트</h2>
               <p>앱 내부 child view로 provider 웹 앱을 띄우는 화면입니다.</p>
               <label>
