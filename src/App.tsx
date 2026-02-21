@@ -235,6 +235,12 @@ type PendingWebTurn = {
   mode: WebResultMode;
 };
 
+type PendingWebLogin = {
+  nodeId: string;
+  provider: WebProvider;
+  reason: string;
+};
+
 type TransformMode = "pick" | "merge" | "template";
 
 type TransformConfig = {
@@ -1496,6 +1502,7 @@ function App() {
   const [pendingApprovals, setPendingApprovals] = useState<PendingApproval[]>([]);
   const [approvalSubmitting, setApprovalSubmitting] = useState(false);
   const [pendingWebTurn, setPendingWebTurn] = useState<PendingWebTurn | null>(null);
+  const [pendingWebLogin, setPendingWebLogin] = useState<PendingWebLogin | null>(null);
   const [webResponseDraft, setWebResponseDraft] = useState("");
   const [providerWindowOpen, setProviderWindowOpen] = useState<Record<WebProvider, boolean>>({
     gemini: false,
@@ -1508,6 +1515,7 @@ function App() {
   });
   const [webWorkerBusy, setWebWorkerBusy] = useState(false);
   const [webWorkerStatus, setWebWorkerStatus] = useState("");
+  const [showAdvancedWebOps, setShowAdvancedWebOps] = useState(false);
   const [childViewProvider, setChildViewProvider] = useState<WebProvider>("gemini");
   const [providerChildViewOpen, setProviderChildViewOpen] = useState<Record<WebProvider, boolean>>({
     gemini: false,
@@ -1568,6 +1576,7 @@ function App() {
   const webTurnResolverRef = useRef<((result: { ok: boolean; output?: unknown; error?: string }) => void) | null>(
     null,
   );
+  const webLoginResolverRef = useRef<((retry: boolean) => void) | null>(null);
   const activeRunDeltaRef = useRef<Record<string, string>>({});
   const collectingRunRef = useRef(false);
   const runLogCollectorRef = useRef<Record<string, string[]>>({});
@@ -1716,15 +1725,27 @@ function App() {
 
   useEffect(() => {
     let cancelled = false;
-    void invoke<WebWorkerHealth>("web_provider_health")
-      .then((health) => {
+    const bootstrapWorker = async () => {
+      try {
+        await invoke("web_worker_start");
+      } catch {
+        // non-fatal: fallback path handles worker unavailable
+      }
+      try {
+        const health = await invoke<WebWorkerHealth>("web_provider_health");
         if (!cancelled) {
           setWebWorkerHealth(health);
+          setWebWorkerStatus(
+            health.running ? "웹 자동화 준비 완료" : "웹 자동화 사용 불가 (수동 폴백)",
+          );
         }
-      })
-      .catch(() => {
-        // ignore boot-time health check errors
-      });
+      } catch {
+        if (!cancelled) {
+          setWebWorkerStatus("웹 자동화 상태를 확인하지 못했습니다. 수동 모드로 동작합니다.");
+        }
+      }
+    };
+    void bootstrapWorker();
     return () => {
       cancelled = true;
     };
@@ -2206,6 +2227,39 @@ function App() {
     } catch (error) {
       setError(`로그 열기 실패: ${String(error)}`);
     }
+  }
+
+  async function ensureWebWorkerReady() {
+    try {
+      await invoke("web_worker_start");
+      const health = await refreshWebWorkerHealth(true);
+      if (!health?.running) {
+        return false;
+      }
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  function resolvePendingWebLogin(retry: boolean) {
+    const resolver = webLoginResolverRef.current;
+    webLoginResolverRef.current = null;
+    setPendingWebLogin(null);
+    if (resolver) {
+      resolver(retry);
+    }
+  }
+
+  function requestWebLogin(nodeId: string, provider: WebProvider, reason: string): Promise<boolean> {
+    setPendingWebLogin({
+      nodeId,
+      provider,
+      reason,
+    });
+    return new Promise((resolve) => {
+      webLoginResolverRef.current = resolve;
+    });
   }
 
   async function onCopyPendingWebPrompt() {
@@ -3582,41 +3636,77 @@ function App() {
         activeWebNodeIdRef.current = node.id;
         activeWebProviderRef.current = webProvider;
         addNodeLog(node.id, "[WEB] Gemini 자동화 시작");
-        try {
-          const result = await invoke<WebProviderRunResult>("web_provider_run", {
-            provider: webProvider,
-            prompt: textToSend,
-            timeoutMs: webTimeoutMs,
-            mode: "auto",
-          });
-
-          if (result.ok && result.text) {
-            addNodeLog(node.id, "[WEB] Gemini 응답 추출 완료");
-            return {
-              ok: true,
-              output: {
-                provider: webProvider,
-                timestamp: new Date().toISOString(),
-                text: result.text,
-                raw: result.raw,
-                meta: result.meta,
-              },
-              executor,
+        const workerReady = await ensureWebWorkerReady();
+        if (!workerReady) {
+          addNodeLog(node.id, "[WEB] 자동화 워커 준비 실패. 수동 입력으로 전환");
+        } else {
+          const runAutomation = async () =>
+            invoke<WebProviderRunResult>("web_provider_run", {
               provider: webProvider,
-            };
-          }
+              prompt: textToSend,
+              timeoutMs: webTimeoutMs,
+              mode: "auto",
+            });
 
-          const fallbackReason = `[WEB] 자동화 실패 (${result.errorCode ?? "UNKNOWN"}): ${
-            result.error ?? "unknown error"
-          }`;
-          addNodeLog(node.id, fallbackReason);
-          setNodeStatus(node.id, "waiting_user", "자동화 실패, 수동 입력으로 전환");
-        } catch (error) {
-          addNodeLog(node.id, `[WEB] 자동화 예외: ${String(error)}`);
-          setNodeStatus(node.id, "waiting_user", "자동화 예외, 수동 입력으로 전환");
-        } finally {
-          activeWebNodeIdRef.current = "";
-          activeWebProviderRef.current = null;
+          let result: WebProviderRunResult | null = null;
+          try {
+            result = await runAutomation();
+            if (!result.ok && result.errorCode === "NOT_LOGGED_IN") {
+              addNodeLog(node.id, "[WEB] 로그인 필요 감지");
+              await onOpenProviderChildView(webProvider);
+              const shouldRetry = await requestWebLogin(
+                node.id,
+                webProvider,
+                result.error ?? "Gemini 로그인 후 계속을 눌러주세요.",
+              );
+              if (cancelRequestedRef.current) {
+                return {
+                  ok: false,
+                  error: "사용자 취소",
+                  executor,
+                  provider: webProvider,
+                };
+              }
+              if (shouldRetry) {
+                addNodeLog(node.id, "[WEB] 로그인 완료 확인, 자동화를 재시도합니다.");
+                result = await runAutomation();
+              }
+            }
+
+            if (result.ok && result.text) {
+              addNodeLog(node.id, "[WEB] Gemini 응답 추출 완료");
+              return {
+                ok: true,
+                output: {
+                  provider: webProvider,
+                  timestamp: new Date().toISOString(),
+                  text: result.text,
+                  raw: result.raw,
+                  meta: result.meta,
+                },
+                executor,
+                provider: webProvider,
+              };
+            }
+
+            const fallbackReason = `[WEB] 자동화 실패 (${result?.errorCode ?? "UNKNOWN"}): ${
+              result?.error ?? "unknown error"
+            }`;
+            addNodeLog(node.id, fallbackReason);
+            if (result?.errorCode === "BROWSER_MISSING") {
+              addNodeLog(
+                node.id,
+                "[WEB] playwright/playwright-core 설치가 필요할 수 있습니다. 자동으로 수동 입력으로 전환합니다.",
+              );
+            }
+            setNodeStatus(node.id, "waiting_user", "자동화 실패, 수동 입력으로 전환");
+          } catch (error) {
+            addNodeLog(node.id, `[WEB] 자동화 예외: ${String(error)}`);
+            setNodeStatus(node.id, "waiting_user", "자동화 예외, 수동 입력으로 전환");
+          } finally {
+            activeWebNodeIdRef.current = "";
+            activeWebProviderRef.current = null;
+          }
         }
       }
 
@@ -4002,7 +4092,9 @@ function App() {
     } finally {
       turnTerminalResolverRef.current = null;
       webTurnResolverRef.current = null;
+      webLoginResolverRef.current = null;
       setPendingWebTurn(null);
+      setPendingWebLogin(null);
       setWebResponseDraft("");
       activeTurnNodeIdRef.current = "";
       activeWebNodeIdRef.current = "";
@@ -4016,6 +4108,11 @@ function App() {
   async function onCancelGraphRun() {
     cancelRequestedRef.current = true;
     setStatus("취소 요청됨");
+
+    if (pendingWebLogin) {
+      resolvePendingWebLogin(false);
+      return;
+    }
 
     const activeWebNodeId = activeWebNodeIdRef.current;
     const activeWebProvider = activeWebProviderRef.current;
@@ -4201,24 +4298,33 @@ function App() {
             활성 Provider: {webWorkerHealth.activeProvider ?? "없음"}
           </span>
         </div>
-        <div className="button-row">
-          <button disabled={webWorkerBusy} onClick={onStartWebWorker} type="button">
-            워커 시작
-          </button>
-          <button disabled={webWorkerBusy} onClick={onStopWebWorker} type="button">
-            워커 중지
-          </button>
-          <button disabled={webWorkerBusy} onClick={() => refreshWebWorkerHealth()} type="button">
-            상태 갱신
-          </button>
-          <button disabled={webWorkerBusy} onClick={onResetGeminiSession} type="button">
-            Gemini 세션 리셋
-          </button>
-          <button onClick={onOpenWebWorkerLog} type="button">
-            진단 로그 열기
-          </button>
-        </div>
         <div className="usage-method">{webWorkerStatus || "워커 상태를 확인하세요."}</div>
+        <button
+          className="error-log-link"
+          onClick={() => setShowAdvancedWebOps((prev) => !prev)}
+          type="button"
+        >
+          고급 제어 {showAdvancedWebOps ? "숨기기" : "보기"}
+        </button>
+        {showAdvancedWebOps && (
+          <div className="button-row">
+            <button disabled={webWorkerBusy} onClick={onStartWebWorker} type="button">
+              워커 시작
+            </button>
+            <button disabled={webWorkerBusy} onClick={onStopWebWorker} type="button">
+              워커 중지
+            </button>
+            <button disabled={webWorkerBusy} onClick={() => refreshWebWorkerHealth()} type="button">
+              상태 갱신
+            </button>
+            <button disabled={webWorkerBusy} onClick={onResetGeminiSession} type="button">
+              Gemini 세션 리셋
+            </button>
+            <button onClick={onOpenWebWorkerLog} type="button">
+              진단 로그 열기
+            </button>
+          </div>
+        )}
         <div className="usage-method">
           로그 경로: <code>{webWorkerHealth.logPath ?? "-"}</code>
         </div>
@@ -4228,7 +4334,7 @@ function App() {
         {webWorkerHealth.lastError && (
           <div className="usage-method">마지막 오류: {webWorkerHealth.lastError}</div>
         )}
-        <pre>{healthProviders}</pre>
+        {showAdvancedWebOps && <pre>{healthProviders}</pre>}
       </section>
     );
   }
@@ -5163,6 +5269,28 @@ function App() {
           </section>
         )}
       </section>
+
+      {pendingWebLogin && (
+        <div className="modal-backdrop">
+          <section className="approval-modal web-turn-modal">
+            <h2>로그인이 필요합니다</h2>
+            <div>노드: {pendingWebLogin.nodeId}</div>
+            <div>서비스: {pendingWebLogin.provider}</div>
+            <div>{pendingWebLogin.reason}</div>
+            <div className="button-row">
+              <button onClick={() => onOpenProviderChildView(pendingWebLogin.provider)} type="button">
+                Child View 열기
+              </button>
+              <button onClick={() => resolvePendingWebLogin(true)} type="button">
+                로그인 완료 후 계속
+              </button>
+              <button onClick={() => resolvePendingWebLogin(false)} type="button">
+                수동 입력으로 전환
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
 
       {pendingWebTurn && (
         <div className="modal-backdrop">
