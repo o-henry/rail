@@ -471,7 +471,7 @@ h3 {
 .fancy-select-trigger {
   width: 100%;
   min-height: 36px;
-  border-radius: 10px;
+  border-radius: 6px;
   border: 1px solid transparent;
   background: #dfe5ee;
   color: #1e2731;
@@ -529,7 +529,7 @@ h3 {
   left: 0;
   right: 0;
   z-index: 45;
-  border-radius: 12px;
+  border-radius: 8px;
   border: 1px solid #d2dbe8;
   background: #f8fafd;
   box-shadow: 0 16px 28px rgba(15, 24, 34, 0.16);
@@ -549,7 +549,7 @@ h3 {
 
 .fancy-select-option {
   width: 100%;
-  border-radius: 8px;
+  border-radius: 6px;
   background: transparent;
   display: inline-flex;
   align-items: center;
@@ -581,27 +581,31 @@ h3 {
 }
 
 .fancy-select-empty {
-  padding: 10px 11px;
+  padding: 6px 11px;
   color: #6f7c8c;
+  position: relative;
+  top: 4px;
 }
 
 .fancy-select.graph-file-select .fancy-select-trigger {
   background: #dfe5ee;
-  min-height: 38px;
-  border-radius: 10px;
+  height: 36px;
+  min-height: 36px;
+  max-height: 36px;
+  border-radius: 6px;
   border: 1px solid transparent;
-  padding: 9px 12px;
+  padding: 0 12px;
 }
 
 .fancy-select.graph-file-select .fancy-select-value {
-  line-height: 1.38;
+  line-height: 1.2;
   display: inline-flex;
   align-items: center;
-  min-height: 20px;
+  min-height: 0;
 }
 
 .fancy-select.graph-file-select .fancy-select-menu {
-  border-radius: 12px;
+  border-radius: 8px;
   padding: 7px 7px 10px;
 }
 
@@ -1093,13 +1097,20 @@ h3 {
 }
 
 .tool-dropdown-group .fancy-select-trigger {
-  min-height: 38px;
-  padding: 9px 12px;
+  height: 36px;
+  min-height: 36px;
+  max-height: 36px;
+  padding: 0 12px;
 }
 
 .tool-dropdown-group .fancy-select-value {
-  line-height: 1.38;
-  min-height: 20px;
+  line-height: 1.2;
+  min-height: 0;
+}
+
+.tool-dropdown-group .fancy-select-value.is-placeholder,
+.fancy-select.graph-file-select .fancy-select-value.is-placeholder {
+  font-size: 13px;
 }
 
 .workflow-runtime-status .settings-badges {
