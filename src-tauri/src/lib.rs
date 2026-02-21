@@ -19,6 +19,7 @@ pub fn run() {
             engine::provider_window_close,
             engine::provider_child_view_open,
             engine::provider_child_view_close,
+            engine::provider_child_view_hide,
             engine::web_worker_start,
             engine::web_worker_stop,
             engine::web_provider_health,

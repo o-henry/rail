@@ -2192,14 +2192,14 @@ function App() {
 
   async function onCloseProviderChildView(provider: WebProvider) {
     try {
-      await invoke("provider_child_view_close", { provider });
+      await invoke("provider_child_view_hide", { provider });
       setProviderChildViewOpen((prev) => ({ ...prev, [provider]: false }));
-      setStatus(`${webProviderLabel(provider)} child view 닫힘`);
+      setStatus(`${webProviderLabel(provider)} child view 숨김`);
     } catch (error) {
       const message = String(error);
       if (message.includes("provider child view not found")) {
         setProviderChildViewOpen((prev) => ({ ...prev, [provider]: false }));
-        setStatus(`${webProviderLabel(provider)} child view 닫힘`);
+        setStatus(`${webProviderLabel(provider)} child view 숨김`);
         return;
       }
       setError(message);
@@ -2213,6 +2213,28 @@ function App() {
     }
     await onOpenProviderChildView(provider);
   }
+
+  useEffect(() => {
+    if (workspaceTab === "childview") {
+      return;
+    }
+    const openProviders = WEB_PROVIDER_OPTIONS.filter((provider) => providerChildViewOpen[provider]);
+    if (openProviders.length === 0) {
+      return;
+    }
+    for (const provider of openProviders) {
+      invoke("provider_child_view_hide", { provider }).catch((error) => {
+        setError(String(error));
+      });
+    }
+    setProviderChildViewOpen((prev) => {
+      const next = { ...prev };
+      for (const provider of WEB_PROVIDER_OPTIONS) {
+        next[provider] = false;
+      }
+      return next;
+    });
+  }, [workspaceTab, providerChildViewOpen]);
 
   async function refreshWebWorkerHealth(silent = false) {
     try {
@@ -5294,14 +5316,8 @@ function App() {
                 />
               </label>
               <div className="button-row">
-                <button onClick={() => onOpenProviderChildView(childViewProvider)} type="button">
-                  Child View 열기
-                </button>
-                <button onClick={() => onCloseProviderChildView(childViewProvider)} type="button">
-                  Child View 닫기
-                </button>
                 <button onClick={() => onToggleProviderChildView(childViewProvider)} type="button">
-                  토글
+                  {providerChildViewOpen[childViewProvider] ? "닫기" : "열기"}
                 </button>
               </div>
               <div className="settings-badges">

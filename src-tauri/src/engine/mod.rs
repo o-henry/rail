@@ -24,10 +24,12 @@ const EVENT_ENGINE_APPROVAL_REQUEST: &str = "engine://approval_request";
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(90);
 const WEB_WORKER_REQUEST_TIMEOUT: Duration = Duration::from_secs(120);
 const CHILD_VIEW_LABEL_PREFIX: &str = "provider-child-";
-const CHILD_VIEW_MIN_WIDTH: u32 = 840;
-const CHILD_VIEW_MIN_HEIGHT: u32 = 520;
-const CHILD_VIEW_MARGIN_X: u32 = 180;
-const CHILD_VIEW_MARGIN_Y: u32 = 112;
+const CHILD_VIEW_MIN_WIDTH: u32 = 640;
+const CHILD_VIEW_MIN_HEIGHT: u32 = 420;
+const CHILD_VIEW_MAX_WIDTH: u32 = 1120;
+const CHILD_VIEW_MAX_HEIGHT: u32 = 760;
+const CHILD_VIEW_WIDTH_RATIO: f64 = 0.58;
+const CHILD_VIEW_HEIGHT_RATIO: f64 = 0.52;
 const CHILD_VIEW_SAFE_MARGIN_X: u32 = 44;
 const CHILD_VIEW_SAFE_MARGIN_TOP: u32 = 212;
 const CHILD_VIEW_SAFE_MARGIN_BOTTOM: u32 = 36;
@@ -1222,6 +1224,7 @@ pub async fn provider_child_view_open(window: Window, provider: String) -> Resul
     let child_label = provider_child_view_label(&provider_key);
 
     if let Some(webview) = window.app_handle().get_webview(&child_label) {
+        let _ = webview.show();
         let _ = webview.set_focus();
         return Ok(());
     }
@@ -1229,9 +1232,6 @@ pub async fn provider_child_view_open(window: Window, provider: String) -> Resul
     let size = window
         .inner_size()
         .map_err(|e| format!("failed to read parent window size: {e}"))?;
-    let desired_width = size.width.saturating_sub(CHILD_VIEW_MARGIN_X);
-    let desired_height = size.height.saturating_sub(CHILD_VIEW_MARGIN_Y);
-
     let available_width = size.width.saturating_sub(CHILD_VIEW_SAFE_MARGIN_X.saturating_mul(2));
     let available_height = size
         .height
@@ -1239,10 +1239,14 @@ pub async fn provider_child_view_open(window: Window, provider: String) -> Resul
 
     let width_ceiling = available_width.max(1);
     let height_ceiling = available_height.max(1);
-    let width_floor = CHILD_VIEW_MIN_WIDTH.min(width_ceiling);
-    let height_floor = CHILD_VIEW_MIN_HEIGHT.min(height_ceiling);
-    let width = desired_width.clamp(width_floor, width_ceiling);
-    let height = desired_height.clamp(height_floor, height_ceiling);
+    let width_floor = CHILD_VIEW_MIN_WIDTH.min(width_ceiling).max(1);
+    let height_floor = CHILD_VIEW_MIN_HEIGHT.min(height_ceiling).max(1);
+    let desired_width =
+        ((f64::from(available_width) * CHILD_VIEW_WIDTH_RATIO).round() as u32).min(CHILD_VIEW_MAX_WIDTH);
+    let desired_height =
+        ((f64::from(available_height) * CHILD_VIEW_HEIGHT_RATIO).round() as u32).min(CHILD_VIEW_MAX_HEIGHT);
+    let width = desired_width.max(width_floor).min(width_ceiling);
+    let height = desired_height.max(height_floor).min(height_ceiling);
 
     let x_start = CHILD_VIEW_SAFE_MARGIN_X.min(size.width.saturating_sub(width));
     let y_start = CHILD_VIEW_SAFE_MARGIN_TOP.min(size.height.saturating_sub(height));
@@ -1282,6 +1286,26 @@ pub async fn provider_child_view_close(app: AppHandle, provider: String) -> Resu
         .close()
         .map_err(|e| format!("failed to close provider child view: {e}"))?;
     Ok(())
+}
+
+#[cfg(desktop)]
+#[tauri::command]
+pub async fn provider_child_view_hide(app: AppHandle, provider: String) -> Result<(), String> {
+    let provider_key = provider.trim().to_lowercase();
+    let child_label = provider_child_view_label(&provider_key);
+    let Some(webview) = app.get_webview(&child_label) else {
+        return Ok(());
+    };
+    webview
+        .hide()
+        .map_err(|e| format!("failed to hide provider child view: {e}"))?;
+    Ok(())
+}
+
+#[cfg(not(desktop))]
+#[tauri::command]
+pub async fn provider_child_view_hide(_provider: String) -> Result<(), String> {
+    Err("provider child view is only supported on desktop".to_string())
 }
 
 #[cfg(not(desktop))]
