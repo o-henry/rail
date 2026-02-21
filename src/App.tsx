@@ -919,14 +919,17 @@ function toWebProviderHealthMap(raw: unknown): Record<string, WebProviderHealthE
   return next;
 }
 
-function providerSessionStateLabel(state?: string | null): string {
+function providerSessionStateMeta(state?: string | null): {
+  label: string;
+  tone: "connected" | "required" | "unknown";
+} {
   if (state === "active") {
-    return "로그인 유지(추정)";
+    return { label: "연결됨", tone: "connected" };
   }
   if (state === "login_required") {
-    return "로그인 필요";
+    return { label: "로그인 필요", tone: "required" };
   }
-  return "미확인";
+  return { label: "확인 필요", tone: "unknown" };
 }
 
 function turnRoleLabel(node: GraphNode): string {
@@ -4284,12 +4287,13 @@ function App() {
             {WEB_PROVIDER_OPTIONS.map((provider) => {
               const row = providerHealthMap[provider];
               const hasContext = row?.contextOpen === true;
-              const sessionState = providerSessionStateLabel(row?.sessionState);
+              const session = providerSessionStateMeta(row?.sessionState);
               return (
                 <div className="provider-hub-row" key={`session-${provider}`}>
-                  <span>
-                    {webProviderLabel(provider)} · {sessionState}
-                  </span>
+                  <div className="provider-hub-meta">
+                    <span className="provider-hub-name">{webProviderLabel(provider)}</span>
+                    <span className={`provider-session-pill ${session.tone}`}>{session.label}</span>
+                  </div>
                   <div className="button-row">
                     <button
                       disabled={webWorkerBusy}

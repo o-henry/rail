@@ -1324,6 +1324,54 @@ h3 {
   gap: 10px;
 }
 
+.provider-hub-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.provider-hub-name {
+  color: #253246;
+  font-weight: 600;
+  letter-spacing: -0.2px;
+}
+
+.provider-session-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 999px;
+  padding: 4px 9px;
+  font-size: 0.74rem;
+  line-height: 1;
+  letter-spacing: -0.1px;
+}
+
+.provider-session-pill::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: currentColor;
+  opacity: 0.9;
+}
+
+.provider-session-pill.connected {
+  background: #d8f3df;
+  color: #1f6d43;
+}
+
+.provider-session-pill.required {
+  background: #fbe4d8;
+  color: #9a4a1b;
+}
+
+.provider-session-pill.unknown {
+  background: #e3e8f2;
+  color: #4f5e76;
+}
+
 .provider-hub-row button {
   min-width: 64px;
 }
