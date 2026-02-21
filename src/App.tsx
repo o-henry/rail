@@ -5187,7 +5187,7 @@ function App() {
           <section className="approval-modal web-turn-modal">
             <h2>로그인이 필요합니다</h2>
             <div>노드: {pendingWebLogin.nodeId}</div>
-            <div>서비스: {pendingWebLogin.provider}</div>
+            <div>서비스: {webProviderLabel(pendingWebLogin.provider)}</div>
             <div>{pendingWebLogin.reason}</div>
             <div className="button-row">
               <button onClick={() => onOpenProviderChildView(pendingWebLogin.provider)} type="button">
@@ -5209,7 +5209,7 @@ function App() {
           <section className="approval-modal web-turn-modal">
             <h2>웹 응답 입력 필요</h2>
             <div>노드: {pendingWebTurn.nodeId}</div>
-            <div>서비스: {pendingWebTurn.provider}</div>
+            <div>서비스: {webProviderLabel(pendingWebTurn.provider)}</div>
             <div>수집 모드: {pendingWebTurn.mode === "manualPasteJson" ? "JSON" : "텍스트"}</div>
             <div className="button-row">
               <button onClick={onOpenPendingProviderWindow} type="button">
