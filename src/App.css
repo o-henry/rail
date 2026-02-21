@@ -96,7 +96,7 @@ textarea,
 select {
   border: 0;
   border-radius: 5px;
-  background: #e7ebf1;
+  /* background: #e7ebf1; */
   color: #1d252c;
   padding: 8px 10px;
 }
@@ -489,7 +489,15 @@ h3 {
   padding: 4px 10px;
   font-size: 12px;
   line-height: 1;
-  border-radius: 5px;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.graph-file-actions .mini-action-button-label {
+  position: relative;
+  top: 1px;
 }
 
 .fancy-select {
@@ -502,7 +510,7 @@ h3 {
   min-height: 36px;
   border-radius: 6px;
   border: 1px solid transparent;
-  background: #dfe5ee;
+  /* background: #dfe5ee; */
   color: #1e2731;
   padding: 9px 12px;
   display: inline-flex;
@@ -617,11 +625,12 @@ h3 {
 }
 
 .fancy-select.graph-file-select .fancy-select-trigger {
-  background: #dfe5ee;
+  /* background: #dfe5ee; */
   height: 36px;
   min-height: 36px;
   max-height: 36px;
   border-radius: 6px;
+  margin-bottom: 2px;
   border: 1px solid transparent;
   padding: 0 12px;
 }
@@ -1003,7 +1012,7 @@ h3 {
   width: 34px;
   min-width: 34px;
   height: 34px;
-  /* border: 1px solid gray; */
+  border: 1px solid gray;
   box-shadow: rgba(20, 30, 39, 0.08) 0px 6px 14px;
   min-height: 34px;
   font-size: 15px;

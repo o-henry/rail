@@ -4961,10 +4961,10 @@ function App() {
                       />
                       <div className="graph-file-actions">
                         <button className="mini-action-button" onClick={saveGraph} type="button">
-                          저장
+                          <span className="mini-action-button-label">저장</span>
                         </button>
                         <button className="mini-action-button" onClick={refreshGraphFiles} type="button">
-                          새로고침
+                          <span className="mini-action-button-label">새로고침</span>
                         </button>
                       </div>
                     </div>
