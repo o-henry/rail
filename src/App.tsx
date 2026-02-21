@@ -5412,8 +5412,8 @@ function App() {
                 <span className="status-tag neutral">기록: {runFiles.length}</span>
               </div>
             </section>
-            <section className="panel-card">{renderWebAutomationPanel()}</section>
-            <section className="panel-card error-log-section">
+            {renderWebAutomationPanel()}
+            <section className="error-log-section">
               <button
                 className="error-log-link"
                 onClick={() => setShowErrorLogs((prev) => !prev)}
