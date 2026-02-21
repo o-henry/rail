@@ -188,7 +188,8 @@ type TurnExecutor =
   | "web_perplexity"
   | "web_claude"
   | "ollama";
-type WebResultMode = "manualPasteJson" | "manualPasteText";
+type WebAutomationMode = "auto" | "manualPasteJson" | "manualPasteText";
+type WebResultMode = WebAutomationMode;
 type WebProvider = "gemini" | "grok" | "perplexity" | "claude";
 
 type TurnConfig = {
@@ -198,7 +199,33 @@ type TurnConfig = {
   cwd?: string;
   promptTemplate?: string;
   webResultMode?: WebResultMode;
+  webTimeoutMs?: number;
   ollamaModel?: string;
+};
+
+type WebProviderRunResult = {
+  ok: boolean;
+  text?: string;
+  raw?: unknown;
+  meta?: {
+    provider: string;
+    url?: string | null;
+    startedAt?: string | null;
+    finishedAt?: string | null;
+    elapsedMs?: number | null;
+    extractionStrategy?: string | null;
+  };
+  error?: string;
+  errorCode?: string;
+};
+
+type WebWorkerHealth = {
+  running: boolean;
+  lastError?: string | null;
+  providers?: unknown;
+  logPath?: string | null;
+  profileRoot?: string | null;
+  activeProvider?: string | null;
 };
 
 type PendingWebTurn = {
@@ -1476,6 +1503,11 @@ function App() {
     perplexity: false,
     claude: false,
   });
+  const [webWorkerHealth, setWebWorkerHealth] = useState<WebWorkerHealth>({
+    running: false,
+  });
+  const [webWorkerBusy, setWebWorkerBusy] = useState(false);
+  const [webWorkerStatus, setWebWorkerStatus] = useState("");
   const [childViewProvider, setChildViewProvider] = useState<WebProvider>("gemini");
   const [providerChildViewOpen, setProviderChildViewOpen] = useState<Record<WebProvider, boolean>>({
     gemini: false,
@@ -1530,6 +1562,8 @@ function App() {
   const zoomStatusTimerRef = useRef<number | null>(null);
   const cancelRequestedRef = useRef(false);
   const activeTurnNodeIdRef = useRef<string>("");
+  const activeWebNodeIdRef = useRef<string>("");
+  const activeWebProviderRef = useRef<WebProvider | null>(null);
   const turnTerminalResolverRef = useRef<((terminal: TurnTerminal) => void) | null>(null);
   const webTurnResolverRef = useRef<((result: { ok: boolean; output?: unknown; error?: string }) => void) | null>(
     null,
@@ -1682,6 +1716,22 @@ function App() {
 
   useEffect(() => {
     let cancelled = false;
+    void invoke<WebWorkerHealth>("web_provider_health")
+      .then((health) => {
+        if (!cancelled) {
+          setWebWorkerHealth(health);
+        }
+      })
+      .catch(() => {
+        // ignore boot-time health check errors
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
 
     const attach = async () => {
       const unlistenNotification = await listen<EngineNotificationEvent>(
@@ -1720,6 +1770,24 @@ function App() {
               } else {
                 setStatus("계정 상태 갱신 수신 (인증 모드 미확인)");
               }
+            }
+
+            if (payload.method === "web/progress") {
+              const message = extractStringByPaths(payload.params, ["message", "stage", "error"]);
+              const activeWebNodeId = activeWebNodeIdRef.current;
+              if (activeWebNodeId && message) {
+                addNodeLog(activeWebNodeId, `[WEB] ${message}`);
+              }
+            }
+
+            if (payload.method === "web/worker/ready") {
+              setWebWorkerHealth((prev) => ({ ...prev, running: true }));
+              setWebWorkerStatus("웹 워커 준비됨");
+            }
+
+            if (payload.method === "web/worker/stopped") {
+              setWebWorkerHealth((prev) => ({ ...prev, running: false, activeProvider: null }));
+              setWebWorkerStatus("웹 워커 중지됨");
             }
 
             const terminal = isTurnTerminalEvent(payload.method, payload.params);
@@ -2058,6 +2126,86 @@ function App() {
       return;
     }
     await onOpenProviderChildView(provider);
+  }
+
+  async function refreshWebWorkerHealth(silent = false) {
+    try {
+      const health = await invoke<WebWorkerHealth>("web_provider_health");
+      setWebWorkerHealth(health);
+      if (!silent) {
+        setWebWorkerStatus(
+          health.running
+            ? `웹 워커 실행 중 (${health.activeProvider ?? "idle"})`
+            : "웹 워커 중지됨",
+        );
+      }
+      return health;
+    } catch (error) {
+      if (!silent) {
+        setError(`웹 워커 상태 조회 실패: ${String(error)}`);
+      }
+      return null;
+    }
+  }
+
+  async function onStartWebWorker() {
+    setWebWorkerBusy(true);
+    setError("");
+    try {
+      await invoke("web_worker_start");
+      await refreshWebWorkerHealth(true);
+      setWebWorkerStatus("웹 워커 시작 완료");
+      setStatus("웹 워커 시작 완료");
+    } catch (error) {
+      setError(`웹 워커 시작 실패: ${String(error)}`);
+    } finally {
+      setWebWorkerBusy(false);
+    }
+  }
+
+  async function onStopWebWorker() {
+    setWebWorkerBusy(true);
+    setError("");
+    try {
+      await invoke("web_worker_stop");
+      await refreshWebWorkerHealth(true);
+      setWebWorkerStatus("웹 워커 중지 완료");
+      setStatus("웹 워커 중지 완료");
+    } catch (error) {
+      setError(`웹 워커 중지 실패: ${String(error)}`);
+    } finally {
+      setWebWorkerBusy(false);
+    }
+  }
+
+  async function onResetGeminiSession() {
+    setWebWorkerBusy(true);
+    setError("");
+    try {
+      await invoke("web_provider_reset_session", { provider: "gemini" });
+      await refreshWebWorkerHealth(true);
+      setWebWorkerStatus("Gemini 세션 리셋 완료");
+      setStatus("Gemini 세션 리셋 완료");
+    } catch (error) {
+      setError(`Gemini 세션 리셋 실패: ${String(error)}`);
+    } finally {
+      setWebWorkerBusy(false);
+    }
+  }
+
+  async function onOpenWebWorkerLog() {
+    const health = await refreshWebWorkerHealth(true);
+    const logPath = health?.logPath ?? webWorkerHealth.logPath;
+    if (!logPath) {
+      setError("웹 워커 로그 경로를 찾지 못했습니다.");
+      return;
+    }
+    try {
+      await openPath(logPath);
+      setStatus("웹 워커 로그 열기");
+    } catch (error) {
+      setError(`로그 열기 실패: ${String(error)}`);
+    }
   }
 
   async function onCopyPendingWebPrompt() {
@@ -2756,7 +2904,7 @@ function App() {
     }
   }
 
-  function updateSelectedNodeConfig(key: string, value: string) {
+  function updateSelectedNodeConfig(key: string, value: unknown) {
     if (!selectedNode) {
       return;
     }
@@ -3426,6 +3574,52 @@ function App() {
 
     const webProvider = getWebProviderFromExecutor(executor);
     if (webProvider) {
+      const webResultMode =
+        config.webResultMode ?? (webProvider === "gemini" ? "auto" : "manualPasteText");
+      const webTimeoutMs = Math.max(5_000, Number(config.webTimeoutMs ?? 90_000) || 90_000);
+
+      if (webProvider === "gemini" && webResultMode === "auto") {
+        activeWebNodeIdRef.current = node.id;
+        activeWebProviderRef.current = webProvider;
+        addNodeLog(node.id, "[WEB] Gemini 자동화 시작");
+        try {
+          const result = await invoke<WebProviderRunResult>("web_provider_run", {
+            provider: webProvider,
+            prompt: textToSend,
+            timeoutMs: webTimeoutMs,
+            mode: "auto",
+          });
+
+          if (result.ok && result.text) {
+            addNodeLog(node.id, "[WEB] Gemini 응답 추출 완료");
+            return {
+              ok: true,
+              output: {
+                provider: webProvider,
+                timestamp: new Date().toISOString(),
+                text: result.text,
+                raw: result.raw,
+                meta: result.meta,
+              },
+              executor,
+              provider: webProvider,
+            };
+          }
+
+          const fallbackReason = `[WEB] 자동화 실패 (${result.errorCode ?? "UNKNOWN"}): ${
+            result.error ?? "unknown error"
+          }`;
+          addNodeLog(node.id, fallbackReason);
+          setNodeStatus(node.id, "waiting_user", "자동화 실패, 수동 입력으로 전환");
+        } catch (error) {
+          addNodeLog(node.id, `[WEB] 자동화 예외: ${String(error)}`);
+          setNodeStatus(node.id, "waiting_user", "자동화 예외, 수동 입력으로 전환");
+        } finally {
+          activeWebNodeIdRef.current = "";
+          activeWebProviderRef.current = null;
+        }
+      }
+
       try {
         await invoke("provider_window_open", { provider: webProvider });
       } catch (error) {
@@ -3444,7 +3638,7 @@ function App() {
         node.id,
         webProvider,
         textToSend,
-        config.webResultMode ?? "manualPasteText",
+        webResultMode === "auto" ? "manualPasteText" : webResultMode,
       ).then((result) => ({
         ...result,
         executor,
@@ -3811,6 +4005,8 @@ function App() {
       setPendingWebTurn(null);
       setWebResponseDraft("");
       activeTurnNodeIdRef.current = "";
+      activeWebNodeIdRef.current = "";
+      activeWebProviderRef.current = null;
       setIsGraphRunning(false);
       cancelRequestedRef.current = false;
       collectingRunRef.current = false;
@@ -3820,6 +4016,18 @@ function App() {
   async function onCancelGraphRun() {
     cancelRequestedRef.current = true;
     setStatus("취소 요청됨");
+
+    const activeWebNodeId = activeWebNodeIdRef.current;
+    const activeWebProvider = activeWebProviderRef.current;
+    if (activeWebNodeId && activeWebProvider) {
+      try {
+        await invoke("web_provider_cancel", { provider: activeWebProvider });
+        addNodeLog(activeWebNodeId, "[WEB] 취소 요청 전송");
+      } catch (e) {
+        setError(String(e));
+      }
+    }
+
     if (pendingWebTurn) {
       resolvePendingWebTurn({ ok: false, error: "사용자 취소" });
       return;
@@ -3976,6 +4184,51 @@ function App() {
             </div>
           </section>
         )}
+      </section>
+    );
+  }
+
+  function renderWebAutomationPanel() {
+    const healthProviders = formatUnknown(webWorkerHealth.providers ?? {});
+    return (
+      <section className="controls web-automation-panel">
+        <h2>웹 자동화</h2>
+        <div className="settings-badges">
+          <span className={`status-tag ${webWorkerHealth.running ? "on" : "off"}`}>
+            워커: {webWorkerHealth.running ? "실행 중" : "중지"}
+          </span>
+          <span className="status-tag neutral">
+            활성 Provider: {webWorkerHealth.activeProvider ?? "없음"}
+          </span>
+        </div>
+        <div className="button-row">
+          <button disabled={webWorkerBusy} onClick={onStartWebWorker} type="button">
+            워커 시작
+          </button>
+          <button disabled={webWorkerBusy} onClick={onStopWebWorker} type="button">
+            워커 중지
+          </button>
+          <button disabled={webWorkerBusy} onClick={() => refreshWebWorkerHealth()} type="button">
+            상태 갱신
+          </button>
+          <button disabled={webWorkerBusy} onClick={onResetGeminiSession} type="button">
+            Gemini 세션 리셋
+          </button>
+          <button onClick={onOpenWebWorkerLog} type="button">
+            진단 로그 열기
+          </button>
+        </div>
+        <div className="usage-method">{webWorkerStatus || "워커 상태를 확인하세요."}</div>
+        <div className="usage-method">
+          로그 경로: <code>{webWorkerHealth.logPath ?? "-"}</code>
+        </div>
+        <div className="usage-method">
+          프로필 루트: <code>{webWorkerHealth.profileRoot ?? "-"}</code>
+        </div>
+        {webWorkerHealth.lastError && (
+          <div className="usage-method">마지막 오류: {webWorkerHealth.lastError}</div>
+        )}
+        <pre>{healthProviders}</pre>
       </section>
     );
   }
@@ -4585,16 +4838,31 @@ function App() {
                                   className="modern-select"
                                   onChange={(next) => updateSelectedNodeConfig("webResultMode", next)}
                                   options={[
+                                    { value: "auto", label: "자동 (Gemini 우선)" },
                                     { value: "manualPasteText", label: "텍스트 붙여넣기" },
                                     { value: "manualPasteJson", label: "JSON 붙여넣기" },
                                   ]}
                                   value={String(
-                                    (selectedNode.config as TurnConfig).webResultMode ?? "manualPasteText",
+                                    (selectedNode.config as TurnConfig).webResultMode ??
+                                      (selectedTurnExecutor === "web_gemini" ? "auto" : "manualPasteText"),
                                   )}
                                 />
                               </label>
+                              <label>
+                                자동화 타임아웃(ms)
+                                <input
+                                  onChange={(e) =>
+                                    updateSelectedNodeConfig(
+                                      "webTimeoutMs",
+                                      Number(e.currentTarget.value) || 90_000,
+                                    )
+                                  }
+                                  type="number"
+                                  value={String((selectedNode.config as TurnConfig).webTimeoutMs ?? 90_000)}
+                                />
+                              </label>
                               <div className="inspector-empty">
-                                실행 시 서비스 창을 열고, 결과를 수동으로 붙여넣습니다.
+                                Gemini는 자동 입력/추출을 시도하고, 실패하면 수동 붙여넣기로 폴백합니다.
                               </div>
                             </>
                           )}
@@ -4780,42 +5048,45 @@ function App() {
         )}
 
         {workspaceTab === "childview" && (
-          <section className="panel-card childview-view">
-            <h2>Child View 테스트</h2>
-            <p>앱 내부 child view로 provider 웹 앱을 띄우는 화면입니다.</p>
-            <label>
-              Provider 선택
-              <FancySelect
-                ariaLabel="Child View Provider"
-                className="modern-select"
-                hideCheckmark
-                onChange={(next) => setChildViewProvider(next as WebProvider)}
-                options={WEB_PROVIDER_OPTIONS.map((provider) => ({
-                  value: provider,
-                  label: webProviderLabel(provider),
-                }))}
-                value={childViewProvider}
-              />
-            </label>
-            <div className="button-row">
-              <button onClick={() => onOpenProviderChildView(childViewProvider)} type="button">
-                Child View 열기
-              </button>
-              <button onClick={() => onCloseProviderChildView(childViewProvider)} type="button">
-                Child View 닫기
-              </button>
-              <button onClick={() => onToggleProviderChildView(childViewProvider)} type="button">
-                토글
-              </button>
-            </div>
-            <div className="settings-badges">
-              <span className={`status-tag ${providerChildViewOpen[childViewProvider] ? "on" : "off"}`}>
-                {providerChildViewOpen[childViewProvider] ? "열림" : "닫힘"}
-              </span>
-              <span className="status-tag neutral">
-                현재 Provider: {webProviderLabel(childViewProvider)}
-              </span>
-            </div>
+          <section className="childview-view">
+            <section className="panel-card">
+              <h2>Child View 테스트</h2>
+              <p>앱 내부 child view로 provider 웹 앱을 띄우는 화면입니다.</p>
+              <label>
+                Provider 선택
+                <FancySelect
+                  ariaLabel="Child View Provider"
+                  className="modern-select"
+                  hideCheckmark
+                  onChange={(next) => setChildViewProvider(next as WebProvider)}
+                  options={WEB_PROVIDER_OPTIONS.map((provider) => ({
+                    value: provider,
+                    label: webProviderLabel(provider),
+                  }))}
+                  value={childViewProvider}
+                />
+              </label>
+              <div className="button-row">
+                <button onClick={() => onOpenProviderChildView(childViewProvider)} type="button">
+                  Child View 열기
+                </button>
+                <button onClick={() => onCloseProviderChildView(childViewProvider)} type="button">
+                  Child View 닫기
+                </button>
+                <button onClick={() => onToggleProviderChildView(childViewProvider)} type="button">
+                  토글
+                </button>
+              </div>
+              <div className="settings-badges">
+                <span className={`status-tag ${providerChildViewOpen[childViewProvider] ? "on" : "off"}`}>
+                  {providerChildViewOpen[childViewProvider] ? "열림" : "닫힘"}
+                </span>
+                <span className="status-tag neutral">
+                  현재 Provider: {webProviderLabel(childViewProvider)}
+                </span>
+              </div>
+            </section>
+            <section className="panel-card">{renderWebAutomationPanel()}</section>
           </section>
         )}
 
@@ -4836,6 +5107,7 @@ function App() {
                 <span className="status-tag neutral">기록: {runFiles.length}</span>
               </div>
             </section>
+            <section className="panel-card">{renderWebAutomationPanel()}</section>
             <section className="panel-card error-log-section">
               <button
                 className="error-log-link"

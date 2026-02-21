@@ -1244,8 +1244,18 @@ h3 {
 .childview-view {
   margin: 12px;
   height: calc(100% - 24px);
+  display: grid;
   align-content: start;
   gap: 10px;
+  overflow: auto;
+}
+
+.web-automation-panel {
+  gap: 10px;
+}
+
+.web-automation-panel pre {
+  max-height: 140px;
 }
 
 .dev-layout {
