@@ -1,5 +1,4 @@
 import {
-  FormEvent,
   KeyboardEvent as ReactKeyboardEvent,
   MouseEvent as ReactMouseEvent,
   WheelEvent as ReactWheelEvent,
@@ -54,7 +53,7 @@ type PendingApproval = {
   params: unknown;
 };
 
-type WorkspaceTab = "workflow" | "history" | "childview" | "settings" | "dev";
+type WorkspaceTab = "workflow" | "history" | "childview" | "settings";
 type NodeType = "turn" | "transform" | "gate";
 type PortType = "in" | "out";
 
@@ -954,12 +953,12 @@ function nodeStatusLabel(status: NodeExecutionStatus): string {
     return "완료";
   }
   if (status === "failed") {
-    return "실패";
+    return "오류";
   }
   if (status === "skipped") {
     return "건너뜀";
   }
-  return "취소됨";
+  return "정지";
 }
 
 function approvalDecisionLabel(decision: ApprovalDecision): string {
@@ -1014,13 +1013,6 @@ function NavIcon({ tab }: { tab: WorkspaceTab }) {
       <svg aria-hidden="true" fill="none" height="20" viewBox="0 0 24 24" width="20">
         <rect height="14" rx="2.2" stroke="currentColor" strokeWidth="1.8" width="18" x="3" y="5" />
         <path d="M8 19v2M16 19v2M8 21h8" stroke="currentColor" strokeLinecap="round" strokeWidth="1.8" />
-      </svg>
-    );
-  }
-  if (tab === "dev") {
-    return (
-      <svg aria-hidden="true" fill="none" height="20" viewBox="0 0 24 24" width="20">
-        <path d="M6 8L3 12l3 4M18 8l3 4-3 4M14 5l-4 14" stroke="currentColor" strokeLinecap="round" strokeWidth="1.8" />
       </svg>
     );
   }
@@ -1551,8 +1543,6 @@ function App() {
   const [workflowQuestion, setWorkflowQuestion] = useState(
     "언어 학습에서 AI가 기존 학습 패러다임을 어떻게 개선할 수 있는지 분석해줘.",
   );
-  const [threadId, setThreadId] = useState("");
-  const [text, setText] = useState("안녕하세요. 지금 상태를 3줄로 요약해줘.");
 
   const [engineStarted, setEngineStarted] = useState(false);
   const [status, setStatus] = useState("대기 중");
@@ -1566,8 +1556,6 @@ function App() {
   const [usageInfoText, setUsageInfoText] = useState("");
   const [authMode, setAuthMode] = useState<AuthMode>("unknown");
   const [loginCompleted, setLoginCompleted] = useState(false);
-  const [streamText, setStreamText] = useState("");
-  const [events, setEvents] = useState<string[]>([]);
   const [pendingApprovals, setPendingApprovals] = useState<PendingApproval[]>([]);
   const [approvalSubmitting, setApprovalSubmitting] = useState(false);
   const [pendingWebTurn, setPendingWebTurn] = useState<PendingWebTurn | null>(null);
@@ -1732,6 +1720,54 @@ function App() {
     });
   }
 
+  function markCodexNodesStatusOnEngineIssue(
+    nextStatus: "failed" | "cancelled",
+    message: string,
+    includeIdle = false,
+  ) {
+    const now = Date.now();
+    const finishedAt = new Date(now).toISOString();
+    const nodeById = new Map(graph.nodes.map((node) => [node.id, node]));
+
+    const isTerminal = (status: NodeExecutionStatus) =>
+      status === "done" || status === "failed" || status === "skipped" || status === "cancelled";
+
+    setNodeStates((prev) => {
+      const next: Record<string, NodeRunState> = { ...prev };
+      let changed = false;
+
+      for (const [nodeId, current] of Object.entries(prev)) {
+        const node = nodeById.get(nodeId);
+        if (!node || node.type !== "turn") {
+          continue;
+        }
+        if (getTurnExecutor(node.config as TurnConfig) !== "codex") {
+          continue;
+        }
+        if (isTerminal(current.status)) {
+          continue;
+        }
+        if (!includeIdle && current.status === "idle") {
+          continue;
+        }
+
+        changed = true;
+        next[nodeId] = {
+          ...current,
+          status: nextStatus,
+          error: nextStatus === "failed" ? message : current.error,
+          finishedAt,
+          durationMs: current.startedAt
+            ? Math.max(0, now - new Date(current.startedAt).getTime())
+            : current.durationMs,
+          logs: [...current.logs, message].slice(-300),
+        };
+      }
+
+      return changed ? next : prev;
+    });
+  }
+
   function applyGraphChange(updater: (prev: GraphData) => GraphData) {
     setGraph((prev) => {
       const next = updater(prev);
@@ -1831,10 +1867,6 @@ function App() {
         (event) => {
           try {
             const payload = event.payload;
-            const now = new Date().toLocaleTimeString();
-            const line = `[${now}] ${payload.method} ${formatUnknown(payload.params)}`;
-
-            setEvents((prev) => [line, ...prev].slice(0, 200));
 
             if (payload.method === "item/agentMessage/delta") {
               const delta = extractDeltaText(payload.params);
@@ -1843,9 +1875,6 @@ function App() {
                 activeRunDeltaRef.current[activeNodeId] =
                   (activeRunDeltaRef.current[activeNodeId] ?? "") + delta;
                 addNodeLog(activeNodeId, delta);
-              }
-              if (delta) {
-                setStreamText((prev) => prev + delta);
               }
             }
 
@@ -1933,12 +1962,16 @@ function App() {
             }
             if (payload.state === "stopped" || payload.state === "disconnected") {
               setEngineStarted(false);
+              markCodexNodesStatusOnEngineIssue("cancelled", "엔진 중지 또는 연결 끊김");
               setAuthMode("unknown");
               setLoginCompleted(false);
               setUsageSourceMethod("");
               setUsageInfoText("");
               setPendingApprovals([]);
               setApprovalSubmitting(false);
+            }
+            if (payload.state === "parseError" || payload.state === "readError" || payload.state === "stderrError") {
+              markCodexNodesStatusOnEngineIssue("failed", "엔진/프로토콜 오류");
             }
           } catch (handlerError) {
             reportSoftError("lifecycle handler failed", handlerError);
@@ -2097,6 +2130,7 @@ function App() {
     try {
       await invoke("engine_stop");
       setEngineStarted(false);
+      markCodexNodesStatusOnEngineIssue("cancelled", "엔진 정지");
       setStatus("중지됨");
       setRunning(false);
       setIsGraphRunning(false);
@@ -4252,6 +4286,7 @@ function App() {
       setSelectedRunFile(`run-${runRecord.runId}.json`);
       setStatus("그래프 실행 완료");
     } catch (e) {
+      markCodexNodesStatusOnEngineIssue("failed", `그래프 실행 실패: ${String(e)}`, true);
       setError(String(e));
       setStatus("그래프 실행 실패");
     } finally {
@@ -4308,50 +4343,6 @@ function App() {
     try {
       await invoke("turn_interrupt", { threadId: active.threadId });
       addNodeLog(activeNodeId, "turn_interrupt 요청 전송");
-    } catch (e) {
-      setError(String(e));
-    }
-  }
-
-  async function onRunTurnDev(e: FormEvent) {
-    e.preventDefault();
-    setError("");
-    setRunning(true);
-
-    try {
-      await ensureEngineStarted();
-
-      let activeThreadId = threadId.trim();
-      if (!activeThreadId) {
-        const result = await invoke<ThreadStartResult>("thread_start", {
-          model: toTurnModelEngineId(model),
-          cwd,
-        });
-        activeThreadId = result.threadId;
-        setThreadId(activeThreadId);
-      }
-
-      setStreamText((prev) => (prev ? `${prev}\n\n` : prev));
-      await invoke("turn_start", {
-        threadId: activeThreadId,
-        text,
-      });
-      setStatus(`개발 테스트 실행 시작 (스레드: ${activeThreadId})`);
-    } catch (err) {
-      setError(String(err));
-    } finally {
-      setRunning(false);
-    }
-  }
-
-  async function onInterruptDev() {
-    if (!threadId.trim()) {
-      return;
-    }
-    setError("");
-    try {
-      await invoke("turn_interrupt", { threadId });
-      setStatus("중단 요청됨");
     } catch (e) {
       setError(String(e));
     }
@@ -4624,16 +4615,6 @@ function App() {
             <span className="nav-label">웹</span>
           </button>
           <button
-            className={isActiveTab("dev") ? "is-active" : ""}
-            onClick={() => setWorkspaceTab("dev")}
-            aria-label="개발"
-            title="개발"
-            type="button"
-          >
-            <span className="nav-icon"><NavIcon tab="dev" /></span>
-            <span className="nav-label">개발</span>
-          </button>
-          <button
             className={isActiveTab("settings") ? "is-active" : ""}
             onClick={() => setWorkspaceTab("settings")}
             aria-label="설정"
@@ -4812,7 +4793,16 @@ function App() {
                               </div>
                             </div>
                             <div className="node-runtime-meta">
-                              <div>완료 여부: {nodeStatus === "done" ? "완료" : nodeStatus === "failed" ? "실패" : "대기"}</div>
+                              <div>
+                                완료 여부:{" "}
+                                {nodeStatus === "done"
+                                  ? "완료"
+                                  : nodeStatus === "failed"
+                                    ? "오류"
+                                    : nodeStatus === "cancelled"
+                                      ? "정지"
+                                      : "대기"}
+                              </div>
                               <div>생성 시간: {formatDuration(runState?.durationMs)}</div>
                               <div>사용량: {formatUsage(runState?.usage)}</div>
                             </div>
@@ -5425,44 +5415,6 @@ function App() {
           </section>
         )}
 
-        {workspaceTab === "dev" && (
-          <section className="workflow-layout dev-layout">
-            <article className="panel-card">
-              <h2>개발용 단일 턴 테스트</h2>
-              <label>
-                스레드 ID
-                <input
-                  onChange={(e) => setThreadId(e.currentTarget.value)}
-                  placeholder="thread_start 결과가 자동 입력됩니다"
-                  value={threadId}
-                />
-              </label>
-
-              <form className="prompt" onSubmit={onRunTurnDev}>
-                <label>
-                  입력
-                  <textarea onChange={(e) => setText(e.currentTarget.value)} rows={4} value={text} />
-                </label>
-                <div className="button-row">
-                  <button disabled={running || !text.trim()} type="submit">
-                    {running ? "실행 중..." : "실행"}
-                  </button>
-                  <button disabled={!threadId} onClick={onInterruptDev} type="button">
-                    중단
-                  </button>
-                </div>
-              </form>
-
-              <h3>스트리밍 출력</h3>
-              <pre>{streamText || "(item/agentMessage/delta를 기다리는 중...)"}</pre>
-            </article>
-
-            <article className="panel-card">
-              <h2>알림 이벤트</h2>
-              <pre>{events.join("\n") || "(아직 이벤트 없음)"}</pre>
-            </article>
-          </section>
-        )}
       </section>
 
       {pendingWebLogin && (
