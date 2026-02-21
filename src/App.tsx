@@ -4731,12 +4731,12 @@ function App() {
                             </button>
                           </div>
                           <div className="node-body">
-                            <div className="node-id-row">
+                            <div className="node-summary-row">
+                              <div>{nodeCardSummary(node)}</div>
                               <div className={`status-pill status-${nodeStatus}`}>
                                 {nodeStatusLabel(nodeStatus)}
                               </div>
                             </div>
-                            <div>{nodeCardSummary(node)}</div>
                             <div className="node-runtime-meta">
                               <div>완료 여부: {nodeStatus === "done" ? "완료" : nodeStatus === "failed" ? "실패" : "대기"}</div>
                               <div>생성 시간: {formatDuration(runState?.durationMs)}</div>

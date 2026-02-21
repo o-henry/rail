@@ -816,16 +816,10 @@ h3 {
   overflow: hidden;
 }
 
-.node-id {
-  color: #63707d;
-  font-size: 0.72rem;
-  font-family: "BasicallyAMono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-}
-
-.node-id-row {
+.node-summary-row {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: space-between;
   gap: 8px;
 }
 
