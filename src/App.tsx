@@ -4806,16 +4806,54 @@ function App() {
                 <div className="inspector-section">
                   <section className="inspector-block">
                     <h3>그래프 도구</h3>
+                    <div className="tool-dropdown-group">
+                      <h4>노드 선택</h4>
+                      <FancySelect
+                        ariaLabel="노드 선택"
+                        className="modern-select"
+                        emptyMessage="선택 가능한 노드가 없습니다."
+                        onChange={(value) => {
+                          if (value === "turn") {
+                            addNode("turn");
+                          } else if (value === "transform") {
+                            addNode("transform");
+                          } else if (value === "gate") {
+                            addNode("gate");
+                          }
+                        }}
+                        options={[
+                          { value: "turn", label: "응답 에이전트" },
+                          { value: "transform", label: "데이터 변환" },
+                          { value: "gate", label: "분기" },
+                        ]}
+                        placeholder="노드 선택"
+                        value=""
+                      />
+                    </div>
+
+                    <div className="tool-dropdown-group">
+                      <h4>템플릿</h4>
+                      <FancySelect
+                        ariaLabel="템플릿 선택"
+                        className="modern-select"
+                        emptyMessage="선택 가능한 템플릿이 없습니다."
+                        onChange={(value) => {
+                          if (value === "validation") {
+                            applyPreset("validation");
+                          } else if (value === "development") {
+                            applyPreset("development");
+                          }
+                        }}
+                        options={[
+                          { value: "validation", label: "검증형 5에이전트" },
+                          { value: "development", label: "개방형 5에이전트" },
+                        ]}
+                        placeholder="템플릿 선택"
+                        value=""
+                      />
+                    </div>
+
                     <div className="button-row">
-                      <button onClick={() => addNode("turn")} type="button">
-                        + 응답 에이전트
-                      </button>
-                      <button onClick={() => addNode("transform")} type="button">
-                        + 데이터 변환
-                      </button>
-                      <button onClick={() => addNode("gate")} type="button">
-                        + 분기
-                      </button>
                       <button
                         disabled={!connectFromNodeId}
                         onClick={() => {
@@ -4828,15 +4866,6 @@ function App() {
                         type="button"
                       >
                         연결 취소
-                      </button>
-                    </div>
-
-                    <div className="button-row">
-                      <button onClick={() => applyPreset("validation")} type="button">
-                        검증형 5에이전트
-                      </button>
-                      <button onClick={() => applyPreset("development")} type="button">
-                        개발형 5에이전트
                       </button>
                     </div>
 
