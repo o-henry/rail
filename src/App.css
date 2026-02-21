@@ -1187,7 +1187,8 @@ h3 {
 }
 
 .workflow-runtime-status .settings-badges {
-  gap: 6px;
+  margin-top: 10px;
+  gap: 8px;
 }
 
 .inspector-empty {
@@ -1444,6 +1445,7 @@ h3 {
 }
 
 .web-automation-panel {
+  margin-top: 18px;
   gap: 10px;
 }
 

@@ -9,7 +9,7 @@ import {
 } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { openPath, openUrl } from "@tauri-apps/plugin-opener";
+import { openPath } from "@tauri-apps/plugin-opener";
 import "./App.css";
 
 type EngineNotificationEvent = {
@@ -24,11 +24,6 @@ type EngineLifecycleEvent = {
 
 type ThreadStartResult = {
   threadId: string;
-  raw: unknown;
-};
-
-type LoginChatgptResult = {
-  authUrl: string;
   raw: unknown;
 };
 
@@ -332,7 +327,6 @@ const TURN_MODEL_CANONICAL_PAIRS: Array<{ display: string; engine: string }> = [
   { display: "GPT-5.2", engine: "gpt-5.2" },
   { display: "GPT-5.1-Codex-Mini", engine: "gpt-5.1-codex-mini" },
 ];
-const TRUSTED_AUTH_HOSTS = ["chatgpt.com", "openai.com", "auth.openai.com"] as const;
 const NODE_ANCHOR_SIDES: NodeAnchorSide[] = ["top", "right", "bottom", "left"];
 
 function formatUnknown(value: unknown): string {
@@ -1232,36 +1226,6 @@ function loginStateLabel(engineStarted: boolean, loginCompleted: boolean, authMo
   return "로그인 필요";
 }
 
-function validateAuthUrl(input: string): { ok: boolean; normalized?: string; reason?: string } {
-  const raw = input.trim();
-  if (!raw) {
-    return { ok: false, reason: "빈 URL" };
-  }
-
-  let parsed: URL;
-  try {
-    parsed = new URL(raw);
-  } catch {
-    return { ok: false, reason: "URL 형식 오류" };
-  }
-
-  if (parsed.protocol !== "https:") {
-    return { ok: false, reason: `허용되지 않은 프로토콜(${parsed.protocol})` };
-  }
-
-  if (parsed.username || parsed.password) {
-    return { ok: false, reason: "인증 정보가 포함된 URL은 허용되지 않음" };
-  }
-
-  const host = parsed.hostname.toLowerCase();
-  const trusted = TRUSTED_AUTH_HOSTS.some((allowed) => host === allowed || host.endsWith(`.${allowed}`));
-  if (!trusted) {
-    return { ok: false, reason: `허용되지 않은 인증 도메인(${host})` };
-  }
-
-  return { ok: true, normalized: parsed.toString() };
-}
-
 function extractFinalAnswer(output: unknown): string {
   const maybeText = extractStringByPaths(output, [
     "text",
@@ -1581,7 +1545,6 @@ function App() {
   const [errorLogs, setErrorLogs] = useState<string[]>([]);
   const [showErrorLogs, setShowErrorLogs] = useState(false);
 
-  const [authUrl, setAuthUrl] = useState("");
   const [usageSourceMethod, setUsageSourceMethod] = useState("");
   const [usageInfoText, setUsageInfoText] = useState("");
   const [authMode, setAuthMode] = useState<AuthMode>("unknown");
@@ -1591,13 +1554,6 @@ function App() {
   const [pendingWebTurn, setPendingWebTurn] = useState<PendingWebTurn | null>(null);
   const [pendingWebLogin, setPendingWebLogin] = useState<PendingWebLogin | null>(null);
   const [webResponseDraft, setWebResponseDraft] = useState("");
-  const [providerWindowOpen, setProviderWindowOpen] = useState<Record<WebProvider, boolean>>({
-    gemini: false,
-    gpt: false,
-    grok: false,
-    perplexity: false,
-    claude: false,
-  });
   const [webWorkerHealth, setWebWorkerHealth] = useState<WebWorkerHealth>({
     running: false,
   });
@@ -2170,32 +2126,6 @@ function App() {
     }
   }
 
-  async function onLoginChatgpt() {
-    setError("");
-    setLoginCompleted(false);
-    try {
-      await ensureEngineStarted();
-      const result = await invoke<LoginChatgptResult>("login_chatgpt");
-      setAuthUrl(result.authUrl);
-      const validation = validateAuthUrl(result.authUrl);
-      if (!validation.ok || !validation.normalized) {
-        setStatus("인증 URL 검증 실패, 수동 진행 필요");
-        setError(`authUrl validation failed: ${validation.reason ?? "unknown reason"}`);
-        return;
-      }
-      setStatus("인증 URL 수신");
-      try {
-        await openUrl(validation.normalized);
-        setStatus("외부 브라우저에서 인증 URL 열림");
-      } catch (openErr) {
-        setStatus("브라우저 열기 실패, URL 복사 후 수동 진행");
-        setError(`openUrl failed: ${String(openErr)}`);
-      }
-    } catch (e) {
-      setError(String(e));
-    }
-  }
-
   async function onCheckUsage() {
     setError("");
     try {
@@ -2210,62 +2140,15 @@ function App() {
     }
   }
 
-  async function onCopyAuthUrl() {
-    if (!authUrl) {
-      return;
-    }
-    try {
-      await navigator.clipboard.writeText(authUrl);
-      setStatus("인증 URL 복사 완료");
-    } catch (e) {
-      setError(`clipboard copy failed: ${String(e)}`);
-    }
-  }
-
   async function onOpenPendingProviderWindow() {
     if (!pendingWebTurn) {
       return;
     }
     try {
       await invoke("provider_window_open", { provider: pendingWebTurn.provider });
-      setProviderWindowOpen((prev) => ({ ...prev, [pendingWebTurn.provider]: true }));
     } catch (error) {
       setError(String(error));
     }
-  }
-
-  async function onOpenProviderWindow(provider: WebProvider) {
-    try {
-      await invoke("provider_window_open", { provider });
-      setProviderWindowOpen((prev) => ({ ...prev, [provider]: true }));
-      setStatus(`${webProviderLabel(provider)} 창 열림`);
-    } catch (error) {
-      setError(String(error));
-    }
-  }
-
-  async function onCloseProviderWindow(provider: WebProvider) {
-    try {
-      await invoke("provider_window_close", { provider });
-      setProviderWindowOpen((prev) => ({ ...prev, [provider]: false }));
-      setStatus(`${webProviderLabel(provider)} 창 닫힘`);
-    } catch (error) {
-      const message = String(error);
-      if (message.includes("provider window not found")) {
-        setProviderWindowOpen((prev) => ({ ...prev, [provider]: false }));
-        setStatus(`${webProviderLabel(provider)} 창 닫힘`);
-        return;
-      }
-      setError(message);
-    }
-  }
-
-  async function onToggleProviderWindow(provider: WebProvider) {
-    if (providerWindowOpen[provider]) {
-      await onCloseProviderWindow(provider);
-      return;
-    }
-    await onOpenProviderWindow(provider);
   }
 
   async function onOpenProviderChildView(provider: WebProvider) {
@@ -4375,7 +4258,7 @@ function App() {
     }
   }
 
-  function renderSettingsPanel(compact = false, hideThreeEngineButtons = false) {
+  function renderSettingsPanel(compact = false) {
     return (
       <section className={`controls ${compact ? "settings-compact" : ""}`}>
         <h2>엔진 및 계정</h2>
@@ -4406,30 +4289,15 @@ function App() {
         </label>
         {!compact && (
           <div className="button-row">
-            {!hideThreeEngineButtons && (
-              <>
-                <button onClick={onStartEngine} disabled={running || isGraphRunning} type="button">
-                  엔진 시작
-                </button>
-                <button onClick={onStopEngine} type="button">
-                  엔진 중지
-                </button>
-                <button onClick={onLoginChatgpt} disabled={running || isGraphRunning} type="button">
-                  ChatGPT 로그인
-                </button>
-              </>
-            )}
+            <button
+              onClick={engineStarted ? onStopEngine : onStartEngine}
+              disabled={running || isGraphRunning}
+              type="button"
+            >
+              {engineStarted ? "엔진 중지" : "엔진 시작"}
+            </button>
             <button onClick={onCheckUsage} disabled={running || isGraphRunning} type="button">
               사용량 확인
-            </button>
-          </div>
-        )}
-        {authUrl && (
-          <div className="auth-url-box">
-            <span>인증 URL</span>
-            <code>{authUrl}</code>
-            <button onClick={onCopyAuthUrl} type="button">
-              복사
             </button>
           </div>
         )}
@@ -4443,25 +4311,6 @@ function App() {
             <h3>사용량 조회 결과</h3>
             <pre>{usageInfoText}</pre>
           </div>
-        )}
-        {!compact && (
-          <section className="provider-hub">
-            <h3>Provider Hub</h3>
-            <div className="provider-hub-list">
-              {WEB_PROVIDER_OPTIONS.map((provider) => (
-                <div className="provider-hub-row" key={provider}>
-                  <span>{webProviderLabel(provider)}</span>
-                  <button
-                    className={providerWindowOpen[provider] ? "is-active" : ""}
-                    onClick={() => onToggleProviderWindow(provider)}
-                    type="button"
-                  >
-                    {providerWindowOpen[provider] ? "닫기" : "열기"}
-                  </button>
-                </div>
-              ))}
-            </div>
-          </section>
         )}
       </section>
     );
