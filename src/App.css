@@ -1027,6 +1027,11 @@ h3 {
   filter: brightness(0) invert(1);
 }
 
+.canvas-runbar .canvas-icon-btn:not(.play) .canvas-icon-image {
+  filter: grayscale(1);
+  opacity: 0.56;
+}
+
 .canvas-runbar .stop .canvas-icon-image {
   width: 18px;
   height: 18px;
@@ -1054,7 +1059,7 @@ h3 {
 }
 
 .inspector-title-chip {
-  background: #dfe5ee;
+  /* background: #dfe5ee; */
   border-radius: 5px;
   padding: 8px 12px;
   font-weight: 600;

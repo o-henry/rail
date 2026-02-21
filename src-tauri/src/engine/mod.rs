@@ -1223,12 +1223,6 @@ pub async fn provider_child_view_open(window: Window, provider: String) -> Resul
         .ok_or_else(|| format!("unsupported provider: {provider}"))?;
     let child_label = provider_child_view_label(&provider_key);
 
-    if let Some(webview) = window.app_handle().get_webview(&child_label) {
-        let _ = webview.show();
-        let _ = webview.set_focus();
-        return Ok(());
-    }
-
     let size = window
         .inner_size()
         .map_err(|e| format!("failed to read parent window size: {e}"))?;
@@ -1252,6 +1246,14 @@ pub async fn provider_child_view_open(window: Window, provider: String) -> Resul
     let y_start = CHILD_VIEW_SAFE_MARGIN_TOP.min(size.height.saturating_sub(height));
     let x = x_start + (available_width.saturating_sub(width) / 2);
     let y = y_start + (available_height.saturating_sub(height) / 2);
+
+    if let Some(webview) = window.app_handle().get_webview(&child_label) {
+        let _ = webview.set_position(tauri::LogicalPosition::new(f64::from(x), f64::from(y)));
+        let _ = webview.set_size(tauri::LogicalSize::new(f64::from(width), f64::from(height)));
+        let _ = webview.show();
+        let _ = webview.set_focus();
+        return Ok(());
+    }
 
     let external = url
         .parse()
