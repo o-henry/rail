@@ -598,7 +598,7 @@ h3 {
 }
 
 .fancy-select.graph-file-select .fancy-select-value {
-  line-height: 1.2;
+  line-height: 1.35;
   display: inline-flex;
   align-items: center;
   min-height: 0;
@@ -1106,7 +1106,7 @@ h3 {
 }
 
 .tool-dropdown-group .fancy-select-value {
-  line-height: 1.2;
+  line-height: 1.35;
   min-height: 0;
   position: relative;
   top: 4px;
@@ -1115,6 +1115,7 @@ h3 {
 .tool-dropdown-group .fancy-select-value.is-placeholder,
 .fancy-select.graph-file-select .fancy-select-value.is-placeholder {
   font-size: 13px;
+  padding-top: 1px;
 }
 
 .workflow-runtime-status .settings-badges {
