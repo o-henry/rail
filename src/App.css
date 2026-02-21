@@ -822,6 +822,13 @@ h3 {
   font-family: "BasicallyAMono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 
+.node-id-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
 .status-pill {
   width: fit-content;
   border-radius: 5px;
@@ -1179,6 +1186,13 @@ h3 {
 
 .inspector-summary {
   gap: 6px;
+}
+
+.inspector-summary-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
 }
 
 .inspector-section input,

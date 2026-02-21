@@ -4731,9 +4731,11 @@ function App() {
                             </button>
                           </div>
                           <div className="node-body">
-                            <div className="node-id">{node.id}</div>
-                            <div className={`status-pill status-${nodeStatus}`}>
-                              {nodeStatusLabel(nodeStatus)}
+                            <div className="node-id-row">
+                              <div className="node-id">{node.id}</div>
+                              <div className={`status-pill status-${nodeStatus}`}>
+                                {nodeStatusLabel(nodeStatus)}
+                              </div>
                             </div>
                             <div>{nodeCardSummary(node)}</div>
                             <div className="node-runtime-meta">
@@ -4977,9 +4979,11 @@ function App() {
                         <div>
                           <strong>{selectedNode.id}</strong>
                         </div>
-                        <div>유형: {nodeTypeLabel(selectedNode.type)}</div>
-                        <div className={`status-pill status-${selectedNodeState?.status ?? "idle"}`}>
-                          상태: {nodeStatusLabel(selectedNodeState?.status ?? "idle")}
+                        <div className="inspector-summary-row">
+                          <div>유형: {nodeTypeLabel(selectedNode.type)}</div>
+                          <div className={`status-pill status-${selectedNodeState?.status ?? "idle"}`}>
+                            상태: {nodeStatusLabel(selectedNodeState?.status ?? "idle")}
+                          </div>
                         </div>
                         <div>완료 여부: {(selectedNodeState?.status ?? "idle") === "done" ? "완료" : "미완료"}</div>
                         <div>생성 시간: {formatDuration(selectedNodeState?.durationMs)}</div>
