@@ -5314,7 +5314,6 @@ function App() {
                     </>
                   )}
 
-                  <section className="inspector-block">{renderSettingsPanel(true)}</section>
                 </div>
               </div>
             </aside>}
