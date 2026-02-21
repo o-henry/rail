@@ -4941,21 +4941,8 @@ function App() {
                       />
                     </div>
 
-                    <div className="save-row">
-                      <input
-                        value={graphFileName}
-                        onChange={(e) => setGraphFileName(e.currentTarget.value)}
-                        placeholder="저장할 그래프 파일 이름"
-                      />
-                      <button onClick={saveGraph} type="button">
-                        저장
-                      </button>
-                      <button onClick={() => loadGraph()} type="button">
-                        불러오기
-                      </button>
-                      <button onClick={refreshGraphFiles} type="button">
-                        새로고침
-                      </button>
+                    <div className="tool-dropdown-group">
+                      <h4>그래프 파일</h4>
                       <FancySelect
                         ariaLabel="그래프 파일 선택"
                         className="graph-file-select modern-select"
@@ -4969,10 +4956,23 @@ function App() {
                         placeholder="그래프 파일 선택"
                         value=""
                       />
+                      <input
+                        value={graphFileName}
+                        onChange={(e) => setGraphFileName(e.currentTarget.value)}
+                        placeholder="저장할 그래프 파일 이름"
+                      />
+                      <div className="graph-file-actions">
+                        <button className="mini-action-button" onClick={saveGraph} type="button">
+                          저장
+                        </button>
+                        <button className="mini-action-button" onClick={refreshGraphFiles} type="button">
+                          새로고침
+                        </button>
+                      </div>
                     </div>
                   </section>
 
-                  {!selectedNode && <div className="inspector-empty">노드를 선택하세요.</div>}
+                  {/* {!selectedNode && <div className="inspector-empty">노드를 선택하세요.</div>} */}
                   {selectedNode && (
                     <>
                       <section className="inspector-block inspector-summary">

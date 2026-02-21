@@ -477,6 +477,21 @@ h3 {
   min-width: 160px;
 }
 
+.graph-file-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.graph-file-actions .mini-action-button {
+  min-height: 30px;
+  height: 30px;
+  padding: 4px 10px;
+  font-size: 12px;
+  line-height: 1;
+  border-radius: 5px;
+}
+
 .fancy-select {
   position: relative;
   width: 100%;
@@ -1023,15 +1038,13 @@ h3 {
   margin: auto;
 }
 
-
+.canvas-runbar .play .canvas-icon-image {
+  filter: brightness(0) invert(1);
+}
 
 .canvas-runbar .canvas-icon-btn:not(.play) .canvas-icon-image {
   filter: grayscale(1);
   opacity: 0.56;
-}
-
-.canvas-runbar .play .canvas-icon-image {
-  /* filter: brightness(0) invert(1); */
 }
 
 .canvas-runbar .stop .canvas-icon-image {
@@ -1103,10 +1116,11 @@ h3 {
 .inspector-block {
   border: 0;
   border-radius: 5px;
-  padding: 10px;
-  background: var(--surface-strong);
+  /* padding: 10px; */
+  padding-top: 10px;
+  /* background: var(--surface-strong); */
   display: grid;
-  gap: 8px;
+  gap: 20px;
 }
 
 .tool-dropdown-group {
@@ -1174,7 +1188,7 @@ h3 {
 }
 
 .settings-compact {
-  margin-top: 0;
+  margin-top: 16px;
   padding-top: 0;
   padding-bottom: 22px;
   border-top: 0;
