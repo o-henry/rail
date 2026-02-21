@@ -607,11 +607,6 @@ h3 {
   color: #1e5cc6;
 }
 
-.fancy-select-check {
-  font-weight: 700;
-  color: #1d7cff;
-}
-
 .fancy-select-option:disabled {
   opacity: 0.5;
   cursor: not-allowed;
