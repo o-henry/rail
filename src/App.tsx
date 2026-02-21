@@ -1583,7 +1583,7 @@ function App() {
   const [connectPreviewStartPoint, setConnectPreviewStartPoint] = useState<LogicalPoint | null>(null);
   const [connectPreviewPoint, setConnectPreviewPoint] = useState<LogicalPoint | null>(null);
   const [isConnectingDrag, setIsConnectingDrag] = useState(false);
-  const [graphFileName, setGraphFileName] = useState("sample.json");
+  const [graphFileName, setGraphFileName] = useState("");
   const [graphFiles, setGraphFiles] = useState<string[]>([]);
   const [runFiles, setRunFiles] = useState<string[]>([]);
   const [selectedRunFile, setSelectedRunFile] = useState("");
@@ -3069,12 +3069,14 @@ function App() {
   async function saveGraph() {
     setError("");
     try {
+      const saveTarget = graphFileName.trim() || "sample.json";
       await invoke("graph_save", {
-        name: graphFileName,
+        name: saveTarget,
         graph,
       });
       await refreshGraphFiles();
-      setStatus(`그래프 저장 완료 (${graphFileName})`);
+      setGraphFileName(saveTarget);
+      setStatus(`그래프 저장 완료 (${saveTarget})`);
     } catch (e) {
       setError(String(e));
     }
@@ -4949,17 +4951,13 @@ function App() {
                         emptyMessage="저장된 그래프가 없습니다."
                         onChange={(value) => {
                           if (value) {
+                            setGraphFileName(value);
                             loadGraph(value);
                           }
                         }}
                         options={graphFiles.map((file) => ({ value: file, label: file }))}
                         placeholder="그래프 파일 선택"
-                        value=""
-                      />
-                      <input
-                        value={graphFileName}
-                        onChange={(e) => setGraphFileName(e.currentTarget.value)}
-                        placeholder="저장할 그래프 파일 이름"
+                        value={graphFiles.includes(graphFileName) ? graphFileName : ""}
                       />
                       <div className="graph-file-actions">
                         <button className="mini-action-button" onClick={saveGraph} type="button">
