@@ -622,17 +622,6 @@ function formatUsage(usage?: UsageStats): string {
   return `${total}토큰 (입력 ${inputText} / 출력 ${outputText})`;
 }
 
-function formatFinishedAt(value?: string): string {
-  if (!value) {
-    return "-";
-  }
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return "-";
-  }
-  return date.toLocaleTimeString("ko-KR", { hour12: false });
-}
-
 function getByPath(input: unknown, path: string): unknown {
   if (!path.trim()) {
     return input;
@@ -4974,22 +4963,9 @@ function App() {
                   {/* {!selectedNode && <div className="inspector-empty">노드를 선택하세요.</div>} */}
                   {selectedNode && (
                     <>
-                      <section className="inspector-block inspector-summary">
-                        <div className="inspector-summary-row">
-                          <div>유형: {nodeTypeLabel(selectedNode.type)}</div>
-                          <div className={`status-pill status-${selectedNodeState?.status ?? "idle"}`}>
-                            상태: {nodeStatusLabel(selectedNodeState?.status ?? "idle")}
-                          </div>
-                        </div>
-                        <div>완료 여부: {(selectedNodeState?.status ?? "idle") === "done" ? "완료" : "미완료"}</div>
-                        <div>생성 시간: {formatDuration(selectedNodeState?.durationMs)}</div>
-                        <div>완료 시각: {formatFinishedAt(selectedNodeState?.finishedAt)}</div>
-                        <div>사용량: {formatUsage(selectedNodeState?.usage)}</div>
-                      </section>
-
                       {selectedNode.type === "turn" && (
                         <section className="inspector-block form-grid">
-                          <h3>Turn 에이전트 설정</h3>
+                          <h3>에이전트 설정</h3>
                           <label>
                             에이전트
                             <FancySelect
