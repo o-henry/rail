@@ -587,16 +587,17 @@ h3 {
 
 .fancy-select.graph-file-select .fancy-select-trigger {
   background: #dfe5ee;
-  min-height: 36px;
+  min-height: 38px;
   border-radius: 10px;
   border: 1px solid transparent;
-  padding: 8px 12px;
+  padding: 9px 12px;
 }
 
 .fancy-select.graph-file-select .fancy-select-value {
-  line-height: 1.2;
+  line-height: 1.38;
   display: inline-flex;
   align-items: center;
+  min-height: 20px;
 }
 
 .fancy-select.graph-file-select .fancy-select-menu {
@@ -1091,6 +1092,16 @@ h3 {
   line-height: 1.2;
 }
 
+.tool-dropdown-group .fancy-select-trigger {
+  min-height: 38px;
+  padding: 9px 12px;
+}
+
+.tool-dropdown-group .fancy-select-value {
+  line-height: 1.38;
+  min-height: 20px;
+}
+
 .workflow-runtime-status .settings-badges {
   gap: 6px;
 }
@@ -1255,6 +1266,7 @@ h3 {
 .settings-view {
   margin: 0 10px 10px;
   height: 100%;
+  border-radius: 12px;
 }
 
 .childview-view {
@@ -1275,7 +1287,14 @@ h3 {
 }
 
 .dev-layout {
-  margin-left: 0;
+  margin: 0 10px 10px;
+  height: 100%;
+}
+
+.history-layout > .panel-card,
+.childview-view > .panel-card,
+.dev-layout > .panel-card {
+  border-radius: 12px;
 }
 
 .history-list button.is-active {
