@@ -1186,8 +1186,14 @@ h3 {
   padding-top: 1px;
 }
 
+.workflow-runtime-status {
+  margin-top: 8px;
+  display: grid;
+  gap: 12px;
+}
+
 .workflow-runtime-status .settings-badges {
-  margin-top: 10px;
+  margin-top: 12px;
   gap: 8px;
 }
 
@@ -1328,19 +1334,6 @@ h3 {
   border-color: transparent;
 }
 
-.error-log-section {
-  margin-top: 0;
-}
-
-.error-log-link {
-  border: 0;
-  background: transparent;
-  color: #1f66d5;
-  text-decoration: underline;
-  padding: 0;
-  width: fit-content;
-}
-
 .panel-card {
   border: 0;
   border-radius: 5px;
@@ -1445,8 +1438,8 @@ h3 {
 }
 
 .web-automation-panel {
-  margin-top: 18px;
-  gap: 10px;
+  margin-top: 24px;
+  gap: 12px;
 }
 
 .web-automation-panel pre {

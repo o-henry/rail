@@ -287,10 +287,10 @@ const TURN_EXECUTOR_OPTIONS = [
 ] as const;
 const TURN_EXECUTOR_LABELS: Record<TurnExecutor, string> = {
   codex: "Codex",
-  web_gemini: "Web / Gemini",
-  web_grok: "Web / Grok",
-  web_perplexity: "Web / Perplexity",
-  web_claude: "Web / Claude",
+  web_gemini: "WEB / GEMINI",
+  web_grok: "WEB / GROK",
+  web_perplexity: "WEB / PERPLEXITY",
+  web_claude: "WEB / CLAUDE",
   ollama: "Ollama (로컬)",
 };
 const WEB_PROVIDER_OPTIONS: ReadonlyArray<WebProvider> = [
@@ -884,18 +884,18 @@ function getWebProviderFromExecutor(executor: TurnExecutor): WebProvider | null 
 
 function webProviderLabel(provider: WebProvider): string {
   if (provider === "gemini") {
-    return "Gemini";
+    return "GEMINI";
   }
   if (provider === "gpt") {
     return "GPT";
   }
   if (provider === "grok") {
-    return "Grok";
+    return "GROK";
   }
   if (provider === "perplexity") {
-    return "Perplexity";
+    return "PERPLEXITY";
   }
-  return "Claude";
+  return "CLAUDE";
 }
 
 function toWebProviderHealthMap(raw: unknown): Record<string, WebProviderHealthEntry> {
@@ -1542,8 +1542,7 @@ function App() {
   const [status, setStatus] = useState("대기 중");
   const [running, setRunning] = useState(false);
   const [error, setErrorState] = useState("");
-  const [errorLogs, setErrorLogs] = useState<string[]>([]);
-  const [showErrorLogs, setShowErrorLogs] = useState(false);
+  const [, setErrorLogs] = useState<string[]>([]);
 
   const [usageSourceMethod, setUsageSourceMethod] = useState("");
   const [usageInfoText, setUsageInfoText] = useState("");
@@ -1558,8 +1557,6 @@ function App() {
     running: false,
   });
   const [webWorkerBusy, setWebWorkerBusy] = useState(false);
-  const [webWorkerStatus, setWebWorkerStatus] = useState("");
-  const [showAdvancedWebOps, setShowAdvancedWebOps] = useState(false);
   const [providerChildViewOpen, setProviderChildViewOpen] = useState<Record<WebProvider, boolean>>({
     gemini: false,
     gpt: false,
@@ -1827,14 +1824,9 @@ function App() {
         const health = await invoke<WebWorkerHealth>("web_provider_health");
         if (!cancelled) {
           setWebWorkerHealth(health);
-          setWebWorkerStatus(
-            health.running ? "웹 자동화 준비 완료" : "웹 자동화 사용 불가 (수동 폴백)",
-          );
         }
       } catch {
-        if (!cancelled) {
-          setWebWorkerStatus("웹 자동화 상태를 확인하지 못했습니다. 수동 모드로 동작합니다.");
-        }
+        // silent: settings panel refresh button shows latest state on demand
       }
     };
     void bootstrapWorker();
@@ -1888,12 +1880,10 @@ function App() {
 
             if (payload.method === "web/worker/ready") {
               setWebWorkerHealth((prev) => ({ ...prev, running: true }));
-              setWebWorkerStatus("웹 워커 준비됨");
             }
 
             if (payload.method === "web/worker/stopped") {
               setWebWorkerHealth((prev) => ({ ...prev, running: false, activeProvider: null }));
-              setWebWorkerStatus("웹 워커 중지됨");
             }
 
             const terminal = isTurnTerminalEvent(payload.method, payload.params);
@@ -2194,13 +2184,6 @@ function App() {
     try {
       const health = await invoke<WebWorkerHealth>("web_provider_health");
       setWebWorkerHealth(health);
-      if (!silent) {
-        setWebWorkerStatus(
-          health.running
-            ? `웹 워커 실행 중 (${health.activeProvider ?? "idle"})`
-            : "웹 워커 중지됨",
-        );
-      }
       return health;
     } catch (error) {
       if (!silent) {
@@ -2210,43 +2193,12 @@ function App() {
     }
   }
 
-  async function onStartWebWorker() {
-    setWebWorkerBusy(true);
-    setError("");
-    try {
-      await invoke("web_worker_start");
-      await refreshWebWorkerHealth(true);
-      setWebWorkerStatus("웹 워커 시작 완료");
-      setStatus("웹 워커 시작 완료");
-    } catch (error) {
-      setError(`웹 워커 시작 실패: ${String(error)}`);
-    } finally {
-      setWebWorkerBusy(false);
-    }
-  }
-
-  async function onStopWebWorker() {
-    setWebWorkerBusy(true);
-    setError("");
-    try {
-      await invoke("web_worker_stop");
-      await refreshWebWorkerHealth(true);
-      setWebWorkerStatus("웹 워커 중지 완료");
-      setStatus("웹 워커 중지 완료");
-    } catch (error) {
-      setError(`웹 워커 중지 실패: ${String(error)}`);
-    } finally {
-      setWebWorkerBusy(false);
-    }
-  }
-
   async function onOpenProviderSession(provider: WebProvider) {
     setWebWorkerBusy(true);
     setError("");
     try {
       await invoke("web_provider_open_session", { provider });
       await refreshWebWorkerHealth(true);
-      setWebWorkerStatus(`${webProviderLabel(provider)} 로그인 세션 창 열림`);
       setStatus(`${webProviderLabel(provider)} 로그인 세션 창 열림`);
     } catch (error) {
       setError(`${webProviderLabel(provider)} 로그인 세션 열기 실패: ${String(error)}`);
@@ -2261,27 +2213,11 @@ function App() {
     try {
       await invoke("web_provider_reset_session", { provider });
       await refreshWebWorkerHealth(true);
-      setWebWorkerStatus(`${webProviderLabel(provider)} 세션 리셋 완료`);
       setStatus(`${webProviderLabel(provider)} 세션 리셋 완료`);
     } catch (error) {
       setError(`${webProviderLabel(provider)} 세션 리셋 실패: ${String(error)}`);
     } finally {
       setWebWorkerBusy(false);
-    }
-  }
-
-  async function onOpenWebWorkerLog() {
-    const health = await refreshWebWorkerHealth(true);
-    const logPath = health?.logPath ?? webWorkerHealth.logPath;
-    if (!logPath) {
-      setError("웹 워커 로그 경로를 찾지 못했습니다.");
-      return;
-    }
-    try {
-      await openPath(logPath);
-      setStatus("웹 워커 로그 열기");
-    } catch (error) {
-      setError(`로그 열기 실패: ${String(error)}`);
     }
   }
 
@@ -3744,7 +3680,7 @@ function App() {
       if (webProvider === "gemini" && webResultMode === "auto") {
         activeWebNodeIdRef.current = node.id;
         activeWebProviderRef.current = webProvider;
-        addNodeLog(node.id, "[WEB] Gemini 자동화 시작");
+        addNodeLog(node.id, "[WEB] GEMINI 자동화 시작");
         const workerReady = await ensureWebWorkerReady();
         if (!workerReady) {
           addNodeLog(node.id, "[WEB] 자동화 워커 준비 실패. 수동 입력으로 전환");
@@ -3766,7 +3702,7 @@ function App() {
               const shouldRetry = await requestWebLogin(
                 node.id,
                 webProvider,
-                result.error ?? "Gemini 로그인 후 계속을 눌러주세요.",
+                result.error ?? "GEMINI 로그인 후 계속을 눌러주세요.",
               );
               if (cancelRequestedRef.current) {
                 return {
@@ -3783,7 +3719,7 @@ function App() {
             }
 
             if (result.ok && result.text) {
-              addNodeLog(node.id, "[WEB] Gemini 응답 추출 완료");
+              addNodeLog(node.id, "[WEB] GEMINI 응답 추출 완료");
               return {
                 ok: true,
                 output: {
@@ -4318,28 +4254,32 @@ function App() {
 
   function renderWebAutomationPanel() {
     const providerHealthMap = toWebProviderHealthMap(webWorkerHealth.providers);
-    const healthProviders = formatUnknown(webWorkerHealth.providers ?? {});
+    const activeProviderRaw =
+      typeof webWorkerHealth.activeProvider === "string" ? webWorkerHealth.activeProvider.trim() : "";
+    const activeProviderLabel = activeProviderRaw
+      ? WEB_PROVIDER_OPTIONS.includes(activeProviderRaw as WebProvider)
+        ? webProviderLabel(activeProviderRaw as WebProvider)
+        : activeProviderRaw.toUpperCase()
+      : "없음";
     return (
       <section className="controls web-automation-panel">
-        <h2>웹 자동화</h2>
+        <h2>웹 계정 연동</h2>
         <div className="settings-badges">
-          <span className={`status-tag ${webWorkerHealth.running ? "on" : "off"}`}>
-            워커: {webWorkerHealth.running ? "실행 중" : "중지"}
-          </span>
+          <span className="status-tag neutral">활성 Provider: {activeProviderLabel}</span>
           <span className="status-tag neutral">
-            활성 Provider: {webWorkerHealth.activeProvider ?? "없음"}
+            상태 동기화: {webWorkerHealth.running ? "준비됨" : "초기화 필요"}
           </span>
         </div>
-        <div className="usage-method">{webWorkerStatus || "워커 상태를 확인하세요."}</div>
-        <button
-          className="error-log-link"
-          onClick={() => setShowAdvancedWebOps((prev) => !prev)}
-          type="button"
-        >
-          고급 제어 {showAdvancedWebOps ? "숨기기" : "보기"}
-        </button>
+        <div className="button-row">
+          <button disabled={webWorkerBusy} onClick={() => refreshWebWorkerHealth()} type="button">
+            상태 새로고침
+          </button>
+        </div>
+        <div className="usage-method">
+          각 서비스의 로그인 상태를 확인하고, 필요한 서비스만 로그인하세요.
+        </div>
         <section className="provider-hub">
-          <h3>로그인 유지(세션)</h3>
+          <h3>서비스 로그인 상태</h3>
           <div className="provider-hub-list">
             {WEB_PROVIDER_OPTIONS.map((provider) => {
               const row = providerHealthMap[provider];
@@ -4356,7 +4296,7 @@ function App() {
                       onClick={() => onOpenProviderSession(provider)}
                       type="button"
                     >
-                      로그인 창 열기
+                      로그인
                     </button>
                     <button
                       disabled={webWorkerBusy || !hasContext}
@@ -4374,32 +4314,6 @@ function App() {
             세션 데이터는 로컬 프로필에만 저장되며, 토큰/쿠키 값은 UI와 로그에 출력하지 않습니다.
           </div>
         </section>
-        {showAdvancedWebOps && (
-          <div className="button-row">
-            <button disabled={webWorkerBusy} onClick={onStartWebWorker} type="button">
-              워커 시작
-            </button>
-            <button disabled={webWorkerBusy} onClick={onStopWebWorker} type="button">
-              워커 중지
-            </button>
-            <button disabled={webWorkerBusy} onClick={() => refreshWebWorkerHealth()} type="button">
-              상태 갱신
-            </button>
-            <button onClick={onOpenWebWorkerLog} type="button">
-              진단 로그 열기
-            </button>
-          </div>
-        )}
-        <div className="usage-method">
-          로그 경로: <code>{webWorkerHealth.logPath ?? "-"}</code>
-        </div>
-        <div className="usage-method">
-          프로필 루트: <code>{webWorkerHealth.profileRoot ?? "-"}</code>
-        </div>
-        {webWorkerHealth.lastError && (
-          <div className="usage-method">마지막 오류: {webWorkerHealth.lastError}</div>
-        )}
-        {showAdvancedWebOps && <pre>{healthProviders}</pre>}
       </section>
     );
   }
@@ -5012,7 +4926,7 @@ function App() {
                                   className="modern-select"
                                   onChange={(next) => updateSelectedNodeConfig("webResultMode", next)}
                                   options={[
-                                    { value: "auto", label: "자동 (Gemini 우선)" },
+                                    { value: "auto", label: "자동 (GEMINI 우선)" },
                                     { value: "manualPasteText", label: "텍스트 붙여넣기" },
                                     { value: "manualPasteJson", label: "JSON 붙여넣기" },
                                   ]}
@@ -5036,7 +4950,7 @@ function App() {
                                 />
                               </label>
                               <div className="inspector-empty">
-                                Gemini는 자동 입력/추출을 시도하고, 실패하면 수동 붙여넣기로 폴백합니다.
+                                GEMINI는 자동 입력/추출을 시도하고, 실패하면 수동 붙여넣기로 폴백합니다.
                               </div>
                             </>
                           )}
@@ -5262,18 +5176,6 @@ function App() {
               </div>
             </section>
             {renderWebAutomationPanel()}
-            <section className="error-log-section">
-              <button
-                className="error-log-link"
-                onClick={() => setShowErrorLogs((prev) => !prev)}
-                type="button"
-              >
-                오류 로그 {showErrorLogs ? "숨기기" : "보기"}
-              </button>
-              {showErrorLogs && (
-                <pre>{errorLogs.length > 0 ? errorLogs.join("\n") : "(기록된 오류 없음)"}</pre>
-              )}
-            </section>
             {lastSavedRunFile && <div>최근 실행 파일: {lastSavedRunFile}</div>}
           </section>
         )}
