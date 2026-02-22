@@ -9,7 +9,7 @@ import {
 } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { revealItemInDir } from "@tauri-apps/plugin-opener";
+import { openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 import "./App.css";
 
 type EngineNotificationEvent = {
@@ -30,6 +30,11 @@ type ThreadStartResult = {
 type UsageCheckResult = {
   sourceMethod: string;
   raw: unknown;
+};
+
+type LoginChatgptResult = {
+  authUrl: string;
+  raw?: unknown;
 };
 
 type AuthMode = "chatgpt" | "apikey" | "unknown";
@@ -2177,7 +2182,7 @@ function NavIcon({ tab }: { tab: WorkspaceTab }) {
     );
   }
   if (tab === "feed") {
-    return <img alt="" aria-hidden="true" className="nav-workflow-image" src="/feeds.svg" />;
+    return <img alt="" aria-hidden="true" className="nav-workflow-image" src="/feed.svg" />;
   }
   if (tab === "history") {
     return <img alt="" aria-hidden="true" className="nav-workflow-image" src="/time.svg" />;
@@ -3939,6 +3944,22 @@ function App() {
     } catch (e) {
       setError(toUsageCheckErrorMessage(e));
       setStatus("사용량 조회 실패");
+    }
+  }
+
+  async function onLoginCodex() {
+    setError("");
+    try {
+      await ensureEngineStarted();
+      const result = await invoke<LoginChatgptResult>("login_chatgpt");
+      const authUrl = typeof result?.authUrl === "string" ? result.authUrl.trim() : "";
+      if (!authUrl) {
+        throw new Error("로그인 URL을 받지 못했습니다.");
+      }
+      await openUrl(authUrl);
+      setStatus("Codex 로그인 창 열림");
+    } catch (e) {
+      setError(`Codex 로그인 시작 실패: ${String(e)}`);
     }
   }
 
@@ -6688,6 +6709,14 @@ ${prompt}`;
               type="button"
             >
               <span className="settings-button-label">사용량 확인</span>
+            </button>
+            <button
+              className="settings-usage-button"
+              onClick={onLoginCodex}
+              disabled={running || isGraphRunning}
+              type="button"
+            >
+              <span className="settings-button-label">Codex 로그인</span>
             </button>
           </div>
         )}
