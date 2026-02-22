@@ -1139,7 +1139,7 @@ h3 {
 .inspector-section {
   display: grid;
   align-content: start;
-  gap: 10px;
+  gap: 20px;
 }
 
 .inspector-block {
@@ -1241,17 +1241,36 @@ h3 {
   box-shadow: none;
 }
 
+.controls input:focus,
+.controls input:focus-visible,
+.controls select:focus,
+.controls select:focus-visible,
+.controls textarea:focus,
+.controls textarea:focus-visible,
+.controls .fancy-select-trigger:focus,
+.controls .fancy-select-trigger:focus-visible {
+  outline: none;
+  border-color: transparent;
+  box-shadow: none;
+}
+
 .inspector-section .save-row input,
 .inspector-section .save-row select {
   min-width: 0;
   flex: 1 1 100%;
 }
 
+.log-empty {
+    margin-top: 8px;
+}
+
+
 .form-grid,
 .controls,
 .meta,
 .prompt {
   display: grid;
+  /* gap: 8px; */
   gap: 16px;
 }
 
@@ -1260,6 +1279,20 @@ h3 {
   padding-top: 0;
   padding-bottom: 22px;
   border-top: 0;
+}
+
+.prompt-template-textarea {
+  min-height: 132px;
+  max-height: 220px;
+  overflow: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.prompt-template-textarea::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
 }
 
 .settings-badges {
@@ -1429,7 +1462,7 @@ h3 {
   /* background: #f4f6f9; */
   background: white;
   color: #3f4b5a;
-  border: 1px solid #d6dde8;
+  /* border: 1px solid #d6dde8; */
 }
 
 .provider-session-toggle:hover:not(:disabled),

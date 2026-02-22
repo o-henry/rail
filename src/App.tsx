@@ -1405,6 +1405,119 @@ function buildDevelopmentPreset(): GraphData {
   return { version: GRAPH_SCHEMA_VERSION, nodes, edges };
 }
 
+function buildResearchPreset(): GraphData {
+  const nodes: GraphNode[] = [
+    makePresetNode("turn-research-intake", "turn", 120, 120, {
+      model: "GPT-5.1-Codex-Mini",
+      role: "RESEARCH PLANNING AGENT",
+      cwd: ".",
+      promptTemplate:
+        "입력 질문을 자료조사 관점으로 분해하고 조사 체크리스트(JSON)를 작성해줘. 질문: {{input}}",
+    }),
+    makePresetNode("turn-research-collector", "turn", 420, 120, {
+      model: "GPT-5.2",
+      role: "SOURCE COLLECTION AGENT",
+      cwd: ".",
+      promptTemplate:
+        "체크리스트 기준으로 핵심 근거 후보를 수집해 JSON으로 정리해줘. 입력: {{input}}",
+    }),
+    makePresetNode("turn-research-factcheck", "turn", 720, 120, {
+      model: "GPT-5.2-Codex",
+      role: "FACT CHECK AGENT",
+      cwd: ".",
+      promptTemplate:
+        "수집 근거의 신뢰도/한계/누락을 검토하고 JSON으로 출력해줘. 입력: {{input}}",
+    }),
+    makePresetNode("transform-research-brief", "transform", 1020, 120, {
+      mode: "template",
+      template:
+        "자료조사 요약\n- 핵심 사실: {{input}}\n- 검증 포인트: 신뢰도, 최신성, 반례 존재 여부\n- 최종 답변 작성 전 누락 항목 점검",
+    }),
+    makePresetNode("turn-research-final", "turn", 1320, 120, {
+      model: "GPT-5.3-Codex",
+      role: "RESEARCH SYNTHESIS AGENT",
+      cwd: ".",
+      promptTemplate:
+        "조사 결과를 기반으로 근거 중심 최종 답변을 한국어로 작성해줘. 불확실성은 명시해라. 입력: {{input}}",
+    }),
+  ];
+
+  const edges: GraphEdge[] = [
+    {
+      from: { nodeId: "turn-research-intake", port: "out" },
+      to: { nodeId: "turn-research-collector", port: "in" },
+    },
+    {
+      from: { nodeId: "turn-research-collector", port: "out" },
+      to: { nodeId: "turn-research-factcheck", port: "in" },
+    },
+    {
+      from: { nodeId: "turn-research-factcheck", port: "out" },
+      to: { nodeId: "transform-research-brief", port: "in" },
+    },
+    {
+      from: { nodeId: "transform-research-brief", port: "out" },
+      to: { nodeId: "turn-research-final", port: "in" },
+    },
+  ];
+
+  return { version: GRAPH_SCHEMA_VERSION, nodes, edges };
+}
+
+function buildExpertPreset(): GraphData {
+  const nodes: GraphNode[] = [
+    makePresetNode("turn-expert-intake", "turn", 120, 120, {
+      model: "GPT-5.1-Codex-Mini",
+      role: "DOMAIN INTAKE AGENT",
+      cwd: ".",
+      promptTemplate:
+        "질문의 도메인/목표/제약을 구조화해줘. 출력은 JSON 우선. 입력: {{input}}",
+    }),
+    makePresetNode("turn-expert-analysis", "turn", 420, 40, {
+      model: "GPT-5.2-Codex",
+      role: "DOMAIN EXPERT AGENT",
+      cwd: ".",
+      promptTemplate:
+        "도메인 전문가 관점의 해결 전략을 작성해줘. 핵심 원리와 실무 적용을 포함. 입력: {{input}}",
+    }),
+    makePresetNode("turn-expert-review", "turn", 420, 220, {
+      model: "GPT-5.2",
+      role: "PEER REVIEW AGENT",
+      cwd: ".",
+      promptTemplate:
+        "전문가 전략의 취약점/반례를 리뷰하고 JSON으로 정리해줘. 입력: {{input}}",
+    }),
+    makePresetNode("gate-expert", "gate", 720, 120, {
+      decisionPath: "decision",
+      passNodeId: "turn-expert-final",
+      rejectNodeId: "transform-expert-rework",
+      schemaJson: "{\"type\":\"object\",\"required\":[\"decision\"]}",
+    }),
+    makePresetNode("turn-expert-final", "turn", 1020, 40, {
+      model: "GPT-5.3-Codex",
+      role: "EXPERT SYNTHESIS AGENT",
+      cwd: ".",
+      promptTemplate:
+        "최종 전문가 답변을 작성해줘. 실행 단계, 주의점, 검증 체크리스트를 포함. 입력: {{input}}",
+    }),
+    makePresetNode("transform-expert-rework", "transform", 1020, 220, {
+      mode: "template",
+      template: "REJECT. 전문가 전략을 보완해야 합니다. 보완 항목 목록을 작성하세요. 원문: {{input}}",
+    }),
+  ];
+
+  const edges: GraphEdge[] = [
+    { from: { nodeId: "turn-expert-intake", port: "out" }, to: { nodeId: "turn-expert-analysis", port: "in" } },
+    { from: { nodeId: "turn-expert-intake", port: "out" }, to: { nodeId: "turn-expert-review", port: "in" } },
+    { from: { nodeId: "turn-expert-analysis", port: "out" }, to: { nodeId: "gate-expert", port: "in" } },
+    { from: { nodeId: "turn-expert-review", port: "out" }, to: { nodeId: "gate-expert", port: "in" } },
+    { from: { nodeId: "gate-expert", port: "out" }, to: { nodeId: "turn-expert-final", port: "in" } },
+    { from: { nodeId: "gate-expert", port: "out" }, to: { nodeId: "transform-expert-rework", port: "in" } },
+  ];
+
+  return { version: GRAPH_SCHEMA_VERSION, nodes, edges };
+}
+
 function normalizeGraph(input: unknown): GraphData {
   if (!input || typeof input !== "object") {
     return { version: GRAPH_SCHEMA_VERSION, nodes: [], edges: [] };
@@ -2356,8 +2469,17 @@ function App() {
     setSelectedEdgeKey("");
   }
 
-  function applyPreset(kind: "validation" | "development") {
-    const preset = kind === "validation" ? buildValidationPreset() : buildDevelopmentPreset();
+  function applyPreset(kind: "validation" | "development" | "research" | "expert") {
+    let preset: GraphData;
+    if (kind === "validation") {
+      preset = buildValidationPreset();
+    } else if (kind === "development") {
+      preset = buildDevelopmentPreset();
+    } else if (kind === "research") {
+      preset = buildResearchPreset();
+    } else {
+      preset = buildExpertPreset();
+    }
     setGraph(cloneGraph(preset));
     setUndoStack([]);
     setRedoStack([]);
@@ -2370,11 +2492,15 @@ function App() {
     setConnectPreviewPoint(null);
     setIsConnectingDrag(false);
     setMarqueeSelection(null);
-    setStatus(
-      kind === "validation"
-        ? "검증형 5-에이전트 프리셋 로드됨"
-        : "개발형 5-에이전트 프리셋 로드됨",
-    );
+    if (kind === "validation") {
+      setStatus("검증형 에이전트 템플릿 로드됨");
+    } else if (kind === "development") {
+      setStatus("개방형 에이전트 템플릿 로드됨");
+    } else if (kind === "research") {
+      setStatus("자료조사 템플릿 로드됨");
+    } else {
+      setStatus("전문가 템플릿 로드됨");
+    }
   }
 
   function applyCostPreset(preset: CostPreset) {
@@ -4827,11 +4953,17 @@ function App() {
                             applyPreset("validation");
                           } else if (value === "development") {
                             applyPreset("development");
+                          } else if (value === "research") {
+                            applyPreset("research");
+                          } else if (value === "expert") {
+                            applyPreset("expert");
                           }
                         }}
                         options={[
-                          { value: "validation", label: "검증형 5에이전트" },
-                          { value: "development", label: "개방형 5에이전트" },
+                          { value: "validation", label: "검증형 에이전트" },
+                          { value: "development", label: "개방형 에이전트" },
+                          { value: "research", label: "자료조사 템플릿" },
+                          { value: "expert", label: "전문가 템플릿" },
                         ]}
                         placeholder="템플릿 선택"
                         value=""
@@ -4981,10 +5113,11 @@ function App() {
                           <label>
                             프롬프트 템플릿
                             <textarea
+                              className="prompt-template-textarea"
                               onChange={(e) =>
                                 updateSelectedNodeConfig("promptTemplate", e.currentTarget.value)
                               }
-                              rows={3}
+                              rows={6}
                               value={String((selectedNode.config as TurnConfig).promptTemplate ?? "{{input}}")}
                             />
                           </label>
@@ -5012,17 +5145,25 @@ function App() {
                             pick 경로
                             <input
                               onChange={(e) => updateSelectedNodeConfig("pickPath", e.currentTarget.value)}
+                              placeholder="예: text 또는 result.finalDraft"
                               value={String((selectedNode.config as TransformConfig).pickPath ?? "")}
                             />
                           </label>
+                          <div className="inspector-empty">
+                            pick 경로는 입력 JSON에서 필요한 필드만 꺼낼 경로입니다.
+                          </div>
                           <label>
                             merge JSON
                             <textarea
                               onChange={(e) => updateSelectedNodeConfig("mergeJson", e.currentTarget.value)}
+                              placeholder='예: {"source":"web","priority":"high"}'
                               rows={3}
                               value={String((selectedNode.config as TransformConfig).mergeJson ?? "{}")}
                             />
                           </label>
+                          <div className="inspector-empty">
+                            merge JSON은 입력 데이터에 추가/덮어쓸 고정 JSON 조각입니다.
+                          </div>
                           <label>
                             템플릿
                             <textarea
@@ -5057,6 +5198,9 @@ function App() {
                               value={String((selectedNode.config as GateConfig).passNodeId ?? "")}
                             />
                           </label>
+                          <div className="inspector-empty">
+                            decision 값이 PASS일 때 실행할 다음 노드를 지정합니다.
+                          </div>
                           <label>
                             REJECT 대상 노드
                             <FancySelect
@@ -5070,6 +5214,9 @@ function App() {
                               value={String((selectedNode.config as GateConfig).rejectNodeId ?? "")}
                             />
                           </label>
+                          <div className="inspector-empty">
+                            decision 값이 REJECT일 때 실행할 다음 노드를 지정합니다.
+                          </div>
                           <label>
                             스키마 JSON (선택)
                             <textarea
@@ -5111,7 +5258,7 @@ function App() {
                   Finder에서 열기
                 </button>
               </div>
-              {runFiles.length === 0 && <div>(실행 기록 파일 없음)</div>}
+              {runFiles.length === 0 && <div className={"log-empty"}>실행 기록 파일 없음</div>}
               {runFiles.map((file) => (
                 <button
                   className={selectedRunFile === file ? "is-active" : ""}
