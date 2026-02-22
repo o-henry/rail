@@ -756,11 +756,23 @@ function buildRoundedEdgePath(
   y2: number,
   withArrow: boolean,
 ): string {
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+  const absDx = Math.abs(dx);
+  const absDy = Math.abs(dy);
+  const isNearlyVertical = absDx <= 20;
+  const isNearlyHorizontal = absDy <= 20;
+  const isShortHorizontalHop = absDx <= 150 && absDy <= 40;
+
+  if (isNearlyVertical || isNearlyHorizontal || isShortHorizontalHop) {
+    return `M ${x1} ${y1} L ${x2} ${y2}`;
+  }
+
   const direction = x2 >= x1 ? 1 : -1;
   const arrowLeadX = withArrow ? x2 - 12 * direction : x2;
   const horizontalGap = Math.max(64, Math.min(180, Math.abs(arrowLeadX - x1) * 0.5));
   const bendX = x1 + horizontalGap * direction;
-  const verticalDelta = y2 - y1;
+  const verticalDelta = dy;
 
   if (Math.abs(verticalDelta) < 1) {
     return withArrow
