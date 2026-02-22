@@ -4084,6 +4084,12 @@ function App() {
     setWebWorkerBusy(true);
     setError("");
     try {
+      if (provider !== "gemini") {
+        await invoke("provider_window_open", { provider });
+        setStatus(`${webProviderLabel(provider)} 로그인 페이지 열림`);
+        return;
+      }
+
       const result = await invoke<{ ok?: boolean; error?: string; errorCode?: string }>(
         "web_provider_open_session",
         { provider },
