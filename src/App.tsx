@@ -140,6 +140,7 @@ type NodeRunState = {
   finishedAt?: string;
   durationMs?: number;
   usage?: UsageStats;
+  qualityReport?: QualityReport;
 };
 
 type RunTransition = {
@@ -170,6 +171,9 @@ type RunRecord = {
     summary?: string;
   }>;
   knowledgeTrace?: KnowledgeTraceEntry[];
+  nodeMetrics?: Record<string, NodeMetric>;
+  qualitySummary?: QualitySummary;
+  regression?: RegressionSummary;
 };
 
 type TurnTerminal = {
@@ -247,6 +251,79 @@ type TurnConfig = {
   webResultMode?: WebResultMode;
   webTimeoutMs?: number;
   ollamaModel?: string;
+  qualityProfile?: QualityProfileId;
+  qualityThreshold?: number;
+  qualityCommandEnabled?: boolean;
+  qualityCommands?: string;
+  artifactType?: ArtifactType;
+};
+
+type QualityProfileId =
+  | "code_implementation"
+  | "research_evidence"
+  | "design_planning"
+  | "synthesis_final"
+  | "generic";
+
+type ArtifactType =
+  | "none"
+  | "RequirementArtifact"
+  | "DesignArtifact"
+  | "TaskPlanArtifact"
+  | "ChangePlanArtifact"
+  | "EvidenceArtifact";
+
+type QualityCheck = {
+  id: string;
+  label: string;
+  kind: string;
+  required: boolean;
+  passed: boolean;
+  scoreDelta: number;
+  detail?: string;
+};
+
+type QualityReport = {
+  profile: QualityProfileId;
+  threshold: number;
+  score: number;
+  decision: "PASS" | "REJECT";
+  checks: QualityCheck[];
+  failures: string[];
+  warnings: string[];
+};
+
+type NodeMetric = {
+  nodeId: string;
+  profile: QualityProfileId;
+  score: number;
+  decision: "PASS" | "REJECT";
+  threshold: number;
+  failedChecks: number;
+  warningCount: number;
+};
+
+type QualitySummary = {
+  avgScore: number;
+  passRate: number;
+  totalNodes: number;
+  passNodes: number;
+};
+
+type RegressionSummary = {
+  baselineRunId?: string;
+  avgScoreDelta?: number;
+  passRateDelta?: number;
+  status: "improved" | "stable" | "degraded" | "unknown";
+  note?: string;
+};
+
+type QualityCommandResult = {
+  name: string;
+  exitCode: number;
+  stdoutTail: string;
+  stderrTail: string;
+  elapsedMs: number;
 };
 
 type WebProviderRunResult = {
@@ -330,6 +407,7 @@ const FALLBACK_TURN_ROLE = "GENERAL AGENT";
 const GRAPH_SCHEMA_VERSION = 3;
 const KNOWLEDGE_DEFAULT_TOP_K = 4;
 const KNOWLEDGE_DEFAULT_MAX_CHARS = 2800;
+const QUALITY_DEFAULT_THRESHOLD = 70;
 const KNOWLEDGE_TOP_K_OPTIONS: FancySelectOption[] = [
   { value: "2", label: "2개" },
   { value: "4", label: "4개" },
@@ -393,6 +471,21 @@ const TURN_MODEL_CANONICAL_PAIRS: Array<{ display: string; engine: string }> = [
   { display: "GPT-5.1-Codex-Mini", engine: "gpt-5.1-codex-mini" },
 ];
 const NODE_ANCHOR_SIDES: NodeAnchorSide[] = ["top", "right", "bottom", "left"];
+const QUALITY_PROFILE_OPTIONS: FancySelectOption[] = [
+  { value: "code_implementation", label: "코드 구현" },
+  { value: "research_evidence", label: "자료/근거 검증" },
+  { value: "design_planning", label: "설계/기획" },
+  { value: "synthesis_final", label: "최종 종합" },
+  { value: "generic", label: "일반" },
+];
+const ARTIFACT_TYPE_OPTIONS: FancySelectOption[] = [
+  { value: "none", label: "사용 안 함" },
+  { value: "RequirementArtifact", label: "요구사항 아티팩트" },
+  { value: "DesignArtifact", label: "설계 아티팩트" },
+  { value: "TaskPlanArtifact", label: "작업계획 아티팩트" },
+  { value: "ChangePlanArtifact", label: "변경계획 아티팩트" },
+  { value: "EvidenceArtifact", label: "근거 아티팩트" },
+];
 
 function formatUnknown(value: unknown): string {
   try {
@@ -803,6 +896,301 @@ function formatUsage(usage?: UsageStats): string {
   return `${total}토큰 (입력 ${inputText} / 출력 ${outputText})`;
 }
 
+function toQualityProfileId(value: unknown): QualityProfileId | null {
+  if (
+    value === "code_implementation" ||
+    value === "research_evidence" ||
+    value === "design_planning" ||
+    value === "synthesis_final" ||
+    value === "generic"
+  ) {
+    return value;
+  }
+  return null;
+}
+
+function inferQualityProfile(node: GraphNode, config: TurnConfig): QualityProfileId {
+  const explicit = toQualityProfileId(config.qualityProfile);
+  if (explicit) {
+    return explicit;
+  }
+
+  const executor = getTurnExecutor(config);
+  const signal = `${String(config.role ?? "")} ${String(config.promptTemplate ?? "")} ${node.id}`.toLowerCase();
+  if (executor === "web_gemini" || executor === "web_grok" || executor === "web_perplexity" || executor === "web_claude") {
+    return "research_evidence";
+  }
+  if (/impl|code|test|lint|build|refactor|fix|bug|개발|구현|코드/.test(signal)) {
+    return "code_implementation";
+  }
+  if (/research|evidence|search|fact|source|검증|자료|근거|조사/.test(signal)) {
+    return "research_evidence";
+  }
+  if (/design|plan|architecture|요구|설계|기획/.test(signal)) {
+    return "design_planning";
+  }
+  if (/final|synth|judge|평가|최종|합성/.test(signal)) {
+    return "synthesis_final";
+  }
+  return "generic";
+}
+
+function toArtifactType(value: unknown): ArtifactType {
+  if (
+    value === "RequirementArtifact" ||
+    value === "DesignArtifact" ||
+    value === "TaskPlanArtifact" ||
+    value === "ChangePlanArtifact" ||
+    value === "EvidenceArtifact"
+  ) {
+    return value;
+  }
+  return "none";
+}
+
+function parseQualityCommands(input: unknown): string[] {
+  const raw = String(input ?? "").trim();
+  if (!raw) {
+    return [];
+  }
+  return raw
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+}
+
+function normalizeArtifactOutput(
+  nodeId: string,
+  artifactType: ArtifactType,
+  rawOutput: unknown,
+): { output: unknown; warnings: string[] } {
+  if (artifactType === "none") {
+    return { output: rawOutput, warnings: [] };
+  }
+
+  let payload: unknown = rawOutput;
+  if (typeof rawOutput === "string") {
+    const text = rawOutput.trim();
+    if (text.startsWith("{") || text.startsWith("[")) {
+      try {
+        payload = JSON.parse(text);
+      } catch {
+        payload = { text };
+      }
+    } else {
+      payload = { text };
+    }
+  }
+
+  const warnings: string[] = [];
+  if (payload == null || typeof payload !== "object") {
+    payload = { text: stringifyInput(rawOutput) };
+    warnings.push("아티팩트 변환: 구조화된 출력이 없어 텍스트 기반으로 보정했습니다.");
+  }
+
+  const envelope = {
+    artifactType,
+    version: "v1",
+    authorNodeId: nodeId,
+    createdAt: new Date().toISOString(),
+    payload,
+  };
+
+  return {
+    output: {
+      artifact: envelope,
+      text: extractFinalAnswer(rawOutput) || stringifyInput(rawOutput),
+      raw: rawOutput,
+    },
+    warnings,
+  };
+}
+
+async function buildQualityReport(params: {
+  node: GraphNode;
+  config: TurnConfig;
+  output: unknown;
+  cwd: string;
+}): Promise<QualityReport> {
+  const { node, config, output, cwd } = params;
+  const profile = inferQualityProfile(node, config);
+  const threshold = Math.max(0, Math.min(100, Number(config.qualityThreshold ?? QUALITY_DEFAULT_THRESHOLD) || QUALITY_DEFAULT_THRESHOLD));
+  const checks: QualityCheck[] = [];
+  const failures: string[] = [];
+  const warnings: string[] = [];
+  let score = 100;
+
+  const fullText = extractFinalAnswer(output) || stringifyInput(output);
+  const normalized = fullText.toLowerCase();
+
+  const addCheck = (input: {
+    id: string;
+    label: string;
+    kind: string;
+    required: boolean;
+    passed: boolean;
+    penalty: number;
+    detail?: string;
+  }) => {
+    if (!input.passed) {
+      score = Math.max(0, score - input.penalty);
+      if (input.required) {
+        failures.push(input.label);
+      }
+    }
+    checks.push({
+      id: input.id,
+      label: input.label,
+      kind: input.kind,
+      required: input.required,
+      passed: input.passed,
+      scoreDelta: input.passed ? 0 : -input.penalty,
+      detail: input.detail,
+    });
+  };
+
+  addCheck({
+    id: "non_empty",
+    label: "응답 비어있지 않음",
+    kind: "structure",
+    required: true,
+    passed: fullText.trim().length > 0,
+    penalty: 40,
+  });
+
+  addCheck({
+    id: "minimum_length",
+    label: "최소 설명 길이",
+    kind: "structure",
+    required: false,
+    passed: fullText.trim().length >= 120,
+    penalty: 12,
+    detail: "120자 미만이면 요약 부족으로 감점",
+  });
+
+  if (profile === "research_evidence") {
+    addCheck({
+      id: "source_signal",
+      label: "근거/출처 신호 포함",
+      kind: "evidence",
+      required: true,
+      passed: /(source|출처|근거|http|https|reference)/i.test(fullText),
+      penalty: 25,
+    });
+    addCheck({
+      id: "uncertainty_signal",
+      label: "한계/불확실성 표기",
+      kind: "consistency",
+      required: false,
+      passed: /(한계|불확실|리스크|위험|counter|반례|제약)/i.test(fullText),
+      penalty: 10,
+    });
+  } else if (profile === "design_planning") {
+    const hits = ["목표", "제약", "리스크", "우선순위", "아키텍처", "scope", "milestone"].filter((key) =>
+      normalized.includes(key.toLowerCase()),
+    ).length;
+    addCheck({
+      id: "design_sections",
+      label: "설계 핵심 항목 포함",
+      kind: "structure",
+      required: true,
+      passed: hits >= 3,
+      penalty: 24,
+      detail: "목표/제약/리스크/우선순위 등 3개 이상 필요",
+    });
+  } else if (profile === "synthesis_final") {
+    const hits = ["결론", "근거", "한계", "다음 단계", "실행", "체크리스트"].filter((key) =>
+      normalized.includes(key.toLowerCase()),
+    ).length;
+    addCheck({
+      id: "final_structure",
+      label: "최종 답변 구조 충족",
+      kind: "structure",
+      required: true,
+      passed: hits >= 3,
+      penalty: 24,
+      detail: "결론/근거/한계/다음 단계 중 3개 이상",
+    });
+  } else if (profile === "code_implementation") {
+    addCheck({
+      id: "code_plan_signal",
+      label: "코드/파일/테스트 계획 포함",
+      kind: "structure",
+      required: true,
+      passed: /(file|파일|test|테스트|lint|build|patch|module|class|function)/i.test(fullText),
+      penalty: 24,
+    });
+
+    if (config.qualityCommandEnabled) {
+      const commands = parseQualityCommands(config.qualityCommands);
+      if (commands.length === 0) {
+        warnings.push("품질 명령 실행이 켜져 있지만 명령 목록이 비어 있습니다.");
+      } else {
+        try {
+          const commandResults = await invoke<QualityCommandResult[]>("quality_run_checks", {
+            commands,
+            cwd,
+          });
+          const failed = commandResults.find((row) => row.exitCode !== 0);
+          addCheck({
+            id: "local_commands",
+            label: "로컬 품질 명령 통과",
+            kind: "local_command",
+            required: true,
+            passed: !failed,
+            penalty: 35,
+            detail: failed ? `${failed.name} 실패(exit=${failed.exitCode})` : "모든 명령 성공",
+          });
+          for (const row of commandResults) {
+            if (row.exitCode !== 0 && row.stderrTail.trim()) {
+              warnings.push(`[${row.name}] ${row.stderrTail}`);
+            }
+          }
+        } catch (error) {
+          addCheck({
+            id: "local_commands",
+            label: "로컬 품질 명령 통과",
+            kind: "local_command",
+            required: true,
+            passed: false,
+            penalty: 35,
+            detail: String(error),
+          });
+        }
+      }
+    }
+  }
+
+  const hardFail = failures.length > 0;
+  const decision: "PASS" | "REJECT" = !hardFail && score >= threshold ? "PASS" : "REJECT";
+
+  return {
+    profile,
+    threshold,
+    score,
+    decision,
+    checks,
+    failures,
+    warnings,
+  };
+}
+
+function summarizeQualityMetrics(nodeMetrics: Record<string, NodeMetric>): QualitySummary {
+  const rows = Object.values(nodeMetrics);
+  if (rows.length === 0) {
+    return { avgScore: 0, passRate: 0, totalNodes: 0, passNodes: 0 };
+  }
+  const passNodes = rows.filter((row) => row.decision === "PASS").length;
+  const avgScore = rows.reduce((sum, row) => sum + row.score, 0) / rows.length;
+  const passRate = passNodes / rows.length;
+  return {
+    avgScore: Math.round(avgScore * 100) / 100,
+    passRate: Math.round(passRate * 10000) / 100,
+    totalNodes: rows.length,
+    passNodes,
+  };
+}
+
 function getByPath(input: unknown, path: string): unknown {
   if (!path.trim()) {
     return input;
@@ -1017,6 +1405,17 @@ function buildRoundedEdgePath(
 
   const start = { x: x1, y: y1 };
   const end = { x: x2, y: y2 };
+  const alignedVertical =
+    (fromSide === "top" || fromSide === "bottom") &&
+    (toSide === "top" || toSide === "bottom") &&
+    Math.abs(x1 - x2) <= 24;
+  const alignedHorizontal =
+    (fromSide === "left" || fromSide === "right") &&
+    (toSide === "left" || toSide === "right") &&
+    Math.abs(y1 - y2) <= 24;
+  if (alignedVertical || alignedHorizontal) {
+    return `M ${x1} ${y1} L ${x2} ${y2}`;
+  }
   const baseDistance = Math.hypot(end.x - start.x, end.y - start.y);
   if (baseDistance <= 1) {
     return `M ${x1} ${y1} L ${x2} ${y2}`;
@@ -1158,6 +1557,10 @@ function defaultNodeConfig(type: NodeType): Record<string, unknown> {
       cwd: ".",
       promptTemplate: "{{input}}",
       knowledgeEnabled: true,
+      qualityThreshold: QUALITY_DEFAULT_THRESHOLD,
+      artifactType: "none",
+      qualityCommandEnabled: false,
+      qualityCommands: "npm run build",
     };
   }
 
@@ -2306,6 +2709,20 @@ function normalizeGraph(input: unknown): GraphData {
         model: toTurnModelDisplayName(String(config.model ?? DEFAULT_TURN_MODEL)),
         knowledgeEnabled:
           typeof config.knowledgeEnabled === "boolean" ? config.knowledgeEnabled : true,
+        qualityProfile: toQualityProfileId(config.qualityProfile) ?? undefined,
+        qualityThreshold: Math.max(
+          0,
+          Math.min(
+            100,
+            Number(
+              readNumber(config.qualityThreshold) ?? QUALITY_DEFAULT_THRESHOLD,
+            ) || QUALITY_DEFAULT_THRESHOLD,
+          ),
+        ),
+        qualityCommandEnabled:
+          typeof config.qualityCommandEnabled === "boolean" ? config.qualityCommandEnabled : false,
+        qualityCommands: String(config.qualityCommands ?? "npm run build"),
+        artifactType: toArtifactType(config.artifactType),
       };
       return {
         ...node,
@@ -4574,6 +4991,82 @@ function App() {
     }
   }
 
+  function questionSignature(question?: string): string {
+    return (question ?? "").trim().replace(/\s+/g, " ").toLowerCase();
+  }
+
+  function graphSignature(graphData: GraphData): string {
+    const nodeSig = graphData.nodes
+      .map((node) => `${node.id}:${node.type}`)
+      .sort()
+      .join("|");
+    const edgeSig = graphData.edges
+      .map((edge) => `${edge.from.nodeId}->${edge.to.nodeId}`)
+      .sort()
+      .join("|");
+    return `${nodeSig}::${edgeSig}`;
+  }
+
+  async function buildRegressionSummary(currentRun: RunRecord): Promise<RegressionSummary> {
+    if (!currentRun.qualitySummary) {
+      return { status: "unknown", note: "비교할 품질 요약이 없습니다." };
+    }
+
+    try {
+      const files = await invoke<string[]>("run_list");
+      const currentFile = `run-${currentRun.runId}.json`;
+      const targetSignature = graphSignature(currentRun.graphSnapshot);
+      const targetQuestion = questionSignature(currentRun.question);
+      const sortedCandidates = files
+        .filter((file) => file !== currentFile)
+        .sort((a, b) => b.localeCompare(a))
+        .slice(0, 30);
+
+      for (const file of sortedCandidates) {
+        const previous = await invoke<RunRecord>("run_load", { name: file });
+        if (!previous.qualitySummary) {
+          continue;
+        }
+        if (graphSignature(previous.graphSnapshot) !== targetSignature) {
+          continue;
+        }
+        if (questionSignature(previous.question) !== targetQuestion) {
+          continue;
+        }
+
+        const avgScoreDelta =
+          Math.round((currentRun.qualitySummary.avgScore - previous.qualitySummary.avgScore) * 100) /
+          100;
+        const passRateDelta =
+          Math.round((currentRun.qualitySummary.passRate - previous.qualitySummary.passRate) * 100) /
+          100;
+
+        let status: RegressionSummary["status"] = "stable";
+        if (avgScoreDelta >= 3 || passRateDelta >= 8) {
+          status = "improved";
+        } else if (avgScoreDelta <= -5 || passRateDelta <= -12) {
+          status = "degraded";
+        }
+
+        return {
+          baselineRunId: previous.runId,
+          avgScoreDelta,
+          passRateDelta,
+          status,
+          note:
+            status === "improved"
+              ? "이전 실행 대비 품질이 개선되었습니다."
+              : status === "degraded"
+                ? "이전 실행 대비 품질이 악화되었습니다."
+                : "이전 실행과 유사한 품질입니다.",
+        };
+      }
+      return { status: "unknown", note: "비교 가능한 이전 실행이 없습니다." };
+    } catch (error) {
+      return { status: "unknown", note: `회귀 비교 실패: ${String(error)}` };
+    }
+  }
+
   function nodeInputFor(
     nodeId: string,
     outputs: Record<string, unknown>,
@@ -5158,6 +5651,7 @@ ${prompt}`;
       threadTurnMap: {},
       providerTrace: [],
       knowledgeTrace: [],
+      nodeMetrics: {},
     };
 
     try {
@@ -5265,11 +5759,79 @@ ${prompt}`;
               break;
             }
 
+            const config = node.config as TurnConfig;
+            const artifactType = toArtifactType(config.artifactType);
+            const normalizedArtifact = normalizeArtifactOutput(nodeId, artifactType, result.output);
+            for (const warning of normalizedArtifact.warnings) {
+              addNodeLog(nodeId, `[아티팩트] ${warning}`);
+            }
+            const normalizedOutput = normalizedArtifact.output;
+            const qualityReport = await buildQualityReport({
+              node,
+              config,
+              output: normalizedOutput,
+              cwd: String(config.cwd ?? cwd).trim() || cwd,
+            });
+            const nodeMetric: NodeMetric = {
+              nodeId,
+              profile: qualityReport.profile,
+              score: qualityReport.score,
+              decision: qualityReport.decision,
+              threshold: qualityReport.threshold,
+              failedChecks: qualityReport.failures.length,
+              warningCount: qualityReport.warnings.length,
+            };
+            runRecord.nodeMetrics = {
+              ...(runRecord.nodeMetrics ?? {}),
+              [nodeId]: nodeMetric,
+            };
+            for (const warning of qualityReport.warnings) {
+              addNodeLog(nodeId, `[품질] ${warning}`);
+            }
+
+            if (qualityReport.decision !== "PASS") {
+              const finishedAtIso = new Date().toISOString();
+              setNodeStatus(nodeId, "failed", "품질 게이트 REJECT");
+              setNodeRuntimeFields(nodeId, {
+                status: "failed",
+                output: normalizedOutput,
+                qualityReport,
+                error: `품질 게이트 REJECT (점수 ${qualityReport.score}/${qualityReport.threshold})`,
+                threadId: result.threadId,
+                turnId: result.turnId,
+                usage: result.usage,
+                finishedAt: finishedAtIso,
+                durationMs: Date.now() - startedAtMs,
+              });
+              runRecord.threadTurnMap[nodeId] = {
+                threadId: result.threadId,
+                turnId: result.turnId,
+              };
+              runRecord.providerTrace?.push({
+                nodeId,
+                executor: result.executor,
+                provider: result.provider,
+                status: "failed",
+                startedAt: startedAtIso,
+                finishedAt: finishedAtIso,
+                summary: `품질 REJECT (${qualityReport.score}/${qualityReport.threshold})`,
+              });
+              transition(
+                runRecord,
+                nodeId,
+                "failed",
+                `품질 REJECT (${qualityReport.score}/${qualityReport.threshold})`,
+              );
+              break;
+            }
+
             const finishedAtIso = new Date().toISOString();
-            outputs[nodeId] = result.output;
+            outputs[nodeId] = normalizedOutput;
+            addNodeLog(nodeId, `[품질] PASS (${qualityReport.score}/${qualityReport.threshold})`);
             setNodeRuntimeFields(nodeId, {
               status: "done",
-              output: result.output,
+              output: normalizedOutput,
+              qualityReport,
               threadId: result.threadId,
               turnId: result.turnId,
               usage: result.usage,
@@ -5378,10 +5940,14 @@ ${prompt}`;
       }
 
       runRecord.nodeLogs = runLogCollectorRef.current;
+      if (runRecord.nodeMetrics && Object.keys(runRecord.nodeMetrics).length > 0) {
+        runRecord.qualitySummary = summarizeQualityMetrics(runRecord.nodeMetrics);
+      }
       if (lastDoneNodeId && lastDoneNodeId in outputs) {
         runRecord.finalAnswer = extractFinalAnswer(outputs[lastDoneNodeId]);
       }
       runRecord.finishedAt = new Date().toISOString();
+      runRecord.regression = await buildRegressionSummary(runRecord);
       await saveRunRecord(runRecord);
       setSelectedRunDetail(runRecord);
       setSelectedRunFile(`run-${runRecord.runId}.json`);
@@ -5693,8 +6259,15 @@ ${prompt}`;
   })();
 
   const selectedNodeState = selectedNodeId ? nodeStates[selectedNodeId] : undefined;
+  const selectedTurnConfig: TurnConfig | null =
+    selectedNode?.type === "turn" ? (selectedNode.config as TurnConfig) : null;
   const selectedTurnExecutor: TurnExecutor =
-    selectedNode?.type === "turn" ? getTurnExecutor(selectedNode.config as TurnConfig) : "codex";
+    selectedTurnConfig ? getTurnExecutor(selectedTurnConfig) : "codex";
+  const selectedQualityProfile: QualityProfileId =
+    selectedNode?.type === "turn" && selectedTurnConfig
+      ? inferQualityProfile(selectedNode, selectedTurnConfig)
+      : "generic";
+  const selectedArtifactType: ArtifactType = toArtifactType(selectedTurnConfig?.artifactType);
   const outgoingFromSelected = selectedNode
     ? graph.edges
         .filter((edge) => edge.from.nodeId === selectedNode.id)
@@ -5822,14 +6395,14 @@ ${prompt}`;
                       <defs>
                         <marker
                           id="edge-arrow"
-                          markerHeight="6"
+                          markerHeight="7"
                           markerUnits="userSpaceOnUse"
-                          markerWidth="6"
+                          markerWidth="7"
                           orient="auto"
-                          refX="5"
-                          refY="3"
+                          refX="6"
+                          refY="3.5"
                         >
-                          <path d="M0 0 L6 3 L0 6 Z" fill="#70848a" />
+                          <path d="M0 0 L7 3.5 L0 7 Z" fill="#70848a" />
                         </marker>
                       </defs>
                       {edgeLines.map((line) => (
@@ -6434,6 +7007,74 @@ ${prompt}`;
                             />
                           </label>
                           <label>
+                            품질 프로필
+                            <FancySelect
+                              ariaLabel="품질 프로필"
+                              className="modern-select"
+                              onChange={(next) => updateSelectedNodeConfig("qualityProfile", next)}
+                              options={QUALITY_PROFILE_OPTIONS}
+                              value={selectedQualityProfile}
+                            />
+                          </label>
+                          <label>
+                            품질 통과 기준 점수
+                            <input
+                              min={0}
+                              max={100}
+                              onChange={(e) =>
+                                updateSelectedNodeConfig(
+                                  "qualityThreshold",
+                                  Math.max(
+                                    0,
+                                    Math.min(100, Number(e.currentTarget.value) || QUALITY_DEFAULT_THRESHOLD),
+                                  ),
+                                )
+                              }
+                              type="number"
+                              value={String((selectedTurnConfig?.qualityThreshold ?? QUALITY_DEFAULT_THRESHOLD))}
+                            />
+                          </label>
+                          {selectedQualityProfile === "code_implementation" && (
+                            <>
+                              <label>
+                                로컬 품질 명령 실행
+                                <FancySelect
+                                  ariaLabel="로컬 품질 명령 실행"
+                                  className="modern-select"
+                                  onChange={(next) =>
+                                    updateSelectedNodeConfig("qualityCommandEnabled", next === "true")
+                                  }
+                                  options={[
+                                    { value: "false", label: "미사용" },
+                                    { value: "true", label: "사용" },
+                                  ]}
+                                  value={String(selectedTurnConfig?.qualityCommandEnabled === true)}
+                                />
+                              </label>
+                              <label>
+                                품질 명령 목록(줄바꿈 구분)
+                                <textarea
+                                  className="prompt-template-textarea"
+                                  onChange={(e) =>
+                                    updateSelectedNodeConfig("qualityCommands", e.currentTarget.value)
+                                  }
+                                  rows={3}
+                                  value={String(selectedTurnConfig?.qualityCommands ?? "npm run build")}
+                                />
+                              </label>
+                            </>
+                          )}
+                          <label>
+                            출력 형식(아티팩트)
+                            <FancySelect
+                              ariaLabel="출력 형식(아티팩트)"
+                              className="modern-select"
+                              onChange={(next) => updateSelectedNodeConfig("artifactType", next)}
+                              options={ARTIFACT_TYPE_OPTIONS}
+                              value={selectedArtifactType}
+                            />
+                          </label>
+                          <label>
                             프롬프트 템플릿
                             <textarea
                               className="prompt-template-textarea"
@@ -6648,6 +7289,14 @@ ${prompt}`;
                       <pre>{selectedRunDetail.summaryLogs.join("\n") || "(없음)"}</pre>
                     </div>
                     <div className="history-detail-group">
+                      <h3>품질 요약</h3>
+                      <pre>{formatUnknown(selectedRunDetail.qualitySummary ?? {})}</pre>
+                    </div>
+                    <div className="history-detail-group">
+                      <h3>회귀 비교</h3>
+                      <pre>{formatUnknown(selectedRunDetail.regression ?? {})}</pre>
+                    </div>
+                    <div className="history-detail-group">
                       <h3>상태 전이</h3>
                       <pre>{formatUnknown(selectedRunDetail.transitions)}</pre>
                     </div>
@@ -6662,6 +7311,10 @@ ${prompt}`;
                     <div className="history-detail-group">
                       <h3>노드 로그</h3>
                       <pre>{formatUnknown(selectedRunDetail.nodeLogs ?? {})}</pre>
+                    </div>
+                    <div className="history-detail-group">
+                      <h3>노드 품질 지표</h3>
+                      <pre>{formatUnknown(selectedRunDetail.nodeMetrics ?? {})}</pre>
                     </div>
                   </div>
                 </>
