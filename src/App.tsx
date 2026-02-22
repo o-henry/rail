@@ -3542,6 +3542,8 @@ function App() {
   const [feedAttachmentTabByPost, setFeedAttachmentTabByPost] = useState<Record<string, FeedAttachmentKind>>({});
   const [feedRawViewByPost, setFeedRawViewByPost] = useState<Record<string, boolean>>({});
   const [homeTimelineTab, setHomeTimelineTab] = useState<"recommended" | "following">("recommended");
+  const [homeFeedViewMode, setHomeFeedViewMode] = useState<"live" | "all">("live");
+  const [activeHomeRunId, setActiveHomeRunId] = useState<string>("");
   const [homeTargetAgentId, setHomeTargetAgentId] = useState<string>("all");
   const [followingAnchorAgentId, setFollowingAnchorAgentId] = useState<string>("");
   const [selectedAgentTemplate, setSelectedAgentTemplate] = useState<AgentTemplatePresetId>("research");
@@ -6625,6 +6627,7 @@ ${prompt}`;
       feedPosts: [],
       socialTrace: [],
     };
+    setActiveHomeRunId(runRecord.runId);
     const liveDraftIdByNode: Record<string, string> = {};
 
     try {
@@ -7168,6 +7171,7 @@ ${prompt}`;
     collectingRunRef.current = true;
     const nodeId = agentNode.id;
     const runId = `${Date.now()}`;
+    setActiveHomeRunId(runId);
     const draftId = `${runId}:${nodeId}:draft`;
     const startedAtIso = new Date().toISOString();
 
@@ -7739,6 +7743,12 @@ ${prompt}`;
     homeTimelineTab === "recommended"
       ? filteredFeedPosts
       : filteredFeedPosts.filter((post) => followingReachableSet.has(post.nodeId));
+  const homeFeedPosts =
+    homeFeedViewMode === "all"
+      ? homeVisibleFeedPosts
+      : homeVisibleFeedPosts.filter((post) =>
+          activeHomeRunId ? post.runId === activeHomeRunId : post.status === "draft",
+        );
   const runningCount = Object.values(nodeStates).filter((row) => row.status === "running").length;
   const queuedCount = Object.values(nodeStates).filter((row) => row.status === "queued").length;
   const failedCount = Object.values(nodeStates).filter((row) => row.status === "failed").length;
@@ -7852,6 +7862,22 @@ ${prompt}`;
                   팔로잉
                 </button>
               </div>
+              <div className="social-feed-mode-tabs">
+                <button
+                  className={homeFeedViewMode === "live" ? "is-active" : ""}
+                  onClick={() => setHomeFeedViewMode("live")}
+                  type="button"
+                >
+                  라이브
+                </button>
+                <button
+                  className={homeFeedViewMode === "all" ? "is-active" : ""}
+                  onClick={() => setHomeFeedViewMode("all")}
+                  type="button"
+                >
+                  전체
+                </button>
+              </div>
               <div className="social-composer">
                 <h2>무슨 일을 진행할까요?</h2>
                 <label>
@@ -7887,22 +7913,16 @@ ${prompt}`;
               </div>
               <div className="social-feed-stream">
                 {feedLoading && <div className="log-empty">피드 로딩 중...</div>}
-                {!feedLoading && homeVisibleFeedPosts.length === 0 && (
+                {!feedLoading && homeFeedPosts.length === 0 && (
                   <div className="log-empty">표시할 포스트가 없습니다.</div>
                 )}
                 {!feedLoading &&
-                  homeVisibleFeedPosts.map((post) => {
-                    const activeAttachmentKind = feedAttachmentTabByPost[post.id] ?? "markdown";
-                    const selectedAttachment =
-                      post.attachments.find((attachment) => attachment.kind === activeAttachmentKind) ??
-                      post.attachments[0];
+                  homeFeedPosts.map((post) => {
                     const rawEnabled = feedRawViewByPost[post.id] === true;
-                    const rawContent = selectedAttachment
-                      ? feedRawAttachmentRef.current[feedAttachmentRawKey(post.id, selectedAttachment.kind)]
-                      : "";
-                    const canShowRaw = Boolean(rawContent);
+                    const rawContent = feedRawAttachmentRef.current[feedAttachmentRawKey(post.id, "markdown")] ?? "";
+                    const maskedContent = post.contentMd?.trim() || post.summary || "(내용 없음)";
                     const visibleContent =
-                      rawEnabled && canShowRaw && rawContent ? rawContent : selectedAttachment?.content ?? "(첨부 없음)";
+                      rawEnabled && rawContent.trim() ? rawContent : maskedContent;
                     return (
                       <section className={`feed-card ${post.status === "draft" ? "is-draft" : ""}`} key={post.id}>
                         <div className="feed-card-head">
@@ -7919,6 +7939,7 @@ ${prompt}`;
                         </div>
                         {post.question && <div className="feed-card-question">질문: {post.question}</div>}
                         <div className="feed-card-summary">{post.summary || "(요약 없음)"}</div>
+                        <pre className="social-post-content">{visibleContent}</pre>
                         <div className="feed-step-list">
                           {post.steps.map((step) => (
                             <span className="feed-step-chip" key={`${post.id}-${step}`}>
@@ -7926,26 +7947,9 @@ ${prompt}`;
                             </span>
                           ))}
                         </div>
-                        <div className="feed-attachment-toolbar">
-                          <div className="feed-attachment-tabs">
-                            {post.attachments.map((attachment) => (
-                              <button
-                                className={activeAttachmentKind === attachment.kind ? "is-active" : ""}
-                                key={`${post.id}-${attachment.kind}`}
-                                onClick={() =>
-                                  setFeedAttachmentTabByPost((prev) => ({
-                                    ...prev,
-                                    [post.id]: attachment.kind,
-                                  }))
-                                }
-                                type="button"
-                              >
-                                {attachment.kind === "markdown" ? "문서(MD)" : "데이터(JSON)"}
-                              </button>
-                            ))}
-                          </div>
+                        <div className="button-row">
                           <button
-                            disabled={!canShowRaw}
+                            disabled={!rawContent.trim()}
                             onClick={() =>
                               setFeedRawViewByPost((prev) => ({
                                 ...prev,
@@ -7957,7 +7961,6 @@ ${prompt}`;
                             {rawEnabled ? "마스킹 보기" : "원문 보기"}
                           </button>
                         </div>
-                        <pre className="feed-attachment-content">{visibleContent}</pre>
                         <div className="feed-evidence-row">
                           <span>생성 시간: {formatDuration(post.evidence.durationMs)}</span>
                           <span>사용량: {formatUsage(post.evidence.usage)}</span>
@@ -7968,28 +7971,32 @@ ${prompt}`;
                               : "-"}
                           </span>
                         </div>
-                        <label className="feed-reply-box">
-                          답글(리트윗)
-                          <textarea
-                            onChange={(e) =>
-                              setReplyDraftByPost((prev) => ({
-                                ...prev,
-                                [post.id]: e.currentTarget.value,
-                              }))
-                            }
-                            placeholder="변경 요청, 추가 요구사항, 검증 포인트를 입력하세요."
-                            rows={3}
-                            value={replyDraftByPost[post.id] ?? ""}
-                          />
-                        </label>
+                        {post.status !== "draft" && (
+                          <label className="feed-reply-box">
+                            답글(리트윗)
+                            <textarea
+                              onChange={(e) =>
+                                setReplyDraftByPost((prev) => ({
+                                  ...prev,
+                                  [post.id]: e.currentTarget.value,
+                                }))
+                              }
+                              placeholder="변경 요청, 추가 요구사항, 검증 포인트를 입력하세요."
+                              rows={3}
+                              value={replyDraftByPost[post.id] ?? ""}
+                            />
+                          </label>
+                        )}
                         <div className="button-row feed-card-actions">
-                          <button
-                            disabled={replyBusyPostId === post.id || isGraphRunning || post.status === "draft"}
-                            onClick={() => onSubmitReply(post)}
-                            type="button"
-                          >
-                            답글 실행
-                          </button>
+                          {post.status !== "draft" && (
+                            <button
+                              disabled={replyBusyPostId === post.id || isGraphRunning}
+                              onClick={() => onSubmitReply(post)}
+                              type="button"
+                            >
+                              답글 실행
+                            </button>
+                          )}
                           <button onClick={() => onOpenFeedPostHistory(post)} type="button">
                             기록 열기
                           </button>

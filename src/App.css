@@ -2101,6 +2101,23 @@ pre {
   background: #e8f0ff;
 }
 
+.social-feed-mode-tabs {
+  display: inline-flex;
+  gap: 8px;
+}
+
+.social-feed-mode-tabs button {
+  min-width: 72px;
+  height: 30px;
+  font-size: 11px;
+  color: #526275;
+}
+
+.social-feed-mode-tabs button.is-active {
+  color: #1f66d5;
+  background: #e8f0ff;
+}
+
 .social-composer {
   display: grid;
   gap: 10px;
@@ -2161,6 +2178,25 @@ pre {
 }
 
 .feed-reply-box textarea::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}
+
+.social-post-content {
+  margin: 0;
+  border-radius: 5px;
+  background: #f9fbff;
+  padding: 12px;
+  max-height: 260px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.social-post-content::-webkit-scrollbar {
   width: 0;
   height: 0;
   display: none;
