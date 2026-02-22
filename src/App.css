@@ -1392,13 +1392,18 @@ h3 {
   gap: 6px;
 }
 
+.settings-button-label {
+  position: relative;
+  top: 2px;
+}
+
 .provider-session-toggle,
 .settings-refresh-button {
   min-width: 70px;
   height: 29px;
   min-height: 29px;
   padding: 0 10px;
-  border-radius: 999px;
+  /* border-radius: 999px; */
   font-size: 11px;
   line-height: 1;
   display: inline-flex;
@@ -1411,7 +1416,7 @@ h3 {
 .provider-session-toggle {
   background: #edf4ff;
   color: #1f66d5;
-  border: 1px solid #c8dcff;
+  /* border: 1px solid #c8dcff; */
 }
 
 .provider-session-toggle.is-active {
@@ -1421,7 +1426,8 @@ h3 {
 }
 
 .settings-refresh-button {
-  background: #f4f6f9;
+  /* background: #f4f6f9; */
+  background: white;
   color: #3f4b5a;
   border: 1px solid #d6dde8;
 }

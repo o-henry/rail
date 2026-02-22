@@ -4229,14 +4229,20 @@ function App() {
         {!compact && (
           <div className="button-row">
             <button
+              className="settings-engine-button"
               onClick={engineStarted ? onStopEngine : onStartEngine}
               disabled={running || isGraphRunning}
               type="button"
             >
-              {engineStarted ? "엔진 중지" : "엔진 시작"}
+              <span className="settings-button-label">{engineStarted ? "엔진 중지" : "엔진 시작"}</span>
             </button>
-            <button onClick={onCheckUsage} disabled={running || isGraphRunning} type="button">
-              사용량 확인
+            <button
+              className="settings-usage-button"
+              onClick={onCheckUsage}
+              disabled={running || isGraphRunning}
+              type="button"
+            >
+              <span className="settings-button-label">사용량 확인</span>
             </button>
           </div>
         )}
@@ -4280,7 +4286,7 @@ function App() {
             onClick={() => refreshWebWorkerHealth()}
             type="button"
           >
-            상태 동기화
+            <span className="settings-button-label">상태 동기화</span>
           </button>
         </div>
         <div className="usage-method">
@@ -4311,7 +4317,9 @@ function App() {
                       }
                       type="button"
                     >
-                      {hasContext ? "세션 리셋" : "로그인"}
+                      <span className="settings-button-label">
+                        {hasContext ? "세션 리셋" : "로그인"}
+                      </span>
                     </button>
                   </div>
                 </div>
