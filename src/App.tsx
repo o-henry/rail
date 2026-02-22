@@ -169,6 +169,7 @@ type FeedPost = {
 type FeedStatusFilter = "all" | FeedPostStatus;
 type FeedExecutorFilter = "all" | "codex" | "web" | "ollama";
 type FeedPeriodFilter = "all" | "today" | "7d";
+type FeedCategory = "all_posts" | "birthdays" | "industry_news" | "job_updates";
 
 type NodeRunState = {
   status: NodeExecutionStatus;
@@ -2148,6 +2149,27 @@ function lifecycleStateLabel(state: string): string {
   return map[state] ?? state;
 }
 
+function formatRelativeFeedTime(iso: string): string {
+  const at = new Date(iso).getTime();
+  if (Number.isNaN(at)) {
+    return iso;
+  }
+  const diffMs = Date.now() - at;
+  if (diffMs < 60_000) {
+    return "방금";
+  }
+  const minutes = Math.floor(diffMs / 60_000);
+  if (minutes < 60) {
+    return `${minutes}분 전`;
+  }
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) {
+    return `${hours}시간 전`;
+  }
+  const days = Math.floor(hours / 24);
+  return `${days}일 전`;
+}
+
 function NavIcon({ tab }: { tab: WorkspaceTab }) {
   if (tab === "workflow") {
     return (
@@ -3275,7 +3297,8 @@ function App() {
   const [feedExecutorFilter, setFeedExecutorFilter] = useState<FeedExecutorFilter>("all");
   const [feedPeriodFilter, setFeedPeriodFilter] = useState<FeedPeriodFilter>("all");
   const [feedKeyword, setFeedKeyword] = useState("");
-  const [feedAttachmentTabByPost, setFeedAttachmentTabByPost] = useState<Record<string, FeedAttachmentKind>>({});
+  const [feedCategory, setFeedCategory] = useState<FeedCategory>("all_posts");
+  const [feedFilterOpen, setFeedFilterOpen] = useState(false);
   const [feedRawViewByPost, setFeedRawViewByPost] = useState<Record<string, boolean>>({});
   const [selectedRunFile, setSelectedRunFile] = useState("");
   const [selectedRunDetail, setSelectedRunDetail] = useState<RunRecord | null>(null);
@@ -6931,6 +6954,23 @@ ${prompt}`;
       return haystack.includes(keyword);
     })
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  const feedCategoryPosts: Record<FeedCategory, FeedViewPost[]> = {
+    all_posts: filteredFeedPosts,
+    birthdays: filteredFeedPosts.filter((post) => post.status === "done"),
+    industry_news: filteredFeedPosts.filter((post) =>
+      String(post.executor ?? "").toLowerCase().startsWith("web_"),
+    ),
+    job_updates: filteredFeedPosts.filter(
+      (post) => post.status === "failed" || post.status === "cancelled",
+    ),
+  };
+  const currentFeedPosts = feedCategoryPosts[feedCategory] ?? filteredFeedPosts;
+  const feedCategoryMeta: Array<{ key: FeedCategory; label: string }> = [
+    { key: "all_posts", label: "All posts" },
+    { key: "birthdays", label: "Birthdays" },
+    { key: "industry_news", label: "Industry news" },
+    { key: "job_updates", label: "Job updates" },
+  ];
   const viewportWidth = Math.ceil(canvasLogicalViewport.width);
   const viewportHeight = Math.ceil(canvasLogicalViewport.height);
   const stagePadding = graph.nodes.length > 0 ? STAGE_GROW_MARGIN : 0;
@@ -7893,168 +7933,171 @@ ${prompt}`;
 
         {workspaceTab === "feed" && (
           <section className="feed-layout">
-            <article className="panel-card feed-filter-pane">
-              <h2>에이전트 피드</h2>
-              <div className="feed-filter-grid">
-                <label>
-                  상태
-                  <FancySelect
-                    ariaLabel="피드 상태 필터"
-                    className="modern-select"
-                    onChange={(next) => setFeedStatusFilter(next as FeedStatusFilter)}
-                    options={[
-                      { value: "all", label: "전체" },
-                      { value: "done", label: "완료" },
-                      { value: "failed", label: "오류" },
-                      { value: "cancelled", label: "취소" },
-                    ]}
-                    value={feedStatusFilter}
-                  />
-                </label>
-                <label>
-                  실행기
-                  <FancySelect
-                    ariaLabel="피드 실행기 필터"
-                    className="modern-select"
-                    onChange={(next) => setFeedExecutorFilter(next as FeedExecutorFilter)}
-                    options={[
-                      { value: "all", label: "전체" },
-                      { value: "codex", label: "Codex" },
-                      { value: "web", label: "WEB" },
-                      { value: "ollama", label: "Ollama" },
-                    ]}
-                    value={feedExecutorFilter}
-                  />
-                </label>
-                <label>
-                  기간
-                  <FancySelect
-                    ariaLabel="피드 기간 필터"
-                    className="modern-select"
-                    onChange={(next) => setFeedPeriodFilter(next as FeedPeriodFilter)}
-                    options={[
-                      { value: "all", label: "전체" },
-                      { value: "today", label: "오늘" },
-                      { value: "7d", label: "최근 7일" },
-                    ]}
-                    value={feedPeriodFilter}
-                  />
-                </label>
-                <label>
-                  키워드
-                  <input
-                    onChange={(e) => setFeedKeyword(e.currentTarget.value)}
-                    placeholder="질문/역할/모델 검색"
-                    value={feedKeyword}
-                  />
-                </label>
-                <div className="button-row">
-                  <button onClick={refreshFeedTimeline} type="button">
-                    새로고침
-                  </button>
-                </div>
-                <div className="usage-method">표시 중: {filteredFeedPosts.length}개 포스트</div>
+            <article className="panel-card feed-main">
+              <div className="feed-topbar">
+                <h2>Feed</h2>
+                <button
+                  className={`feed-filter-toggle ${feedFilterOpen ? "is-open" : ""}`}
+                  onClick={() => setFeedFilterOpen((prev) => !prev)}
+                  type="button"
+                >
+                  Filter by
+                </button>
               </div>
-            </article>
-
-            <article className="panel-card feed-stream">
-              {feedLoading && <div className="log-empty">피드 로딩 중...</div>}
-              {!feedLoading && filteredFeedPosts.length === 0 && (
-                <div className="log-empty">표시할 포스트가 없습니다.</div>
+              {feedFilterOpen && (
+                <div className="feed-filter-inline">
+                  <label>
+                    상태
+                    <FancySelect
+                      ariaLabel="피드 상태 필터"
+                      className="modern-select"
+                      onChange={(next) => setFeedStatusFilter(next as FeedStatusFilter)}
+                      options={[
+                        { value: "all", label: "전체" },
+                        { value: "done", label: "완료" },
+                        { value: "failed", label: "오류" },
+                        { value: "cancelled", label: "취소" },
+                      ]}
+                      value={feedStatusFilter}
+                    />
+                  </label>
+                  <label>
+                    실행기
+                    <FancySelect
+                      ariaLabel="피드 실행기 필터"
+                      className="modern-select"
+                      onChange={(next) => setFeedExecutorFilter(next as FeedExecutorFilter)}
+                      options={[
+                        { value: "all", label: "전체" },
+                        { value: "codex", label: "Codex" },
+                        { value: "web", label: "WEB" },
+                        { value: "ollama", label: "Ollama" },
+                      ]}
+                      value={feedExecutorFilter}
+                    />
+                  </label>
+                  <label>
+                    기간
+                    <FancySelect
+                      ariaLabel="피드 기간 필터"
+                      className="modern-select"
+                      onChange={(next) => setFeedPeriodFilter(next as FeedPeriodFilter)}
+                      options={[
+                        { value: "all", label: "전체" },
+                        { value: "today", label: "오늘" },
+                        { value: "7d", label: "최근 7일" },
+                      ]}
+                      value={feedPeriodFilter}
+                    />
+                  </label>
+                  <label>
+                    키워드
+                    <input
+                      onChange={(e) => setFeedKeyword(e.currentTarget.value)}
+                      placeholder="질문/역할/모델 검색"
+                      value={feedKeyword}
+                    />
+                  </label>
+                  <div className="button-row">
+                    <button onClick={refreshFeedTimeline} type="button">
+                      새로고침
+                    </button>
+                  </div>
+                </div>
               )}
-              {!feedLoading &&
-                filteredFeedPosts.map((post) => {
-                  const activeAttachmentKind = feedAttachmentTabByPost[post.id] ?? "markdown";
-                  const selectedAttachment =
-                    post.attachments.find((attachment) => attachment.kind === activeAttachmentKind) ??
-                    post.attachments[0];
-                  const rawEnabled = feedRawViewByPost[post.id] === true;
-                  const rawContent = selectedAttachment
-                    ? feedRawAttachmentRef.current[
-                        feedAttachmentRawKey(post.id, selectedAttachment.kind)
-                      ]
-                    : "";
-                  const canShowRaw = Boolean(rawContent);
-                  const visibleContent =
-                    rawEnabled && canShowRaw && rawContent ? rawContent : selectedAttachment?.content ?? "(첨부 없음)";
+              <div className="feed-topic-tabs">
+                {feedCategoryMeta.map((row) => {
+                  const count = feedCategoryPosts[row.key].length;
                   return (
-                    <section className="feed-card" key={post.id}>
-                      <div className="feed-card-head">
-                        <div className="feed-card-title-wrap">
-                          <h3>{post.agentName}</h3>
-                          <div className="feed-card-sub">{post.roleLabel}</div>
-                        </div>
-                        <div className="feed-card-meta">
-                          <span className={`status-pill status-${post.status}`}>
-                            {nodeStatusLabel(post.status as NodeExecutionStatus)}
-                          </span>
-                          <span className="feed-card-time">{post.createdAt}</span>
-                        </div>
-                      </div>
-                      {post.question && <div className="feed-card-question">질문: {post.question}</div>}
-                      <div className="feed-card-summary">{post.summary || "(요약 없음)"}</div>
-                      <div className="feed-step-list">
-                        {post.steps.map((step) => (
-                          <span className="feed-step-chip" key={`${post.id}-${step}`}>
-                            {step}
-                          </span>
-                        ))}
-                      </div>
-
-                      <div className="feed-attachment-toolbar">
-                        <div className="feed-attachment-tabs">
-                          {post.attachments.map((attachment) => (
-                            <button
-                              className={activeAttachmentKind === attachment.kind ? "is-active" : ""}
-                              key={`${post.id}-${attachment.kind}`}
-                              onClick={() =>
-                                setFeedAttachmentTabByPost((prev) => ({
-                                  ...prev,
-                                  [post.id]: attachment.kind,
-                                }))
-                              }
-                              type="button"
-                            >
-                              {attachment.kind === "markdown" ? "문서(MD)" : "데이터(JSON)"}
-                            </button>
-                          ))}
-                        </div>
-                        <button
-                          disabled={!canShowRaw}
-                          onClick={() =>
-                            setFeedRawViewByPost((prev) => ({
-                              ...prev,
-                              [post.id]: !prev[post.id],
-                            }))
-                          }
-                          type="button"
-                        >
-                          {rawEnabled ? "마스킹 보기" : "원문 보기"}
-                        </button>
-                      </div>
-                      <pre className="feed-attachment-content">{visibleContent}</pre>
-
-                      <div className="feed-evidence-row">
-                        <span>생성 시간: {formatDuration(post.evidence.durationMs)}</span>
-                        <span>사용량: {formatUsage(post.evidence.usage)}</span>
-                        <span>
-                          품질:{" "}
-                          {post.evidence.qualityDecision
-                            ? `${post.evidence.qualityDecision} (${post.evidence.qualityScore ?? "-"})`
-                            : "-"}
-                        </span>
-                      </div>
-                      <div className="button-row feed-card-actions">
-                        <button onClick={() => onOpenFeedPostHistory(post)} type="button">
-                          기록 열기
-                        </button>
-                        <button onClick={() => onExportRunFile(post.sourceFile)} type="button">
-                          Run 내보내기
-                        </button>
-                      </div>
-                    </section>
+                    <button
+                      className={feedCategory === row.key ? "is-active" : ""}
+                      key={row.key}
+                      onClick={() => setFeedCategory(row.key)}
+                      type="button"
+                    >
+                      {row.label}
+                      {count > 0 && <span className="feed-topic-count">{count}</span>}
+                    </button>
                   );
                 })}
+              </div>
+              <article className="feed-stream">
+                <h3 className="feed-section-title">
+                  {feedCategoryMeta.find((row) => row.key === feedCategory)?.label ?? "Feed"}
+                </h3>
+                {feedLoading && <div className="log-empty">피드 로딩 중...</div>}
+                {!feedLoading && currentFeedPosts.length === 0 && (
+                  <div className="log-empty">표시할 포스트가 없습니다.</div>
+                )}
+                {!feedLoading &&
+                  currentFeedPosts.map((post) => {
+                    const rawEnabled = feedRawViewByPost[post.id] === true;
+                    const markdownAttachment = post.attachments.find((attachment) => attachment.kind === "markdown");
+                    const rawContent = markdownAttachment
+                      ? feedRawAttachmentRef.current[feedAttachmentRawKey(post.id, "markdown")]
+                      : "";
+                    const visibleContent =
+                      rawEnabled && rawContent ? rawContent : markdownAttachment?.content ?? post.summary ?? "(첨부 없음)";
+                    const score = Math.max(
+                      1,
+                      Math.min(99, Number(post.evidence.qualityScore ?? (post.status === "done" ? 95 : 55))),
+                    );
+                    return (
+                      <section className="feed-card feed-card-sns" key={post.id}>
+                        <div className="feed-card-head">
+                          <div className="feed-author-avatar" aria-hidden="true">
+                            {post.agentName.slice(0, 1)}
+                          </div>
+                          <div className="feed-card-title-wrap">
+                            <h3>{post.agentName}</h3>
+                            <div className="feed-card-sub">{post.roleLabel}</div>
+                          </div>
+                          <span
+                            className={`feed-score-badge ${post.status === "done" ? "good" : "warn"}`}
+                            title={`품질 점수 ${score}`}
+                          >
+                            {score}
+                          </span>
+                        </div>
+                        {post.question && <div className="feed-card-question">질문: {post.question}</div>}
+                        <div className="feed-card-summary">{post.summary || "(요약 없음)"}</div>
+                        <pre className="feed-sns-content">{visibleContent}</pre>
+                        <div className="feed-step-list">
+                          {post.steps.map((step) => (
+                            <span className="feed-step-chip" key={`${post.id}-${step}`}>
+                              {step}
+                            </span>
+                          ))}
+                        </div>
+                        <div className="feed-evidence-row">
+                          <span>{formatRelativeFeedTime(post.createdAt)}</span>
+                          <span>생성 시간 {formatDuration(post.evidence.durationMs)}</span>
+                          <span>사용량 {formatUsage(post.evidence.usage)}</span>
+                        </div>
+                        <div className="button-row feed-card-actions">
+                          <button
+                            disabled={!rawContent}
+                            onClick={() =>
+                              setFeedRawViewByPost((prev) => ({
+                                ...prev,
+                                [post.id]: !prev[post.id],
+                              }))
+                            }
+                            type="button"
+                          >
+                            {rawEnabled ? "마스킹 보기" : "원문 보기"}
+                          </button>
+                          <button onClick={() => onOpenFeedPostHistory(post)} type="button">
+                            View post
+                          </button>
+                          <button onClick={() => onExportRunFile(post.sourceFile)} type="button">
+                            공유
+                          </button>
+                        </div>
+                      </section>
+                    );
+                  })}
+              </article>
             </article>
           </section>
         )}
