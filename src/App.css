@@ -737,6 +737,17 @@ h3 {
   padding: 7px 7px 10px;
 }
 
+.fancy-select.template-select .fancy-select-menu {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.fancy-select.template-select .fancy-select-menu::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}
+
 .graph-canvas {
   position: relative;
   min-height: 0;

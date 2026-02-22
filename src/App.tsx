@@ -6023,7 +6023,7 @@ ${prompt}`;
                       <h4>템플릿</h4>
                       <FancySelect
                         ariaLabel="템플릿 선택"
-                        className="modern-select"
+                        className="modern-select template-select"
                         emptyMessage="선택 가능한 템플릿이 없습니다."
                         onChange={(value) => {
                           if (value === "validation") {
