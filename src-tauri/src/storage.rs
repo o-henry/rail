@@ -1,5 +1,6 @@
 use serde_json::Value;
 use std::{fs, path::PathBuf};
+use tauri::async_runtime::channel;
 use tauri_plugin_dialog::DialogExt;
 
 fn current_workspace_dir() -> Result<PathBuf, String> {
@@ -124,19 +125,28 @@ pub fn run_directory() -> Result<String, String> {
 }
 
 #[tauri::command]
-pub fn dialog_pick_directory(app: tauri::AppHandle) -> Result<Option<String>, String> {
-    let picked = app
-        .dialog()
+pub async fn dialog_pick_directory(app: tauri::AppHandle) -> Result<Option<String>, String> {
+    let (tx, mut rx) = channel::<Option<String>>(1);
+    app.dialog()
         .file()
         .set_title("작업 경로 선택")
-        .blocking_pick_folder();
-    Ok(picked.map(|path| path.to_string()))
+        .pick_folder(move |picked| {
+            let normalized = picked
+                .and_then(|path| path.into_path().ok())
+                .map(|path| path.to_string_lossy().to_string());
+            let _ = tx.try_send(normalized);
+        });
+
+    match rx.recv().await {
+        Some(path) => Ok(path),
+        None => Err("작업 경로 선택 대화상자 응답을 받지 못했습니다.".to_string()),
+    }
 }
 
 #[tauri::command]
-pub fn dialog_pick_knowledge_files(app: tauri::AppHandle) -> Result<Vec<String>, String> {
-    let picked = app
-        .dialog()
+pub async fn dialog_pick_knowledge_files(app: tauri::AppHandle) -> Result<Vec<String>, String> {
+    let (tx, mut rx) = channel::<Vec<String>>(1);
+    app.dialog()
         .file()
         .set_title("첨부 자료 선택")
         .add_filter(
@@ -146,16 +156,21 @@ pub fn dialog_pick_knowledge_files(app: tauri::AppHandle) -> Result<Vec<String>,
                 "cs", "html", "css", "sql", "yaml", "yml", "pdf", "docx",
             ],
         )
-        .blocking_pick_files()
-        .unwrap_or_default();
+        .pick_files(move |picked| {
+            let unique_paths = picked
+                .unwrap_or_default()
+                .into_iter()
+                .filter_map(|path| path.into_path().ok())
+                .map(|path| path.to_string_lossy().to_string())
+                .filter(|path| !path.trim().is_empty())
+                .collect::<std::collections::BTreeSet<_>>()
+                .into_iter()
+                .collect::<Vec<_>>();
+            let _ = tx.try_send(unique_paths);
+        });
 
-    let unique_paths = picked
-        .into_iter()
-        .map(|path| path.to_string())
-        .filter(|path| !path.trim().is_empty())
-        .collect::<std::collections::BTreeSet<_>>()
-        .into_iter()
-        .collect::<Vec<_>>();
-
-    Ok(unique_paths)
+    match rx.recv().await {
+        Some(paths) => Ok(paths),
+        None => Err("첨부 자료 선택 대화상자 응답을 받지 못했습니다.".to_string()),
+    }
 }
