@@ -1,5 +1,4 @@
 import {
-  ChangeEvent as ReactChangeEvent,
   KeyboardEvent as ReactKeyboardEvent,
   MouseEvent as ReactMouseEvent,
   WheelEvent as ReactWheelEvent,
@@ -2541,8 +2540,6 @@ function App() {
   const edgeDragWindowMoveHandlerRef = useRef<((event: MouseEvent) => void) | null>(null);
   const edgeDragWindowUpHandlerRef = useRef<((event: MouseEvent) => void) | null>(null);
   const zoomStatusTimerRef = useRef<number | null>(null);
-  const cwdDirectoryInputRef = useRef<HTMLInputElement | null>(null);
-  const knowledgeFileInputRef = useRef<HTMLInputElement | null>(null);
   const cancelRequestedRef = useRef(false);
   const activeTurnNodeIdRef = useRef<string>("");
   const activeWebNodeIdRef = useRef<string>("");
@@ -3071,89 +3068,31 @@ function App() {
     }
   }
 
-  function extractDirectoryFromSelectedFiles(files: FileList): string {
-    if (files.length === 0) {
-      return "";
-    }
-    const first = files[0] as File & { path?: string; webkitRelativePath?: string };
-    const nativePath = typeof first.path === "string" ? first.path.trim() : "";
-    if (nativePath) {
-      const separator = nativePath.includes("\\") ? "\\" : "/";
-      const idx = nativePath.lastIndexOf(separator);
-      if (idx > 0) {
-        return nativePath.slice(0, idx);
+  async function onSelectCwdDirectory() {
+    setError("");
+    try {
+      const selected = await invoke<string | null>("dialog_pick_directory");
+      const selectedDirectory = typeof selected === "string" ? selected.trim() : "";
+      if (!selectedDirectory) {
+        return;
       }
-      return nativePath;
+      setCwd(selectedDirectory);
+      setStatus(`작업 경로 선택됨: ${selectedDirectory}`);
+    } catch (error) {
+      setError(`작업 경로 선택 실패: ${String(error)}`);
     }
-    const relative = typeof first.webkitRelativePath === "string" ? first.webkitRelativePath.trim() : "";
-    if (relative) {
-      const root = relative.split("/")[0];
-      return root ? `./${root}` : "";
-    }
-    return "";
   }
 
-  function onSelectCwdDirectory() {
-    const input = cwdDirectoryInputRef.current;
-    if (!input) {
-      setError("폴더 선택기를 열 수 없습니다.");
-      return;
-    }
-    input.value = "";
-    input.click();
-  }
-
-  function onCwdDirectoryPicked(event: ReactChangeEvent<HTMLInputElement>) {
-    const files = event.currentTarget.files;
-    if (!files || files.length === 0) {
-      return;
-    }
-    const selectedDirectory = extractDirectoryFromSelectedFiles(files);
-    if (!selectedDirectory) {
-      setError("선택한 폴더 경로를 읽지 못했습니다. 다시 선택해주세요.");
-      return;
-    }
-    setCwd(selectedDirectory);
-    setStatus(`작업 경로 선택됨: ${selectedDirectory}`);
-  }
-
-  function extractNativePathsFromSelectedFiles(files: FileList): string[] {
-    const next: string[] = [];
-    for (let index = 0; index < files.length; index += 1) {
-      const row = files[index] as File & { path?: string };
-      const raw = typeof row.path === "string" ? row.path.trim() : "";
-      if (raw) {
-        next.push(raw);
-      }
-    }
-    return Array.from(new Set(next));
-  }
-
-  function onOpenKnowledgeFilePicker() {
-    const input = knowledgeFileInputRef.current;
-    if (!input) {
-      setError("첨부 파일 선택기를 열 수 없습니다.");
-      return;
-    }
-    input.value = "";
-    input.click();
-  }
-
-  async function onKnowledgeFilesPicked(event: ReactChangeEvent<HTMLInputElement>) {
-    const files = event.currentTarget.files;
-    if (!files || files.length === 0) {
-      return;
-    }
-
-    const paths = extractNativePathsFromSelectedFiles(files);
-    if (paths.length === 0) {
+  async function attachKnowledgeFiles(paths: string[]) {
+    const uniquePaths = Array.from(new Set(paths.map((path) => path.trim()).filter(Boolean)));
+    if (uniquePaths.length === 0) {
       setError("선택한 파일 경로를 읽지 못했습니다. 다시 선택해주세요.");
       return;
     }
 
     setError("");
     try {
-      const probed = await invoke<KnowledgeFileRef[]>("knowledge_probe", { paths });
+      const probed = await invoke<KnowledgeFileRef[]>("knowledge_probe", { paths: uniquePaths });
       applyGraphChange((prev) => {
         const existingByPath = new Map(
           (prev.knowledge?.files ?? []).map((row) => [row.path, row] as const),
@@ -3173,9 +3112,21 @@ function App() {
           },
         };
       });
-      setStatus(`첨부 자료 ${paths.length}개 추가됨`);
+      setStatus(`첨부 자료 ${uniquePaths.length}개 추가됨`);
     } catch (error) {
       setError(`첨부 자료 추가 실패: ${String(error)}`);
+    }
+  }
+
+  async function onOpenKnowledgeFilePicker() {
+    try {
+      const selectedPaths = await invoke<string[]>("dialog_pick_knowledge_files");
+      if (selectedPaths.length === 0) {
+        return;
+      }
+      await attachKnowledgeFiles(selectedPaths);
+    } catch (error) {
+      setError(`첨부 파일 선택 실패: ${String(error)}`);
     }
   }
 
@@ -5515,13 +5466,6 @@ ${prompt}`;
         )}
         <label>
           작업 경로(CWD)
-          <input
-            className="cwd-directory-input"
-            onChange={onCwdDirectoryPicked}
-            ref={cwdDirectoryInputRef}
-            type="file"
-            {...({ directory: "", multiple: true, webkitdirectory: "" } as Record<string, string | boolean>)}
-          />
           <div className="settings-cwd-row">
             <input readOnly value={cwd} />
             <button className="settings-cwd-picker" onClick={onSelectCwdDirectory} type="button">
@@ -6281,14 +6225,6 @@ ${prompt}`;
 
                     <div className="tool-dropdown-group">
                       <h4>첨부 자료</h4>
-                      <input
-                        accept=".txt,.md,.json,.csv,.ts,.tsx,.js,.jsx,.py,.rs,.go,.java,.cs,.html,.css,.sql,.yaml,.yml,.pdf,.docx"
-                        className="knowledge-file-input"
-                        multiple
-                        onChange={onKnowledgeFilesPicked}
-                        ref={knowledgeFileInputRef}
-                        type="file"
-                      />
                       <div className="graph-file-actions">
                         <button className="mini-action-button" onClick={onOpenKnowledgeFilePicker} type="button">
                           <span className="mini-action-button-label">파일 추가</span>
