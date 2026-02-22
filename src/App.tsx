@@ -568,6 +568,47 @@ const TURN_MODEL_OPTIONS = [
   "GPT-5.2",
   "GPT-5.1-Codex-Mini",
 ] as const;
+const AGENT_TEMPLATE_PRESETS = {
+  research: {
+    label: "자료 조사 에이전트",
+    model: "GPT-5.1-Codex-Mini",
+    role: "RESEARCH AGENT",
+    goal: "주제 관련 핵심 사실, 출처, 반례를 빠르게 수집한다.",
+    qualityRule: "출처 3개 이상 + 상충 정보 1개 이상 포함",
+  },
+  planner: {
+    label: "기획 설계 에이전트",
+    model: "GPT-5.2-Codex",
+    role: "PLANNING AGENT",
+    goal: "요구사항을 작업 단위로 분해하고 우선순위를 정리한다.",
+    qualityRule: "작업목록 + 위험요소 + 다음 액션 포함",
+  },
+  implementer: {
+    label: "구현 에이전트",
+    model: "GPT-5.2-Codex",
+    role: "IMPLEMENTATION AGENT",
+    goal: "실제 코드 변경안과 적용 절차를 구체적으로 제안한다.",
+    qualityRule: "변경파일/로직/검증방법을 명시",
+  },
+  reviewer: {
+    label: "검증 에이전트",
+    model: "GPT-5.3-Codex-Spark",
+    role: "REVIEW AGENT",
+    goal: "결과물의 누락/리스크/회귀 가능성을 점검한다.",
+    qualityRule: "문제점 우선 나열 + 수정 제안 포함",
+  },
+  synth: {
+    label: "최종 정리 에이전트",
+    model: "GPT-5.3-Codex",
+    role: "SYNTHESIS AGENT",
+    goal: "중간 결과를 통합해 최종 의사결정 가능한 결과로 정리한다.",
+    qualityRule: "결론/근거/한계/다음 단계 4요소 포함",
+  },
+} as const;
+type AgentTemplatePresetId = keyof typeof AGENT_TEMPLATE_PRESETS;
+const AGENT_TEMPLATE_OPTIONS: FancySelectOption[] = (
+  Object.entries(AGENT_TEMPLATE_PRESETS) as Array<[AgentTemplatePresetId, (typeof AGENT_TEMPLATE_PRESETS)[AgentTemplatePresetId]]>
+).map(([value, row]) => ({ value, label: row.label }));
 const DEFAULT_TURN_MODEL = TURN_MODEL_OPTIONS[0];
 const COST_PRESET_OPTIONS: FancySelectOption[] = [
   { value: "conservative", label: "고사양 (품질 우선)" },
@@ -3503,6 +3544,7 @@ function App() {
   const [homeTimelineTab, setHomeTimelineTab] = useState<"recommended" | "following">("recommended");
   const [homeTargetAgentId, setHomeTargetAgentId] = useState<string>("all");
   const [followingAnchorAgentId, setFollowingAnchorAgentId] = useState<string>("");
+  const [selectedAgentTemplate, setSelectedAgentTemplate] = useState<AgentTemplatePresetId>("research");
   const [replyDraftByPost, setReplyDraftByPost] = useState<Record<string, string>>({});
   const [replyBusyPostId, setReplyBusyPostId] = useState<string>("");
   const [selectedRunFile, setSelectedRunFile] = useState("");
@@ -4665,6 +4707,47 @@ function App() {
 
     setNodeSelection([node.id], node.id);
     setSelectedEdgeKey("");
+  }
+
+  function addAgentFromTemplate(templateId: AgentTemplatePresetId) {
+    const template = AGENT_TEMPLATE_PRESETS[templateId];
+    if (!template) {
+      return;
+    }
+    const center = getCanvasViewportCenterLogical();
+    const fallbackIndex = graph.nodes.length;
+    const minPos = -NODE_DRAG_MARGIN;
+    const maxX = Math.max(minPos, boundedStageWidth - NODE_WIDTH + NODE_DRAG_MARGIN);
+    const maxY = Math.max(minPos, boundedStageHeight - NODE_HEIGHT + NODE_DRAG_MARGIN);
+    const baseX = center
+      ? Math.round(center.x - NODE_WIDTH / 2)
+      : 40 + (fallbackIndex % 4) * 280;
+    const baseY = center
+      ? Math.round(center.y - NODE_HEIGHT / 2)
+      : 40 + Math.floor(fallbackIndex / 4) * 180;
+    const node: GraphNode = {
+      id: makeNodeId("turn"),
+      type: "turn",
+      position: {
+        x: Math.min(maxX, Math.max(minPos, baseX)),
+        y: Math.min(maxY, Math.max(minPos, baseY)),
+      },
+      config: {
+        ...defaultNodeConfig("turn"),
+        model: template.model,
+        role: template.role,
+        goal: template.goal,
+        qualityRule: template.qualityRule,
+      },
+    };
+
+    applyGraphChange((prev) => ({
+      ...prev,
+      nodes: [...prev.nodes, node],
+    }));
+    setNodeSelection([node.id], node.id);
+    setSelectedEdgeKey("");
+    setStatus(`${template.label} 추가됨`);
   }
 
   function applyPreset(
@@ -7964,7 +8047,20 @@ ${prompt}`;
             <article className="panel-card agents-main">
               <div className="agents-head">
                 <h2>에이전트 관리</h2>
-                <div className="button-row">
+                <div className="button-row agents-head-controls">
+                  <FancySelect
+                    ariaLabel="템플릿 에이전트 선택"
+                    className="modern-select agents-template-select"
+                    onChange={(next) => setSelectedAgentTemplate(next as AgentTemplatePresetId)}
+                    options={AGENT_TEMPLATE_OPTIONS}
+                    value={selectedAgentTemplate}
+                  />
+                  <button
+                    onClick={() => addAgentFromTemplate(selectedAgentTemplate)}
+                    type="button"
+                  >
+                    템플릿 에이전트 추가
+                  </button>
                   <button onClick={() => addNode("turn")} type="button">
                     에이전트 추가
                   </button>

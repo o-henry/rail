@@ -2227,6 +2227,14 @@ pre {
   margin: 0;
 }
 
+.agents-head-controls {
+  align-items: center;
+}
+
+.agents-template-select {
+  min-width: 210px;
+}
+
 .agents-list {
   display: grid;
   gap: 10px;
