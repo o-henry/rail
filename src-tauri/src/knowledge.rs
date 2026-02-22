@@ -1,0 +1,378 @@
+use serde::{Deserialize, Serialize};
+use std::{
+    collections::{HashMap, HashSet},
+    fs::File,
+    hash::{Hash, Hasher},
+    io::Read,
+    path::{Path, PathBuf},
+};
+
+const MAX_FILE_SIZE_BYTES: u64 = 15 * 1024 * 1024;
+const DEFAULT_TOP_K: usize = 4;
+const DEFAULT_MAX_CHARS: usize = 2800;
+const MIN_CHUNK_CHARS: usize = 1200;
+const CHUNK_OVERLAP_CHARS: usize = 180;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct KnowledgeFileRef {
+    pub id: String,
+    pub name: String,
+    pub path: String,
+    pub ext: String,
+    pub enabled: bool,
+    pub size_bytes: Option<u64>,
+    pub mtime_ms: Option<u128>,
+    pub status: Option<String>,
+    pub status_message: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct KnowledgeSnippet {
+    pub file_id: String,
+    pub file_name: String,
+    pub chunk_index: usize,
+    pub text: String,
+    pub score: f32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct KnowledgeRetrieveResult {
+    pub snippets: Vec<KnowledgeSnippet>,
+    pub warnings: Vec<String>,
+}
+
+#[derive(Debug, Clone)]
+struct ChunkCandidate {
+    file_id: String,
+    file_name: String,
+    chunk_index: usize,
+    text: String,
+    score: f32,
+}
+
+#[tauri::command]
+pub fn knowledge_probe(paths: Vec<String>) -> Result<Vec<KnowledgeFileRef>, String> {
+    let mut out = Vec::new();
+    for raw_path in paths {
+        out.push(probe_single_file(raw_path));
+    }
+    Ok(out)
+}
+
+#[tauri::command]
+pub fn knowledge_retrieve(
+    files: Vec<KnowledgeFileRef>,
+    query: String,
+    top_k: Option<usize>,
+    max_chars: Option<usize>,
+) -> Result<KnowledgeRetrieveResult, String> {
+    let mut warnings: Vec<String> = Vec::new();
+    let mut candidates: Vec<ChunkCandidate> = Vec::new();
+
+    let top_k = top_k.unwrap_or(DEFAULT_TOP_K).clamp(1, 20);
+    let max_chars = max_chars.unwrap_or(DEFAULT_MAX_CHARS).clamp(300, 20_000);
+    let query_tokens = tokenize(&query);
+
+    for file in files.into_iter().filter(|file| file.enabled) {
+        let path = PathBuf::from(file.path.trim());
+        if !path.exists() {
+            warnings.push(format!("첨부 파일 없음: {}", file.name));
+            continue;
+        }
+
+        if !is_supported_extension(&file.ext) {
+            warnings.push(format!("지원하지 않는 확장자: {} ({})", file.name, file.ext));
+            continue;
+        }
+
+        let meta = match std::fs::metadata(&path) {
+            Ok(meta) => meta,
+            Err(err) => {
+                warnings.push(format!("파일 메타 읽기 실패: {} ({err})", file.name));
+                continue;
+            }
+        };
+
+        if meta.len() > MAX_FILE_SIZE_BYTES {
+            warnings.push(format!(
+                "파일 크기 제한 초과(15MB): {} ({} bytes)",
+                file.name,
+                meta.len()
+            ));
+            continue;
+        }
+
+        let text = match read_text_by_extension(&path, &file.ext) {
+            Ok(text) => text,
+            Err(err) => {
+                warnings.push(format!("첨부 읽기 실패: {} ({err})", file.name));
+                continue;
+            }
+        };
+
+        if text.trim().is_empty() {
+            warnings.push(format!("첨부 내용이 비어있음: {}", file.name));
+            continue;
+        }
+
+        let chunks = chunk_text(&text, MIN_CHUNK_CHARS, CHUNK_OVERLAP_CHARS);
+        for (index, chunk) in chunks.into_iter().enumerate() {
+            if chunk.trim().is_empty() {
+                continue;
+            }
+            let score = lexical_score(&query_tokens, &chunk, index);
+            if score <= 0.0 {
+                continue;
+            }
+            candidates.push(ChunkCandidate {
+                file_id: file.id.clone(),
+                file_name: file.name.clone(),
+                chunk_index: index + 1,
+                text: chunk,
+                score,
+            });
+        }
+    }
+
+    candidates.sort_by(|a, b| {
+        b.score
+            .partial_cmp(&a.score)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then_with(|| a.file_name.cmp(&b.file_name))
+            .then_with(|| a.chunk_index.cmp(&b.chunk_index))
+    });
+
+    let mut snippets: Vec<KnowledgeSnippet> = Vec::new();
+    let mut used_chars = 0usize;
+    for candidate in candidates {
+        if snippets.len() >= top_k {
+            break;
+        }
+
+        let remain = max_chars.saturating_sub(used_chars);
+        if remain < 40 {
+            break;
+        }
+
+        let text = truncate_chars(&candidate.text, remain.min(MIN_CHUNK_CHARS));
+        if text.trim().is_empty() {
+            continue;
+        }
+
+        used_chars += text.chars().count();
+        snippets.push(KnowledgeSnippet {
+            file_id: candidate.file_id,
+            file_name: candidate.file_name,
+            chunk_index: candidate.chunk_index,
+            text,
+            score: candidate.score,
+        });
+    }
+
+    Ok(KnowledgeRetrieveResult { snippets, warnings })
+}
+
+fn probe_single_file(raw_path: String) -> KnowledgeFileRef {
+    let input_path = raw_path.trim();
+    let fallback = PathBuf::from(input_path);
+    let canonical = std::fs::canonicalize(input_path).unwrap_or(fallback.clone());
+    let path = canonical.to_string_lossy().to_string();
+    let name = canonical
+        .file_name()
+        .and_then(|value| value.to_str())
+        .unwrap_or(input_path)
+        .to_string();
+    let ext = extension_with_dot(&canonical);
+
+    let mut file = KnowledgeFileRef {
+        id: stable_file_id(&path),
+        name,
+        path,
+        ext: ext.clone(),
+        enabled: true,
+        size_bytes: None,
+        mtime_ms: None,
+        status: Some("ready".to_string()),
+        status_message: None,
+    };
+
+    if !canonical.exists() {
+        file.status = Some("missing".to_string());
+        file.status_message = Some("파일이 존재하지 않습니다.".to_string());
+        return file;
+    }
+
+    match std::fs::metadata(&canonical) {
+        Ok(meta) => {
+            file.size_bytes = Some(meta.len());
+            if let Ok(modified) = meta.modified() {
+                if let Ok(duration) = modified.duration_since(std::time::UNIX_EPOCH) {
+                    file.mtime_ms = Some(duration.as_millis());
+                }
+            }
+
+            if meta.len() > MAX_FILE_SIZE_BYTES {
+                file.status = Some("error".to_string());
+                file.status_message = Some("파일 크기 15MB 제한을 초과했습니다.".to_string());
+                return file;
+            }
+        }
+        Err(err) => {
+            file.status = Some("error".to_string());
+            file.status_message = Some(format!("파일 메타를 읽지 못했습니다: {err}"));
+            return file;
+        }
+    }
+
+    if !is_supported_extension(&ext) {
+        file.status = Some("unsupported".to_string());
+        file.status_message = Some("지원하지 않는 파일 형식입니다.".to_string());
+    }
+
+    file
+}
+
+fn extension_with_dot(path: &Path) -> String {
+    path.extension()
+        .and_then(|ext| ext.to_str())
+        .map(|ext| format!(".{}", ext.to_lowercase()))
+        .unwrap_or_default()
+}
+
+fn stable_file_id(path: &str) -> String {
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    path.hash(&mut hasher);
+    format!("{:x}", hasher.finish())
+}
+
+fn is_supported_extension(ext: &str) -> bool {
+    let supported: HashSet<&str> = HashSet::from([
+        ".txt", ".md", ".json", ".csv", ".ts", ".tsx", ".js", ".jsx", ".py", ".rs", ".go",
+        ".java", ".cs", ".html", ".css", ".sql", ".yaml", ".yml", ".pdf", ".docx",
+    ]);
+    supported.contains(ext)
+}
+
+fn read_text_by_extension(path: &Path, ext: &str) -> Result<String, String> {
+    if ext == ".pdf" {
+        return pdf_extract::extract_text(path).map_err(|err| format!("pdf 추출 실패: {err}"));
+    }
+    if ext == ".docx" {
+        return extract_docx_text(path);
+    }
+    std::fs::read_to_string(path).map_err(|err| format!("텍스트 파일 읽기 실패: {err}"))
+}
+
+fn extract_docx_text(path: &Path) -> Result<String, String> {
+    let file = File::open(path).map_err(|err| format!("docx 파일 열기 실패: {err}"))?;
+    let mut archive =
+        zip::ZipArchive::new(file).map_err(|err| format!("docx zip 파싱 실패: {err}"))?;
+    let mut xml_file = archive
+        .by_name("word/document.xml")
+        .map_err(|err| format!("document.xml 읽기 실패: {err}"))?;
+    let mut xml = String::new();
+    xml_file
+        .read_to_string(&mut xml)
+        .map_err(|err| format!("document.xml 문자열 읽기 실패: {err}"))?;
+
+    let doc = roxmltree::Document::parse(&xml).map_err(|err| format!("docx xml 파싱 실패: {err}"))?;
+    let mut out = String::new();
+    for node in doc.descendants() {
+        if node.is_element() && node.tag_name().name() == "t" {
+            if let Some(text) = node.text() {
+                if !text.trim().is_empty() {
+                    if !out.is_empty() {
+                        out.push('\n');
+                    }
+                    out.push_str(text.trim());
+                }
+            }
+        }
+    }
+    Ok(out)
+}
+
+fn chunk_text(input: &str, chunk_size: usize, overlap: usize) -> Vec<String> {
+    let chars: Vec<char> = input.chars().collect();
+    if chars.is_empty() {
+        return Vec::new();
+    }
+
+    let mut chunks = Vec::new();
+    let mut start = 0usize;
+    while start < chars.len() {
+        let end = (start + chunk_size).min(chars.len());
+        let chunk: String = chars[start..end].iter().collect();
+        chunks.push(chunk);
+        if end == chars.len() {
+            break;
+        }
+        start = end.saturating_sub(overlap);
+    }
+
+    chunks
+}
+
+fn truncate_chars(input: &str, max_chars: usize) -> String {
+    if input.chars().count() <= max_chars {
+        return input.to_string();
+    }
+    input.chars().take(max_chars).collect()
+}
+
+fn tokenize(input: &str) -> Vec<String> {
+    let mut tokens = Vec::new();
+    let mut current = String::new();
+
+    for ch in input.chars() {
+        let is_korean = ('\u{AC00}'..='\u{D7A3}').contains(&ch);
+        if ch.is_alphanumeric() || is_korean {
+            for c in ch.to_lowercase() {
+                current.push(c);
+            }
+            continue;
+        }
+
+        if current.chars().count() >= 2 {
+            tokens.push(current.clone());
+        }
+        current.clear();
+    }
+
+    if current.chars().count() >= 2 {
+        tokens.push(current);
+    }
+
+    tokens
+}
+
+fn lexical_score(query_tokens: &[String], chunk: &str, chunk_index: usize) -> f32 {
+    if query_tokens.is_empty() {
+        return 1.0 / ((chunk_index + 1) as f32);
+    }
+
+    let chunk_tokens = tokenize(chunk);
+    if chunk_tokens.is_empty() {
+        return 0.0;
+    }
+
+    let mut freq: HashMap<&str, usize> = HashMap::new();
+    for token in &chunk_tokens {
+        *freq.entry(token.as_str()).or_insert(0) += 1;
+    }
+
+    let mut score = 0f32;
+    for token in query_tokens {
+        if let Some(count) = freq.get(token.as_str()) {
+            score += *count as f32;
+        }
+    }
+
+    if score > 0.0 {
+        score += 1.0 / ((chunk_index + 1) as f32);
+    }
+    score
+}

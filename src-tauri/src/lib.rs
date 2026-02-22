@@ -1,4 +1,5 @@
 mod engine;
+mod knowledge;
 mod storage;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -28,6 +29,8 @@ pub fn run() {
             engine::web_provider_reset_session,
             engine::web_provider_cancel,
             engine::ollama_generate,
+            knowledge::knowledge_probe,
+            knowledge::knowledge_retrieve,
             storage::graph_list,
             storage::graph_save,
             storage::graph_load,
