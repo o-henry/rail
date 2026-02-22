@@ -53,7 +53,7 @@ type PendingApproval = {
   params: unknown;
 };
 
-type WorkspaceTab = "workflow" | "feed" | "history" | "settings";
+type WorkspaceTab = "home" | "agents" | "history" | "settings" | "workflow" | "feed";
 type NodeType = "turn" | "transform" | "gate";
 type PortType = "in" | "out";
 
@@ -75,6 +75,34 @@ type GraphData = {
   nodes: GraphNode[];
   edges: GraphEdge[];
   knowledge: KnowledgeConfig;
+  social?: SocialWorkspace;
+};
+
+type SocialWorkspace = {
+  version: 1;
+  mode: "social_feed";
+  agents: AgentProfile[];
+  follows: AgentFollowEdge[];
+  defaults: { cwd: string; model: string; qualityPreset: "고사양" | "보통" | "저사양" };
+  advanced?: { hiddenNodes: GraphNode[]; hiddenEdges: GraphEdge[] };
+  legacyGraphBackup?: GraphData;
+};
+
+type AgentProfile = {
+  id: string;
+  name: string;
+  model: string;
+  role: string;
+  goal: string;
+  qualityRule: string;
+  enabled: boolean;
+  position?: { x: number; y: number };
+};
+
+type AgentFollowEdge = {
+  fromAgentId: string;
+  toAgentId: string;
+  enabled: boolean;
 };
 
 type KnowledgeFileStatus = "ready" | "missing" | "unsupported" | "error";
@@ -144,19 +172,26 @@ type FeedAttachment = {
   charCount: number;
 };
 
-type FeedPostStatus = "done" | "failed" | "cancelled";
+type FeedPostStatus = "draft" | "done" | "failed" | "cancelled";
 
 type FeedPost = {
   id: string;
   runId: string;
+  threadId?: string;
+  parentPostId?: string;
+  draft?: boolean;
   nodeId: string;
+  agentId?: string;
   nodeType: NodeType;
   executor?: TurnExecutor;
   agentName: string;
   roleLabel: string;
   status: FeedPostStatus;
   createdAt: string;
+  updatedAt?: string;
   summary: string;
+  contentMd?: string;
+  contentJson?: string;
   steps: string[];
   evidence: {
     durationMs?: number;
@@ -221,6 +256,14 @@ type RunRecord = {
   qualitySummary?: QualitySummary;
   regression?: RegressionSummary;
   feedPosts?: FeedPost[];
+  socialTrace?: Array<{
+    at: string;
+    type: "reply_rerun" | "home_target_rerun";
+    sourcePostId?: string;
+    targetAgentId: string;
+    prompt: string;
+    result: "done" | "failed" | "cancelled";
+  }>;
 };
 
 type FeedViewPost = FeedPost & {
@@ -233,6 +276,10 @@ type FeedBuildInput = {
   node: GraphNode;
   status: FeedPostStatus;
   createdAt: string;
+  postId?: string;
+  threadId?: string;
+  parentPostId?: string;
+  draft?: boolean;
   summary?: string;
   logs?: string[];
   output?: unknown;
@@ -311,6 +358,8 @@ type TurnConfig = {
   executor?: TurnExecutor;
   model?: string;
   role?: string;
+  goal?: string;
+  qualityRule?: string;
   cwd?: string;
   promptTemplate?: string;
   knowledgeEnabled?: boolean;
@@ -1042,6 +1091,9 @@ function buildFeedSummary(status: FeedPostStatus, output: unknown, error?: strin
   if (trimmedSummary) {
     return trimmedSummary;
   }
+  if (status === "draft") {
+    return "작성 중...";
+  }
   if (status !== "done") {
     return error?.trim() || "실행 실패로 상세 로그 확인이 필요합니다.";
   }
@@ -1113,16 +1165,23 @@ function buildFeedPost(input: FeedBuildInput): {
   const jsonMasked = redactSensitiveText(jsonClip.text);
 
   const post: FeedPost = {
-    id: `${input.runId}:${input.node.id}:${input.status}`,
+    id: input.postId?.trim() || `${input.runId}:${input.node.id}:${input.status}`,
     runId: input.runId,
+    threadId: input.threadId,
+    parentPostId: input.parentPostId,
+    draft: input.draft === true,
     nodeId: input.node.id,
+    agentId: input.node.id,
     nodeType: input.node.type,
     executor: input.node.type === "turn" ? getTurnExecutor(config) : undefined,
     agentName,
     roleLabel,
     status: input.status,
     createdAt: input.createdAt,
+    updatedAt: input.createdAt,
     summary,
+    contentMd: markdownMasked,
+    contentJson: jsonMasked,
     steps,
     evidence: {
       durationMs: input.durationMs,
@@ -2104,6 +2163,13 @@ function nodeStatusLabel(status: NodeExecutionStatus): string {
   return "정지";
 }
 
+function feedPostStatusLabel(status: FeedPostStatus): string {
+  if (status === "draft") {
+    return "작성 중";
+  }
+  return nodeStatusLabel(status as NodeExecutionStatus);
+}
+
 function knowledgeStatusMeta(status?: KnowledgeFileStatus): { label: string; tone: string } {
   if (status === "ready") {
     return { label: "준비됨", tone: "ready" };
@@ -2154,12 +2220,12 @@ function lifecycleStateLabel(state: string): string {
 }
 
 function NavIcon({ tab }: { tab: WorkspaceTab }) {
-  if (tab === "workflow") {
+  if (tab === "home" || tab === "workflow") {
     return (
       <img alt="" aria-hidden="true" className="nav-workflow-image" src="/workflow.svg" />
     );
   }
-  if (tab === "feed") {
+  if (tab === "agents" || tab === "feed") {
     return (
       <svg aria-hidden="true" fill="none" height="20" viewBox="0 0 24 24" width="20">
         <path
@@ -3125,11 +3191,163 @@ function normalizeGraph(input: unknown): GraphData {
     })
     .filter(Boolean) as GraphEdge[];
 
-  return {
+  let normalized: GraphData = {
     version: Math.max(version, GRAPH_SCHEMA_VERSION),
     nodes: normalizedNodes,
     edges: normalizedEdges,
     knowledge: normalizeKnowledgeConfig(data.knowledge),
+  };
+
+  const socialRaw = data.social;
+  if (socialRaw && typeof socialRaw === "object") {
+    normalized = compileGraphFromSocialWorkspace(socialRaw, normalized);
+  }
+  normalized.social = buildSocialWorkspaceFromGraph(normalized);
+  return normalized;
+}
+
+function buildSocialWorkspaceFromGraph(graph: GraphData): SocialWorkspace {
+  const turnNodes = graph.nodes.filter((node) => node.type === "turn");
+  const turnNodeIdSet = new Set(turnNodes.map((node) => node.id));
+  const follows = graph.edges
+    .filter((edge) => turnNodeIdSet.has(edge.from.nodeId) && turnNodeIdSet.has(edge.to.nodeId))
+    .map((edge) => ({
+      fromAgentId: edge.from.nodeId,
+      toAgentId: edge.to.nodeId,
+      enabled: true,
+    }));
+  const hiddenNodes = graph.nodes.filter((node) => node.type !== "turn");
+  const hiddenNodeIdSet = new Set(hiddenNodes.map((node) => node.id));
+  const hiddenEdges = graph.edges.filter(
+    (edge) =>
+      hiddenNodeIdSet.has(edge.from.nodeId) ||
+      hiddenNodeIdSet.has(edge.to.nodeId) ||
+      !turnNodeIdSet.has(edge.from.nodeId) ||
+      !turnNodeIdSet.has(edge.to.nodeId),
+  );
+
+  return {
+    version: 1,
+    mode: "social_feed",
+    agents: turnNodes.map((node) => {
+      const config = node.config as TurnConfig;
+      return {
+        id: node.id,
+        name: turnModelLabel(node),
+        model: toTurnModelDisplayName(String(config.model ?? DEFAULT_TURN_MODEL)),
+        role: String(config.role ?? "AGENT"),
+        goal: String(config.goal ?? ""),
+        qualityRule: String(config.qualityRule ?? ""),
+        enabled: true,
+        position: { ...node.position },
+      };
+    }),
+    follows,
+    defaults: {
+      cwd: ".",
+      model: DEFAULT_TURN_MODEL,
+      qualityPreset: "보통",
+    },
+    advanced: {
+      hiddenNodes: hiddenNodes.map((node) => ({ ...node, position: { ...node.position }, config: { ...node.config } })),
+      hiddenEdges: hiddenEdges.map((edge) => ({ ...edge, from: { ...edge.from }, to: { ...edge.to }, control: edge.control ? { ...edge.control } : undefined })),
+    },
+    legacyGraphBackup: {
+      ...graph,
+      nodes: graph.nodes.map((node) => ({ ...node, position: { ...node.position }, config: { ...node.config } })),
+      edges: graph.edges.map((edge) => ({ ...edge, from: { ...edge.from }, to: { ...edge.to }, control: edge.control ? { ...edge.control } : undefined })),
+      knowledge: normalizeKnowledgeConfig(graph.knowledge),
+    },
+  };
+}
+
+function compileGraphFromSocialWorkspace(socialRaw: unknown, fallback: GraphData): GraphData {
+  if (!socialRaw || typeof socialRaw !== "object") {
+    return fallback;
+  }
+  const social = socialRaw as Record<string, unknown>;
+  const agentRows = Array.isArray(social.agents) ? social.agents : [];
+  const followRows = Array.isArray(social.follows) ? social.follows : [];
+  if (agentRows.length === 0) {
+    return fallback;
+  }
+
+  const nodes: GraphNode[] = agentRows
+    .map((row, index) => {
+      if (!row || typeof row !== "object") {
+        return null;
+      }
+      const record = row as Record<string, unknown>;
+      const id = String(record.id ?? "").trim();
+      if (!id) {
+        return null;
+      }
+      const enabled = record.enabled !== false;
+      if (!enabled) {
+        return null;
+      }
+      const positionRecord = record.position as Record<string, unknown> | undefined;
+      const px = readNumber(positionRecord?.x) ?? 120 + (index % 3) * 320;
+      const py = readNumber(positionRecord?.y) ?? 120 + Math.floor(index / 3) * 220;
+      return {
+        id,
+        type: "turn" as NodeType,
+        position: { x: px, y: py },
+        config: {
+          ...(fallback.nodes.find((node) => node.id === id)?.config ?? {}),
+          model: toTurnModelDisplayName(String(record.model ?? DEFAULT_TURN_MODEL)),
+          role: String(record.role ?? "AGENT"),
+          goal: String(record.goal ?? ""),
+          qualityRule: String(record.qualityRule ?? ""),
+        },
+      };
+    })
+    .filter(Boolean) as GraphNode[];
+
+  if (nodes.length === 0) {
+    return fallback;
+  }
+  const nodeIdSet = new Set(nodes.map((node) => node.id));
+  const followEdges: GraphEdge[] = followRows
+    .map((row) => {
+      if (!row || typeof row !== "object") {
+        return null;
+      }
+      const record = row as Record<string, unknown>;
+      const from = String(record.fromAgentId ?? "").trim();
+      const to = String(record.toAgentId ?? "").trim();
+      if (!from || !to || from === to || !nodeIdSet.has(from) || !nodeIdSet.has(to)) {
+        return null;
+      }
+      if (record.enabled === false) {
+        return null;
+      }
+      return { from: { nodeId: from, port: "out" }, to: { nodeId: to, port: "in" } } as GraphEdge;
+    })
+    .filter(Boolean) as GraphEdge[];
+
+  const advancedRaw = social.advanced as Record<string, unknown> | undefined;
+  const hiddenNodes = Array.isArray(advancedRaw?.hiddenNodes)
+    ? (advancedRaw?.hiddenNodes as GraphNode[])
+    : fallback.nodes.filter((node) => node.type !== "turn");
+  const hiddenEdges = Array.isArray(advancedRaw?.hiddenEdges)
+    ? (advancedRaw?.hiddenEdges as GraphEdge[])
+    : fallback.edges.filter((edge) => !nodeIdSet.has(edge.from.nodeId) || !nodeIdSet.has(edge.to.nodeId));
+
+  return {
+    version: GRAPH_SCHEMA_VERSION,
+    nodes: [...nodes, ...hiddenNodes].map((node) => ({
+      ...node,
+      position: { ...node.position },
+      config: { ...(node.config ?? {}) },
+    })),
+    edges: [...followEdges, ...hiddenEdges].map((edge) => ({
+      ...edge,
+      from: { ...edge.from, port: "out" as PortType },
+      to: { ...edge.to, port: "in" as PortType },
+      control: edge.control ? { ...edge.control } : undefined,
+    })),
+    knowledge: normalizeKnowledgeConfig(fallback.knowledge),
   };
 }
 
@@ -3221,7 +3439,7 @@ function isTurnTerminalEvent(method: string, params: unknown): TurnTerminal | nu
 function App() {
   const defaultCwd = useMemo(() => ".", []);
 
-  const [workspaceTab, setWorkspaceTab] = useState<WorkspaceTab>("workflow");
+  const [workspaceTab, setWorkspaceTab] = useState<WorkspaceTab>("home");
 
   const [cwd, setCwd] = useState(defaultCwd);
   const [model, setModel] = useState<string>(DEFAULT_TURN_MODEL);
@@ -3282,6 +3500,11 @@ function App() {
   const [feedKeyword, setFeedKeyword] = useState("");
   const [feedAttachmentTabByPost, setFeedAttachmentTabByPost] = useState<Record<string, FeedAttachmentKind>>({});
   const [feedRawViewByPost, setFeedRawViewByPost] = useState<Record<string, boolean>>({});
+  const [homeTimelineTab, setHomeTimelineTab] = useState<"recommended" | "following">("recommended");
+  const [homeTargetAgentId, setHomeTargetAgentId] = useState<string>("all");
+  const [followingAnchorAgentId, setFollowingAnchorAgentId] = useState<string>("");
+  const [replyDraftByPost, setReplyDraftByPost] = useState<Record<string, string>>({});
+  const [replyBusyPostId, setReplyBusyPostId] = useState<string>("");
   const [selectedRunFile, setSelectedRunFile] = useState("");
   const [selectedRunDetail, setSelectedRunDetail] = useState<RunRecord | null>(null);
   const [lastSavedRunFile, setLastSavedRunFile] = useState("");
@@ -3328,9 +3551,42 @@ function App() {
   const runLogCollectorRef = useRef<Record<string, string[]>>({});
   const feedRunCacheRef = useRef<Record<string, RunRecord>>({});
   const feedRawAttachmentRef = useRef<Record<string, string>>({});
+  const liveDraftPostByNodeRef = useRef<Record<string, string>>({});
 
   const activeApproval = pendingApprovals[0];
   const selectedNode = graph.nodes.find((node) => node.id === selectedNodeId) ?? null;
+  const socialWorkspace = useMemo(() => buildSocialWorkspaceFromGraph(graph), [graph]);
+  const turnNodes = useMemo(() => graph.nodes.filter((node) => node.type === "turn"), [graph.nodes]);
+  const turnNodeMap = useMemo(() => new Map(turnNodes.map((node) => [node.id, node])), [turnNodes]);
+  const followEdges = useMemo(
+    () =>
+      graph.edges.filter((edge) => turnNodeMap.has(edge.from.nodeId) && turnNodeMap.has(edge.to.nodeId)),
+    [graph.edges, turnNodeMap],
+  );
+  const followingReachableSet = useMemo(() => {
+    const seed = followingAnchorAgentId || turnNodes[0]?.id || "";
+    if (!seed) {
+      return new Set<string>();
+    }
+    const adjacency = new Map<string, string[]>();
+    followEdges.forEach((edge) => {
+      const rows = adjacency.get(edge.from.nodeId) ?? [];
+      rows.push(edge.to.nodeId);
+      adjacency.set(edge.from.nodeId, rows);
+    });
+    const visited = new Set<string>([seed]);
+    const queue = [seed];
+    while (queue.length > 0) {
+      const current = queue.shift() as string;
+      (adjacency.get(current) ?? []).forEach((next) => {
+        if (!visited.has(next)) {
+          visited.add(next);
+          queue.push(next);
+        }
+      });
+    }
+    return visited;
+  }, [followEdges, followingAnchorAgentId, turnNodes]);
   const graphKnowledge = normalizeKnowledgeConfig(graph.knowledge);
   const enabledKnowledgeFiles = graphKnowledge.files.filter((row) => row.enabled);
   const selectedKnowledgeMaxCharsOption = closestNumericOptionValue(
@@ -3374,6 +3630,7 @@ function App() {
     if (collectingRunRef.current) {
       const current = runLogCollectorRef.current[nodeId] ?? [];
       runLogCollectorRef.current[nodeId] = [...current, message].slice(-500);
+      updateDraftFeedContent(nodeId, message);
     }
     setNodeStates((prev) => {
       const current = prev[nodeId] ?? { status: "idle", logs: [] };
@@ -3854,11 +4111,117 @@ function App() {
     }
   }
 
+  function upsertFeedPost(post: FeedViewPost) {
+    setFeedPosts((prev) => {
+      const next = [post, ...prev.filter((row) => row.id !== post.id)];
+      next.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      return next;
+    });
+  }
+
+  function replaceDraftWithFinalPost(draftId: string, finalPost: FeedViewPost) {
+    setFeedPosts((prev) => {
+      const withoutDraft = prev.filter((row) => row.id !== draftId && row.id !== finalPost.id);
+      const next = [finalPost, ...withoutDraft];
+      next.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      return next;
+    });
+  }
+
+  function updateDraftFeedContent(nodeId: string, appendLine: string) {
+    const draftId = liveDraftPostByNodeRef.current[nodeId];
+    if (!draftId) {
+      return;
+    }
+    setFeedPosts((prev) =>
+      prev.map((post) => {
+        if (post.id !== draftId) {
+          return post;
+        }
+        const markdownAttachment = post.attachments.find((row) => row.kind === "markdown");
+        const nextMd = `${markdownAttachment?.content ?? post.contentMd ?? ""}\n${appendLine}`.trim();
+        return {
+          ...post,
+          summary: appendLine.length > 120 ? `${appendLine.slice(0, 120)}...` : appendLine,
+          updatedAt: new Date().toISOString(),
+          contentMd: nextMd,
+          attachments: post.attachments.map((row) =>
+            row.kind === "markdown"
+              ? {
+                  ...row,
+                  content: nextMd,
+                  charCount: nextMd.length,
+                }
+              : row,
+          ),
+        };
+      }),
+    );
+  }
+
+  function updateTurnNodeConfigById(nodeId: string, patch: Partial<TurnConfig>) {
+    setGraph((prev) => ({
+      ...prev,
+      nodes: prev.nodes.map((node) =>
+        node.id === nodeId && node.type === "turn"
+          ? {
+              ...node,
+              config: {
+                ...node.config,
+                ...patch,
+              },
+            }
+          : node,
+      ),
+    }));
+  }
+
+  function addFollowEdge(fromAgentId: string, toAgentId: string) {
+    if (!fromAgentId || !toAgentId || fromAgentId === toAgentId) {
+      return;
+    }
+    setGraph((prev) => {
+      const exists = prev.edges.some(
+        (edge) => edge.from.nodeId === fromAgentId && edge.to.nodeId === toAgentId,
+      );
+      if (exists) {
+        return prev;
+      }
+      return {
+        ...prev,
+        edges: [...prev.edges, { from: { nodeId: fromAgentId, port: "out" }, to: { nodeId: toAgentId, port: "in" } }],
+      };
+    });
+  }
+
+  function removeFollowEdge(fromAgentId: string, toAgentId: string) {
+    setGraph((prev) => ({
+      ...prev,
+      edges: prev.edges.filter(
+        (edge) => !(edge.from.nodeId === fromAgentId && edge.to.nodeId === toAgentId),
+      ),
+    }));
+  }
+
   useEffect(() => {
     refreshGraphFiles();
     refreshRunFiles();
     refreshFeedTimeline();
   }, []);
+
+  useEffect(() => {
+    if (turnNodes.length === 0) {
+      setFollowingAnchorAgentId("");
+      setHomeTargetAgentId("all");
+      return;
+    }
+    if (!turnNodes.some((node) => node.id === followingAnchorAgentId)) {
+      setFollowingAnchorAgentId(turnNodes[0].id);
+    }
+    if (homeTargetAgentId !== "all" && !turnNodes.some((node) => node.id === homeTargetAgentId)) {
+      setHomeTargetAgentId("all");
+    }
+  }, [turnNodes, followingAnchorAgentId, homeTargetAgentId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -4166,7 +4529,7 @@ function App() {
   }, [workspaceTab]);
 
   useEffect(() => {
-    if (workspaceTab !== "feed") {
+    if (workspaceTab !== "home") {
       return;
     }
     void refreshFeedTimeline();
@@ -5121,7 +5484,10 @@ function App() {
       const saveTarget = graphFileName.trim() || "sample.json";
       await invoke("graph_save", {
         name: saveTarget,
-        graph,
+        graph: {
+          ...graph,
+          social: buildSocialWorkspaceFromGraph(graph),
+        },
       });
       await refreshGraphFiles();
       setGraphFileName(saveTarget);
@@ -5141,10 +5507,15 @@ function App() {
     try {
       const loaded = await invoke<unknown>("graph_load", { name: target });
       const normalized = normalizeGraph(loaded);
-      setGraph(cloneGraph(normalized));
+      const compiled =
+        loaded && typeof loaded === "object" && "social" in (loaded as Record<string, unknown>)
+          ? compileGraphFromSocialWorkspace((loaded as Record<string, unknown>).social, normalized)
+          : normalized;
+      compiled.social = buildSocialWorkspaceFromGraph(compiled);
+      setGraph(cloneGraph(compiled));
       setUndoStack([]);
       setRedoStack([]);
-      setNodeSelection(normalized.nodes.map((node) => node.id).slice(0, 1), normalized.nodes[0]?.id);
+      setNodeSelection(compiled.nodes.map((node) => node.id).slice(0, 1), compiled.nodes[0]?.id);
       setSelectedEdgeKey("");
       setNodeStates({});
       setConnectFromNodeId("");
@@ -6157,7 +6528,10 @@ ${prompt}`;
       runId: `${Date.now()}`,
       question: workflowQuestion,
       startedAt: new Date().toISOString(),
-      graphSnapshot: graph,
+      graphSnapshot: {
+        ...graph,
+        social: socialWorkspace,
+      },
       transitions: [],
       summaryLogs: [],
       nodeLogs: {},
@@ -6166,7 +6540,9 @@ ${prompt}`;
       knowledgeTrace: [],
       nodeMetrics: {},
       feedPosts: [],
+      socialTrace: [],
     };
+    const liveDraftIdByNode: Record<string, string> = {};
 
     try {
       const requiresCodexEngine = graph.nodes.some((node) => {
@@ -6246,6 +6622,25 @@ ${prompt}`;
           const startedAtMs = Date.now();
           const startedAtIso = new Date(startedAtMs).toISOString();
           setNodeStatus(nodeId, "running", "노드 실행 시작");
+          const draftBuilt = buildFeedPost({
+            runId: runRecord.runId,
+            node,
+            status: "draft",
+            draft: true,
+            postId: `${runRecord.runId}:${nodeId}:draft`,
+            threadId: `${runRecord.runId}:${nodeId}`,
+            createdAt: startedAtIso,
+            summary: "작성 중...",
+            logs: [],
+          });
+          const draftView: FeedViewPost = {
+            ...draftBuilt.post,
+            sourceFile: "live",
+            question: workflowQuestion,
+          };
+          liveDraftIdByNode[nodeId] = draftView.id;
+          liveDraftPostByNodeRef.current[nodeId] = draftView.id;
+          upsertFeedPost(draftView);
           setNodeRuntimeFields(nodeId, {
             status: "running",
             startedAt: startedAtIso,
@@ -6287,6 +6682,8 @@ ${prompt}`;
               const failedFeed = buildFeedPost({
                 runId: runRecord.runId,
                 node,
+                postId: `${runRecord.runId}:${nodeId}:failed`,
+                threadId: `${runRecord.runId}:${nodeId}`,
                 status: "failed",
                 createdAt: finishedAtIso,
                 summary: result.error ?? "턴 실행 실패",
@@ -6301,6 +6698,11 @@ ${prompt}`;
                 failedFeed.rawAttachments.markdown;
               feedRawAttachmentRef.current[feedAttachmentRawKey(failedFeed.post.id, "json")] =
                 failedFeed.rawAttachments.json;
+              replaceDraftWithFinalPost(liveDraftIdByNode[nodeId] ?? failedFeed.post.id, {
+                ...failedFeed.post,
+                sourceFile: `run-${runRecord.runId}.json`,
+                question: workflowQuestion,
+              });
               break;
             }
 
@@ -6370,6 +6772,8 @@ ${prompt}`;
               const rejectedFeed = buildFeedPost({
                 runId: runRecord.runId,
                 node,
+                postId: `${runRecord.runId}:${nodeId}:failed`,
+                threadId: `${runRecord.runId}:${nodeId}`,
                 status: "failed",
                 createdAt: finishedAtIso,
                 summary: `품질 REJECT (${qualityReport.score}/${qualityReport.threshold})`,
@@ -6385,6 +6789,11 @@ ${prompt}`;
                 rejectedFeed.rawAttachments.markdown;
               feedRawAttachmentRef.current[feedAttachmentRawKey(rejectedFeed.post.id, "json")] =
                 rejectedFeed.rawAttachments.json;
+              replaceDraftWithFinalPost(liveDraftIdByNode[nodeId] ?? rejectedFeed.post.id, {
+                ...rejectedFeed.post,
+                sourceFile: `run-${runRecord.runId}.json`,
+                question: workflowQuestion,
+              });
               break;
             }
 
@@ -6419,6 +6828,8 @@ ${prompt}`;
             const doneFeed = buildFeedPost({
               runId: runRecord.runId,
               node,
+              postId: `${runRecord.runId}:${nodeId}:done`,
+              threadId: `${runRecord.runId}:${nodeId}`,
               status: "done",
               createdAt: finishedAtIso,
               summary: "턴 실행 완료",
@@ -6433,6 +6844,11 @@ ${prompt}`;
               doneFeed.rawAttachments.markdown;
             feedRawAttachmentRef.current[feedAttachmentRawKey(doneFeed.post.id, "json")] =
               doneFeed.rawAttachments.json;
+            replaceDraftWithFinalPost(liveDraftIdByNode[nodeId] ?? doneFeed.post.id, {
+              ...doneFeed.post,
+              sourceFile: `run-${runRecord.runId}.json`,
+              question: workflowQuestion,
+            });
             lastDoneNodeId = nodeId;
           } else if (node.type === "transform") {
             const result = await executeTransformNode(node, input);
@@ -6449,6 +6865,8 @@ ${prompt}`;
               const transformFailedFeed = buildFeedPost({
                 runId: runRecord.runId,
                 node,
+                postId: `${runRecord.runId}:${nodeId}:failed`,
+                threadId: `${runRecord.runId}:${nodeId}`,
                 status: "failed",
                 createdAt: finishedAtIso,
                 summary: result.error ?? "변환 실패",
@@ -6463,6 +6881,11 @@ ${prompt}`;
               ] = transformFailedFeed.rawAttachments.markdown;
               feedRawAttachmentRef.current[feedAttachmentRawKey(transformFailedFeed.post.id, "json")] =
                 transformFailedFeed.rawAttachments.json;
+              replaceDraftWithFinalPost(liveDraftIdByNode[nodeId] ?? transformFailedFeed.post.id, {
+                ...transformFailedFeed.post,
+                sourceFile: `run-${runRecord.runId}.json`,
+                question: workflowQuestion,
+              });
               break;
             }
 
@@ -6479,6 +6902,8 @@ ${prompt}`;
             const transformDoneFeed = buildFeedPost({
               runId: runRecord.runId,
               node,
+              postId: `${runRecord.runId}:${nodeId}:done`,
+              threadId: `${runRecord.runId}:${nodeId}`,
               status: "done",
               createdAt: finishedAtIso,
               summary: "변환 완료",
@@ -6491,6 +6916,11 @@ ${prompt}`;
               transformDoneFeed.rawAttachments.markdown;
             feedRawAttachmentRef.current[feedAttachmentRawKey(transformDoneFeed.post.id, "json")] =
               transformDoneFeed.rawAttachments.json;
+            replaceDraftWithFinalPost(liveDraftIdByNode[nodeId] ?? transformDoneFeed.post.id, {
+              ...transformDoneFeed.post,
+              sourceFile: `run-${runRecord.runId}.json`,
+              question: workflowQuestion,
+            });
             lastDoneNodeId = nodeId;
           } else {
             const result = executeGateNode(node, input, skipSet);
@@ -6507,6 +6937,8 @@ ${prompt}`;
               const gateFailedFeed = buildFeedPost({
                 runId: runRecord.runId,
                 node,
+                postId: `${runRecord.runId}:${nodeId}:failed`,
+                threadId: `${runRecord.runId}:${nodeId}`,
                 status: "failed",
                 createdAt: finishedAtIso,
                 summary: result.error ?? "분기 실패",
@@ -6520,6 +6952,11 @@ ${prompt}`;
                 gateFailedFeed.rawAttachments.markdown;
               feedRawAttachmentRef.current[feedAttachmentRawKey(gateFailedFeed.post.id, "json")] =
                 gateFailedFeed.rawAttachments.json;
+              replaceDraftWithFinalPost(liveDraftIdByNode[nodeId] ?? gateFailedFeed.post.id, {
+                ...gateFailedFeed.post,
+                sourceFile: `run-${runRecord.runId}.json`,
+                question: workflowQuestion,
+              });
               break;
             }
 
@@ -6536,6 +6973,8 @@ ${prompt}`;
             const gateDoneFeed = buildFeedPost({
               runId: runRecord.runId,
               node,
+              postId: `${runRecord.runId}:${nodeId}:done`,
+              threadId: `${runRecord.runId}:${nodeId}`,
               status: "done",
               createdAt: finishedAtIso,
               summary: result.message ?? "분기 완료",
@@ -6548,6 +6987,11 @@ ${prompt}`;
               gateDoneFeed.rawAttachments.markdown;
             feedRawAttachmentRef.current[feedAttachmentRawKey(gateDoneFeed.post.id, "json")] =
               gateDoneFeed.rawAttachments.json;
+            replaceDraftWithFinalPost(liveDraftIdByNode[nodeId] ?? gateDoneFeed.post.id, {
+              ...gateDoneFeed.post,
+              sourceFile: `run-${runRecord.runId}.json`,
+              question: workflowQuestion,
+            });
             lastDoneNodeId = nodeId;
           }
         }
@@ -6603,6 +7047,7 @@ ${prompt}`;
       setError(String(e));
       setStatus("그래프 실행 실패");
     } finally {
+      liveDraftPostByNodeRef.current = {};
       turnTerminalResolverRef.current = null;
       webTurnResolverRef.current = null;
       webLoginResolverRef.current = null;
@@ -6616,6 +7061,241 @@ ${prompt}`;
       cancelRequestedRef.current = false;
       collectingRunRef.current = false;
     }
+  }
+
+  async function runSingleAgentTurn(options: {
+    agentNode: GraphNode;
+    prompt: string;
+    parentPostId?: string;
+    sourcePostId?: string;
+    traceType: "reply_rerun" | "home_target_rerun";
+  }) {
+    const { agentNode, prompt, parentPostId, sourcePostId, traceType } = options;
+    if (agentNode.type !== "turn") {
+      return;
+    }
+    if (isGraphRunning) {
+      setError("이미 실행 중입니다. 잠시 후 다시 시도해주세요.");
+      return;
+    }
+
+    setError("");
+    setIsGraphRunning(true);
+    cancelRequestedRef.current = false;
+    collectingRunRef.current = true;
+    const nodeId = agentNode.id;
+    const runId = `${Date.now()}`;
+    const draftId = `${runId}:${nodeId}:draft`;
+    const startedAtIso = new Date().toISOString();
+
+    const runRecord: RunRecord = {
+      runId,
+      question: prompt,
+      startedAt: startedAtIso,
+      graphSnapshot: graph,
+      transitions: [],
+      summaryLogs: [],
+      nodeLogs: {},
+      threadTurnMap: {},
+      providerTrace: [],
+      knowledgeTrace: [],
+      nodeMetrics: {},
+      feedPosts: [],
+      socialTrace: [],
+    };
+    runLogCollectorRef.current[nodeId] = [];
+    setNodeStatus(nodeId, "running", "답글 기반 단일 에이전트 실행 시작");
+    transition(runRecord, nodeId, "running", "답글 기반 단일 실행");
+
+    const draftBuilt = buildFeedPost({
+      runId,
+      node: agentNode,
+      status: "draft",
+      draft: true,
+      postId: draftId,
+      threadId: sourcePostId ?? draftId,
+      parentPostId,
+      createdAt: startedAtIso,
+      summary: "작성 중...",
+      logs: [],
+    });
+    const draftView: FeedViewPost = {
+      ...draftBuilt.post,
+      sourceFile: "live",
+      question: prompt,
+    };
+    liveDraftPostByNodeRef.current[nodeId] = draftId;
+    upsertFeedPost(draftView);
+
+    try {
+      const result = await executeTurnNode(agentNode, prompt);
+      const endedAtIso = new Date().toISOString();
+
+      if (!result.ok) {
+        setNodeStatus(nodeId, "failed", result.error ?? "에이전트 실행 실패");
+        setNodeRuntimeFields(nodeId, {
+          status: "failed",
+          error: result.error,
+          threadId: result.threadId,
+          turnId: result.turnId,
+          usage: result.usage,
+          startedAt: startedAtIso,
+          finishedAt: endedAtIso,
+          durationMs: new Date(endedAtIso).getTime() - new Date(startedAtIso).getTime(),
+        });
+        transition(runRecord, nodeId, "failed", result.error ?? "에이전트 실행 실패");
+        const failedBuilt = buildFeedPost({
+          runId,
+          node: agentNode,
+          postId: `${runId}:${nodeId}:failed`,
+          threadId: sourcePostId ?? draftId,
+          parentPostId,
+          status: "failed",
+          createdAt: endedAtIso,
+          summary: result.error ?? "에이전트 실행 실패",
+          logs: runLogCollectorRef.current[nodeId] ?? [],
+          output: result.output,
+          error: result.error,
+          durationMs: new Date(endedAtIso).getTime() - new Date(startedAtIso).getTime(),
+          usage: result.usage,
+        });
+        runRecord.feedPosts?.push(failedBuilt.post);
+        runRecord.socialTrace?.push({
+          at: endedAtIso,
+          type: traceType,
+          sourcePostId,
+          targetAgentId: nodeId,
+          prompt,
+          result: "failed",
+        });
+        replaceDraftWithFinalPost(draftId, {
+          ...failedBuilt.post,
+          sourceFile: `run-${runId}.json`,
+          question: prompt,
+        });
+      } else {
+        const config = agentNode.config as TurnConfig;
+        const artifactType = toArtifactType(config.artifactType);
+        const normalizedArtifact = normalizeArtifactOutput(nodeId, artifactType, result.output);
+        const normalizedOutput = normalizedArtifact.output;
+        const qualityReport = await buildQualityReport({
+          node: agentNode,
+          config,
+          output: normalizedOutput,
+          cwd: String(config.cwd ?? cwd).trim() || cwd,
+        });
+        setNodeStatus(nodeId, "done", "에이전트 실행 완료");
+        setNodeRuntimeFields(nodeId, {
+          status: "done",
+          output: normalizedOutput,
+          qualityReport,
+          threadId: result.threadId,
+          turnId: result.turnId,
+          usage: result.usage,
+          startedAt: startedAtIso,
+          finishedAt: endedAtIso,
+          durationMs: new Date(endedAtIso).getTime() - new Date(startedAtIso).getTime(),
+        });
+        transition(runRecord, nodeId, "done", "에이전트 실행 완료");
+        const doneBuilt = buildFeedPost({
+          runId,
+          node: agentNode,
+          postId: `${runId}:${nodeId}:done`,
+          threadId: sourcePostId ?? draftId,
+          parentPostId,
+          status: "done",
+          createdAt: endedAtIso,
+          summary: "에이전트 실행 완료",
+          logs: runLogCollectorRef.current[nodeId] ?? [],
+          output: normalizedOutput,
+          durationMs: new Date(endedAtIso).getTime() - new Date(startedAtIso).getTime(),
+          usage: result.usage,
+          qualityReport,
+        });
+        runRecord.feedPosts?.push(doneBuilt.post);
+        runRecord.socialTrace?.push({
+          at: endedAtIso,
+          type: traceType,
+          sourcePostId,
+          targetAgentId: nodeId,
+          prompt,
+          result: "done",
+        });
+        replaceDraftWithFinalPost(draftId, {
+          ...doneBuilt.post,
+          sourceFile: `run-${runId}.json`,
+          question: prompt,
+        });
+      }
+
+      runRecord.finishedAt = new Date().toISOString();
+      runRecord.nodeLogs = runLogCollectorRef.current;
+      await saveRunRecord(runRecord);
+      await refreshRunFiles();
+      setStatus("단일 에이전트 실행 완료");
+    } catch (e) {
+      setError(`단일 에이전트 실행 실패: ${String(e)}`);
+      setStatus("단일 에이전트 실행 실패");
+    } finally {
+      delete liveDraftPostByNodeRef.current[nodeId];
+      collectingRunRef.current = false;
+      setIsGraphRunning(false);
+      cancelRequestedRef.current = false;
+    }
+  }
+
+  async function onSubmitReply(post: FeedViewPost) {
+    const reply = (replyDraftByPost[post.id] ?? "").trim();
+    if (!reply) {
+      return;
+    }
+    const targetNode = turnNodeMap.get(post.nodeId);
+    if (!targetNode) {
+      setError("답글 대상으로 지정된 에이전트를 찾지 못했습니다.");
+      return;
+    }
+    setReplyBusyPostId(post.id);
+    const composed = [
+      `[원질문]`,
+      post.question ?? workflowQuestion,
+      ``,
+      `[기존 요약]`,
+      post.summary,
+      ``,
+      `[사용자 답글 요청]`,
+      reply,
+    ].join("\n");
+    await runSingleAgentTurn({
+      agentNode: targetNode,
+      prompt: composed,
+      parentPostId: post.id,
+      sourcePostId: post.threadId ?? post.id,
+      traceType: "reply_rerun",
+    });
+    setReplyDraftByPost((prev) => ({ ...prev, [post.id]: "" }));
+    setReplyBusyPostId("");
+  }
+
+  async function onHomeComposeRun() {
+    const prompt = workflowQuestion.trim();
+    if (!prompt) {
+      setError("요구사항을 입력해주세요.");
+      return;
+    }
+    if (homeTargetAgentId === "all") {
+      await onRunGraph();
+      return;
+    }
+    const targetNode = turnNodeMap.get(homeTargetAgentId);
+    if (!targetNode) {
+      setError("대상 에이전트를 찾지 못했습니다.");
+      return;
+    }
+    await runSingleAgentTurn({
+      agentNode: targetNode,
+      prompt,
+      traceType: "home_target_rerun",
+    });
   }
 
   async function onCancelGraphRun() {
@@ -6972,6 +7652,16 @@ ${prompt}`;
       return haystack.includes(keyword);
     })
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  const homeVisibleFeedPosts =
+    homeTimelineTab === "recommended"
+      ? filteredFeedPosts
+      : filteredFeedPosts.filter((post) => followingReachableSet.has(post.nodeId));
+  const runningCount = Object.values(nodeStates).filter((row) => row.status === "running").length;
+  const queuedCount = Object.values(nodeStates).filter((row) => row.status === "queued").length;
+  const failedCount = Object.values(nodeStates).filter((row) => row.status === "failed").length;
+  const suggestedAgents = turnNodes
+    .filter((node) => !followingReachableSet.has(node.id))
+    .slice(0, 5);
   const viewportWidth = Math.ceil(canvasLogicalViewport.width);
   const viewportHeight = Math.ceil(canvasLogicalViewport.height);
   const stagePadding = graph.nodes.length > 0 ? STAGE_GROW_MARGIN : 0;
@@ -7001,24 +7691,24 @@ ${prompt}`;
           }}
         >
           <button
-            className={isActiveTab("workflow") ? "is-active" : ""}
-            onClick={() => setWorkspaceTab("workflow")}
-            aria-label="워크플로우"
-            title="워크플로우"
+            className={isActiveTab("home") ? "is-active" : ""}
+            onClick={() => setWorkspaceTab("home")}
+            aria-label="홈"
+            title="홈"
             type="button"
           >
-            <span className="nav-icon"><NavIcon tab="workflow" /></span>
-            <span className="nav-label">워크</span>
+            <span className="nav-icon"><NavIcon tab="home" /></span>
+            <span className="nav-label">홈</span>
           </button>
           <button
-            className={isActiveTab("feed") ? "is-active" : ""}
-            onClick={() => setWorkspaceTab("feed")}
-            aria-label="피드"
-            title="피드"
+            className={isActiveTab("agents") ? "is-active" : ""}
+            onClick={() => setWorkspaceTab("agents")}
+            aria-label="에이전트"
+            title="에이전트"
             type="button"
           >
-            <span className="nav-icon"><NavIcon tab="feed" /></span>
-            <span className="nav-label">피드</span>
+            <span className="nav-icon"><NavIcon tab="agents" /></span>
+            <span className="nav-label">에이전트</span>
           </button>
           <button
             className={isActiveTab("history") ? "is-active" : ""}
@@ -7058,6 +7748,330 @@ ${prompt}`;
               ×
             </button>
           </div>
+        )}
+
+        {workspaceTab === "home" && (
+          <section className="social-home-layout">
+            <article className="panel-card social-main-column">
+              <div className="social-timeline-tabs">
+                <button
+                  className={homeTimelineTab === "recommended" ? "is-active" : ""}
+                  onClick={() => setHomeTimelineTab("recommended")}
+                  type="button"
+                >
+                  추천
+                </button>
+                <button
+                  className={homeTimelineTab === "following" ? "is-active" : ""}
+                  onClick={() => setHomeTimelineTab("following")}
+                  type="button"
+                >
+                  팔로잉
+                </button>
+              </div>
+              <div className="social-composer">
+                <h2>무슨 일을 진행할까요?</h2>
+                <label>
+                  실행 대상
+                  <FancySelect
+                    ariaLabel="실행 대상"
+                    className="modern-select"
+                    onChange={setHomeTargetAgentId}
+                    options={[
+                      { value: "all", label: "전체 에이전트" },
+                      ...turnNodes.map((node) => ({ value: node.id, label: turnModelLabel(node) })),
+                    ]}
+                    value={homeTargetAgentId}
+                  />
+                </label>
+                <label>
+                  요구사항 입력
+                  <textarea
+                    className="social-compose-textarea"
+                    onChange={(e) => setWorkflowQuestion(e.currentTarget.value)}
+                    rows={4}
+                    value={workflowQuestion}
+                  />
+                </label>
+                <div className="button-row">
+                  <button disabled={isGraphRunning || turnNodes.length === 0} onClick={onHomeComposeRun} type="button">
+                    게시하기
+                  </button>
+                  <button disabled={!isGraphRunning} onClick={onCancelGraphRun} type="button">
+                    중지
+                  </button>
+                </div>
+              </div>
+              <div className="social-feed-stream">
+                {feedLoading && <div className="log-empty">피드 로딩 중...</div>}
+                {!feedLoading && homeVisibleFeedPosts.length === 0 && (
+                  <div className="log-empty">표시할 포스트가 없습니다.</div>
+                )}
+                {!feedLoading &&
+                  homeVisibleFeedPosts.map((post) => {
+                    const activeAttachmentKind = feedAttachmentTabByPost[post.id] ?? "markdown";
+                    const selectedAttachment =
+                      post.attachments.find((attachment) => attachment.kind === activeAttachmentKind) ??
+                      post.attachments[0];
+                    const rawEnabled = feedRawViewByPost[post.id] === true;
+                    const rawContent = selectedAttachment
+                      ? feedRawAttachmentRef.current[feedAttachmentRawKey(post.id, selectedAttachment.kind)]
+                      : "";
+                    const canShowRaw = Boolean(rawContent);
+                    const visibleContent =
+                      rawEnabled && canShowRaw && rawContent ? rawContent : selectedAttachment?.content ?? "(첨부 없음)";
+                    return (
+                      <section className={`feed-card ${post.status === "draft" ? "is-draft" : ""}`} key={post.id}>
+                        <div className="feed-card-head">
+                          <div className="feed-card-title-wrap">
+                            <h3>{post.agentName}</h3>
+                            <div className="feed-card-sub">{post.roleLabel}</div>
+                          </div>
+                          <div className="feed-card-meta">
+                            <span className={`status-pill status-${post.status === "draft" ? "queued" : post.status}`}>
+                              {feedPostStatusLabel(post.status)}
+                            </span>
+                            <span className="feed-card-time">{post.createdAt}</span>
+                          </div>
+                        </div>
+                        {post.question && <div className="feed-card-question">질문: {post.question}</div>}
+                        <div className="feed-card-summary">{post.summary || "(요약 없음)"}</div>
+                        <div className="feed-step-list">
+                          {post.steps.map((step) => (
+                            <span className="feed-step-chip" key={`${post.id}-${step}`}>
+                              {step}
+                            </span>
+                          ))}
+                        </div>
+                        <div className="feed-attachment-toolbar">
+                          <div className="feed-attachment-tabs">
+                            {post.attachments.map((attachment) => (
+                              <button
+                                className={activeAttachmentKind === attachment.kind ? "is-active" : ""}
+                                key={`${post.id}-${attachment.kind}`}
+                                onClick={() =>
+                                  setFeedAttachmentTabByPost((prev) => ({
+                                    ...prev,
+                                    [post.id]: attachment.kind,
+                                  }))
+                                }
+                                type="button"
+                              >
+                                {attachment.kind === "markdown" ? "문서(MD)" : "데이터(JSON)"}
+                              </button>
+                            ))}
+                          </div>
+                          <button
+                            disabled={!canShowRaw}
+                            onClick={() =>
+                              setFeedRawViewByPost((prev) => ({
+                                ...prev,
+                                [post.id]: !prev[post.id],
+                              }))
+                            }
+                            type="button"
+                          >
+                            {rawEnabled ? "마스킹 보기" : "원문 보기"}
+                          </button>
+                        </div>
+                        <pre className="feed-attachment-content">{visibleContent}</pre>
+                        <div className="feed-evidence-row">
+                          <span>생성 시간: {formatDuration(post.evidence.durationMs)}</span>
+                          <span>사용량: {formatUsage(post.evidence.usage)}</span>
+                          <span>
+                            품질:{" "}
+                            {post.evidence.qualityDecision
+                              ? `${post.evidence.qualityDecision} (${post.evidence.qualityScore ?? "-"})`
+                              : "-"}
+                          </span>
+                        </div>
+                        <label className="feed-reply-box">
+                          답글(리트윗)
+                          <textarea
+                            onChange={(e) =>
+                              setReplyDraftByPost((prev) => ({
+                                ...prev,
+                                [post.id]: e.currentTarget.value,
+                              }))
+                            }
+                            placeholder="변경 요청, 추가 요구사항, 검증 포인트를 입력하세요."
+                            rows={3}
+                            value={replyDraftByPost[post.id] ?? ""}
+                          />
+                        </label>
+                        <div className="button-row feed-card-actions">
+                          <button
+                            disabled={replyBusyPostId === post.id || isGraphRunning || post.status === "draft"}
+                            onClick={() => onSubmitReply(post)}
+                            type="button"
+                          >
+                            답글 실행
+                          </button>
+                          <button onClick={() => onOpenFeedPostHistory(post)} type="button">
+                            기록 열기
+                          </button>
+                          <button
+                            disabled={post.sourceFile === "live"}
+                            onClick={() => onExportRunFile(post.sourceFile)}
+                            type="button"
+                          >
+                            Run 내보내기
+                          </button>
+                        </div>
+                      </section>
+                    );
+                  })}
+              </div>
+            </article>
+
+            <aside className="panel-card social-right-column">
+              <h2>실행 상태</h2>
+              <div className="settings-badges">
+                <span className="status-tag neutral">실행 중 {runningCount}</span>
+                <span className="status-tag neutral">대기 {queuedCount}</span>
+                <span className="status-tag neutral">실패 {failedCount}</span>
+              </div>
+              <label>
+                팔로잉 기준 에이전트
+                <FancySelect
+                  ariaLabel="팔로잉 기준 에이전트"
+                  className="modern-select"
+                  onChange={setFollowingAnchorAgentId}
+                  options={turnNodes.map((node) => ({ value: node.id, label: turnModelLabel(node) }))}
+                  value={followingAnchorAgentId}
+                />
+              </label>
+              <section className="social-recommend-list">
+                <h3>추천 에이전트</h3>
+                {suggestedAgents.length === 0 && <div className="inspector-empty">추천할 에이전트가 없습니다.</div>}
+                {suggestedAgents.map((node) => (
+                  <div className="social-recommend-item" key={node.id}>
+                    <strong>{turnModelLabel(node)}</strong>
+                    <span>{turnRoleLabel(node)}</span>
+                  </div>
+                ))}
+              </section>
+              <section className="social-recommend-list">
+                <h3>최근 오류</h3>
+                <div className="inspector-empty">{error || "최근 오류가 없습니다."}</div>
+              </section>
+            </aside>
+          </section>
+        )}
+
+        {workspaceTab === "agents" && (
+          <section className="agents-layout">
+            <article className="panel-card agents-main">
+              <div className="agents-head">
+                <h2>에이전트 관리</h2>
+                <div className="button-row">
+                  <button onClick={() => addNode("turn")} type="button">
+                    에이전트 추가
+                  </button>
+                </div>
+              </div>
+              <div className="agents-list">
+                {turnNodes.length === 0 && <div className="log-empty">에이전트가 없습니다.</div>}
+                {turnNodes.map((node) => {
+                  const config = node.config as TurnConfig;
+                  const followTargets = followEdges
+                    .filter((edge) => edge.from.nodeId === node.id)
+                    .map((edge) => edge.to.nodeId);
+                  return (
+                    <section className="agents-card" key={node.id}>
+                      <div className="agents-card-head">
+                        <strong>{turnModelLabel(node)}</strong>
+                        <button onClick={() => deleteNode(node.id)} type="button">
+                          삭제
+                        </button>
+                      </div>
+                      <label>
+                        모델
+                        <FancySelect
+                          ariaLabel="에이전트 모델"
+                          className="modern-select"
+                          onChange={(next) => updateTurnNodeConfigById(node.id, { model: next })}
+                          options={TURN_MODEL_OPTIONS.map((option) => ({ value: option, label: option }))}
+                          value={toTurnModelDisplayName(String(config.model ?? DEFAULT_TURN_MODEL))}
+                        />
+                      </label>
+                      <label>
+                        역할
+                        <input
+                          onChange={(e) => updateTurnNodeConfigById(node.id, { role: e.currentTarget.value })}
+                          value={String(config.role ?? "")}
+                        />
+                      </label>
+                      <label>
+                        목표
+                        <input
+                          onChange={(e) => updateTurnNodeConfigById(node.id, { goal: e.currentTarget.value })}
+                          value={String(config.goal ?? "")}
+                        />
+                      </label>
+                      <label>
+                        품질 기준
+                        <input
+                          onChange={(e) => updateTurnNodeConfigById(node.id, { qualityRule: e.currentTarget.value })}
+                          value={String(config.qualityRule ?? "")}
+                        />
+                      </label>
+                      <label>
+                        팔로우 연결 추가
+                        <FancySelect
+                          ariaLabel="팔로우 연결"
+                          className="modern-select"
+                          onChange={(next) => addFollowEdge(node.id, next)}
+                          options={[
+                            { value: "", label: "대상 선택" },
+                            ...turnNodes
+                              .filter((target) => target.id !== node.id)
+                              .map((target) => ({ value: target.id, label: turnModelLabel(target) })),
+                          ]}
+                          value=""
+                        />
+                      </label>
+                      <div className="agent-follow-list">
+                        {followTargets.length === 0 && <span className="inspector-empty">연결된 팔로우 없음</span>}
+                        {followTargets.map((targetId) => {
+                          const targetNode = turnNodeMap.get(targetId);
+                          return (
+                            <button
+                              className="agent-follow-chip"
+                              key={`${node.id}-${targetId}`}
+                              onClick={() => removeFollowEdge(node.id, targetId)}
+                              type="button"
+                            >
+                              {targetNode ? turnModelLabel(targetNode) : targetId} ×
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </section>
+                  );
+                })}
+              </div>
+            </article>
+            <aside className="panel-card agents-side">
+              <h2>고급 실행 노드</h2>
+              <div className="usage-method">
+                Transform/Gate 노드는 실행 로직에 유지되며, SNS 화면에서는 숨겨집니다.
+              </div>
+              <div className="settings-badges">
+                <span className="status-tag neutral">
+                  숨김 노드 {socialWorkspace.advanced?.hiddenNodes.length ?? 0}
+                </span>
+                <span className="status-tag neutral">
+                  숨김 연결 {socialWorkspace.advanced?.hiddenEdges.length ?? 0}
+                </span>
+              </div>
+              <div className="button-row">
+                <button onClick={() => setWorkspaceTab("workflow")} type="button">
+                  고급 편집 열기
+                </button>
+              </div>
+            </aside>
+          </section>
         )}
 
         {workspaceTab === "workflow" && (
