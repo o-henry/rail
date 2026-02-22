@@ -9,7 +9,7 @@ import {
 } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { revealItemInDir } from "@tauri-apps/plugin-opener";
+import { openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 import "./App.css";
 
 type EngineNotificationEvent = {
@@ -29,6 +29,11 @@ type ThreadStartResult = {
 
 type UsageCheckResult = {
   sourceMethod: string;
+  raw: unknown;
+};
+
+type LoginChatgptResult = {
+  authUrl: string;
   raw: unknown;
 };
 
@@ -3933,6 +3938,28 @@ function App() {
     }
   }
 
+  async function onLoginChatgpt() {
+    setError("");
+    try {
+      await ensureEngineStarted();
+      const result = await invoke<LoginChatgptResult>("login_chatgpt");
+      const authUrl = typeof result.authUrl === "string" ? result.authUrl.trim() : "";
+      if (!authUrl) {
+        setError("Codex 로그인 URL을 받지 못했습니다. 잠시 후 다시 시도해주세요.");
+        return;
+      }
+      try {
+        await openUrl(authUrl);
+        setStatus("Codex 로그인 창을 열었습니다. 인증 완료 후 상태가 갱신됩니다.");
+      } catch {
+        setError(`브라우저 자동 열기에 실패했습니다. 아래 URL을 직접 열어 로그인하세요: ${authUrl}`);
+        setStatus("Codex 로그인 URL 수신 완료");
+      }
+    } catch (e) {
+      setError(`Codex 로그인 시작 실패: ${String(e)}`);
+    }
+  }
+
   async function onSelectCwdDirectory() {
     setError("");
     try {
@@ -6685,6 +6712,14 @@ ${prompt}`;
               type="button"
             >
               <span className="settings-button-label">사용량 확인</span>
+            </button>
+            <button
+              className="settings-login-button"
+              onClick={onLoginChatgpt}
+              disabled={running || isGraphRunning}
+              type="button"
+            >
+              <span className="settings-button-label">Codex 로그인</span>
             </button>
           </div>
         )}
