@@ -10,7 +10,7 @@ import {
 } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { openPath } from "@tauri-apps/plugin-opener";
+import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import "./App.css";
 
 type EngineNotificationEvent = {
@@ -446,6 +446,19 @@ function toUsageCheckErrorMessage(error: unknown): string {
 
   const compact = raw.length > 140 ? `${raw.slice(0, 140)}...` : raw;
   return `사용량 조회에 실패했습니다. 원인: ${compact}`;
+}
+
+function toOpenRunsFolderErrorMessage(error: unknown): string {
+  const raw = toErrorText(error);
+  const lower = raw.toLowerCase();
+
+  if (lower.includes("not allowed") || lower.includes("permission")) {
+    return "실행 기록 폴더를 열 권한이 없습니다. 앱 권한 설정을 확인해주세요.";
+  }
+  if (lower.includes("not found") || lower.includes("no such file")) {
+    return "실행 기록 폴더를 찾지 못했습니다. 먼저 실행 기록을 생성해주세요.";
+  }
+  return `실행 기록 폴더 열기 실패: ${raw}`;
 }
 
 function toTurnModelDisplayName(value: string): string {
@@ -2934,10 +2947,10 @@ function App() {
     setError("");
     try {
       const runsDir = await invoke<string>("run_directory");
-      await openPath(runsDir);
+      await revealItemInDir(runsDir);
       setStatus("실행 기록 폴더 열림");
     } catch (e) {
-      setError(`실행 기록 폴더 열기 실패: ${String(e)}`);
+      setError(toOpenRunsFolderErrorMessage(e));
     }
   }
 
