@@ -144,7 +144,8 @@ type FeedAttachment = {
   charCount: number;
 };
 
-type FeedPostStatus = "done" | "failed" | "cancelled";
+type FeedPostStatus = "draft" | "done" | "failed" | "cancelled";
+type FeedTerminalStatus = Exclude<FeedPostStatus, "draft">;
 
 type FeedPost = {
   id: string;
@@ -232,7 +233,7 @@ type FeedViewPost = FeedPost & {
 type FeedBuildInput = {
   runId: string;
   node: GraphNode;
-  status: FeedPostStatus;
+  status: FeedTerminalStatus;
   createdAt: string;
   summary?: string;
   logs?: string[];
@@ -1043,6 +1044,9 @@ function buildFeedSummary(status: FeedPostStatus, output: unknown, error?: strin
   if (trimmedSummary) {
     return trimmedSummary;
   }
+  if (status === "draft") {
+    return "에이전트가 현재 작업 중입니다.";
+  }
   if (status !== "done") {
     return error?.trim() || "실행 실패로 상세 로그 확인이 필요합니다.";
   }
@@ -1189,7 +1193,7 @@ function normalizeRunFeedPosts(run: RunRecord): FeedPost[] {
     const built = buildFeedPost({
       runId: run.runId,
       node,
-      status: transition.status as FeedPostStatus,
+      status: transition.status as FeedTerminalStatus,
       createdAt: transition.at,
       summary: transition.message,
       logs,
@@ -3290,6 +3294,13 @@ function App() {
   const [feedKeyword, setFeedKeyword] = useState("");
   const [feedCategory, setFeedCategory] = useState<FeedCategory>("all_posts");
   const [feedFilterOpen, setFeedFilterOpen] = useState(false);
+  const [feedReplyDraftByPost, setFeedReplyDraftByPost] = useState<Record<string, string>>({});
+  const [pendingNodeRequests, setPendingNodeRequests] = useState<Record<string, string[]>>({});
+  const [activeFeedRunMeta, setActiveFeedRunMeta] = useState<{
+    runId: string;
+    question: string;
+    startedAt: string;
+  } | null>(null);
   const [feedRawViewByPost, setFeedRawViewByPost] = useState<Record<string, boolean>>({});
   const [selectedRunFile, setSelectedRunFile] = useState("");
   const [selectedRunDetail, setSelectedRunDetail] = useState<RunRecord | null>(null);
@@ -3337,6 +3348,7 @@ function App() {
   const runLogCollectorRef = useRef<Record<string, string[]>>({});
   const feedRunCacheRef = useRef<Record<string, RunRecord>>({});
   const feedRawAttachmentRef = useRef<Record<string, string>>({});
+  const pendingNodeRequestsRef = useRef<Record<string, string[]>>({});
 
   const activeApproval = pendingApprovals[0];
   const selectedNode = graph.nodes.find((node) => node.id === selectedNodeId) ?? null;
@@ -3423,6 +3435,36 @@ function App() {
         },
       };
     });
+  }
+
+  function enqueueNodeRequest(nodeId: string, text: string) {
+    const trimmed = text.trim();
+    if (!trimmed) {
+      return;
+    }
+    const next = [...(pendingNodeRequestsRef.current[nodeId] ?? []), trimmed];
+    pendingNodeRequestsRef.current = {
+      ...pendingNodeRequestsRef.current,
+      [nodeId]: next,
+    };
+    setPendingNodeRequests((prev) => ({
+      ...prev,
+      [nodeId]: next,
+    }));
+    addNodeLog(nodeId, `[사용자 추가 요청] ${trimmed}`);
+  }
+
+  function consumeNodeRequests(nodeId: string): string[] {
+    const queued = [...(pendingNodeRequestsRef.current[nodeId] ?? [])];
+    pendingNodeRequestsRef.current = {
+      ...pendingNodeRequestsRef.current,
+      [nodeId]: [],
+    };
+    setPendingNodeRequests((prev) => ({
+      ...prev,
+      [nodeId]: [],
+    }));
+    return queued;
   }
 
   function markCodexNodesStatusOnEngineIssue(
@@ -3860,6 +3902,126 @@ function App() {
       setWorkspaceTab("history");
     } catch (e) {
       setError(`실행 기록 열기 실패: ${String(e)}`);
+    }
+  }
+
+  async function onSubmitFeedAgentRequest(post: FeedViewPost) {
+    const draft = (feedReplyDraftByPost[post.id] ?? "").trim();
+    if (!draft) {
+      return;
+    }
+    const node = graph.nodes.find((row) => row.id === post.nodeId);
+    if (!node || node.type !== "turn") {
+      setError("이 포스트는 추가 요청을 받을 수 없는 노드입니다.");
+      return;
+    }
+
+    enqueueNodeRequest(node.id, draft);
+    setFeedReplyDraftByPost((prev) => ({
+      ...prev,
+      [post.id]: "",
+    }));
+
+    if (isGraphRunning) {
+      setStatus(`${turnModelLabel(node)} 에이전트 요청을 큐에 추가했습니다.`);
+      return;
+    }
+
+    const oneOffRunId = `manual-${Date.now()}`;
+    const startedAt = new Date().toISOString();
+    const followupInput = [
+      post.question ? `[원래 질문]\n${post.question}` : "",
+      post.summary ? `[이전 결과 요약]\n${post.summary}` : "",
+      `[사용자 추가 요청]\n${draft}`,
+    ]
+      .filter(Boolean)
+      .join("\n\n");
+
+    setNodeStatus(node.id, "running", "피드 추가 요청 실행 시작");
+    setNodeRuntimeFields(node.id, {
+      status: "running",
+      startedAt,
+      finishedAt: undefined,
+      durationMs: undefined,
+      error: undefined,
+    });
+    try {
+      const startedAtMs = Date.now();
+      const result = await executeTurnNode(node, followupInput);
+      const finishedAt = new Date().toISOString();
+      const durationMs = Date.now() - startedAtMs;
+      if (!result.ok) {
+        setNodeStatus(node.id, "failed", result.error ?? "피드 추가 요청 실행 실패");
+        setNodeRuntimeFields(node.id, {
+          status: "failed",
+          error: result.error,
+          finishedAt,
+          durationMs,
+          threadId: result.threadId,
+          turnId: result.turnId,
+          usage: result.usage,
+        });
+        const failed = buildFeedPost({
+          runId: oneOffRunId,
+          node,
+          status: "failed",
+          createdAt: finishedAt,
+          summary: result.error ?? "피드 추가 요청 실행 실패",
+          logs: nodeStates[node.id]?.logs ?? [],
+          output: result.output,
+          error: result.error,
+          durationMs,
+          usage: result.usage,
+        });
+        feedRawAttachmentRef.current[feedAttachmentRawKey(failed.post.id, "markdown")] =
+          failed.rawAttachments.markdown;
+        feedRawAttachmentRef.current[feedAttachmentRawKey(failed.post.id, "json")] = failed.rawAttachments.json;
+        setFeedPosts((prev) => [
+          {
+            ...failed.post,
+            sourceFile: "",
+            question: post.question,
+          },
+          ...prev,
+        ]);
+        setStatus("피드 추가 요청 실행 실패");
+        return;
+      }
+
+      setNodeStatus(node.id, "done", "피드 추가 요청 실행 완료");
+      setNodeRuntimeFields(node.id, {
+        status: "done",
+        output: result.output,
+        finishedAt,
+        durationMs,
+        threadId: result.threadId,
+        turnId: result.turnId,
+        usage: result.usage,
+      });
+      const done = buildFeedPost({
+        runId: oneOffRunId,
+        node,
+        status: "done",
+        createdAt: finishedAt,
+        summary: "피드 추가 요청 실행 완료",
+        logs: nodeStates[node.id]?.logs ?? [],
+        output: result.output,
+        durationMs,
+        usage: result.usage,
+      });
+      feedRawAttachmentRef.current[feedAttachmentRawKey(done.post.id, "markdown")] = done.rawAttachments.markdown;
+      feedRawAttachmentRef.current[feedAttachmentRawKey(done.post.id, "json")] = done.rawAttachments.json;
+      setFeedPosts((prev) => [
+        {
+          ...done.post,
+          sourceFile: "",
+          question: post.question,
+        },
+        ...prev,
+      ]);
+      setStatus("피드 추가 요청 실행 완료");
+    } catch (error) {
+      setError(`피드 추가 요청 실행 실패: ${String(error)}`);
     }
   }
 
@@ -5873,10 +6035,19 @@ ${prompt}`;
     const nodeOllamaModel = String(config.ollamaModel ?? "llama3.1:8b").trim() || "llama3.1:8b";
 
     const inputText = stringifyInput(input);
+    const queuedRequests = consumeNodeRequests(node.id);
+    const queuedRequestBlock =
+      queuedRequests.length > 0
+        ? `\n\n[사용자 추가 요청]\n${queuedRequests.map((line, index) => `${index + 1}. ${line}`).join("\n")}`
+        : "";
+    if (queuedRequests.length > 0) {
+      addNodeLog(node.id, `[요청 반영] ${queuedRequests.length}개 추가 요청을 이번 실행에 반영했습니다.`);
+    }
     const basePrompt = promptTemplate.includes("{{input}}")
       ? replaceInputPlaceholder(promptTemplate, inputText)
       : `${promptTemplate}${inputText ? `\n${inputText}` : ""}`;
-    const withKnowledge = await injectKnowledgeContext(node, basePrompt, config);
+    const promptWithRequests = `${basePrompt}${queuedRequestBlock}`.trim();
+    const withKnowledge = await injectKnowledgeContext(node, promptWithRequests, config);
     const textToSend = withKnowledge.prompt;
     const knowledgeTrace = withKnowledge.trace;
 
@@ -6164,6 +6335,11 @@ ${prompt}`;
       nodeMetrics: {},
       feedPosts: [],
     };
+    setActiveFeedRunMeta({
+      runId: runRecord.runId,
+      question: workflowQuestion,
+      startedAt: runRecord.startedAt,
+    });
 
     try {
       const requiresCodexEngine = graph.nodes.some((node) => {
@@ -6612,6 +6788,7 @@ ${prompt}`;
       setIsGraphRunning(false);
       cancelRequestedRef.current = false;
       collectingRunRef.current = false;
+      setActiveFeedRunMeta(null);
     }
   }
 
@@ -6936,14 +7113,100 @@ ${prompt}`;
     };
   });
   const isActiveTab = (tab: WorkspaceTab): boolean => workspaceTab === tab;
-  const filteredFeedPosts = feedPosts
+  const liveFeedPosts: FeedViewPost[] = (() => {
+    if (!activeFeedRunMeta) {
+      return [];
+    }
+    const now = Date.now();
+    const posts: FeedViewPost[] = [];
+    for (const node of graph.nodes) {
+      const runState = nodeStates[node.id];
+      if (!runState) {
+        continue;
+      }
+      if (!["queued", "running", "waiting_user"].includes(runState.status)) {
+        continue;
+      }
+
+      const logs = runState.logs.slice(-60);
+      const lastLog = logs[logs.length - 1] ?? "";
+      const roleLabel = node.type === "turn" ? turnRoleLabel(node) : nodeTypeLabel(node.type);
+      const agentName =
+        node.type === "turn"
+          ? turnModelLabel(node)
+          : node.type === "transform"
+            ? "데이터 변환"
+            : "결정 분기";
+      const summary =
+        runState.status === "queued"
+          ? "실행 대기 중입니다."
+          : runState.status === "running"
+            ? (lastLog || "에이전트가 작업 중입니다.")
+            : "사용자 입력 또는 후속 작업을 기다리는 중입니다.";
+      const liveText = logs.join("\n").trim() || summary;
+      const clip = clipTextByChars(liveText);
+      const masked = redactSensitiveText(clip.text);
+      const startedAtMs = runState.startedAt ? new Date(runState.startedAt).getTime() : Number.NaN;
+      const durationMs = Number.isNaN(startedAtMs) ? undefined : Math.max(0, now - startedAtMs);
+      const executor = node.type === "turn" ? getTurnExecutor(node.config as TurnConfig) : undefined;
+
+      posts.push({
+        id: `${activeFeedRunMeta.runId}:${node.id}:draft`,
+        runId: activeFeedRunMeta.runId,
+        nodeId: node.id,
+        nodeType: node.type,
+        executor,
+        agentName,
+        roleLabel,
+        status: "draft",
+        createdAt: runState.startedAt ?? activeFeedRunMeta.startedAt,
+        summary,
+        steps: summarizeFeedSteps(logs),
+        evidence: {
+          durationMs,
+          usage: runState.usage,
+          qualityScore: runState.qualityReport?.score,
+          qualityDecision: runState.qualityReport?.decision,
+        },
+        attachments: [
+          {
+            kind: "markdown",
+            title: "실시간 작업 로그",
+            content: masked,
+            truncated: clip.truncated,
+            charCount: clip.charCount,
+          },
+        ],
+        redaction: {
+          masked: true,
+          ruleVersion: FEED_REDACTION_RULE_VERSION,
+        },
+        sourceFile: `run-${activeFeedRunMeta.runId}.json`,
+        question: activeFeedRunMeta.question,
+      });
+    }
+    posts.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    return posts;
+  })();
+  const liveFeedNodeKeys = new Set(liveFeedPosts.map((post) => `${post.runId}:${post.nodeId}`));
+  const mergedFeedPosts = [
+    ...liveFeedPosts,
+    ...feedPosts.filter((post) => !liveFeedNodeKeys.has(`${post.runId}:${post.nodeId}`)),
+  ];
+  const filteredFeedPosts = mergedFeedPosts
     .filter((post) => {
       if (feedStatusFilter !== "all" && post.status !== feedStatusFilter) {
         return false;
       }
       if (feedExecutorFilter !== "all") {
         const normalizedExecutor =
-          post.executor === "codex" ? "codex" : post.executor === "ollama" ? "ollama" : "web";
+          post.executor === "codex"
+            ? "codex"
+            : post.executor === "ollama"
+              ? "ollama"
+              : post.executor
+                ? "web"
+                : "";
         if (normalizedExecutor !== feedExecutorFilter) {
           return false;
         }
@@ -7969,6 +8232,7 @@ ${prompt}`;
                       onChange={(next) => setFeedStatusFilter(next as FeedStatusFilter)}
                       options={[
                         { value: "all", label: "전체" },
+                        { value: "draft", label: "작업중" },
                         { value: "done", label: "완료" },
                         { value: "failed", label: "오류" },
                         { value: "cancelled", label: "취소" },
@@ -8057,6 +8321,10 @@ ${prompt}`;
                       1,
                       Math.min(99, Number(post.evidence.qualityScore ?? (post.status === "done" ? 95 : 55))),
                     );
+                    const pendingRequestCount = (pendingNodeRequests[post.nodeId] ?? []).length;
+                    const requestDraft = feedReplyDraftByPost[post.id] ?? "";
+                    const isDraftPost = post.status === "draft";
+                    const canRequest = post.nodeType === "turn";
                     return (
                       <section className="feed-card feed-card-sns" key={post.id}>
                         <div className="feed-card-head">
@@ -8068,10 +8336,12 @@ ${prompt}`;
                             <div className="feed-card-sub">{post.roleLabel}</div>
                           </div>
                           <span
-                            className={`feed-score-badge ${post.status === "done" ? "good" : "warn"}`}
-                            title={`품질 점수 ${score}`}
+                            className={`feed-score-badge ${
+                              isDraftPost ? "live" : post.status === "done" ? "good" : "warn"
+                            }`}
+                            title={isDraftPost ? "에이전트 작업 중" : `품질 점수 ${score}`}
                           >
-                            {score}
+                            {isDraftPost ? "LIVE" : score}
                           </span>
                         </div>
                         {post.question && <div className="feed-card-question">질문: {post.question}</div>}
@@ -8088,7 +8358,25 @@ ${prompt}`;
                           <span>{formatRelativeFeedTime(post.createdAt)}</span>
                           <span>생성 시간 {formatDuration(post.evidence.durationMs)}</span>
                           <span>사용량 {formatUsage(post.evidence.usage)}</span>
+                          {pendingRequestCount > 0 && <span>추가 요청 대기 {pendingRequestCount}건</span>}
                         </div>
+                        {canRequest && (
+                          <div className="feed-reply-row">
+                            <input
+                              onChange={(event) =>
+                                setFeedReplyDraftByPost((prev) => ({
+                                  ...prev,
+                                  [post.id]: event.currentTarget.value,
+                                }))
+                              }
+                              placeholder="에이전트에게 추가 요청을 남기세요"
+                              value={requestDraft}
+                            />
+                            <button onClick={() => onSubmitFeedAgentRequest(post)} type="button">
+                              요청 보내기
+                            </button>
+                          </div>
+                        )}
                         <div className="button-row feed-card-actions">
                           <button
                             disabled={!rawContent}
@@ -8102,10 +8390,18 @@ ${prompt}`;
                           >
                             {rawEnabled ? "마스킹 보기" : "원문 보기"}
                           </button>
-                          <button onClick={() => onOpenFeedPostHistory(post)} type="button">
+                          <button
+                            disabled={!post.sourceFile}
+                            onClick={() => onOpenFeedPostHistory(post)}
+                            type="button"
+                          >
                             기록 열기
                           </button>
-                          <button onClick={() => onExportRunFile(post.sourceFile)} type="button">
+                          <button
+                            disabled={!post.sourceFile}
+                            onClick={() => onExportRunFile(post.sourceFile)}
+                            type="button"
+                          >
                             공유
                           </button>
                         </div>
