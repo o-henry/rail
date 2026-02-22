@@ -6208,8 +6208,6 @@ ${prompt}`;
                             applyPreset("creative");
                           } else if (value === "newsTrend") {
                             applyPreset("newsTrend");
-                          } else if (value === "expert") {
-                            applyPreset("expert");
                           }
                         }}
                         options={[
@@ -6220,7 +6218,6 @@ ${prompt}`;
                           { value: "fullstack", label: "풀스택 개발 템플릿" },
                           { value: "creative", label: "창의적 답변 템플릿" },
                           { value: "newsTrend", label: "최신 뉴스·트렌드 템플릿" },
-                          { value: "expert", label: "전문가 템플릿" },
                         ]}
                         placeholder="템플릿 선택"
                         value=""
