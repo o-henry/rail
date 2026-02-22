@@ -488,6 +488,94 @@ h3 {
   gap: 6px;
 }
 
+.knowledge-file-input {
+  display: none;
+}
+
+.knowledge-file-list {
+  display: grid;
+  gap: 6px;
+}
+
+.knowledge-file-empty {
+  font-size: 12px;
+  color: #6d7a8a;
+  background: #f7f9fc;
+  border-radius: 6px;
+  padding: 8px 10px;
+}
+
+.knowledge-file-item {
+  border-radius: 6px;
+  background: #f7f9fc;
+  padding: 8px 10px;
+  display: grid;
+  gap: 6px;
+}
+
+.knowledge-file-main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.knowledge-file-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  color: #2b3642;
+}
+
+.knowledge-file-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.knowledge-file-message {
+  font-size: 11px;
+  color: #7a8697;
+  line-height: 1.3;
+}
+
+.knowledge-status-pill {
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 11px;
+  line-height: 1.2;
+  background: #e4e9f1;
+  color: #3d4c61;
+  flex-shrink: 0;
+}
+
+.knowledge-status-pill.ready {
+  background: #dff4e8;
+  color: #1f6744;
+}
+
+.knowledge-status-pill.missing,
+.knowledge-status-pill.error {
+  background: #fde2e2;
+  color: #8f2d2d;
+}
+
+.knowledge-status-pill.unsupported {
+  background: #fbead9;
+  color: #8f5724;
+}
+
+.knowledge-status-pill.unknown {
+  background: #e5e9f0;
+  color: #4b596d;
+}
+
+.knowledge-file-actions .mini-action-button.is-enabled {
+  background: #e8f0ff;
+  color: #1f5ec6;
+}
+
 .graph-file-actions .mini-action-button {
   min-height: 30px;
   height: 30px;
@@ -738,7 +826,8 @@ h3 {
 
 .node-head {
   display: flex;
-  align-items: flex-start;
+  /* align-items: flex-start; */
+  align-items: center;
   justify-content: space-between;
   gap: 8px;
   padding: 13px 12px 10px;
@@ -1155,7 +1244,9 @@ h3 {
   top: calc(100% + 8px);
   width: 100%;
   box-sizing: border-box;
-  padding: 6px 8px;
+  /* padding: 6px 8px; */
+  padding: 16px 12px;
+  letter-spacing: 1px;
   border-radius: 6px;
   background: #1f2631;
   color: #ffffff;

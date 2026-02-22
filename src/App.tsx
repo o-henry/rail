@@ -69,6 +69,48 @@ type GraphData = {
   version: number;
   nodes: GraphNode[];
   edges: GraphEdge[];
+  knowledge: KnowledgeConfig;
+};
+
+type KnowledgeFileStatus = "ready" | "missing" | "unsupported" | "error";
+
+type KnowledgeFileRef = {
+  id: string;
+  name: string;
+  path: string;
+  ext: string;
+  enabled: boolean;
+  sizeBytes?: number;
+  mtimeMs?: number;
+  status?: KnowledgeFileStatus;
+  statusMessage?: string;
+};
+
+type KnowledgeConfig = {
+  files: KnowledgeFileRef[];
+  topK: number;
+  maxChars: number;
+};
+
+type KnowledgeSnippet = {
+  fileId: string;
+  fileName: string;
+  chunkIndex: number;
+  text: string;
+  score: number;
+};
+
+type KnowledgeRetrieveResult = {
+  snippets: KnowledgeSnippet[];
+  warnings: string[];
+};
+
+type KnowledgeTraceEntry = {
+  nodeId: string;
+  fileId: string;
+  fileName: string;
+  chunkIndex: number;
+  score: number;
 };
 
 type NodeExecutionStatus =
@@ -127,6 +169,7 @@ type RunRecord = {
     finishedAt: string;
     summary?: string;
   }>;
+  knowledgeTrace?: KnowledgeTraceEntry[];
 };
 
 type TurnTerminal = {
@@ -194,6 +237,7 @@ type TurnConfig = {
   role?: string;
   cwd?: string;
   promptTemplate?: string;
+  knowledgeEnabled?: boolean;
   webResultMode?: WebResultMode;
   webTimeoutMs?: number;
   ollamaModel?: string;
@@ -277,7 +321,21 @@ const QUESTION_INPUT_MAX_HEIGHT = 132;
 const NODE_DRAG_MARGIN = 60;
 const NODE_ANCHOR_OFFSET = 15;
 const FALLBACK_TURN_ROLE = "GENERAL AGENT";
-const GRAPH_SCHEMA_VERSION = 2;
+const GRAPH_SCHEMA_VERSION = 3;
+const KNOWLEDGE_DEFAULT_TOP_K = 4;
+const KNOWLEDGE_DEFAULT_MAX_CHARS = 2800;
+const KNOWLEDGE_TOP_K_OPTIONS: FancySelectOption[] = [
+  { value: "2", label: "2개" },
+  { value: "4", label: "4개" },
+  { value: "6", label: "6개" },
+  { value: "8", label: "8개" },
+];
+const KNOWLEDGE_MAX_CHARS_OPTIONS: FancySelectOption[] = [
+  { value: "1600", label: "1600자" },
+  { value: "2800", label: "2800자" },
+  { value: "4000", label: "4000자" },
+  { value: "5600", label: "5600자" },
+];
 const TURN_EXECUTOR_OPTIONS = [
   "codex",
   "web_gemini",
@@ -730,6 +788,68 @@ function replaceInputPlaceholder(template: string, value: string): string {
   return template.split("{{input}}").join(value);
 }
 
+function defaultKnowledgeConfig(): KnowledgeConfig {
+  return {
+    files: [],
+    topK: KNOWLEDGE_DEFAULT_TOP_K,
+    maxChars: KNOWLEDGE_DEFAULT_MAX_CHARS,
+  };
+}
+
+function normalizeKnowledgeStatus(input: unknown): KnowledgeFileStatus | undefined {
+  if (input === "ready" || input === "missing" || input === "unsupported" || input === "error") {
+    return input;
+  }
+  return undefined;
+}
+
+function normalizeKnowledgeFile(input: unknown): KnowledgeFileRef | null {
+  if (!input || typeof input !== "object") {
+    return null;
+  }
+  const row = input as Record<string, unknown>;
+  const rawPath = String(row.path ?? "").trim();
+  if (!rawPath) {
+    return null;
+  }
+
+  const id = String(row.id ?? "").trim() || rawPath;
+  const name = String(row.name ?? "").trim() || rawPath.split(/[\\/]/).pop() || rawPath;
+  const ext = String(row.ext ?? "").trim();
+  const enabled = typeof row.enabled === "boolean" ? row.enabled : true;
+  const sizeBytes = readNumber(row.sizeBytes);
+  const mtimeMs = readNumber(row.mtimeMs);
+  const status = normalizeKnowledgeStatus(row.status);
+  const statusMessage = typeof row.statusMessage === "string" ? row.statusMessage : undefined;
+
+  return {
+    id,
+    name,
+    path: rawPath,
+    ext,
+    enabled,
+    sizeBytes,
+    mtimeMs,
+    status,
+    statusMessage,
+  };
+}
+
+function normalizeKnowledgeConfig(input: unknown): KnowledgeConfig {
+  if (!input || typeof input !== "object") {
+    return defaultKnowledgeConfig();
+  }
+  const row = input as Record<string, unknown>;
+  const files = Array.isArray(row.files) ? row.files.map(normalizeKnowledgeFile).filter(Boolean) : [];
+  const topK = Math.max(1, Math.min(20, readNumber(row.topK) ?? KNOWLEDGE_DEFAULT_TOP_K));
+  const maxChars = Math.max(300, Math.min(20_000, readNumber(row.maxChars) ?? KNOWLEDGE_DEFAULT_MAX_CHARS));
+  return {
+    files: files as KnowledgeFileRef[],
+    topK,
+    maxChars,
+  };
+}
+
 function cloneGraph(input: GraphData): GraphData {
   return {
     version: input.version,
@@ -742,6 +862,11 @@ function cloneGraph(input: GraphData): GraphData {
       from: { ...edge.from },
       to: { ...edge.to },
     })),
+    knowledge: {
+      files: (input.knowledge?.files ?? []).map((file) => ({ ...file })),
+      topK: input.knowledge?.topK ?? KNOWLEDGE_DEFAULT_TOP_K,
+      maxChars: input.knowledge?.maxChars ?? KNOWLEDGE_DEFAULT_MAX_CHARS,
+    },
   };
 }
 
@@ -859,6 +984,7 @@ function defaultNodeConfig(type: NodeType): Record<string, unknown> {
       role: "",
       cwd: ".",
       promptTemplate: "{{input}}",
+      knowledgeEnabled: true,
     };
   }
 
@@ -1045,6 +1171,22 @@ function nodeStatusLabel(status: NodeExecutionStatus): string {
     return "건너뜀";
   }
   return "정지";
+}
+
+function knowledgeStatusMeta(status?: KnowledgeFileStatus): { label: string; tone: string } {
+  if (status === "ready") {
+    return { label: "준비됨", tone: "ready" };
+  }
+  if (status === "missing") {
+    return { label: "파일 없음", tone: "missing" };
+  }
+  if (status === "unsupported") {
+    return { label: "미지원", tone: "unsupported" };
+  }
+  if (status === "error") {
+    return { label: "오류", tone: "error" };
+  }
+  return { label: "미확인", tone: "unknown" };
 }
 
 function approvalDecisionLabel(decision: ApprovalDecision): string {
@@ -1368,7 +1510,7 @@ function buildValidationPreset(): GraphData {
     { from: { nodeId: "gate-decision", port: "out" }, to: { nodeId: "transform-reject", port: "in" } },
   ];
 
-  return { version: GRAPH_SCHEMA_VERSION, nodes, edges };
+  return { version: GRAPH_SCHEMA_VERSION, nodes, edges, knowledge: defaultKnowledgeConfig() };
 }
 
 function buildDevelopmentPreset(): GraphData {
@@ -1451,7 +1593,7 @@ function buildDevelopmentPreset(): GraphData {
     },
   ];
 
-  return { version: GRAPH_SCHEMA_VERSION, nodes, edges };
+  return { version: GRAPH_SCHEMA_VERSION, nodes, edges, knowledge: defaultKnowledgeConfig() };
 }
 
 function buildResearchPreset(): GraphData {
@@ -1510,7 +1652,7 @@ function buildResearchPreset(): GraphData {
     },
   ];
 
-  return { version: GRAPH_SCHEMA_VERSION, nodes, edges };
+  return { version: GRAPH_SCHEMA_VERSION, nodes, edges, knowledge: defaultKnowledgeConfig() };
 }
 
 function buildExpertPreset(): GraphData {
@@ -1564,12 +1706,12 @@ function buildExpertPreset(): GraphData {
     { from: { nodeId: "gate-expert", port: "out" }, to: { nodeId: "transform-expert-rework", port: "in" } },
   ];
 
-  return { version: GRAPH_SCHEMA_VERSION, nodes, edges };
+  return { version: GRAPH_SCHEMA_VERSION, nodes, edges, knowledge: defaultKnowledgeConfig() };
 }
 
 function normalizeGraph(input: unknown): GraphData {
   if (!input || typeof input !== "object") {
-    return { version: GRAPH_SCHEMA_VERSION, nodes: [], edges: [] };
+    return { version: GRAPH_SCHEMA_VERSION, nodes: [], edges: [], knowledge: defaultKnowledgeConfig() };
   }
 
   const data = input as Record<string, unknown>;
@@ -1592,6 +1734,8 @@ function normalizeGraph(input: unknown): GraphData {
         ...config,
         executor,
         model: toTurnModelDisplayName(String(config.model ?? DEFAULT_TURN_MODEL)),
+        knowledgeEnabled:
+          typeof config.knowledgeEnabled === "boolean" ? config.knowledgeEnabled : true,
       };
       return {
         ...node,
@@ -1603,6 +1747,7 @@ function normalizeGraph(input: unknown): GraphData {
     version: Math.max(version, GRAPH_SCHEMA_VERSION),
     nodes: normalizedNodes,
     edges: edges.filter(Boolean) as GraphEdge[],
+    knowledge: normalizeKnowledgeConfig(data.knowledge),
   };
 }
 
@@ -1734,6 +1879,7 @@ function App() {
     version: GRAPH_SCHEMA_VERSION,
     nodes: [],
     edges: [],
+    knowledge: defaultKnowledgeConfig(),
   });
   const [selectedNodeId, setSelectedNodeId] = useState<string>("");
   const [selectedNodeIds, setSelectedNodeIds] = useState<string[]>([]);
@@ -1775,6 +1921,7 @@ function App() {
   const dragStartSnapshotRef = useRef<GraphData | null>(null);
   const zoomStatusTimerRef = useRef<number | null>(null);
   const cwdDirectoryInputRef = useRef<HTMLInputElement | null>(null);
+  const knowledgeFileInputRef = useRef<HTMLInputElement | null>(null);
   const cancelRequestedRef = useRef(false);
   const activeTurnNodeIdRef = useRef<string>("");
   const activeWebNodeIdRef = useRef<string>("");
@@ -1790,6 +1937,8 @@ function App() {
 
   const activeApproval = pendingApprovals[0];
   const selectedNode = graph.nodes.find((node) => node.id === selectedNodeId) ?? null;
+  const graphKnowledge = normalizeKnowledgeConfig(graph.knowledge);
+  const enabledKnowledgeFiles = graphKnowledge.files.filter((row) => row.enabled);
 
   function setError(next: string) {
     setErrorState(next);
@@ -2342,6 +2491,90 @@ function App() {
     setStatus(`작업 경로 선택됨: ${selectedDirectory}`);
   }
 
+  function extractNativePathsFromSelectedFiles(files: FileList): string[] {
+    const next: string[] = [];
+    for (let index = 0; index < files.length; index += 1) {
+      const row = files[index] as File & { path?: string };
+      const raw = typeof row.path === "string" ? row.path.trim() : "";
+      if (raw) {
+        next.push(raw);
+      }
+    }
+    return Array.from(new Set(next));
+  }
+
+  function onOpenKnowledgeFilePicker() {
+    const input = knowledgeFileInputRef.current;
+    if (!input) {
+      setError("첨부 파일 선택기를 열 수 없습니다.");
+      return;
+    }
+    input.value = "";
+    input.click();
+  }
+
+  async function onKnowledgeFilesPicked(event: ReactChangeEvent<HTMLInputElement>) {
+    const files = event.currentTarget.files;
+    if (!files || files.length === 0) {
+      return;
+    }
+
+    const paths = extractNativePathsFromSelectedFiles(files);
+    if (paths.length === 0) {
+      setError("선택한 파일 경로를 읽지 못했습니다. 다시 선택해주세요.");
+      return;
+    }
+
+    setError("");
+    try {
+      const probed = await invoke<KnowledgeFileRef[]>("knowledge_probe", { paths });
+      applyGraphChange((prev) => {
+        const existingByPath = new Map(
+          (prev.knowledge?.files ?? []).map((row) => [row.path, row] as const),
+        );
+        for (const row of probed) {
+          const existing = existingByPath.get(row.path);
+          existingByPath.set(row.path, {
+            ...row,
+            enabled: existing ? existing.enabled : row.enabled,
+          });
+        }
+        return {
+          ...prev,
+          knowledge: {
+            ...(prev.knowledge ?? defaultKnowledgeConfig()),
+            files: Array.from(existingByPath.values()),
+          },
+        };
+      });
+      setStatus(`첨부 자료 ${paths.length}개 추가됨`);
+    } catch (error) {
+      setError(`첨부 자료 추가 실패: ${String(error)}`);
+    }
+  }
+
+  function onRemoveKnowledgeFile(fileId: string) {
+    applyGraphChange((prev) => ({
+      ...prev,
+      knowledge: {
+        ...(prev.knowledge ?? defaultKnowledgeConfig()),
+        files: (prev.knowledge?.files ?? []).filter((row) => row.id !== fileId),
+      },
+    }));
+  }
+
+  function onToggleKnowledgeFileEnabled(fileId: string) {
+    applyGraphChange((prev) => ({
+      ...prev,
+      knowledge: {
+        ...(prev.knowledge ?? defaultKnowledgeConfig()),
+        files: (prev.knowledge?.files ?? []).map((row) =>
+          row.id === fileId ? { ...row, enabled: !row.enabled } : row,
+        ),
+      },
+    }));
+  }
+
   async function onOpenPendingProviderWindow() {
     if (!pendingWebTurn) {
       return;
@@ -2576,10 +2809,14 @@ function App() {
     } else {
       preset = buildExpertPreset();
     }
-    setGraph(cloneGraph(preset));
+    const nextPreset = {
+      ...preset,
+      knowledge: normalizeKnowledgeConfig(graph.knowledge),
+    };
+    setGraph(cloneGraph(nextPreset));
     setUndoStack([]);
     setRedoStack([]);
-    setNodeSelection(preset.nodes.map((node) => node.id).slice(0, 1), preset.nodes[0]?.id);
+    setNodeSelection(nextPreset.nodes.map((node) => node.id).slice(0, 1), nextPreset.nodes[0]?.id);
     setSelectedEdgeKey("");
     setNodeStates({});
     setConnectFromNodeId("");
@@ -3840,6 +4077,64 @@ function App() {
     });
   }
 
+  async function injectKnowledgeContext(
+    node: GraphNode,
+    prompt: string,
+    config: TurnConfig,
+  ): Promise<{ prompt: string; trace: KnowledgeTraceEntry[] }> {
+    const knowledgeEnabled = config.knowledgeEnabled !== false;
+    if (!knowledgeEnabled) {
+      return { prompt, trace: [] };
+    }
+
+    if (enabledKnowledgeFiles.length === 0) {
+      return { prompt, trace: [] };
+    }
+
+    try {
+      const result = await invoke<KnowledgeRetrieveResult>("knowledge_retrieve", {
+        files: enabledKnowledgeFiles,
+        query: prompt,
+        topK: graphKnowledge.topK,
+        maxChars: graphKnowledge.maxChars,
+      });
+
+      for (const warning of result.warnings) {
+        addNodeLog(node.id, `[첨부] ${warning}`);
+      }
+
+      if (result.snippets.length === 0) {
+        addNodeLog(node.id, "[첨부] 관련 문단을 찾지 못해 기본 프롬프트로 실행합니다.");
+        return { prompt, trace: [] };
+      }
+
+      const contextLines = result.snippets.map(
+        (snippet) => `- [source: ${snippet.fileName}#${snippet.chunkIndex}] ${snippet.text}`,
+      );
+      const mergedPrompt = `[첨부 참고자료]
+${contextLines.join("\n")}
+[/첨부 참고자료]
+
+[요청]
+${prompt}`;
+
+      addNodeLog(node.id, `[첨부] ${result.snippets.length}개 문단 반영`);
+
+      const trace = result.snippets.map((snippet) => ({
+        nodeId: node.id,
+        fileId: snippet.fileId,
+        fileName: snippet.fileName,
+        chunkIndex: snippet.chunkIndex,
+        score: snippet.score,
+      }));
+
+      return { prompt: mergedPrompt, trace };
+    } catch (error) {
+      addNodeLog(node.id, `[첨부] 검색 실패: ${String(error)}`);
+      return { prompt, trace: [] };
+    }
+  }
+
   async function executeTurnNode(
     node: GraphNode,
     input: unknown,
@@ -3852,6 +4147,7 @@ function App() {
     usage?: UsageStats;
     executor: TurnExecutor;
     provider: string;
+    knowledgeTrace?: KnowledgeTraceEntry[];
   }> {
     const config = node.config as TurnConfig;
     const executor = getTurnExecutor(config);
@@ -3862,9 +4158,12 @@ function App() {
     const nodeOllamaModel = String(config.ollamaModel ?? "llama3.1:8b").trim() || "llama3.1:8b";
 
     const inputText = stringifyInput(input);
-    const textToSend = promptTemplate.includes("{{input}}")
+    const basePrompt = promptTemplate.includes("{{input}}")
       ? replaceInputPlaceholder(promptTemplate, inputText)
       : `${promptTemplate}${inputText ? `\n${inputText}` : ""}`;
+    const withKnowledge = await injectKnowledgeContext(node, basePrompt, config);
+    const textToSend = withKnowledge.prompt;
+    const knowledgeTrace = withKnowledge.trace;
 
     if (executor === "ollama") {
       try {
@@ -3885,6 +4184,7 @@ function App() {
           },
           executor,
           provider: "ollama",
+          knowledgeTrace,
         };
       } catch (error) {
         return {
@@ -3892,6 +4192,7 @@ function App() {
           error: `Ollama 실행 실패: ${String(error)}`,
           executor,
           provider: "ollama",
+          knowledgeTrace,
         };
       }
     }
@@ -3935,6 +4236,7 @@ function App() {
                   error: "사용자 취소",
                   executor,
                   provider: webProvider,
+                  knowledgeTrace,
                 };
               }
               if (shouldRetry) {
@@ -3956,6 +4258,7 @@ function App() {
                 },
                 executor,
                 provider: webProvider,
+                knowledgeTrace,
               };
             }
 
@@ -3988,6 +4291,7 @@ function App() {
           error: `웹 서비스 창 열기 실패(${webProvider}): ${String(error)}`,
           executor,
           provider: webProvider,
+          knowledgeTrace,
         };
       }
       setNodeStatus(node.id, "waiting_user", `${webProvider} 응답 입력 대기`);
@@ -4003,6 +4307,7 @@ function App() {
         ...result,
         executor,
         provider: webProvider,
+        knowledgeTrace,
       }));
     }
 
@@ -4016,7 +4321,13 @@ function App() {
     }
 
     if (!activeThreadId) {
-      return { ok: false, error: "threadId를 가져오지 못했습니다.", executor, provider: "codex" };
+      return {
+        ok: false,
+        error: "threadId를 가져오지 못했습니다.",
+        executor,
+        provider: "codex",
+        knowledgeTrace,
+      };
     }
 
     setNodeRuntimeFields(node.id, { threadId: activeThreadId });
@@ -4056,6 +4367,7 @@ function App() {
         threadId: activeThreadId,
         executor: "codex",
         provider: "codex",
+        knowledgeTrace,
       };
     }
 
@@ -4080,6 +4392,7 @@ function App() {
         usage,
         executor: "codex",
         provider: "codex",
+        knowledgeTrace,
       };
     }
 
@@ -4094,6 +4407,7 @@ function App() {
       usage,
       executor: "codex",
       provider: "codex",
+      knowledgeTrace,
     };
   }
 
@@ -4131,6 +4445,7 @@ function App() {
       nodeLogs: {},
       threadTurnMap: {},
       providerTrace: [],
+      knowledgeTrace: [],
     };
 
     try {
@@ -4210,6 +4525,9 @@ function App() {
 
           if (node.type === "turn") {
             const result = await executeTurnNode(node, input);
+            if (result.knowledgeTrace && result.knowledgeTrace.length > 0) {
+              runRecord.knowledgeTrace?.push(...result.knowledgeTrace);
+            }
             if (!result.ok) {
               const finishedAtIso = new Date().toISOString();
               setNodeStatus(nodeId, "failed", result.error ?? "턴 실행 실패");
@@ -5125,6 +5443,100 @@ function App() {
                         </button>
                       </div>
                     </div>
+
+                    <div className="tool-dropdown-group">
+                      <h4>첨부 자료</h4>
+                      <input
+                        accept=".txt,.md,.json,.csv,.ts,.tsx,.js,.jsx,.py,.rs,.go,.java,.cs,.html,.css,.sql,.yaml,.yml,.pdf,.docx"
+                        className="knowledge-file-input"
+                        multiple
+                        onChange={onKnowledgeFilesPicked}
+                        ref={knowledgeFileInputRef}
+                        type="file"
+                      />
+                      <div className="graph-file-actions">
+                        <button className="mini-action-button" onClick={onOpenKnowledgeFilePicker} type="button">
+                          <span className="mini-action-button-label">파일 추가</span>
+                        </button>
+                      </div>
+                      <div className="knowledge-file-list">
+                        {graphKnowledge.files.length === 0 && (
+                          <div className="knowledge-file-empty">첨부된 자료가 없습니다.</div>
+                        )}
+                        {graphKnowledge.files.map((file) => {
+                          const statusMeta = knowledgeStatusMeta(file.status);
+                          return (
+                            <div className="knowledge-file-item" key={file.id}>
+                              <div className="knowledge-file-main">
+                                <span className="knowledge-file-name" title={file.path}>
+                                  {file.name}
+                                </span>
+                                <span className={`knowledge-status-pill ${statusMeta.tone}`}>
+                                  {statusMeta.label}
+                                </span>
+                              </div>
+                              <div className="knowledge-file-actions">
+                                <button
+                                  className={`mini-action-button ${file.enabled ? "is-enabled" : ""}`}
+                                  onClick={() => onToggleKnowledgeFileEnabled(file.id)}
+                                  type="button"
+                                >
+                                  <span className="mini-action-button-label">
+                                    {file.enabled ? "사용 중" : "제외"}
+                                  </span>
+                                </button>
+                                <button
+                                  className="mini-action-button"
+                                  onClick={() => onRemoveKnowledgeFile(file.id)}
+                                  type="button"
+                                >
+                                  <span className="mini-action-button-label">삭제</span>
+                                </button>
+                              </div>
+                              {file.statusMessage && <div className="knowledge-file-message">{file.statusMessage}</div>}
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <label>
+                        관련 문단 개수(topK)
+                        <FancySelect
+                          ariaLabel="관련 문단 개수"
+                          className="modern-select"
+                          onChange={(next) => {
+                            const parsed = Number(next) || KNOWLEDGE_DEFAULT_TOP_K;
+                            applyGraphChange((prev) => ({
+                              ...prev,
+                              knowledge: {
+                                ...(prev.knowledge ?? defaultKnowledgeConfig()),
+                                topK: Math.max(1, Math.min(20, parsed)),
+                              },
+                            }));
+                          }}
+                          options={KNOWLEDGE_TOP_K_OPTIONS}
+                          value={String(graphKnowledge.topK)}
+                        />
+                      </label>
+                      <label>
+                        문맥 길이(maxChars)
+                        <FancySelect
+                          ariaLabel="문맥 길이"
+                          className="modern-select"
+                          onChange={(next) => {
+                            const parsed = Number(next) || KNOWLEDGE_DEFAULT_MAX_CHARS;
+                            applyGraphChange((prev) => ({
+                              ...prev,
+                              knowledge: {
+                                ...(prev.knowledge ?? defaultKnowledgeConfig()),
+                                maxChars: Math.max(300, Math.min(20_000, parsed)),
+                              },
+                            }));
+                          }}
+                          options={KNOWLEDGE_MAX_CHARS_OPTIONS}
+                          value={String(graphKnowledge.maxChars)}
+                        />
+                      </label>
+                    </div>
                   </section>
 
                   {/* {!selectedNode && <div className="inspector-empty">노드를 선택하세요.</div>} */}
@@ -5225,6 +5637,23 @@ function App() {
                               onChange={(e) => updateSelectedNodeConfig("role", e.currentTarget.value)}
                               placeholder={turnRoleLabel(selectedNode)}
                               value={String((selectedNode.config as TurnConfig).role ?? "")}
+                            />
+                          </label>
+                          <label>
+                            첨부 참고 사용
+                            <FancySelect
+                              ariaLabel="첨부 참고 사용"
+                              className="modern-select"
+                              onChange={(next) =>
+                                updateSelectedNodeConfig("knowledgeEnabled", next === "true")
+                              }
+                              options={[
+                                { value: "true", label: "사용" },
+                                { value: "false", label: "미사용" },
+                              ]}
+                              value={String(
+                                (selectedNode.config as TurnConfig).knowledgeEnabled !== false,
+                              )}
                             />
                           </label>
                           <label>
@@ -5438,6 +5867,10 @@ function App() {
                     <div className="history-detail-group">
                       <h3>Provider Trace</h3>
                       <pre>{formatUnknown(selectedRunDetail.providerTrace ?? [])}</pre>
+                    </div>
+                    <div className="history-detail-group">
+                      <h3>첨부 참조 Trace</h3>
+                      <pre>{formatUnknown(selectedRunDetail.knowledgeTrace ?? [])}</pre>
                     </div>
                     <div className="history-detail-group">
                       <h3>노드 로그</h3>
