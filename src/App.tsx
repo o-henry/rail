@@ -2177,24 +2177,10 @@ function NavIcon({ tab }: { tab: WorkspaceTab }) {
     );
   }
   if (tab === "feed") {
-    return (
-      <svg aria-hidden="true" fill="none" height="20" viewBox="0 0 24 24" width="20">
-        <path
-          d="M4.5 17.5a2 2 0 1 0 0 .01M4.5 10.5a9 9 0 0 1 9 9M4.5 4.5c8 0 15 6.5 15 14.5"
-          stroke="currentColor"
-          strokeLinecap="round"
-          strokeWidth="1.8"
-        />
-      </svg>
-    );
+    return <img alt="" aria-hidden="true" className="nav-workflow-image" src="/feeds.svg" />;
   }
   if (tab === "history") {
-    return (
-      <svg aria-hidden="true" fill="none" height="20" viewBox="0 0 24 24" width="20">
-        <path d="M4 12a8 8 0 1 0 2.4-5.7" stroke="currentColor" strokeLinecap="round" strokeWidth="1.8" />
-        <path d="M4 4v4h4M12 8v4l2.8 1.8" stroke="currentColor" strokeLinecap="round" strokeWidth="1.8" />
-      </svg>
-    );
+    return <img alt="" aria-hidden="true" className="nav-workflow-image" src="/time.svg" />;
   }
   if (tab === "settings") {
     return <img alt="" aria-hidden="true" className="nav-workflow-image" src="/setting.svg" />;
