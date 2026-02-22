@@ -169,7 +169,7 @@ type FeedPost = {
 type FeedStatusFilter = "all" | FeedPostStatus;
 type FeedExecutorFilter = "all" | "codex" | "web" | "ollama";
 type FeedPeriodFilter = "all" | "today" | "7d";
-type FeedCategory = "all_posts" | "birthdays" | "industry_news" | "job_updates";
+type FeedCategory = "all_posts" | "completed_posts" | "web_posts" | "error_posts";
 
 type NodeRunState = {
   status: NodeExecutionStatus;
@@ -6942,20 +6942,20 @@ ${prompt}`;
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   const feedCategoryPosts: Record<FeedCategory, FeedViewPost[]> = {
     all_posts: filteredFeedPosts,
-    birthdays: filteredFeedPosts.filter((post) => post.status === "done"),
-    industry_news: filteredFeedPosts.filter((post) =>
+    completed_posts: filteredFeedPosts.filter((post) => post.status === "done"),
+    web_posts: filteredFeedPosts.filter((post) =>
       String(post.executor ?? "").toLowerCase().startsWith("web_"),
     ),
-    job_updates: filteredFeedPosts.filter(
+    error_posts: filteredFeedPosts.filter(
       (post) => post.status === "failed" || post.status === "cancelled",
     ),
   };
   const currentFeedPosts = feedCategoryPosts[feedCategory] ?? filteredFeedPosts;
   const feedCategoryMeta: Array<{ key: FeedCategory; label: string }> = [
-    { key: "all_posts", label: "All posts" },
-    { key: "birthdays", label: "Birthdays" },
-    { key: "industry_news", label: "Industry news" },
-    { key: "job_updates", label: "Job updates" },
+    { key: "all_posts", label: "전체 포스트" },
+    { key: "completed_posts", label: "완료 답변" },
+    { key: "web_posts", label: "웹 리서치" },
+    { key: "error_posts", label: "오류/취소" },
   ];
   const viewportWidth = Math.ceil(canvasLogicalViewport.width);
   const viewportHeight = Math.ceil(canvasLogicalViewport.height);
@@ -7921,13 +7921,13 @@ ${prompt}`;
           <section className="feed-layout">
             <article className="panel-card feed-main">
               <div className="feed-topbar">
-                <h2>Feed</h2>
+                <h2>에이전트 피드</h2>
                 <button
                   className={`feed-filter-toggle ${feedFilterOpen ? "is-open" : ""}`}
                   onClick={() => setFeedFilterOpen((prev) => !prev)}
                   type="button"
                 >
-                  Filter by
+                  필터
                 </button>
               </div>
               {feedFilterOpen && (
@@ -8009,7 +8009,7 @@ ${prompt}`;
               </div>
               <article className="feed-stream">
                 <h3 className="feed-section-title">
-                  {feedCategoryMeta.find((row) => row.key === feedCategory)?.label ?? "Feed"}
+                  {feedCategoryMeta.find((row) => row.key === feedCategory)?.label ?? "에이전트 피드"}
                 </h3>
                 {feedLoading && <div className="log-empty">피드 로딩 중...</div>}
                 {!feedLoading && currentFeedPosts.length === 0 && (
@@ -8074,7 +8074,7 @@ ${prompt}`;
                             {rawEnabled ? "마스킹 보기" : "원문 보기"}
                           </button>
                           <button onClick={() => onOpenFeedPostHistory(post)} type="button">
-                            View post
+                            기록 열기
                           </button>
                           <button onClick={() => onExportRunFile(post.sourceFile)} type="button">
                             공유
