@@ -939,7 +939,7 @@ function buildManualEdgePath(
   x2: number,
   y2: number,
 ): string {
-  return `M ${x1} ${y1} Q ${cx} ${cy} ${x2} ${y2}`;
+  return `M ${x1} ${y1} L ${cx} ${cy} L ${x2} ${y2}`;
 }
 
 function edgeMidPoint(start: LogicalPoint, end: LogicalPoint): LogicalPoint {
@@ -1024,7 +1024,7 @@ function defaultNodeConfig(type: NodeType): Record<string, unknown> {
   }
 
   return {
-    decisionPath: "decision",
+    decisionPath: "DECISION",
     passNodeId: "",
     rejectNodeId: "",
     schemaJson: "",
@@ -1052,7 +1052,8 @@ function nodeCardSummary(node: GraphNode): string {
     return "정리 방식: 필요한 값만 꺼내기";
   }
   const config = node.config as GateConfig;
-  return `판단값 위치: ${String(config.decisionPath ?? "decision")}`;
+  const path = String(config.decisionPath ?? "DECISION");
+  return `판단값 위치: ${path === "decision" ? "DECISION" : path}`;
 }
 
 function turnModelLabel(node: GraphNode): string {
@@ -1183,7 +1184,7 @@ function nodeTypeLabel(type: NodeType): string {
 
 function nodeSelectionLabel(node: GraphNode): string {
   if (node.type === "turn") {
-    return `${turnModelLabel(node)} · ${turnRoleLabel(node)}`;
+    return turnModelLabel(node);
   }
   if (node.type === "transform") {
     return "데이터 변환";
@@ -1501,41 +1502,67 @@ function buildValidationPreset(): GraphData {
       role: "PLANNING AGENT",
       cwd: ".",
       promptTemplate:
-        "질문을 분석하고 검증 계획을 3개 불릿으로 요약해줘. 입력 질문: {{input}}",
+        "당신은 검증 설계 에이전트다. 아래 질문을 분석해 검증 계획 JSON만 출력하라.\n" +
+        "출력 형식:\n" +
+        "{\n" +
+        '  "question":"...",\n' +
+        '  "goal":"...",\n' +
+        '  "checkpoints":["...","...","..."],\n' +
+        '  "searchQueries":["...","...","..."]\n' +
+        "}\n" +
+        "질문: {{input}}",
     }),
     makePresetNode("turn-search-a", "turn", 420, 40, {
       model: "GPT-5.2",
       role: "SEARCH AGENT A",
       cwd: ".",
       promptTemplate:
-        "입력 내용을 바탕으로 찬성 근거를 조사해 JSON으로 정리해줘. {{input}}",
+        "아래 입력에서 주장에 유리한 근거를 찾아 JSON으로 정리하라.\n" +
+        "출력 형식:\n" +
+        '{ "evidences":[{"claim":"...","evidence":"...","sourceHint":"...","confidence":0.0}] }\n' +
+        "조건: 근거가 약하면 confidence를 낮게 주고 추정이라고 표시.\n" +
+        "입력: {{input}}",
     }),
     makePresetNode("turn-search-b", "turn", 420, 220, {
       model: "GPT-5.2-Codex",
       role: "SEARCH AGENT B",
       cwd: ".",
       promptTemplate:
-        "입력 내용을 바탕으로 반대 근거/한계를 조사해 JSON으로 정리해줘. {{input}}",
+        "아래 입력에서 반례/한계/위험요인을 찾아 JSON으로 정리하라.\n" +
+        "출력 형식:\n" +
+        '{ "risks":[{"point":"...","why":"...","confidence":0.0,"mitigation":"..."}] }\n' +
+        "조건: 모호하면 모호하다고 명시.\n" +
+        "입력: {{input}}",
     }),
     makePresetNode("turn-judge", "turn", 720, 120, {
       model: "GPT-5.3-Codex",
       role: "EVALUATION AGENT",
       cwd: ".",
       promptTemplate:
-        "근거를 종합해 엄격한 JSON만 출력해라: {\"decision\":\"PASS|REJECT\",\"finalDraft\":\"...\",\"why\":\"...\"}. 입력: {{input}}",
+        "입력을 종합 평가해 JSON만 출력하라.\n" +
+        "출력 형식:\n" +
+        '{ "DECISION":"PASS|REJECT", "finalDraft":"...", "why":["...","..."], "gaps":["..."], "confidence":0.0 }\n' +
+        "판정 기준: 근거 일관성, 반례 대응 가능성, 불확실성 명시 여부.\n" +
+        "입력: {{input}}",
     }),
     makePresetNode("gate-decision", "gate", 1020, 120, {
-      decisionPath: "decision",
+      decisionPath: "DECISION",
       passNodeId: "turn-final",
       rejectNodeId: "transform-reject",
-      schemaJson: "{\"type\":\"object\",\"required\":[\"decision\"]}",
+      schemaJson: "{\"type\":\"object\",\"required\":[\"DECISION\"]}",
     }),
     makePresetNode("turn-final", "turn", 1320, 40, {
       model: "GPT-5.3-Codex",
       role: "SYNTHESIS AGENT",
       cwd: ".",
       promptTemplate:
-        "decision=PASS로 가정하고 finalDraft와 근거를 정리해 최종 답변을 한국어로 작성해줘. {{input}}",
+        "아래 입력을 바탕으로 최종 답변을 한국어로 작성하라.\n" +
+        "규칙:\n" +
+        "1) 핵심 결론 먼저\n" +
+        "2) 근거 3~5개\n" +
+        "3) 한계/불확실성 분리\n" +
+        "4) 바로 실행 가능한 다음 단계 제시\n" +
+        "입력: {{input}}",
     }),
     makePresetNode("transform-reject", "transform", 1320, 220, {
       mode: "template",
@@ -1563,41 +1590,52 @@ function buildDevelopmentPreset(): GraphData {
       role: "REQUIREMENTS AGENT",
       cwd: ".",
       promptTemplate:
-        "요구사항을 기능/비기능으로 분해하고 우선순위를 매겨줘. 질문: {{input}}",
+        "아래 요청을 분석해 요구사항 JSON만 출력하라.\n" +
+        '{ "functional":["..."], "nonFunctional":["..."], "constraints":["..."], "priority":["P0","P1","P2"] }\n' +
+        "질문: {{input}}",
     }),
     makePresetNode("turn-architecture", "turn", 420, 40, {
       model: "GPT-5.2",
       role: "ARCHITECTURE AGENT",
       cwd: ".",
       promptTemplate:
-        "입력을 바탕으로 풀스택 아키텍처를 제안해 JSON으로 출력해줘. {{input}}",
+        "입력을 바탕으로 현실적인 시스템 설계를 JSON으로 제안하라.\n" +
+        '{ "architecture":"...", "components":[...], "tradeoffs":[...], "risks":[...], "decisionLog":[...] }\n' +
+        "과설계 금지, MVP 우선.\n" +
+        "입력: {{input}}",
     }),
     makePresetNode("turn-implementation", "turn", 420, 220, {
       model: "GPT-5.2-Codex",
       role: "IMPLEMENTATION AGENT",
       cwd: ".",
       promptTemplate:
-        "구현 단계 계획(파일 단위 포함)을 작성해줘. 입력: {{input}}",
+        "입력을 기반으로 구현 계획을 단계별로 작성하라.\n" +
+        "필수: 파일 단위 변경 목록, 테스트 계획, 실패 시 롤백 포인트.\n" +
+        "입력: {{input}}",
     }),
     makePresetNode("turn-evaluator", "turn", 720, 120, {
       model: "GPT-5.3-Codex",
       role: "QUALITY AGENT",
       cwd: ".",
       promptTemplate:
-        "계획을 검토하고 JSON만 출력: {\"decision\":\"PASS|REJECT\",\"finalDraft\":\"...\",\"risk\":\"...\"}. 입력: {{input}}",
+        "입력을 리뷰해 품질 판정을 JSON으로 출력하라.\n" +
+        '{ "DECISION":"PASS|REJECT", "finalDraft":"...", "risk":["..."], "blockingIssues":["..."] }\n' +
+        "입력: {{input}}",
     }),
     makePresetNode("gate-quality", "gate", 1020, 120, {
-      decisionPath: "decision",
+      decisionPath: "DECISION",
       passNodeId: "turn-final-dev",
       rejectNodeId: "transform-rework",
-      schemaJson: "{\"type\":\"object\",\"required\":[\"decision\"]}",
+      schemaJson: "{\"type\":\"object\",\"required\":[\"DECISION\"]}",
     }),
     makePresetNode("turn-final-dev", "turn", 1320, 40, {
       model: "GPT-5.3-Codex",
       role: "DEV SYNTHESIS AGENT",
       cwd: ".",
       promptTemplate:
-        "실행 가능한 최종 개발 가이드를 산출해줘. 코드/테스트/배포 체크리스트 포함. {{input}}",
+        "아래 입력으로 최종 개발 가이드를 작성하라.\n" +
+        "구성: 구현 순서, 코드 품질 기준, 테스트 명세, 배포 체크리스트, 운영 리스크 대응.\n" +
+        "입력: {{input}}",
     }),
     makePresetNode("transform-rework", "transform", 1320, 220, {
       mode: "template",
@@ -1646,21 +1684,27 @@ function buildResearchPreset(): GraphData {
       role: "RESEARCH PLANNING AGENT",
       cwd: ".",
       promptTemplate:
-        "입력 질문을 자료조사 관점으로 분해하고 조사 체크리스트(JSON)를 작성해줘. 질문: {{input}}",
+        "질문을 조사 계획으로 분해해 JSON만 출력하라.\n" +
+        '{ "researchGoal":"...", "questions":["..."], "evidenceCriteria":["..."], "riskChecks":["..."] }\n' +
+        "질문: {{input}}",
     }),
     makePresetNode("turn-research-collector", "turn", 420, 120, {
       model: "GPT-5.2",
       role: "SOURCE COLLECTION AGENT",
       cwd: ".",
       promptTemplate:
-        "체크리스트 기준으로 핵심 근거 후보를 수집해 JSON으로 정리해줘. 입력: {{input}}",
+        "입력 기준으로 핵심 근거 후보를 수집해 JSON으로 정리하라.\n" +
+        '{ "evidences":[{"id":"E1","statement":"...","whyRelevant":"...","confidence":0.0}] }\n' +
+        "입력: {{input}}",
     }),
     makePresetNode("turn-research-factcheck", "turn", 720, 120, {
       model: "GPT-5.2-Codex",
       role: "FACT CHECK AGENT",
       cwd: ".",
       promptTemplate:
-        "수집 근거의 신뢰도/한계/누락을 검토하고 JSON으로 출력해줘. 입력: {{input}}",
+        "수집 근거를 검증하고 JSON으로 출력하라.\n" +
+        '{ "verified":["E1"], "contested":["E2"], "missing":["..."], "notes":["..."] }\n' +
+        "입력: {{input}}",
     }),
     makePresetNode("transform-research-brief", "transform", 1020, 120, {
       mode: "template",
@@ -1672,7 +1716,9 @@ function buildResearchPreset(): GraphData {
       role: "RESEARCH SYNTHESIS AGENT",
       cwd: ".",
       promptTemplate:
-        "조사 결과를 기반으로 근거 중심 최종 답변을 한국어로 작성해줘. 불확실성은 명시해라. 입력: {{input}}",
+        "근거 중심 최종 답변을 한국어로 작성하라.\n" +
+        "규칙: 주장 옆에 근거 ID(E1, E2) 표시, 불확실성 분리, 과장 금지.\n" +
+        "입력: {{input}}",
     }),
   ];
 
@@ -1705,34 +1751,42 @@ function buildExpertPreset(): GraphData {
       role: "DOMAIN INTAKE AGENT",
       cwd: ".",
       promptTemplate:
-        "질문의 도메인/목표/제약을 구조화해줘. 출력은 JSON 우선. 입력: {{input}}",
+        "질문을 전문가 분석용 브리프로 구조화하라.\n" +
+        '{ "domain":"...", "objective":"...", "constraints":["..."], "successCriteria":["..."] }\n' +
+        "입력: {{input}}",
     }),
     makePresetNode("turn-expert-analysis", "turn", 420, 40, {
       model: "GPT-5.2-Codex",
       role: "DOMAIN EXPERT AGENT",
       cwd: ".",
       promptTemplate:
-        "도메인 전문가 관점의 해결 전략을 작성해줘. 핵심 원리와 실무 적용을 포함. 입력: {{input}}",
+        "도메인 전문가 관점의 해결 전략을 작성하라.\n" +
+        "필수: 핵심 원리, 실제 적용 절차, 실패 조건, 대안 전략.\n" +
+        "입력: {{input}}",
     }),
     makePresetNode("turn-expert-review", "turn", 420, 220, {
       model: "GPT-5.2",
       role: "PEER REVIEW AGENT",
       cwd: ".",
       promptTemplate:
-        "전문가 전략의 취약점/반례를 리뷰하고 JSON으로 정리해줘. 입력: {{input}}",
+        "전략의 취약점과 반례를 엄격히 리뷰해 JSON으로 출력하라.\n" +
+        '{ "DECISION":"PASS|REJECT", "criticalIssues":["..."], "improvements":["..."] }\n' +
+        "입력: {{input}}",
     }),
     makePresetNode("gate-expert", "gate", 720, 120, {
-      decisionPath: "decision",
+      decisionPath: "DECISION",
       passNodeId: "turn-expert-final",
       rejectNodeId: "transform-expert-rework",
-      schemaJson: "{\"type\":\"object\",\"required\":[\"decision\"]}",
+      schemaJson: "{\"type\":\"object\",\"required\":[\"DECISION\"]}",
     }),
     makePresetNode("turn-expert-final", "turn", 1020, 40, {
       model: "GPT-5.3-Codex",
       role: "EXPERT SYNTHESIS AGENT",
       cwd: ".",
       promptTemplate:
-        "최종 전문가 답변을 작성해줘. 실행 단계, 주의점, 검증 체크리스트를 포함. 입력: {{input}}",
+        "최종 전문가 답변을 작성하라.\n" +
+        "구성: 핵심 결론, 단계별 실행안, 검증 체크리스트, 실패 시 대체안.\n" +
+        "입력: {{input}}",
     }),
     makePresetNode("transform-expert-rework", "transform", 1020, 220, {
       mode: "template",
@@ -4168,8 +4222,11 @@ function App() {
       }
     }
 
-    const decisionPath = String(config.decisionPath ?? "decision");
-    const decisionRaw = getByPath(input, decisionPath);
+    const decisionPath = String(config.decisionPath ?? "DECISION");
+    const decisionRaw =
+      getByPath(input, decisionPath) ??
+      (decisionPath === "DECISION" ? getByPath(input, "decision") : undefined) ??
+      (decisionPath === "decision" ? getByPath(input, "DECISION") : undefined);
     const decision = String(decisionRaw ?? "").toUpperCase();
 
     if (decision !== "PASS" && decision !== "REJECT") {
@@ -5735,9 +5792,9 @@ ${prompt}`;
                         })}
                       </div>
                       <label>
-                        관련 문단 개수(topK)
+                        참고할 자료 개수
                         <FancySelect
-                          ariaLabel="관련 문단 개수"
+                          ariaLabel="참고할 자료 개수"
                           className="modern-select"
                           onChange={(next) => {
                             const parsed = Number(next) || KNOWLEDGE_DEFAULT_TOP_K;
@@ -5753,10 +5810,13 @@ ${prompt}`;
                           value={String(graphKnowledge.topK)}
                         />
                       </label>
+                      <div className="inspector-empty">
+                        질문과 가장 관련 있는 참고 자료를 몇 개까지 붙일지 정합니다.
+                      </div>
                       <label>
-                        문맥 길이(maxChars)
+                        참고 내용 길이
                         <FancySelect
-                          ariaLabel="문맥 길이"
+                          ariaLabel="참고 내용 길이"
                           className="modern-select"
                           onChange={(next) => {
                             const parsed = Number(next) || KNOWLEDGE_DEFAULT_MAX_CHARS;
@@ -5772,6 +5832,9 @@ ${prompt}`;
                           value={String(graphKnowledge.maxChars)}
                         />
                       </label>
+                      <div className="inspector-empty">
+                        참고 내용 총 길이입니다. 크게 할수록 정보는 늘지만 응답 속도는 느려질 수 있습니다.
+                      </div>
                     </div>
                   </section>
 
@@ -5967,18 +6030,18 @@ ${prompt}`;
                       {selectedNode.type === "gate" && (
                         <section className="inspector-block form-grid">
                           <InspectorSectionTitle
-                            help="이 노드는 '통과(PASS)'인지 '재검토(REJECT)'인지 보고 다음으로 갈 길을 고르는 스위치입니다. 체크포인트처럼 생각하면 됩니다."
+                            help="이 노드는 결과를 보고 길을 나눕니다. DECISION 값이 PASS면 통과 경로로, REJECT면 재검토 경로로 보냅니다."
                             title="결정 나누기 설정"
                           />
                           <label>
-                            판단값 위치
+                            판단값 위치(DECISION)
                             <input
                               onChange={(e) => updateSelectedNodeConfig("decisionPath", e.currentTarget.value)}
-                              value={String((selectedNode.config as GateConfig).decisionPath ?? "decision")}
+                              value={String((selectedNode.config as GateConfig).decisionPath ?? "DECISION")}
                             />
                           </label>
                           <div className="inspector-empty">
-                            보통 `decision`을 사용합니다. 이 값이 PASS면 통과, REJECT면 재검토로 이동합니다.
+                            보통 `DECISION`을 사용합니다. 값은 PASS 또는 REJECT(대문자)여야 합니다.
                           </div>
                           <label>
                             통과(PASS) 다음 노드
