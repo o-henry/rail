@@ -63,6 +63,7 @@ type GraphNode = {
 type GraphEdge = {
   from: { nodeId: string; port: PortType; side?: NodeAnchorSide };
   to: { nodeId: string; port: PortType; side?: NodeAnchorSide };
+  control?: { x: number; y: number };
 };
 
 type GraphData = {
@@ -182,6 +183,12 @@ type DragState = {
   nodeIds: string[];
   pointerStart: LogicalPoint;
   startPositions: Record<string, { x: number; y: number }>;
+};
+
+type EdgeDragState = {
+  edgeKey: string;
+  pointerStart: LogicalPoint;
+  startControl: LogicalPoint;
 };
 
 type PanState = {
@@ -861,6 +868,7 @@ function cloneGraph(input: GraphData): GraphData {
     edges: input.edges.map((edge) => ({
       from: { ...edge.from },
       to: { ...edge.to },
+      control: edge.control ? { ...edge.control } : undefined,
     })),
     knowledge: {
       files: (input.knowledge?.files ?? []).map((file) => ({ ...file })),
@@ -921,6 +929,24 @@ function buildRoundedEdgePath(
     pathParts.push(`L ${x2} ${y2}`);
   }
   return pathParts.join(" ");
+}
+
+function buildManualEdgePath(
+  x1: number,
+  y1: number,
+  cx: number,
+  cy: number,
+  x2: number,
+  y2: number,
+): string {
+  return `M ${x1} ${y1} Q ${cx} ${cy} ${x2} ${y2}`;
+}
+
+function edgeMidPoint(start: LogicalPoint, end: LogicalPoint): LogicalPoint {
+  return {
+    x: (start.x + end.x) / 2,
+    y: (start.y + end.y) / 2,
+  };
 }
 
 function getNodeAnchorPoint(
@@ -1016,10 +1042,17 @@ function nodeCardSummary(node: GraphNode): string {
   }
   if (node.type === "transform") {
     const config = node.config as TransformConfig;
-    return `모드: ${String(config.mode ?? "pick")}`;
+    const mode = String(config.mode ?? "pick");
+    if (mode === "merge") {
+      return "정리 방식: 고정 정보 덧붙이기";
+    }
+    if (mode === "template") {
+      return "정리 방식: 문장 틀로 다시 쓰기";
+    }
+    return "정리 방식: 필요한 값만 꺼내기";
   }
   const config = node.config as GateConfig;
-  return `분기 경로: ${String(config.decisionPath ?? "decision")}`;
+  return `판단값 위치: ${String(config.decisionPath ?? "decision")}`;
 }
 
 function turnModelLabel(node: GraphNode): string {
@@ -1145,7 +1178,17 @@ function nodeTypeLabel(type: NodeType): string {
   if (type === "transform") {
     return "데이터 변환";
   }
-  return "분기";
+  return "결정 분기";
+}
+
+function nodeSelectionLabel(node: GraphNode): string {
+  if (node.type === "turn") {
+    return `${turnModelLabel(node)} · ${turnRoleLabel(node)}`;
+  }
+  if (node.type === "transform") {
+    return "데이터 변환";
+  }
+  return "결정 분기";
 }
 
 function nodeStatusLabel(status: NodeExecutionStatus): string {
@@ -1743,10 +1786,56 @@ function normalizeGraph(input: unknown): GraphData {
       };
     });
 
+  const normalizedEdges = edges
+    .map((edge) => {
+      if (!edge || typeof edge !== "object") {
+        return null;
+      }
+      const row = edge as Record<string, unknown>;
+      const from = row.from as Record<string, unknown> | undefined;
+      const to = row.to as Record<string, unknown> | undefined;
+      if (!from || !to) {
+        return null;
+      }
+      const fromNodeId = String(from.nodeId ?? "").trim();
+      const toNodeId = String(to.nodeId ?? "").trim();
+      if (!fromNodeId || !toNodeId) {
+        return null;
+      }
+      const controlRow =
+        row.control && typeof row.control === "object"
+          ? (row.control as Record<string, unknown>)
+          : null;
+      const controlX = controlRow ? readNumber(controlRow.x) : undefined;
+      const controlY = controlRow ? readNumber(controlRow.y) : undefined;
+      return {
+        from: {
+          nodeId: fromNodeId,
+          port: "out" as PortType,
+          side:
+            from.side === "top" || from.side === "right" || from.side === "bottom" || from.side === "left"
+              ? (from.side as NodeAnchorSide)
+              : undefined,
+        },
+        to: {
+          nodeId: toNodeId,
+          port: "in" as PortType,
+          side: to.side === "top" || to.side === "right" || to.side === "bottom" || to.side === "left"
+            ? (to.side as NodeAnchorSide)
+            : undefined,
+        },
+        control:
+          typeof controlX === "number" && typeof controlY === "number"
+            ? { x: controlX, y: controlY }
+            : undefined,
+      } as GraphEdge;
+    })
+    .filter(Boolean) as GraphEdge[];
+
   return {
     version: Math.max(version, GRAPH_SCHEMA_VERSION),
     nodes: normalizedNodes,
-    edges: edges.filter(Boolean) as GraphEdge[],
+    edges: normalizedEdges,
     knowledge: normalizeKnowledgeConfig(data.knowledge),
   };
 }
@@ -1910,6 +1999,7 @@ function App() {
   const [marqueeSelection, setMarqueeSelection] = useState<MarqueeSelection | null>(null);
 
   const dragRef = useRef<DragState | null>(null);
+  const edgeDragRef = useRef<EdgeDragState | null>(null);
   const graphCanvasRef = useRef<HTMLDivElement | null>(null);
   const nodeSizeMapRef = useRef<Record<string, NodeVisualSize>>({});
   const questionInputRef = useRef<HTMLTextAreaElement | null>(null);
@@ -1919,6 +2009,9 @@ function App() {
   const dragWindowMoveHandlerRef = useRef<((event: MouseEvent) => void) | null>(null);
   const dragWindowUpHandlerRef = useRef<((event: MouseEvent) => void) | null>(null);
   const dragStartSnapshotRef = useRef<GraphData | null>(null);
+  const edgeDragStartSnapshotRef = useRef<GraphData | null>(null);
+  const edgeDragWindowMoveHandlerRef = useRef<((event: MouseEvent) => void) | null>(null);
+  const edgeDragWindowUpHandlerRef = useRef<((event: MouseEvent) => void) | null>(null);
   const zoomStatusTimerRef = useRef<number | null>(null);
   const cwdDirectoryInputRef = useRef<HTMLInputElement | null>(null);
   const knowledgeFileInputRef = useRef<HTMLInputElement | null>(null);
@@ -3072,6 +3165,82 @@ function App() {
     };
   }
 
+  function applyEdgeControlPosition(clientX: number, clientY: number) {
+    if (!edgeDragRef.current) {
+      return;
+    }
+    const logicalPoint = clientToLogicalPoint(clientX, clientY);
+    if (!logicalPoint) {
+      return;
+    }
+
+    const minPos = -NODE_DRAG_MARGIN;
+    const maxX = Math.max(minPos, boundedStageWidth + NODE_DRAG_MARGIN);
+    const maxY = Math.max(minPos, boundedStageHeight + NODE_DRAG_MARGIN);
+    const { edgeKey, pointerStart, startControl } = edgeDragRef.current;
+    const dx = logicalPoint.x - pointerStart.x;
+    const dy = logicalPoint.y - pointerStart.y;
+    const nextControl = {
+      x: Math.min(maxX, Math.max(minPos, startControl.x + dx)),
+      y: Math.min(maxY, Math.max(minPos, startControl.y + dy)),
+    };
+
+    setGraph((prev) => ({
+      ...prev,
+      edges: prev.edges.map((edge) =>
+        getGraphEdgeKey(edge) === edgeKey
+          ? {
+              ...edge,
+              control: nextControl,
+            }
+          : edge,
+      ),
+    }));
+  }
+
+  function onEdgeDragStart(
+    event: ReactMouseEvent<SVGPathElement>,
+    edgeKey: string,
+    defaultControl: LogicalPoint,
+  ) {
+    if (panMode || isConnectingDrag) {
+      return;
+    }
+    if (event.button !== 0) {
+      return;
+    }
+    const pointer = clientToLogicalPoint(event.clientX, event.clientY);
+    if (!pointer) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    setNodeSelection([]);
+    setSelectedEdgeKey(edgeKey);
+    edgeDragStartSnapshotRef.current = cloneGraph(graph);
+    edgeDragRef.current = {
+      edgeKey,
+      pointerStart: pointer,
+      startControl: defaultControl,
+    };
+
+    if (!edgeDragWindowMoveHandlerRef.current) {
+      edgeDragWindowMoveHandlerRef.current = (nextEvent: MouseEvent) => {
+        if (!edgeDragRef.current) {
+          return;
+        }
+        applyEdgeControlPosition(nextEvent.clientX, nextEvent.clientY);
+      };
+      window.addEventListener("mousemove", edgeDragWindowMoveHandlerRef.current);
+    }
+    if (!edgeDragWindowUpHandlerRef.current) {
+      edgeDragWindowUpHandlerRef.current = () => {
+        onCanvasMouseUp();
+      };
+      window.addEventListener("mouseup", edgeDragWindowUpHandlerRef.current);
+    }
+  }
+
   function zoomAtClientPoint(nextZoom: number, clientX: number, clientY: number) {
     const canvas = graphCanvasRef.current;
     if (!canvas) {
@@ -3254,6 +3423,11 @@ function App() {
       return;
     }
 
+    if (edgeDragRef.current) {
+      applyEdgeControlPosition(e.clientX, e.clientY);
+      return;
+    }
+
     if (isConnectingDrag && connectFromNodeId) {
       const point = clientToLogicalPoint(e.clientX, e.clientY);
       if (point) {
@@ -3280,6 +3454,25 @@ function App() {
 
   function onCanvasMouseUp() {
     panRef.current = null;
+
+    if (edgeDragRef.current) {
+      if (edgeDragWindowMoveHandlerRef.current) {
+        window.removeEventListener("mousemove", edgeDragWindowMoveHandlerRef.current);
+        edgeDragWindowMoveHandlerRef.current = null;
+      }
+      if (edgeDragWindowUpHandlerRef.current) {
+        window.removeEventListener("mouseup", edgeDragWindowUpHandlerRef.current);
+        edgeDragWindowUpHandlerRef.current = null;
+      }
+
+      const edgeSnapshot = edgeDragStartSnapshotRef.current;
+      if (edgeSnapshot && !graphEquals(edgeSnapshot, graph)) {
+        setUndoStack((stack) => [...stack.slice(-79), cloneGraph(edgeSnapshot)]);
+        setRedoStack([]);
+      }
+      edgeDragRef.current = null;
+      edgeDragStartSnapshotRef.current = null;
+    }
 
     if (isConnectingDrag) {
       setIsConnectingDrag(false);
@@ -3815,6 +4008,12 @@ function App() {
       }
       if (dragWindowUpHandlerRef.current) {
         window.removeEventListener("mouseup", dragWindowUpHandlerRef.current);
+      }
+      if (edgeDragWindowMoveHandlerRef.current) {
+        window.removeEventListener("mousemove", edgeDragWindowMoveHandlerRef.current);
+      }
+      if (edgeDragWindowUpHandlerRef.current) {
+        window.removeEventListener("mouseup", edgeDragWindowUpHandlerRef.current);
       }
       if (zoomStatusTimerRef.current != null) {
         window.clearTimeout(zoomStatusTimerRef.current);
@@ -4909,14 +5108,32 @@ ${prompt}`;
         getNodeVisualSize(toNode.id),
       );
       const edgeKey = getGraphEdgeKey(edge);
+      const defaultControl = edgeMidPoint(fromPoint, toPoint);
+      const control = edge.control ?? defaultControl;
+      const hasManualControl =
+        typeof edge.control?.x === "number" && typeof edge.control?.y === "number";
 
       return {
         key: `${edgeKey}-${index}`,
         edgeKey,
-        path: buildRoundedEdgePath(fromPoint.x, fromPoint.y, toPoint.x, toPoint.y, true),
+        startPoint: fromPoint,
+        endPoint: toPoint,
+        controlPoint: control,
+        hasManualControl,
+        path: hasManualControl
+          ? buildManualEdgePath(fromPoint.x, fromPoint.y, control.x, control.y, toPoint.x, toPoint.y)
+          : buildRoundedEdgePath(fromPoint.x, fromPoint.y, toPoint.x, toPoint.y, true),
       };
     })
-    .filter(Boolean) as Array<{ key: string; edgeKey: string; path: string }>;
+    .filter(Boolean) as Array<{
+      key: string;
+      edgeKey: string;
+      path: string;
+      startPoint: LogicalPoint;
+      endPoint: LogicalPoint;
+      controlPoint: LogicalPoint;
+      hasManualControl: boolean;
+    }>;
   const connectPreviewLine = (() => {
     if (!connectFromNodeId || !connectPreviewPoint) {
       return null;
@@ -4950,6 +5167,13 @@ ${prompt}`;
         .map((edge) => edge.to.nodeId)
         .filter((value, index, arr) => arr.indexOf(value) === index)
     : [];
+  const outgoingNodeOptions = outgoingFromSelected.map((nodeId) => {
+    const target = graph.nodes.find((node) => node.id === nodeId);
+    return {
+      value: nodeId,
+      label: target ? nodeSelectionLabel(target) : "연결된 노드",
+    };
+  });
   const isActiveTab = (tab: WorkspaceTab): boolean => workspaceTab === tab;
   const viewportWidth = Math.ceil(canvasLogicalViewport.width);
   const viewportHeight = Math.ceil(canvasLogicalViewport.height);
@@ -5085,6 +5309,7 @@ ${prompt}`;
                               setNodeSelection([]);
                               setSelectedEdgeKey(line.edgeKey);
                             }}
+                            onMouseDown={(e) => onEdgeDragStart(e, line.edgeKey, line.controlPoint)}
                             pointerEvents="stroke"
                             stroke="transparent"
                             strokeWidth={(selectedEdgeKey === line.edgeKey ? 3 : 2) + 2}
@@ -5100,6 +5325,17 @@ ${prompt}`;
                             strokeLinecap="round"
                             strokeWidth={selectedEdgeKey === line.edgeKey ? 3 : 2}
                           />
+                          {selectedEdgeKey === line.edgeKey && (
+                            <circle
+                              className="edge-control-point"
+                              cx={line.controlPoint.x}
+                              cy={line.controlPoint.y}
+                              fill="#ffffff"
+                              r={5}
+                              stroke="#4f83ff"
+                              strokeWidth={1.4}
+                            />
+                          )}
                         </g>
                       ))}
                       {connectPreviewLine && (
@@ -5673,25 +5909,25 @@ ${prompt}`;
                       {selectedNode.type === "transform" && (
                         <section className="inspector-block form-grid">
                           <InspectorSectionTitle
-                            help="입력 JSON에서 필요한 필드 추출, 병합, 템플릿 변환 규칙을 설정합니다."
-                            title="변환 규칙"
+                            help="앞 노드 결과를 읽기 쉬운 형태로 다시 정리하는 설정입니다. 쉽게 말해, 필요한 것만 꺼내거나, 고정 정보를 붙이거나, 문장 틀에 맞춰 다시 쓰는 역할입니다."
+                            title="결과 정리 설정"
                           />
                           <label>
-                            변환 모드
+                            정리 방식
                             <FancySelect
-                              ariaLabel="변환 모드"
+                              ariaLabel="정리 방식"
                               className="modern-select"
                               onChange={(next) => updateSelectedNodeConfig("mode", next)}
                               options={[
-                                { value: "pick", label: "필드 선택" },
-                                { value: "merge", label: "병합" },
-                                { value: "template", label: "문자열 템플릿" },
+                                { value: "pick", label: "필요한 값만 꺼내기" },
+                                { value: "merge", label: "고정 정보 덧붙이기" },
+                                { value: "template", label: "문장 틀로 다시 쓰기" },
                               ]}
                               value={String((selectedNode.config as TransformConfig).mode ?? "pick")}
                             />
                           </label>
                           <label>
-                            pick 경로
+                            꺼낼 값 위치
                             <input
                               onChange={(e) => updateSelectedNodeConfig("pickPath", e.currentTarget.value)}
                               placeholder="예: text 또는 result.finalDraft"
@@ -5699,10 +5935,10 @@ ${prompt}`;
                             />
                           </label>
                           <div className="inspector-empty">
-                            pick 경로는 입력 JSON에서 필요한 필드만 꺼낼 경로입니다.
+                            예를 들어 `text`를 쓰면 결과에서 text 부분만 가져옵니다.
                           </div>
                           <label>
-                            merge JSON
+                            덧붙일 고정 정보(JSON)
                             <textarea
                               onChange={(e) => updateSelectedNodeConfig("mergeJson", e.currentTarget.value)}
                               placeholder='예: {"source":"web","priority":"high"}'
@@ -5711,72 +5947,82 @@ ${prompt}`;
                             />
                           </label>
                           <div className="inspector-empty">
-                            merge JSON은 입력 데이터에 추가/덮어쓸 고정 JSON 조각입니다.
+                            예: {"`{\"출처\":\"웹조사\"}`"}를 넣으면 모든 결과에 같은 정보를 붙입니다.
                           </div>
                           <label>
-                            템플릿
+                            문장 틀
                             <textarea
+                              className="transform-template-textarea"
                               onChange={(e) => updateSelectedNodeConfig("template", e.currentTarget.value)}
-                              rows={3}
+                              rows={5}
                               value={String((selectedNode.config as TransformConfig).template ?? "{{input}}")}
                             />
                           </label>
+                          <div className="inspector-empty">
+                            {"`{{input}}`"} 자리에 이전 결과가 들어갑니다. 원하는 문장 형태로 바꿀 때 사용합니다.
+                          </div>
                         </section>
                       )}
 
                       {selectedNode.type === "gate" && (
                         <section className="inspector-block form-grid">
                           <InspectorSectionTitle
-                            help="decision 값(PASS/REJECT)에 따라 다음 실행 노드를 선택합니다."
-                            title="분기 설정"
+                            help="이 노드는 '통과(PASS)'인지 '재검토(REJECT)'인지 보고 다음으로 갈 길을 고르는 스위치입니다. 체크포인트처럼 생각하면 됩니다."
+                            title="결정 나누기 설정"
                           />
                           <label>
-                            분기 경로(decisionPath)
+                            판단값 위치
                             <input
                               onChange={(e) => updateSelectedNodeConfig("decisionPath", e.currentTarget.value)}
                               value={String((selectedNode.config as GateConfig).decisionPath ?? "decision")}
                             />
                           </label>
+                          <div className="inspector-empty">
+                            보통 `decision`을 사용합니다. 이 값이 PASS면 통과, REJECT면 재검토로 이동합니다.
+                          </div>
                           <label>
-                            PASS 대상 노드
+                            통과(PASS) 다음 노드
                             <FancySelect
-                              ariaLabel="PASS 대상 노드"
+                              ariaLabel="통과 다음 노드"
                               className="modern-select"
                               onChange={(next) => updateSelectedNodeConfig("passNodeId", next)}
                               options={[
                                 { value: "", label: "(없음)" },
-                                ...outgoingFromSelected.map((nodeId) => ({ value: nodeId, label: nodeId })),
+                                ...outgoingNodeOptions,
                               ]}
                               value={String((selectedNode.config as GateConfig).passNodeId ?? "")}
                             />
                           </label>
                           <div className="inspector-empty">
-                            decision 값이 PASS일 때 실행할 다음 노드를 지정합니다.
+                            결과가 좋으면(통과) 어디로 보낼지 선택합니다.
                           </div>
                           <label>
-                            REJECT 대상 노드
+                            재검토(REJECT) 다음 노드
                             <FancySelect
-                              ariaLabel="REJECT 대상 노드"
+                              ariaLabel="재검토 다음 노드"
                               className="modern-select"
                               onChange={(next) => updateSelectedNodeConfig("rejectNodeId", next)}
                               options={[
                                 { value: "", label: "(없음)" },
-                                ...outgoingFromSelected.map((nodeId) => ({ value: nodeId, label: nodeId })),
+                                ...outgoingNodeOptions,
                               ]}
                               value={String((selectedNode.config as GateConfig).rejectNodeId ?? "")}
                             />
                           </label>
                           <div className="inspector-empty">
-                            decision 값이 REJECT일 때 실행할 다음 노드를 지정합니다.
+                            결과가 부족하면(재검토) 어디로 보낼지 선택합니다.
                           </div>
                           <label>
-                            스키마 JSON (선택)
+                            결과 형식 검사(선택)
                             <textarea
                               onChange={(e) => updateSelectedNodeConfig("schemaJson", e.currentTarget.value)}
                               rows={4}
                               value={String((selectedNode.config as GateConfig).schemaJson ?? "")}
                             />
                           </label>
+                          <div className="inspector-empty">
+                            고급 옵션입니다. 결과가 원하는 형식인지 자동 검사할 때만 사용하세요.
+                          </div>
                         </section>
                       )}
 

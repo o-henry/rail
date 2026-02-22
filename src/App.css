@@ -799,7 +799,11 @@ h3 {
 
 .edge-path-hit {
   pointer-events: stroke;
-  cursor: pointer;
+  cursor: grab;
+}
+
+.edge-control-point {
+  pointer-events: none;
 }
 
 .graph-node {
@@ -1439,6 +1443,21 @@ h3 {
 }
 
 .prompt-template-textarea::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}
+
+.transform-template-textarea {
+  min-height: 152px;
+  max-height: 220px;
+  resize: none;
+  overflow: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.transform-template-textarea::-webkit-scrollbar {
   width: 0;
   height: 0;
   display: none;
