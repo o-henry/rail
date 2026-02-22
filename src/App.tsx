@@ -1,4 +1,5 @@
 import {
+  ChangeEvent as ReactChangeEvent,
   KeyboardEvent as ReactKeyboardEvent,
   MouseEvent as ReactMouseEvent,
   WheelEvent as ReactWheelEvent,
@@ -342,6 +343,44 @@ function toErrorText(error: unknown): string {
     return error.message;
   }
   return String(error);
+}
+
+function toUsageCheckErrorMessage(error: unknown): string {
+  const raw = toErrorText(error);
+  const lower = raw.toLowerCase();
+
+  if (
+    lower.includes("account/usage/get") ||
+    lower.includes("account/usage") ||
+    lower.includes("unknown variant `account/get`") ||
+    lower.includes("unknown variant `account/status`")
+  ) {
+    return "사용량 조회 API를 지원하지 않는 엔진 버전입니다. 엔진 실행/로그인은 정상이어도 사용량은 현재 버전에서 조회할 수 없습니다.";
+  }
+
+  if (lower.includes("not initialized")) {
+    return "엔진 초기화가 아직 끝나지 않아 사용량 조회를 할 수 없습니다. 잠시 후 다시 시도해주세요.";
+  }
+
+  if (
+    lower.includes("engine not running") ||
+    lower.includes("failed to spawn") ||
+    lower.includes("broken pipe") ||
+    lower.includes("connection reset") ||
+    lower.includes("connection refused")
+  ) {
+    return "엔진 연결이 끊어져 사용량 조회에 실패했습니다. 엔진 상태를 확인하고 다시 시도해주세요.";
+  }
+
+  if (
+    (lower.includes("login") || lower.includes("auth")) &&
+    (lower.includes("required") || lower.includes("unauthorized"))
+  ) {
+    return "로그인이 완료되지 않아 사용량을 조회할 수 없습니다. 설정에서 로그인 후 다시 시도해주세요.";
+  }
+
+  const compact = raw.length > 140 ? `${raw.slice(0, 140)}...` : raw;
+  return `사용량 조회에 실패했습니다. 원인: ${compact}`;
 }
 
 function toTurnModelDisplayName(value: string): string {
@@ -1220,6 +1259,9 @@ function InspectorSectionTitle({ title, help }: { title: string; help: string })
       <span aria-label={`${title} 도움말`} className="help-tooltip" data-tooltip={help} role="note" tabIndex={0}>
         ?
       </span>
+      <div className="help-tooltip-panel" role="tooltip">
+        {help}
+      </div>
     </div>
   );
 }
@@ -1720,6 +1762,7 @@ function App() {
   const dragWindowUpHandlerRef = useRef<((event: MouseEvent) => void) | null>(null);
   const dragStartSnapshotRef = useRef<GraphData | null>(null);
   const zoomStatusTimerRef = useRef<number | null>(null);
+  const cwdDirectoryInputRef = useRef<HTMLInputElement | null>(null);
   const cancelRequestedRef = useRef(false);
   const activeTurnNodeIdRef = useRef<string>("");
   const activeWebNodeIdRef = useRef<string>("");
@@ -2236,9 +2279,55 @@ function App() {
       setUsageInfoText(JSON.stringify(result.raw, null, 2));
       setStatus(`사용량 조회 완료 (${result.sourceMethod})`);
     } catch (e) {
-      setError(String(e));
+      setError(toUsageCheckErrorMessage(e));
       setStatus("사용량 조회 실패");
     }
+  }
+
+  function extractDirectoryFromSelectedFiles(files: FileList): string {
+    if (files.length === 0) {
+      return "";
+    }
+    const first = files[0] as File & { path?: string; webkitRelativePath?: string };
+    const nativePath = typeof first.path === "string" ? first.path.trim() : "";
+    if (nativePath) {
+      const separator = nativePath.includes("\\") ? "\\" : "/";
+      const idx = nativePath.lastIndexOf(separator);
+      if (idx > 0) {
+        return nativePath.slice(0, idx);
+      }
+      return nativePath;
+    }
+    const relative = typeof first.webkitRelativePath === "string" ? first.webkitRelativePath.trim() : "";
+    if (relative) {
+      const root = relative.split("/")[0];
+      return root ? `./${root}` : "";
+    }
+    return "";
+  }
+
+  function onSelectCwdDirectory() {
+    const input = cwdDirectoryInputRef.current;
+    if (!input) {
+      setError("폴더 선택기를 열 수 없습니다.");
+      return;
+    }
+    input.value = "";
+    input.click();
+  }
+
+  function onCwdDirectoryPicked(event: ReactChangeEvent<HTMLInputElement>) {
+    const files = event.currentTarget.files;
+    if (!files || files.length === 0) {
+      return;
+    }
+    const selectedDirectory = extractDirectoryFromSelectedFiles(files);
+    if (!selectedDirectory) {
+      setError("선택한 폴더 경로를 읽지 못했습니다. 다시 선택해주세요.");
+      return;
+    }
+    setCwd(selectedDirectory);
+    setStatus(`작업 경로 선택됨: ${selectedDirectory}`);
   }
 
   async function onOpenPendingProviderWindow() {
@@ -4335,7 +4424,19 @@ function App() {
         )}
         <label>
           작업 경로(CWD)
-          <input value={cwd} onChange={(e) => setCwd(e.currentTarget.value)} />
+          <input
+            className="cwd-directory-input"
+            onChange={onCwdDirectoryPicked}
+            ref={cwdDirectoryInputRef}
+            type="file"
+            {...({ directory: "", multiple: true, webkitdirectory: "" } as Record<string, string | boolean>)}
+          />
+          <div className="settings-cwd-row">
+            <input readOnly value={cwd} />
+            <button className="settings-cwd-picker" onClick={onSelectCwdDirectory} type="button">
+              폴더 선택
+            </button>
+          </div>
         </label>
         <label>
           기본 모델
@@ -4394,22 +4495,24 @@ function App() {
       : "없음";
     return (
       <section className="controls web-automation-panel">
-        <h2>웹 계정 연동</h2>
+        <div className="web-automation-head">
+          <h2>웹 계정 연동</h2>
+          <button
+            aria-label="상태 동기화"
+            className="settings-refresh-button settings-refresh-icon-button"
+            disabled={webWorkerBusy}
+            onClick={() => refreshWebWorkerHealth()}
+            title="상태 동기화"
+            type="button"
+          >
+            <img alt="" aria-hidden="true" className="settings-refresh-icon" src="/reload.svg" />
+          </button>
+        </div>
         <div className="settings-badges">
           <span className="status-tag neutral">활성 Provider: {activeProviderLabel}</span>
           <span className="status-tag neutral">
             상태 동기화: {webWorkerHealth.running ? "준비됨" : "초기화 필요"}
           </span>
-        </div>
-        <div className="button-row">
-          <button
-            className="settings-refresh-button"
-            disabled={webWorkerBusy}
-            onClick={() => refreshWebWorkerHealth()}
-            type="button"
-          >
-            <span className="settings-button-label">상태 동기화</span>
-          </button>
         </div>
         <div className="usage-method">
           각 서비스의 로그인 상태를 확인하고, 필요한 서비스만 로그인하세요.
@@ -5342,11 +5445,14 @@ function App() {
             <section className="settings-usage-guide">
               <h3>사용 방법</h3>
               <ol>
-                <li>작업 경로(CWD)를 현재 프로젝트 루트로 맞춥니다.</li>
-                <li>엔진 시작 후 기본 모델을 선택합니다.</li>
-                <li>웹 계정 연동에서 필요한 서비스만 로그인합니다.</li>
-                <li>워크플로우 탭에서 노드를 연결하고 실행합니다.</li>
-                <li>기록 탭에서 실행 결과와 로그를 확인합니다.</li>
+                <li>작업 경로(CWD)에서 폴더 선택 버튼을 눌러 실제 프로젝트 루트를 선택합니다.</li>
+                <li>엔진 시작 버튼으로 Codex 엔진을 켠 뒤 기본 모델을 선택합니다.</li>
+                <li>사용량 확인으로 계정 사용량 조회가 가능한지 먼저 점검합니다.</li>
+                <li>웹 계정 연동에서 필요한 서비스(GEMINI/GPT 등)만 로그인합니다.</li>
+                <li>상태 동기화(새로고침 아이콘)를 눌러 로그인 상태를 최신으로 갱신합니다.</li>
+                <li>워크플로우 탭에서 노드 추가, 연결, 프롬프트/역할 설정을 완료합니다.</li>
+                <li>실행 후 노드 로그/출력에서 중간 결과를 확인하고 필요 시 수정합니다.</li>
+                <li>기록 탭에서 실행 상세와 최종 결과를 비교하며 재사용 가능한 그래프로 다듬습니다.</li>
               </ol>
             </section>
             {lastSavedRunFile && <div>최근 실행 파일: {lastSavedRunFile}</div>}
