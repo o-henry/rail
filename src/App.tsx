@@ -1213,22 +1213,6 @@ function authModeLabel(mode: AuthMode): string {
   return "미확인";
 }
 
-function loginStateLabel(engineStarted: boolean, loginCompleted: boolean, authMode: AuthMode): string {
-  if (!engineStarted) {
-    return "엔진 꺼짐";
-  }
-  if (loginCompleted) {
-    return `로그인 완료 (${authModeLabel(authMode)})`;
-  }
-  if (authMode === "apikey") {
-    return "API 키 모드";
-  }
-  if (authMode === "chatgpt") {
-    return "세션 확인 중";
-  }
-  return "로그인 필요";
-}
-
 function InspectorSectionTitle({ title, help }: { title: string; help: string }) {
   return (
     <div className="inspector-section-title">
@@ -4383,6 +4367,7 @@ function App() {
             </button>
           </div>
         )}
+        <div className="usage-method">최근 상태: {status}</div>
         {usageSourceMethod && (
           <div className="usage-method">
             사용량 조회 메서드: <code>{usageSourceMethod}</code>
@@ -5353,20 +5338,6 @@ function App() {
         {workspaceTab === "settings" && (
           <section className="panel-card settings-view">
             {renderSettingsPanel(false)}
-            <section className="workflow-runtime-status">
-              <h3>워크플로우 상태</h3>
-              <div className="settings-badges">
-                <span className="status-tag neutral">
-                  로그인: {loginStateLabel(engineStarted, loginCompleted, authMode)}
-                </span>
-                <span className="status-tag neutral">인증: {authModeLabel(authMode)}</span>
-                <span className={`status-tag ${isGraphRunning ? "on" : "off"}`}>
-                  실행: {isGraphRunning ? "진행 중" : "대기"}
-                </span>
-                <span className="status-tag neutral">상태: {status}</span>
-                <span className="status-tag neutral">기록: {runFiles.length}</span>
-              </div>
-            </section>
             {renderWebAutomationPanel()}
             <section className="settings-usage-guide">
               <h3>사용 방법</h3>

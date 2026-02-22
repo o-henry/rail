@@ -1245,17 +1245,6 @@ h3 {
   padding-top: 1px;
 }
 
-.workflow-runtime-status {
-  margin-top: 8px;
-  display: grid;
-  /* gap: 12px; */
-}
-
-.workflow-runtime-status .settings-badges {
-  margin-top: 12px;
-  gap: 8px;
-}
-
 .inspector-empty {
   color: #6b7580;
   font-size: 0.86rem;
