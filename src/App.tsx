@@ -48,7 +48,7 @@ type PendingApproval = {
   params: unknown;
 };
 
-type WorkspaceTab = "workflow" | "history" | "settings";
+type WorkspaceTab = "workflow" | "feed" | "history" | "settings";
 type NodeType = "turn" | "transform" | "gate";
 type PortType = "in" | "out";
 
@@ -129,6 +129,47 @@ type UsageStats = {
   totalTokens?: number;
 };
 
+type FeedAttachmentKind = "markdown" | "json";
+
+type FeedAttachment = {
+  kind: FeedAttachmentKind;
+  title: string;
+  content: string;
+  truncated: boolean;
+  charCount: number;
+};
+
+type FeedPostStatus = "done" | "failed" | "cancelled";
+
+type FeedPost = {
+  id: string;
+  runId: string;
+  nodeId: string;
+  nodeType: NodeType;
+  executor?: TurnExecutor;
+  agentName: string;
+  roleLabel: string;
+  status: FeedPostStatus;
+  createdAt: string;
+  summary: string;
+  steps: string[];
+  evidence: {
+    durationMs?: number;
+    usage?: UsageStats;
+    qualityScore?: number;
+    qualityDecision?: string;
+  };
+  attachments: FeedAttachment[];
+  redaction: {
+    masked: boolean;
+    ruleVersion: string;
+  };
+};
+
+type FeedStatusFilter = "all" | FeedPostStatus;
+type FeedExecutorFilter = "all" | "codex" | "web" | "ollama";
+type FeedPeriodFilter = "all" | "today" | "7d";
+
 type NodeRunState = {
   status: NodeExecutionStatus;
   logs: string[];
@@ -174,6 +215,26 @@ type RunRecord = {
   nodeMetrics?: Record<string, NodeMetric>;
   qualitySummary?: QualitySummary;
   regression?: RegressionSummary;
+  feedPosts?: FeedPost[];
+};
+
+type FeedViewPost = FeedPost & {
+  sourceFile: string;
+  question?: string;
+};
+
+type FeedBuildInput = {
+  runId: string;
+  node: GraphNode;
+  status: FeedPostStatus;
+  createdAt: string;
+  summary?: string;
+  logs?: string[];
+  output?: unknown;
+  error?: string;
+  durationMs?: number;
+  usage?: UsageStats;
+  qualityReport?: QualityReport;
 };
 
 type TurnTerminal = {
@@ -408,6 +469,8 @@ const GRAPH_SCHEMA_VERSION = 3;
 const KNOWLEDGE_DEFAULT_TOP_K = 4;
 const KNOWLEDGE_DEFAULT_MAX_CHARS = 2800;
 const QUALITY_DEFAULT_THRESHOLD = 70;
+const FEED_REDACTION_RULE_VERSION = "feed-v1";
+const FEED_ATTACHMENT_CHAR_CAP = 12_000;
 const KNOWLEDGE_TOP_K_OPTIONS: FancySelectOption[] = [
   { value: "2", label: "2개" },
   { value: "4", label: "4개" },
@@ -894,6 +957,272 @@ function formatUsage(usage?: UsageStats): string {
   const inputText = usage.inputTokens != null ? `${usage.inputTokens}` : "-";
   const outputText = usage.outputTokens != null ? `${usage.outputTokens}` : "-";
   return `${total}토큰 (입력 ${inputText} / 출력 ${outputText})`;
+}
+
+function redactSensitiveText(input: string): string {
+  let next = input;
+  next = next.replace(/(sk-[A-Za-z0-9_-]{8,})/g, "sk-***");
+  next = next.replace(/(bearer\s+)[A-Za-z0-9._\-+/=]{10,}/gi, "$1***");
+  next = next.replace(/([?&](?:token|auth|key|api_key|access_token|session|jwt)=)[^&\s]+/gi, "$1***");
+  next = next.replace(/(cookie|set-cookie)\s*[:=]\s*[^\r\n;]+/gi, "$1=***");
+  next = next.replace(/\/Users\/([^/\s]+)/g, "/Users/***");
+  return next;
+}
+
+function clipTextByChars(input: string, maxChars = FEED_ATTACHMENT_CHAR_CAP): {
+  text: string;
+  truncated: boolean;
+  charCount: number;
+} {
+  const text = input ?? "";
+  const charCount = text.length;
+  if (charCount <= maxChars) {
+    return { text, truncated: false, charCount };
+  }
+  return {
+    text: `${text.slice(0, maxChars)}\n\n...[중략: ${charCount - maxChars}자 생략]`,
+    truncated: true,
+    charCount,
+  };
+}
+
+function summarizeFeedSteps(logs: string[]): string[] {
+  const steps: string[] = [];
+  const pushStep = (label: string) => {
+    if (!steps.includes(label)) {
+      steps.push(label);
+    }
+  };
+  for (const line of logs) {
+    const lower = line.toLowerCase();
+    if (lower.includes("[첨부]")) {
+      pushStep("첨부 근거 반영");
+    }
+    if (lower.includes("[web]") && lower.includes("로그인")) {
+      pushStep("웹 로그인 확인");
+    }
+    if (lower.includes("[web]") && (lower.includes("자동화") || lower.includes("응답"))) {
+      pushStep("웹 자동화 실행");
+    }
+    if (lower.includes("turn_interrupt") || lower.includes("취소")) {
+      pushStep("사용자 중지 요청");
+    }
+    if (lower.includes("[품질]")) {
+      pushStep("품질 검증");
+    }
+    if (lower.includes("변환 완료")) {
+      pushStep("결과 변환");
+    }
+    if (lower.includes("분기 결과")) {
+      pushStep("분기 판정");
+    }
+    if (lower.includes("실패") || lower.includes("오류")) {
+      pushStep("오류 처리");
+    }
+    if (lower.includes("턴 실행 완료") || lower.includes("완료")) {
+      pushStep("완료");
+    }
+    if (steps.length >= 5) {
+      break;
+    }
+  }
+  if (steps.length === 0) {
+    steps.push("실행 로그 요약 없음");
+  }
+  return steps.slice(0, 5);
+}
+
+function buildFeedSummary(status: FeedPostStatus, output: unknown, error?: string, summary?: string): string {
+  const trimmedSummary = (summary ?? "").trim();
+  if (trimmedSummary) {
+    return trimmedSummary;
+  }
+  if (status !== "done") {
+    return error?.trim() || "실행 실패로 상세 로그 확인이 필요합니다.";
+  }
+  const outputText = extractFinalAnswer(output).trim();
+  if (!outputText) {
+    return "실행은 완료되었지만 표시할 결과 텍스트가 없습니다.";
+  }
+  return outputText.length > 360 ? `${outputText.slice(0, 360)}...` : outputText;
+}
+
+function buildFeedPost(input: FeedBuildInput): {
+  post: FeedPost;
+  rawAttachments: Record<FeedAttachmentKind, string>;
+} {
+  const config = input.node.config as TurnConfig;
+  const roleLabel = input.node.type === "turn" ? turnRoleLabel(input.node) : nodeTypeLabel(input.node.type);
+  const agentName =
+    input.node.type === "turn"
+      ? turnModelLabel(input.node)
+      : input.node.type === "transform"
+        ? "데이터 변환"
+        : "결정 분기";
+  const logs = input.logs ?? [];
+  const steps = summarizeFeedSteps(logs);
+  const summary = buildFeedSummary(input.status, input.output, input.error, input.summary);
+  const outputText = extractFinalAnswer(input.output).trim() || stringifyInput(input.output).trim();
+  const markdownRaw = [
+    `# ${agentName}`,
+    `- 상태: ${nodeStatusLabel(input.status as NodeExecutionStatus)}`,
+    `- 역할: ${roleLabel}`,
+    "",
+    "## 요약",
+    summary || "(없음)",
+    "",
+    "## 단계 요약",
+    ...steps.map((step) => `- ${step}`),
+    "",
+    "## 핵심 결과",
+    outputText || "(출력 없음)",
+    "",
+    "## 참고",
+    "- 이 문서는 실행 결과를 자동 요약해 생성되었습니다.",
+  ].join("\n");
+
+  const jsonRaw = JSON.stringify(
+    {
+      nodeId: input.node.id,
+      nodeType: input.node.type,
+      status: input.status,
+      summary,
+      steps,
+      output: input.output ?? null,
+      error: input.error ?? null,
+      evidence: {
+        durationMs: input.durationMs,
+        usage: input.usage,
+        qualityScore: input.qualityReport?.score,
+        qualityDecision: input.qualityReport?.decision,
+      },
+    },
+    null,
+    2,
+  );
+
+  const markdownClip = clipTextByChars(markdownRaw);
+  const jsonClip = clipTextByChars(jsonRaw);
+
+  const markdownMasked = redactSensitiveText(markdownClip.text);
+  const jsonMasked = redactSensitiveText(jsonClip.text);
+
+  const post: FeedPost = {
+    id: `${input.runId}:${input.node.id}:${input.status}`,
+    runId: input.runId,
+    nodeId: input.node.id,
+    nodeType: input.node.type,
+    executor: input.node.type === "turn" ? getTurnExecutor(config) : undefined,
+    agentName,
+    roleLabel,
+    status: input.status,
+    createdAt: input.createdAt,
+    summary,
+    steps,
+    evidence: {
+      durationMs: input.durationMs,
+      usage: input.usage,
+      qualityScore: input.qualityReport?.score,
+      qualityDecision: input.qualityReport?.decision,
+    },
+    attachments: [
+      {
+        kind: "markdown",
+        title: "요약 문서 (Markdown)",
+        content: markdownMasked,
+        truncated: markdownClip.truncated,
+        charCount: markdownClip.charCount,
+      },
+      {
+        kind: "json",
+        title: "구조화 결과 (JSON)",
+        content: jsonMasked,
+        truncated: jsonClip.truncated,
+        charCount: jsonClip.charCount,
+      },
+    ],
+    redaction: {
+      masked: true,
+      ruleVersion: FEED_REDACTION_RULE_VERSION,
+    },
+  };
+
+  return {
+    post,
+    rawAttachments: {
+      markdown: markdownClip.text,
+      json: jsonClip.text,
+    },
+  };
+}
+
+function normalizeRunFeedPosts(run: RunRecord): FeedPost[] {
+  if (Array.isArray(run.feedPosts) && run.feedPosts.length > 0) {
+    return run.feedPosts;
+  }
+  const nodeMap = new Map(run.graphSnapshot.nodes.map((node) => [node.id, node]));
+  const terminalMap = new Map<string, RunTransition>();
+  for (const transition of run.transitions) {
+    if (transition.status !== "done" && transition.status !== "failed" && transition.status !== "cancelled") {
+      continue;
+    }
+    const prev = terminalMap.get(transition.nodeId);
+    if (!prev || new Date(transition.at).getTime() >= new Date(prev.at).getTime()) {
+      terminalMap.set(transition.nodeId, transition);
+    }
+  }
+
+  const posts: FeedPost[] = [];
+  for (const [nodeId, transition] of terminalMap.entries()) {
+    const node = nodeMap.get(nodeId);
+    if (!node) {
+      continue;
+    }
+    const logs = run.nodeLogs?.[nodeId] ?? [];
+    const metric = run.nodeMetrics?.[nodeId];
+    const built = buildFeedPost({
+      runId: run.runId,
+      node,
+      status: transition.status as FeedPostStatus,
+      createdAt: transition.at,
+      summary: transition.message,
+      logs,
+      output: {
+        nodeId,
+        status: transition.status,
+        message: transition.message ?? "",
+        logs: logs.slice(-10),
+      },
+      error: transition.status === "failed" ? transition.message : undefined,
+      qualityReport: metric
+        ? {
+            profile: metric.profile,
+            threshold: metric.threshold,
+            score: metric.score,
+            decision: metric.decision,
+            checks: [],
+            failures: [],
+            warnings: [],
+          }
+        : undefined,
+    });
+    posts.push(built.post);
+  }
+
+  posts.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  return posts;
+}
+
+function normalizeRunRecord(run: RunRecord): RunRecord {
+  const feedPosts = normalizeRunFeedPosts(run);
+  return {
+    ...run,
+    feedPosts,
+  };
+}
+
+function feedAttachmentRawKey(postId: string, kind: FeedAttachmentKind): string {
+  return `${postId}:${kind}`;
 }
 
 function toQualityProfileId(value: unknown): QualityProfileId | null {
@@ -1823,6 +2152,18 @@ function NavIcon({ tab }: { tab: WorkspaceTab }) {
   if (tab === "workflow") {
     return (
       <img alt="" aria-hidden="true" className="nav-workflow-image" src="/workflow.svg" />
+    );
+  }
+  if (tab === "feed") {
+    return (
+      <svg aria-hidden="true" fill="none" height="20" viewBox="0 0 24 24" width="20">
+        <path
+          d="M4.5 17.5a2 2 0 1 0 0 .01M4.5 10.5a9 9 0 0 1 9 9M4.5 4.5c8 0 15 6.5 15 14.5"
+          stroke="currentColor"
+          strokeLinecap="round"
+          strokeWidth="1.8"
+        />
+      </svg>
     );
   }
   if (tab === "history") {
@@ -2928,6 +3269,14 @@ function App() {
   const [graphFileName, setGraphFileName] = useState("");
   const [graphFiles, setGraphFiles] = useState<string[]>([]);
   const [runFiles, setRunFiles] = useState<string[]>([]);
+  const [feedPosts, setFeedPosts] = useState<FeedViewPost[]>([]);
+  const [feedLoading, setFeedLoading] = useState(false);
+  const [feedStatusFilter, setFeedStatusFilter] = useState<FeedStatusFilter>("all");
+  const [feedExecutorFilter, setFeedExecutorFilter] = useState<FeedExecutorFilter>("all");
+  const [feedPeriodFilter, setFeedPeriodFilter] = useState<FeedPeriodFilter>("all");
+  const [feedKeyword, setFeedKeyword] = useState("");
+  const [feedAttachmentTabByPost, setFeedAttachmentTabByPost] = useState<Record<string, FeedAttachmentKind>>({});
+  const [feedRawViewByPost, setFeedRawViewByPost] = useState<Record<string, boolean>>({});
   const [selectedRunFile, setSelectedRunFile] = useState("");
   const [selectedRunDetail, setSelectedRunDetail] = useState<RunRecord | null>(null);
   const [lastSavedRunFile, setLastSavedRunFile] = useState("");
@@ -2972,6 +3321,8 @@ function App() {
   const activeRunDeltaRef = useRef<Record<string, string>>({});
   const collectingRunRef = useRef(false);
   const runLogCollectorRef = useRef<Record<string, string[]>>({});
+  const feedRunCacheRef = useRef<Record<string, RunRecord>>({});
+  const feedRawAttachmentRef = useRef<Record<string, string>>({});
 
   const activeApproval = pendingApprovals[0];
   const selectedNode = graph.nodes.find((node) => node.id === selectedNodeId) ?? null;
@@ -3360,6 +3711,48 @@ function App() {
     }
   }
 
+  async function refreshFeedTimeline() {
+    setFeedLoading(true);
+    try {
+      const files = await invoke<string[]>("run_list");
+      const sorted = [...files].sort((a, b) => b.localeCompare(a)).slice(0, 120);
+      const loaded = await Promise.all(
+        sorted.map(async (file) => {
+          try {
+            const rawRun = await invoke<RunRecord>("run_load", { name: file });
+            return { file, run: normalizeRunRecord(rawRun) };
+          } catch {
+            return null;
+          }
+        }),
+      );
+      const nextCache: Record<string, RunRecord> = {};
+      const mergedPosts: FeedViewPost[] = [];
+      for (const row of loaded) {
+        if (!row) {
+          continue;
+        }
+        nextCache[row.file] = row.run;
+        const runQuestion = row.run.question;
+        const posts = row.run.feedPosts ?? [];
+        for (const post of posts) {
+          mergedPosts.push({
+            ...post,
+            sourceFile: row.file,
+            question: runQuestion,
+          });
+        }
+      }
+      mergedPosts.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      feedRunCacheRef.current = nextCache;
+      setFeedPosts(mergedPosts);
+    } catch (e) {
+      setError(`피드 로드 실패: ${String(e)}`);
+    } finally {
+      setFeedLoading(false);
+    }
+  }
+
   async function onOpenRunsFolder() {
     setError("");
     try {
@@ -3380,7 +3773,7 @@ function App() {
     try {
       const run = await invoke<RunRecord>("run_load", { name: target });
       setSelectedRunFile(target);
-      setSelectedRunDetail(run);
+      setSelectedRunDetail(normalizeRunRecord(run));
     } catch (e) {
       setError(String(e));
     }
@@ -3400,14 +3793,66 @@ function App() {
       setSelectedRunFile("");
       setSelectedRunDetail(null);
       setStatus(`실행 기록 삭제: ${target}`);
+      await refreshFeedTimeline();
     } catch (e) {
       setError(`실행 기록 삭제 실패: ${String(e)}`);
+    }
+  }
+
+  async function onExportRunFile(name: string) {
+    const target = name.trim();
+    if (!target) {
+      return;
+    }
+    setError("");
+    try {
+      const exportedPath = await invoke<string>("run_export", { name: target, targetPath: null });
+      setStatus(`실행 기록 내보내기 완료: ${exportedPath}`);
+    } catch (e) {
+      setError(`실행 기록 내보내기 실패: ${String(e)}`);
+    }
+  }
+
+  async function onImportRunFile() {
+    setError("");
+    try {
+      const importedName = await invoke<string>("run_import", { path: null });
+      setStatus(`실행 기록 가져오기 완료: ${importedName}`);
+      await refreshRunFiles();
+      await refreshFeedTimeline();
+    } catch (e) {
+      setError(`실행 기록 가져오기 실패: ${String(e)}`);
+    }
+  }
+
+  async function onOpenFeedPostHistory(post: FeedViewPost) {
+    setError("");
+    const sourceFile = post.sourceFile.trim();
+    if (!sourceFile) {
+      return;
+    }
+    try {
+      const cached = feedRunCacheRef.current[sourceFile];
+      if (cached) {
+        setSelectedRunFile(sourceFile);
+        setSelectedRunDetail(cached);
+      } else {
+        const loaded = await invoke<RunRecord>("run_load", { name: sourceFile });
+        const normalized = normalizeRunRecord(loaded);
+        feedRunCacheRef.current[sourceFile] = normalized;
+        setSelectedRunFile(sourceFile);
+        setSelectedRunDetail(normalized);
+      }
+      setWorkspaceTab("history");
+    } catch (e) {
+      setError(`실행 기록 열기 실패: ${String(e)}`);
     }
   }
 
   useEffect(() => {
     refreshGraphFiles();
     refreshRunFiles();
+    refreshFeedTimeline();
   }, []);
 
   useEffect(() => {
@@ -3685,6 +4130,13 @@ function App() {
     return () => {
       window.clearInterval(intervalId);
     };
+  }, [workspaceTab]);
+
+  useEffect(() => {
+    if (workspaceTab !== "feed") {
+      return;
+    }
+    void refreshFeedTimeline();
   }, [workspaceTab]);
 
   async function ensureWebWorkerReady() {
@@ -5013,6 +5465,7 @@ function App() {
       });
       setLastSavedRunFile(fileName);
       await refreshRunFiles();
+      await refreshFeedTimeline();
     } catch (e) {
       setError(String(e));
     }
@@ -5679,6 +6132,7 @@ ${prompt}`;
       providerTrace: [],
       knowledgeTrace: [],
       nodeMetrics: {},
+      feedPosts: [],
     };
 
     try {
@@ -5731,6 +6185,20 @@ ${prompt}`;
         if (cancelRequestedRef.current) {
           setNodeStatus(nodeId, "cancelled", "취소 요청됨");
           transition(runRecord, nodeId, "cancelled", "취소 요청됨");
+          const cancelledAt = new Date().toISOString();
+          const cancelledFeed = buildFeedPost({
+            runId: runRecord.runId,
+            node,
+            status: "cancelled",
+            createdAt: cancelledAt,
+            summary: "사용자 중지 요청으로 실행이 취소되었습니다.",
+            logs: runLogCollectorRef.current[nodeId] ?? [],
+          });
+          runRecord.feedPosts?.push(cancelledFeed.post);
+          feedRawAttachmentRef.current[feedAttachmentRawKey(cancelledFeed.post.id, "markdown")] =
+            cancelledFeed.rawAttachments.markdown;
+          feedRawAttachmentRef.current[feedAttachmentRawKey(cancelledFeed.post.id, "json")] =
+            cancelledFeed.rawAttachments.json;
           break;
         }
 
@@ -5783,6 +6251,23 @@ ${prompt}`;
                 summary: result.error ?? "턴 실행 실패",
               });
               transition(runRecord, nodeId, "failed", result.error ?? "턴 실행 실패");
+              const failedFeed = buildFeedPost({
+                runId: runRecord.runId,
+                node,
+                status: "failed",
+                createdAt: finishedAtIso,
+                summary: result.error ?? "턴 실행 실패",
+                logs: runLogCollectorRef.current[nodeId] ?? [],
+                output: result.output,
+                error: result.error,
+                durationMs: Date.now() - startedAtMs,
+                usage: result.usage,
+              });
+              runRecord.feedPosts?.push(failedFeed.post);
+              feedRawAttachmentRef.current[feedAttachmentRawKey(failedFeed.post.id, "markdown")] =
+                failedFeed.rawAttachments.markdown;
+              feedRawAttachmentRef.current[feedAttachmentRawKey(failedFeed.post.id, "json")] =
+                failedFeed.rawAttachments.json;
               break;
             }
 
@@ -5849,6 +6334,24 @@ ${prompt}`;
                 "failed",
                 `품질 REJECT (${qualityReport.score}/${qualityReport.threshold})`,
               );
+              const rejectedFeed = buildFeedPost({
+                runId: runRecord.runId,
+                node,
+                status: "failed",
+                createdAt: finishedAtIso,
+                summary: `품질 REJECT (${qualityReport.score}/${qualityReport.threshold})`,
+                logs: runLogCollectorRef.current[nodeId] ?? [],
+                output: normalizedOutput,
+                error: `품질 게이트 REJECT (점수 ${qualityReport.score}/${qualityReport.threshold})`,
+                durationMs: Date.now() - startedAtMs,
+                usage: result.usage,
+                qualityReport,
+              });
+              runRecord.feedPosts?.push(rejectedFeed.post);
+              feedRawAttachmentRef.current[feedAttachmentRawKey(rejectedFeed.post.id, "markdown")] =
+                rejectedFeed.rawAttachments.markdown;
+              feedRawAttachmentRef.current[feedAttachmentRawKey(rejectedFeed.post.id, "json")] =
+                rejectedFeed.rawAttachments.json;
               break;
             }
 
@@ -5880,6 +6383,23 @@ ${prompt}`;
               summary: "턴 실행 완료",
             });
             transition(runRecord, nodeId, "done", "턴 실행 완료");
+            const doneFeed = buildFeedPost({
+              runId: runRecord.runId,
+              node,
+              status: "done",
+              createdAt: finishedAtIso,
+              summary: "턴 실행 완료",
+              logs: runLogCollectorRef.current[nodeId] ?? [],
+              output: normalizedOutput,
+              durationMs: Date.now() - startedAtMs,
+              usage: result.usage,
+              qualityReport,
+            });
+            runRecord.feedPosts?.push(doneFeed.post);
+            feedRawAttachmentRef.current[feedAttachmentRawKey(doneFeed.post.id, "markdown")] =
+              doneFeed.rawAttachments.markdown;
+            feedRawAttachmentRef.current[feedAttachmentRawKey(doneFeed.post.id, "json")] =
+              doneFeed.rawAttachments.json;
             lastDoneNodeId = nodeId;
           } else if (node.type === "transform") {
             const result = await executeTransformNode(node, input);
@@ -5893,6 +6413,23 @@ ${prompt}`;
                 durationMs: Date.now() - startedAtMs,
               });
               transition(runRecord, nodeId, "failed", result.error ?? "변환 실패");
+              const transformFailedFeed = buildFeedPost({
+                runId: runRecord.runId,
+                node,
+                status: "failed",
+                createdAt: finishedAtIso,
+                summary: result.error ?? "변환 실패",
+                logs: runLogCollectorRef.current[nodeId] ?? [],
+                output: result.output,
+                error: result.error ?? "변환 실패",
+                durationMs: Date.now() - startedAtMs,
+              });
+              runRecord.feedPosts?.push(transformFailedFeed.post);
+              feedRawAttachmentRef.current[
+                feedAttachmentRawKey(transformFailedFeed.post.id, "markdown")
+              ] = transformFailedFeed.rawAttachments.markdown;
+              feedRawAttachmentRef.current[feedAttachmentRawKey(transformFailedFeed.post.id, "json")] =
+                transformFailedFeed.rawAttachments.json;
               break;
             }
 
@@ -5906,6 +6443,21 @@ ${prompt}`;
             });
             setNodeStatus(nodeId, "done", "변환 완료");
             transition(runRecord, nodeId, "done", "변환 완료");
+            const transformDoneFeed = buildFeedPost({
+              runId: runRecord.runId,
+              node,
+              status: "done",
+              createdAt: finishedAtIso,
+              summary: "변환 완료",
+              logs: runLogCollectorRef.current[nodeId] ?? [],
+              output: result.output,
+              durationMs: Date.now() - startedAtMs,
+            });
+            runRecord.feedPosts?.push(transformDoneFeed.post);
+            feedRawAttachmentRef.current[feedAttachmentRawKey(transformDoneFeed.post.id, "markdown")] =
+              transformDoneFeed.rawAttachments.markdown;
+            feedRawAttachmentRef.current[feedAttachmentRawKey(transformDoneFeed.post.id, "json")] =
+              transformDoneFeed.rawAttachments.json;
             lastDoneNodeId = nodeId;
           } else {
             const result = executeGateNode(node, input, skipSet);
@@ -5919,6 +6471,22 @@ ${prompt}`;
                 durationMs: Date.now() - startedAtMs,
               });
               transition(runRecord, nodeId, "failed", result.error ?? "분기 실패");
+              const gateFailedFeed = buildFeedPost({
+                runId: runRecord.runId,
+                node,
+                status: "failed",
+                createdAt: finishedAtIso,
+                summary: result.error ?? "분기 실패",
+                logs: runLogCollectorRef.current[nodeId] ?? [],
+                output: result.output,
+                error: result.error ?? "분기 실패",
+                durationMs: Date.now() - startedAtMs,
+              });
+              runRecord.feedPosts?.push(gateFailedFeed.post);
+              feedRawAttachmentRef.current[feedAttachmentRawKey(gateFailedFeed.post.id, "markdown")] =
+                gateFailedFeed.rawAttachments.markdown;
+              feedRawAttachmentRef.current[feedAttachmentRawKey(gateFailedFeed.post.id, "json")] =
+                gateFailedFeed.rawAttachments.json;
               break;
             }
 
@@ -5932,6 +6500,21 @@ ${prompt}`;
             });
             setNodeStatus(nodeId, "done", result.message ?? "분기 완료");
             transition(runRecord, nodeId, "done", result.message ?? "분기 완료");
+            const gateDoneFeed = buildFeedPost({
+              runId: runRecord.runId,
+              node,
+              status: "done",
+              createdAt: finishedAtIso,
+              summary: result.message ?? "분기 완료",
+              logs: runLogCollectorRef.current[nodeId] ?? [],
+              output: result.output,
+              durationMs: Date.now() - startedAtMs,
+            });
+            runRecord.feedPosts?.push(gateDoneFeed.post);
+            feedRawAttachmentRef.current[feedAttachmentRawKey(gateDoneFeed.post.id, "markdown")] =
+              gateDoneFeed.rawAttachments.markdown;
+            feedRawAttachmentRef.current[feedAttachmentRawKey(gateDoneFeed.post.id, "json")] =
+              gateDoneFeed.rawAttachments.json;
             lastDoneNodeId = nodeId;
           }
         }
@@ -5976,8 +6559,11 @@ ${prompt}`;
       runRecord.finishedAt = new Date().toISOString();
       runRecord.regression = await buildRegressionSummary(runRecord);
       await saveRunRecord(runRecord);
-      setSelectedRunDetail(runRecord);
-      setSelectedRunFile(`run-${runRecord.runId}.json`);
+      const normalizedRunRecord = normalizeRunRecord(runRecord);
+      const runFileName = `run-${runRecord.runId}.json`;
+      feedRunCacheRef.current[runFileName] = normalizedRunRecord;
+      setSelectedRunDetail(normalizedRunRecord);
+      setSelectedRunFile(runFileName);
       setStatus("그래프 실행 완료");
     } catch (e) {
       markCodexNodesStatusOnEngineIssue("failed", `그래프 실행 실패: ${String(e)}`, true);
@@ -6312,6 +6898,39 @@ ${prompt}`;
     };
   });
   const isActiveTab = (tab: WorkspaceTab): boolean => workspaceTab === tab;
+  const filteredFeedPosts = feedPosts
+    .filter((post) => {
+      if (feedStatusFilter !== "all" && post.status !== feedStatusFilter) {
+        return false;
+      }
+      if (feedExecutorFilter !== "all") {
+        const normalizedExecutor =
+          post.executor === "codex" ? "codex" : post.executor === "ollama" ? "ollama" : "web";
+        if (normalizedExecutor !== feedExecutorFilter) {
+          return false;
+        }
+      }
+      if (feedPeriodFilter !== "all") {
+        const createdAtMs = new Date(post.createdAt).getTime();
+        const now = Date.now();
+        if (Number.isNaN(createdAtMs)) {
+          return false;
+        }
+        if (feedPeriodFilter === "today" && now - createdAtMs > 24 * 60 * 60 * 1000) {
+          return false;
+        }
+        if (feedPeriodFilter === "7d" && now - createdAtMs > 7 * 24 * 60 * 60 * 1000) {
+          return false;
+        }
+      }
+      const keyword = feedKeyword.trim().toLowerCase();
+      if (!keyword) {
+        return true;
+      }
+      const haystack = `${post.question ?? ""} ${post.agentName} ${post.roleLabel} ${post.summary}`.toLowerCase();
+      return haystack.includes(keyword);
+    })
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   const viewportWidth = Math.ceil(canvasLogicalViewport.width);
   const viewportHeight = Math.ceil(canvasLogicalViewport.height);
   const stagePadding = graph.nodes.length > 0 ? STAGE_GROW_MARGIN : 0;
@@ -6349,6 +6968,16 @@ ${prompt}`;
           >
             <span className="nav-icon"><NavIcon tab="workflow" /></span>
             <span className="nav-label">워크</span>
+          </button>
+          <button
+            className={isActiveTab("feed") ? "is-active" : ""}
+            onClick={() => setWorkspaceTab("feed")}
+            aria-label="피드"
+            title="피드"
+            type="button"
+          >
+            <span className="nav-icon"><NavIcon tab="feed" /></span>
+            <span className="nav-label">피드</span>
           </button>
           <button
             className={isActiveTab("history") ? "is-active" : ""}
@@ -7262,6 +7891,174 @@ ${prompt}`;
           </div>
         )}
 
+        {workspaceTab === "feed" && (
+          <section className="feed-layout">
+            <article className="panel-card feed-filter-pane">
+              <h2>에이전트 피드</h2>
+              <div className="feed-filter-grid">
+                <label>
+                  상태
+                  <FancySelect
+                    ariaLabel="피드 상태 필터"
+                    className="modern-select"
+                    onChange={(next) => setFeedStatusFilter(next as FeedStatusFilter)}
+                    options={[
+                      { value: "all", label: "전체" },
+                      { value: "done", label: "완료" },
+                      { value: "failed", label: "오류" },
+                      { value: "cancelled", label: "취소" },
+                    ]}
+                    value={feedStatusFilter}
+                  />
+                </label>
+                <label>
+                  실행기
+                  <FancySelect
+                    ariaLabel="피드 실행기 필터"
+                    className="modern-select"
+                    onChange={(next) => setFeedExecutorFilter(next as FeedExecutorFilter)}
+                    options={[
+                      { value: "all", label: "전체" },
+                      { value: "codex", label: "Codex" },
+                      { value: "web", label: "WEB" },
+                      { value: "ollama", label: "Ollama" },
+                    ]}
+                    value={feedExecutorFilter}
+                  />
+                </label>
+                <label>
+                  기간
+                  <FancySelect
+                    ariaLabel="피드 기간 필터"
+                    className="modern-select"
+                    onChange={(next) => setFeedPeriodFilter(next as FeedPeriodFilter)}
+                    options={[
+                      { value: "all", label: "전체" },
+                      { value: "today", label: "오늘" },
+                      { value: "7d", label: "최근 7일" },
+                    ]}
+                    value={feedPeriodFilter}
+                  />
+                </label>
+                <label>
+                  키워드
+                  <input
+                    onChange={(e) => setFeedKeyword(e.currentTarget.value)}
+                    placeholder="질문/역할/모델 검색"
+                    value={feedKeyword}
+                  />
+                </label>
+                <div className="button-row">
+                  <button onClick={refreshFeedTimeline} type="button">
+                    새로고침
+                  </button>
+                </div>
+                <div className="usage-method">표시 중: {filteredFeedPosts.length}개 포스트</div>
+              </div>
+            </article>
+
+            <article className="panel-card feed-stream">
+              {feedLoading && <div className="log-empty">피드 로딩 중...</div>}
+              {!feedLoading && filteredFeedPosts.length === 0 && (
+                <div className="log-empty">표시할 포스트가 없습니다.</div>
+              )}
+              {!feedLoading &&
+                filteredFeedPosts.map((post) => {
+                  const activeAttachmentKind = feedAttachmentTabByPost[post.id] ?? "markdown";
+                  const selectedAttachment =
+                    post.attachments.find((attachment) => attachment.kind === activeAttachmentKind) ??
+                    post.attachments[0];
+                  const rawEnabled = feedRawViewByPost[post.id] === true;
+                  const rawContent = selectedAttachment
+                    ? feedRawAttachmentRef.current[
+                        feedAttachmentRawKey(post.id, selectedAttachment.kind)
+                      ]
+                    : "";
+                  const canShowRaw = Boolean(rawContent);
+                  const visibleContent =
+                    rawEnabled && canShowRaw && rawContent ? rawContent : selectedAttachment?.content ?? "(첨부 없음)";
+                  return (
+                    <section className="feed-card" key={post.id}>
+                      <div className="feed-card-head">
+                        <div className="feed-card-title-wrap">
+                          <h3>{post.agentName}</h3>
+                          <div className="feed-card-sub">{post.roleLabel}</div>
+                        </div>
+                        <div className="feed-card-meta">
+                          <span className={`status-pill status-${post.status}`}>
+                            {nodeStatusLabel(post.status as NodeExecutionStatus)}
+                          </span>
+                          <span className="feed-card-time">{post.createdAt}</span>
+                        </div>
+                      </div>
+                      {post.question && <div className="feed-card-question">질문: {post.question}</div>}
+                      <div className="feed-card-summary">{post.summary || "(요약 없음)"}</div>
+                      <div className="feed-step-list">
+                        {post.steps.map((step) => (
+                          <span className="feed-step-chip" key={`${post.id}-${step}`}>
+                            {step}
+                          </span>
+                        ))}
+                      </div>
+
+                      <div className="feed-attachment-toolbar">
+                        <div className="feed-attachment-tabs">
+                          {post.attachments.map((attachment) => (
+                            <button
+                              className={activeAttachmentKind === attachment.kind ? "is-active" : ""}
+                              key={`${post.id}-${attachment.kind}`}
+                              onClick={() =>
+                                setFeedAttachmentTabByPost((prev) => ({
+                                  ...prev,
+                                  [post.id]: attachment.kind,
+                                }))
+                              }
+                              type="button"
+                            >
+                              {attachment.kind === "markdown" ? "문서(MD)" : "데이터(JSON)"}
+                            </button>
+                          ))}
+                        </div>
+                        <button
+                          disabled={!canShowRaw}
+                          onClick={() =>
+                            setFeedRawViewByPost((prev) => ({
+                              ...prev,
+                              [post.id]: !prev[post.id],
+                            }))
+                          }
+                          type="button"
+                        >
+                          {rawEnabled ? "마스킹 보기" : "원문 보기"}
+                        </button>
+                      </div>
+                      <pre className="feed-attachment-content">{visibleContent}</pre>
+
+                      <div className="feed-evidence-row">
+                        <span>생성 시간: {formatDuration(post.evidence.durationMs)}</span>
+                        <span>사용량: {formatUsage(post.evidence.usage)}</span>
+                        <span>
+                          품질:{" "}
+                          {post.evidence.qualityDecision
+                            ? `${post.evidence.qualityDecision} (${post.evidence.qualityScore ?? "-"})`
+                            : "-"}
+                        </span>
+                      </div>
+                      <div className="button-row feed-card-actions">
+                        <button onClick={() => onOpenFeedPostHistory(post)} type="button">
+                          기록 열기
+                        </button>
+                        <button onClick={() => onExportRunFile(post.sourceFile)} type="button">
+                          Run 내보내기
+                        </button>
+                      </div>
+                    </section>
+                  );
+                })}
+            </article>
+          </section>
+        )}
+
         {workspaceTab === "history" && (
           <section className="history-layout">
             <article className="panel-card history-list">
@@ -7357,6 +8154,15 @@ ${prompt}`;
           <section className="panel-card settings-view">
             {renderSettingsPanel(false)}
             {renderWebAutomationPanel()}
+            <section className="controls settings-share-panel">
+              <h2>실행 기록 공유</h2>
+              <div className="usage-method">Run 단위 JSON을 가져오거나, 피드 카드에서 내보낼 수 있습니다.</div>
+              <div className="button-row">
+                <button onClick={onImportRunFile} type="button">
+                  Run 가져오기
+                </button>
+              </div>
+            </section>
             <section className="settings-usage-guide">
               <h3>사용 방법</h3>
               <ol>
