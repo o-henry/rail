@@ -1,9 +1,12 @@
 mod engine;
+mod knowledge;
+mod quality;
 mod storage;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .manage(engine::EngineManager::default())
         .invoke_handler(tauri::generate_handler![
@@ -15,13 +18,32 @@ pub fn run() {
             engine::turn_start,
             engine::turn_interrupt,
             engine::approval_respond,
+            engine::provider_window_open,
+            engine::provider_window_close,
+            engine::provider_child_view_open,
+            engine::provider_child_view_close,
+            engine::provider_child_view_hide,
+            engine::web_worker_start,
+            engine::web_worker_stop,
+            engine::web_provider_health,
+            engine::web_provider_run,
+            engine::web_provider_open_session,
+            engine::web_provider_reset_session,
+            engine::web_provider_cancel,
+            engine::ollama_generate,
+            knowledge::knowledge_probe,
+            knowledge::knowledge_retrieve,
+            quality::quality_run_checks,
             storage::graph_list,
             storage::graph_save,
             storage::graph_load,
             storage::run_save,
             storage::run_list,
             storage::run_load,
+            storage::run_delete,
             storage::run_directory,
+            storage::dialog_pick_directory,
+            storage::dialog_pick_knowledge_files,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

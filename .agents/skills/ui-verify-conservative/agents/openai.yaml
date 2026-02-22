@@ -1,0 +1,6 @@
+policy:
+  allow_implicit_invocation: false
+interface:
+  display_name: "UI Verify (Conservative)"
+  short_description: "Two-phase: spec lock -> implement+run tests with evidence."
+  default_prompt: "$ui-verify-conservative"

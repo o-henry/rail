@@ -28,3 +28,6 @@ runs/
 graphs/
 src-tauri/runs/
 src-tauri/graphs/
+
+# Local automation/runtime temp artifacts
+.tmp/

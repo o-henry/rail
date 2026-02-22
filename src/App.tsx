@@ -1,5 +1,4 @@
 import {
-  FormEvent,
   KeyboardEvent as ReactKeyboardEvent,
   MouseEvent as ReactMouseEvent,
   WheelEvent as ReactWheelEvent,
@@ -10,7 +9,7 @@ import {
 } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { openPath, openUrl } from "@tauri-apps/plugin-opener";
+import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import "./App.css";
 
 type EngineNotificationEvent = {
@@ -25,11 +24,6 @@ type EngineLifecycleEvent = {
 
 type ThreadStartResult = {
   threadId: string;
-  raw: unknown;
-};
-
-type LoginChatgptResult = {
-  authUrl: string;
   raw: unknown;
 };
 
@@ -54,7 +48,7 @@ type PendingApproval = {
   params: unknown;
 };
 
-type WorkspaceTab = "workflow" | "history" | "settings" | "dev";
+type WorkspaceTab = "workflow" | "history" | "settings";
 type NodeType = "turn" | "transform" | "gate";
 type PortType = "in" | "out";
 
@@ -66,20 +60,64 @@ type GraphNode = {
 };
 
 type GraphEdge = {
-  from: { nodeId: string; port: PortType };
-  to: { nodeId: string; port: PortType };
+  from: { nodeId: string; port: PortType; side?: NodeAnchorSide };
+  to: { nodeId: string; port: PortType; side?: NodeAnchorSide };
+  control?: { x: number; y: number };
 };
 
 type GraphData = {
   version: number;
   nodes: GraphNode[];
   edges: GraphEdge[];
+  knowledge: KnowledgeConfig;
+};
+
+type KnowledgeFileStatus = "ready" | "missing" | "unsupported" | "error";
+
+type KnowledgeFileRef = {
+  id: string;
+  name: string;
+  path: string;
+  ext: string;
+  enabled: boolean;
+  sizeBytes?: number;
+  mtimeMs?: number;
+  status?: KnowledgeFileStatus;
+  statusMessage?: string;
+};
+
+type KnowledgeConfig = {
+  files: KnowledgeFileRef[];
+  topK: number;
+  maxChars: number;
+};
+
+type KnowledgeSnippet = {
+  fileId: string;
+  fileName: string;
+  chunkIndex: number;
+  text: string;
+  score: number;
+};
+
+type KnowledgeRetrieveResult = {
+  snippets: KnowledgeSnippet[];
+  warnings: string[];
+};
+
+type KnowledgeTraceEntry = {
+  nodeId: string;
+  fileId: string;
+  fileName: string;
+  chunkIndex: number;
+  score: number;
 };
 
 type NodeExecutionStatus =
   | "idle"
   | "queued"
   | "running"
+  | "waiting_user"
   | "done"
   | "failed"
   | "skipped"
@@ -102,6 +140,7 @@ type NodeRunState = {
   finishedAt?: string;
   durationMs?: number;
   usage?: UsageStats;
+  qualityReport?: QualityReport;
 };
 
 type RunTransition = {
@@ -122,6 +161,19 @@ type RunRecord = {
   summaryLogs: string[];
   nodeLogs?: Record<string, string[]>;
   threadTurnMap: Record<string, { threadId?: string; turnId?: string }>;
+  providerTrace?: Array<{
+    nodeId: string;
+    executor: TurnExecutor;
+    provider: string;
+    status: "done" | "failed" | "cancelled";
+    startedAt: string;
+    finishedAt: string;
+    summary?: string;
+  }>;
+  knowledgeTrace?: KnowledgeTraceEntry[];
+  nodeMetrics?: Record<string, NodeMetric>;
+  qualitySummary?: QualitySummary;
+  regression?: RegressionSummary;
 };
 
 type TurnTerminal = {
@@ -131,9 +183,15 @@ type TurnTerminal = {
 };
 
 type DragState = {
-  nodeId: string;
-  offsetX: number;
-  offsetY: number;
+  nodeIds: string[];
+  pointerStart: LogicalPoint;
+  startPositions: Record<string, { x: number; y: number }>;
+};
+
+type EdgeDragState = {
+  edgeKey: string;
+  pointerStart: LogicalPoint;
+  startControl: LogicalPoint;
 };
 
 type PanState = {
@@ -143,10 +201,174 @@ type PanState = {
   scrollTop: number;
 };
 
+type PointerState = {
+  clientX: number;
+  clientY: number;
+};
+
+type LogicalPoint = {
+  x: number;
+  y: number;
+};
+
+type NodeVisualSize = {
+  width: number;
+  height: number;
+};
+
+type MarqueeSelection = {
+  start: LogicalPoint;
+  current: LogicalPoint;
+  append: boolean;
+};
+
+type NodeAnchorSide = "top" | "right" | "bottom" | "left";
+type FancySelectOption = {
+  value: string;
+  label: string;
+  disabled?: boolean;
+};
+
+type TurnExecutor =
+  | "codex"
+  | "web_gemini"
+  | "web_grok"
+  | "web_perplexity"
+  | "web_claude"
+  | "ollama";
+type CostPreset = "conservative" | "balanced" | "aggressive";
+type WebAutomationMode = "auto" | "manualPasteJson" | "manualPasteText";
+type WebResultMode = WebAutomationMode;
+type WebProvider = "gemini" | "gpt" | "grok" | "perplexity" | "claude";
+
 type TurnConfig = {
+  executor?: TurnExecutor;
   model?: string;
+  role?: string;
   cwd?: string;
   promptTemplate?: string;
+  knowledgeEnabled?: boolean;
+  webResultMode?: WebResultMode;
+  webTimeoutMs?: number;
+  ollamaModel?: string;
+  qualityProfile?: QualityProfileId;
+  qualityThreshold?: number;
+  qualityCommandEnabled?: boolean;
+  qualityCommands?: string;
+  artifactType?: ArtifactType;
+};
+
+type QualityProfileId =
+  | "code_implementation"
+  | "research_evidence"
+  | "design_planning"
+  | "synthesis_final"
+  | "generic";
+
+type ArtifactType =
+  | "none"
+  | "RequirementArtifact"
+  | "DesignArtifact"
+  | "TaskPlanArtifact"
+  | "ChangePlanArtifact"
+  | "EvidenceArtifact";
+
+type QualityCheck = {
+  id: string;
+  label: string;
+  kind: string;
+  required: boolean;
+  passed: boolean;
+  scoreDelta: number;
+  detail?: string;
+};
+
+type QualityReport = {
+  profile: QualityProfileId;
+  threshold: number;
+  score: number;
+  decision: "PASS" | "REJECT";
+  checks: QualityCheck[];
+  failures: string[];
+  warnings: string[];
+};
+
+type NodeMetric = {
+  nodeId: string;
+  profile: QualityProfileId;
+  score: number;
+  decision: "PASS" | "REJECT";
+  threshold: number;
+  failedChecks: number;
+  warningCount: number;
+};
+
+type QualitySummary = {
+  avgScore: number;
+  passRate: number;
+  totalNodes: number;
+  passNodes: number;
+};
+
+type RegressionSummary = {
+  baselineRunId?: string;
+  avgScoreDelta?: number;
+  passRateDelta?: number;
+  status: "improved" | "stable" | "degraded" | "unknown";
+  note?: string;
+};
+
+type QualityCommandResult = {
+  name: string;
+  exitCode: number;
+  stdoutTail: string;
+  stderrTail: string;
+  elapsedMs: number;
+};
+
+type WebProviderRunResult = {
+  ok: boolean;
+  text?: string;
+  raw?: unknown;
+  meta?: {
+    provider: string;
+    url?: string | null;
+    startedAt?: string | null;
+    finishedAt?: string | null;
+    elapsedMs?: number | null;
+    extractionStrategy?: string | null;
+  };
+  error?: string;
+  errorCode?: string;
+};
+
+type WebWorkerHealth = {
+  running: boolean;
+  lastError?: string | null;
+  providers?: unknown;
+  logPath?: string | null;
+  profileRoot?: string | null;
+  activeProvider?: string | null;
+};
+
+type WebProviderHealthEntry = {
+  contextOpen?: boolean;
+  profileDir?: string;
+  url?: string | null;
+  sessionState?: string | null;
+};
+
+type PendingWebTurn = {
+  nodeId: string;
+  provider: WebProvider;
+  prompt: string;
+  mode: WebResultMode;
+};
+
+type PendingWebLogin = {
+  nodeId: string;
+  provider: WebProvider;
+  reason: string;
 };
 
 type TransformMode = "pick" | "merge" | "template";
@@ -168,19 +390,102 @@ type GateConfig = {
 const APPROVAL_DECISIONS: ApprovalDecision[] = ["accept", "acceptForSession", "decline", "cancel"];
 const NODE_WIDTH = 240;
 const NODE_HEIGHT = 136;
-const GRAPH_STAGE_WIDTH = 2600;
-const GRAPH_STAGE_HEIGHT = 1800;
-const GRAPH_PAN_PADDING = 900;
+const DEFAULT_STAGE_WIDTH = 1400;
+const DEFAULT_STAGE_HEIGHT = 900;
+const STAGE_GROW_MARGIN = 120;
+const STAGE_GROW_LIMIT = 720;
+const MAX_STAGE_WIDTH = 4200;
+const MAX_STAGE_HEIGHT = 3200;
+const GRAPH_STAGE_INSET_X = 90;
+const GRAPH_STAGE_INSET_Y = 150;
 const MIN_CANVAS_ZOOM = 0.6;
 const MAX_CANVAS_ZOOM = 1.8;
-const TURN_MODEL_OPTIONS = [
-  "gpt-5.3-codex",
-  "gpt-5.3-codex-spark",
-  "gpt-5.2-codex",
-  "gpt-5.1-codex-max",
-  "gpt-5.2",
-  "gpt-5.1-codex-mini",
+const QUESTION_INPUT_MAX_HEIGHT = 132;
+const NODE_DRAG_MARGIN = 60;
+const NODE_ANCHOR_OFFSET = 15;
+const FALLBACK_TURN_ROLE = "GENERAL AGENT";
+const GRAPH_SCHEMA_VERSION = 3;
+const KNOWLEDGE_DEFAULT_TOP_K = 4;
+const KNOWLEDGE_DEFAULT_MAX_CHARS = 2800;
+const QUALITY_DEFAULT_THRESHOLD = 70;
+const KNOWLEDGE_TOP_K_OPTIONS: FancySelectOption[] = [
+  { value: "2", label: "2개" },
+  { value: "4", label: "4개" },
+  { value: "6", label: "6개" },
+  { value: "8", label: "8개" },
+];
+const KNOWLEDGE_MAX_CHARS_OPTIONS: FancySelectOption[] = [
+  { value: "1600", label: "짧게 (빠름)" },
+  { value: "2800", label: "보통 (균형)" },
+  { value: "4000", label: "길게 (정밀)" },
+  { value: "5600", label: "아주 길게 (최대)" },
+];
+const TURN_EXECUTOR_OPTIONS = [
+  "codex",
+  "web_gemini",
+  "web_grok",
+  "web_perplexity",
+  "web_claude",
+  "ollama",
 ] as const;
+const TURN_EXECUTOR_LABELS: Record<TurnExecutor, string> = {
+  codex: "Codex",
+  web_gemini: "WEB / GEMINI",
+  web_grok: "WEB / GROK",
+  web_perplexity: "WEB / PERPLEXITY",
+  web_claude: "WEB / CLAUDE",
+  ollama: "Ollama (로컬)",
+};
+const WEB_PROVIDER_OPTIONS: ReadonlyArray<WebProvider> = [
+  "gemini",
+  "gpt",
+  "grok",
+  "perplexity",
+  "claude",
+];
+const TURN_MODEL_OPTIONS = [
+  "GPT-5.3-Codex",
+  "GPT-5.3-Codex-Spark",
+  "GPT-5.2-Codex",
+  "GPT-5.1-Codex-Max",
+  "GPT-5.2",
+  "GPT-5.1-Codex-Mini",
+] as const;
+const DEFAULT_TURN_MODEL = TURN_MODEL_OPTIONS[0];
+const COST_PRESET_OPTIONS: FancySelectOption[] = [
+  { value: "conservative", label: "고사양 (품질 우선)" },
+  { value: "balanced", label: "보통 (기본)" },
+  { value: "aggressive", label: "저사양 (사용량 절감)" },
+];
+const COST_PRESET_DEFAULT_MODEL: Record<CostPreset, (typeof TURN_MODEL_OPTIONS)[number]> = {
+  conservative: "GPT-5.3-Codex",
+  balanced: "GPT-5.2-Codex",
+  aggressive: "GPT-5.1-Codex-Mini",
+};
+const TURN_MODEL_CANONICAL_PAIRS: Array<{ display: string; engine: string }> = [
+  { display: "GPT-5.3-Codex", engine: "gpt-5.3-codex" },
+  { display: "GPT-5.3-Codex-Spark", engine: "gpt-5.3-codex-spark" },
+  { display: "GPT-5.2-Codex", engine: "gpt-5.2-codex" },
+  { display: "GPT-5.1-Codex-Max", engine: "gpt-5.1-codex-max" },
+  { display: "GPT-5.2", engine: "gpt-5.2" },
+  { display: "GPT-5.1-Codex-Mini", engine: "gpt-5.1-codex-mini" },
+];
+const NODE_ANCHOR_SIDES: NodeAnchorSide[] = ["top", "right", "bottom", "left"];
+const QUALITY_PROFILE_OPTIONS: FancySelectOption[] = [
+  { value: "code_implementation", label: "코드 구현" },
+  { value: "research_evidence", label: "자료/근거 검증" },
+  { value: "design_planning", label: "설계/기획" },
+  { value: "synthesis_final", label: "최종 종합" },
+  { value: "generic", label: "일반" },
+];
+const ARTIFACT_TYPE_OPTIONS: FancySelectOption[] = [
+  { value: "none", label: "사용 안 함" },
+  { value: "RequirementArtifact", label: "요구사항 아티팩트" },
+  { value: "DesignArtifact", label: "설계 아티팩트" },
+  { value: "TaskPlanArtifact", label: "작업계획 아티팩트" },
+  { value: "ChangePlanArtifact", label: "변경계획 아티팩트" },
+  { value: "EvidenceArtifact", label: "근거 아티팩트" },
+];
 
 function formatUnknown(value: unknown): string {
   try {
@@ -195,6 +500,139 @@ function toErrorText(error: unknown): string {
     return error.message;
   }
   return String(error);
+}
+
+function toUsageCheckErrorMessage(error: unknown): string {
+  const raw = toErrorText(error);
+  const lower = raw.toLowerCase();
+
+  if (
+    lower.includes("account/usage/get") ||
+    lower.includes("account/usage") ||
+    lower.includes("unknown variant `account/get`") ||
+    lower.includes("unknown variant `account/status`")
+  ) {
+    return "사용량 조회 API를 지원하지 않는 엔진 버전입니다. 엔진 실행/로그인은 정상이어도 사용량은 현재 버전에서 조회할 수 없습니다.";
+  }
+
+  if (lower.includes("not initialized")) {
+    return "엔진 초기화가 아직 끝나지 않아 사용량 조회를 할 수 없습니다. 잠시 후 다시 시도해주세요.";
+  }
+
+  if (
+    lower.includes("engine not running") ||
+    lower.includes("failed to spawn") ||
+    lower.includes("broken pipe") ||
+    lower.includes("connection reset") ||
+    lower.includes("connection refused")
+  ) {
+    return "엔진 연결이 끊어져 사용량 조회에 실패했습니다. 엔진 상태를 확인하고 다시 시도해주세요.";
+  }
+
+  if (
+    (lower.includes("login") || lower.includes("auth")) &&
+    (lower.includes("required") || lower.includes("unauthorized"))
+  ) {
+    return "로그인이 완료되지 않아 사용량을 조회할 수 없습니다. 설정에서 로그인 후 다시 시도해주세요.";
+  }
+
+  const compact = raw.length > 140 ? `${raw.slice(0, 140)}...` : raw;
+  return `사용량 조회에 실패했습니다. 원인: ${compact}`;
+}
+
+function toOpenRunsFolderErrorMessage(error: unknown): string {
+  const raw = toErrorText(error);
+  const lower = raw.toLowerCase();
+
+  if (lower.includes("not allowed") || lower.includes("permission")) {
+    return "실행 기록 폴더를 열 권한이 없습니다. 앱 권한 설정을 확인해주세요.";
+  }
+  if (lower.includes("not found") || lower.includes("no such file")) {
+    return "실행 기록 폴더를 찾지 못했습니다. 먼저 실행 기록을 생성해주세요.";
+  }
+  return `실행 기록 폴더 열기 실패: ${raw}`;
+}
+
+function toTurnModelDisplayName(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return DEFAULT_TURN_MODEL;
+  }
+  const lower = trimmed.toLowerCase();
+  const matched = TURN_MODEL_CANONICAL_PAIRS.find(
+    (entry) => entry.engine === lower || entry.display.toLowerCase() === lower,
+  );
+  return matched?.display ?? trimmed;
+}
+
+function toTurnModelEngineId(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return TURN_MODEL_CANONICAL_PAIRS[0].engine;
+  }
+  const lower = trimmed.toLowerCase();
+  const matched = TURN_MODEL_CANONICAL_PAIRS.find(
+    (entry) => entry.engine === lower || entry.display.toLowerCase() === lower,
+  );
+  if (matched) {
+    return matched.engine;
+  }
+  if (lower.startsWith("gpt-")) {
+    return lower;
+  }
+  return trimmed;
+}
+
+function isCostPreset(value: string): value is CostPreset {
+  return value === "conservative" || value === "balanced" || value === "aggressive";
+}
+
+function costPresetLabel(preset: CostPreset): string {
+  return COST_PRESET_OPTIONS.find((entry) => entry.value === preset)?.label ?? preset;
+}
+
+function isCriticalTurnNode(node: GraphNode): boolean {
+  if (node.type !== "turn") {
+    return false;
+  }
+  const config = node.config as TurnConfig;
+  const signal = `${node.id} ${String(config.role ?? "")} ${String(config.promptTemplate ?? "")}`.toLowerCase();
+  return /final|synth|judge|evaluat|quality|verif|검증|평가|판정|최종|합성/.test(signal);
+}
+
+function getCostPresetTargetModel(preset: CostPreset, isCritical: boolean): (typeof TURN_MODEL_OPTIONS)[number] {
+  if (preset === "conservative") {
+    return "GPT-5.3-Codex";
+  }
+  if (preset === "balanced") {
+    return isCritical ? "GPT-5.3-Codex" : "GPT-5.2-Codex";
+  }
+  return isCritical ? "GPT-5.2-Codex" : "GPT-5.1-Codex-Mini";
+}
+
+function isEditableTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) {
+    return false;
+  }
+  const tag = target.tagName.toLowerCase();
+  if (tag === "input" || tag === "textarea" || tag === "select") {
+    return true;
+  }
+  return Boolean(target.closest("[contenteditable='true']"));
+}
+
+function isNodeDragAllowedTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) {
+    return false;
+  }
+  if (
+    target.closest(
+      "button, input, textarea, select, a, .node-anchor, .node-ports, .node-port-btn, .fancy-select, .fancy-select-menu",
+    )
+  ) {
+    return false;
+  }
+  return true;
 }
 
 function extractDeltaText(input: unknown, depth = 0): string {
@@ -343,6 +781,33 @@ function readNumber(value: unknown): number | undefined {
   return undefined;
 }
 
+function closestNumericOptionValue(
+  options: FancySelectOption[],
+  current: number,
+  fallback: number,
+): string {
+  const parsed = options
+    .map((option) => Number(option.value))
+    .filter((value) => Number.isFinite(value));
+  if (parsed.length === 0) {
+    return String(fallback);
+  }
+  if (parsed.includes(current)) {
+    return String(current);
+  }
+  let nearest = parsed[0] ?? fallback;
+  let nearestDistance = Math.abs(current - nearest);
+  for (let index = 1; index < parsed.length; index += 1) {
+    const candidate = parsed[index];
+    const distance = Math.abs(current - candidate);
+    if (distance < nearestDistance) {
+      nearest = candidate;
+      nearestDistance = distance;
+    }
+  }
+  return String(nearest);
+}
+
 function findUsageObject(input: unknown, depth = 0): Record<string, unknown> | null {
   if (depth > 5 || input == null || typeof input !== "object") {
     return null;
@@ -431,15 +896,299 @@ function formatUsage(usage?: UsageStats): string {
   return `${total}토큰 (입력 ${inputText} / 출력 ${outputText})`;
 }
 
-function formatFinishedAt(value?: string): string {
-  if (!value) {
-    return "-";
+function toQualityProfileId(value: unknown): QualityProfileId | null {
+  if (
+    value === "code_implementation" ||
+    value === "research_evidence" ||
+    value === "design_planning" ||
+    value === "synthesis_final" ||
+    value === "generic"
+  ) {
+    return value;
   }
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return "-";
+  return null;
+}
+
+function inferQualityProfile(node: GraphNode, config: TurnConfig): QualityProfileId {
+  const explicit = toQualityProfileId(config.qualityProfile);
+  if (explicit) {
+    return explicit;
   }
-  return date.toLocaleTimeString("ko-KR", { hour12: false });
+
+  const executor = getTurnExecutor(config);
+  const signal = `${String(config.role ?? "")} ${String(config.promptTemplate ?? "")} ${node.id}`.toLowerCase();
+  if (executor === "web_gemini" || executor === "web_grok" || executor === "web_perplexity" || executor === "web_claude") {
+    return "research_evidence";
+  }
+  if (/impl|code|test|lint|build|refactor|fix|bug|개발|구현|코드/.test(signal)) {
+    return "code_implementation";
+  }
+  if (/research|evidence|search|fact|source|검증|자료|근거|조사/.test(signal)) {
+    return "research_evidence";
+  }
+  if (/design|plan|architecture|요구|설계|기획/.test(signal)) {
+    return "design_planning";
+  }
+  if (/final|synth|judge|평가|최종|합성/.test(signal)) {
+    return "synthesis_final";
+  }
+  return "generic";
+}
+
+function toArtifactType(value: unknown): ArtifactType {
+  if (
+    value === "RequirementArtifact" ||
+    value === "DesignArtifact" ||
+    value === "TaskPlanArtifact" ||
+    value === "ChangePlanArtifact" ||
+    value === "EvidenceArtifact"
+  ) {
+    return value;
+  }
+  return "none";
+}
+
+function parseQualityCommands(input: unknown): string[] {
+  const raw = String(input ?? "").trim();
+  if (!raw) {
+    return [];
+  }
+  return raw
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+}
+
+function normalizeArtifactOutput(
+  nodeId: string,
+  artifactType: ArtifactType,
+  rawOutput: unknown,
+): { output: unknown; warnings: string[] } {
+  if (artifactType === "none") {
+    return { output: rawOutput, warnings: [] };
+  }
+
+  let payload: unknown = rawOutput;
+  if (typeof rawOutput === "string") {
+    const text = rawOutput.trim();
+    if (text.startsWith("{") || text.startsWith("[")) {
+      try {
+        payload = JSON.parse(text);
+      } catch {
+        payload = { text };
+      }
+    } else {
+      payload = { text };
+    }
+  }
+
+  const warnings: string[] = [];
+  if (payload == null || typeof payload !== "object") {
+    payload = { text: stringifyInput(rawOutput) };
+    warnings.push("아티팩트 변환: 구조화된 출력이 없어 텍스트 기반으로 보정했습니다.");
+  }
+
+  const envelope = {
+    artifactType,
+    version: "v1",
+    authorNodeId: nodeId,
+    createdAt: new Date().toISOString(),
+    payload,
+  };
+
+  return {
+    output: {
+      artifact: envelope,
+      text: extractFinalAnswer(rawOutput) || stringifyInput(rawOutput),
+      raw: rawOutput,
+    },
+    warnings,
+  };
+}
+
+async function buildQualityReport(params: {
+  node: GraphNode;
+  config: TurnConfig;
+  output: unknown;
+  cwd: string;
+}): Promise<QualityReport> {
+  const { node, config, output, cwd } = params;
+  const profile = inferQualityProfile(node, config);
+  const threshold = Math.max(0, Math.min(100, Number(config.qualityThreshold ?? QUALITY_DEFAULT_THRESHOLD) || QUALITY_DEFAULT_THRESHOLD));
+  const checks: QualityCheck[] = [];
+  const failures: string[] = [];
+  const warnings: string[] = [];
+  let score = 100;
+
+  const fullText = extractFinalAnswer(output) || stringifyInput(output);
+  const normalized = fullText.toLowerCase();
+
+  const addCheck = (input: {
+    id: string;
+    label: string;
+    kind: string;
+    required: boolean;
+    passed: boolean;
+    penalty: number;
+    detail?: string;
+  }) => {
+    if (!input.passed) {
+      score = Math.max(0, score - input.penalty);
+      if (input.required) {
+        failures.push(input.label);
+      }
+    }
+    checks.push({
+      id: input.id,
+      label: input.label,
+      kind: input.kind,
+      required: input.required,
+      passed: input.passed,
+      scoreDelta: input.passed ? 0 : -input.penalty,
+      detail: input.detail,
+    });
+  };
+
+  addCheck({
+    id: "non_empty",
+    label: "응답 비어있지 않음",
+    kind: "structure",
+    required: true,
+    passed: fullText.trim().length > 0,
+    penalty: 40,
+  });
+
+  addCheck({
+    id: "minimum_length",
+    label: "최소 설명 길이",
+    kind: "structure",
+    required: false,
+    passed: fullText.trim().length >= 120,
+    penalty: 12,
+    detail: "120자 미만이면 요약 부족으로 감점",
+  });
+
+  if (profile === "research_evidence") {
+    addCheck({
+      id: "source_signal",
+      label: "근거/출처 신호 포함",
+      kind: "evidence",
+      required: true,
+      passed: /(source|출처|근거|http|https|reference)/i.test(fullText),
+      penalty: 25,
+    });
+    addCheck({
+      id: "uncertainty_signal",
+      label: "한계/불확실성 표기",
+      kind: "consistency",
+      required: false,
+      passed: /(한계|불확실|리스크|위험|counter|반례|제약)/i.test(fullText),
+      penalty: 10,
+    });
+  } else if (profile === "design_planning") {
+    const hits = ["목표", "제약", "리스크", "우선순위", "아키텍처", "scope", "milestone"].filter((key) =>
+      normalized.includes(key.toLowerCase()),
+    ).length;
+    addCheck({
+      id: "design_sections",
+      label: "설계 핵심 항목 포함",
+      kind: "structure",
+      required: true,
+      passed: hits >= 3,
+      penalty: 24,
+      detail: "목표/제약/리스크/우선순위 등 3개 이상 필요",
+    });
+  } else if (profile === "synthesis_final") {
+    const hits = ["결론", "근거", "한계", "다음 단계", "실행", "체크리스트"].filter((key) =>
+      normalized.includes(key.toLowerCase()),
+    ).length;
+    addCheck({
+      id: "final_structure",
+      label: "최종 답변 구조 충족",
+      kind: "structure",
+      required: true,
+      passed: hits >= 3,
+      penalty: 24,
+      detail: "결론/근거/한계/다음 단계 중 3개 이상",
+    });
+  } else if (profile === "code_implementation") {
+    addCheck({
+      id: "code_plan_signal",
+      label: "코드/파일/테스트 계획 포함",
+      kind: "structure",
+      required: true,
+      passed: /(file|파일|test|테스트|lint|build|patch|module|class|function)/i.test(fullText),
+      penalty: 24,
+    });
+
+    if (config.qualityCommandEnabled) {
+      const commands = parseQualityCommands(config.qualityCommands);
+      if (commands.length === 0) {
+        warnings.push("품질 명령 실행이 켜져 있지만 명령 목록이 비어 있습니다.");
+      } else {
+        try {
+          const commandResults = await invoke<QualityCommandResult[]>("quality_run_checks", {
+            commands,
+            cwd,
+          });
+          const failed = commandResults.find((row) => row.exitCode !== 0);
+          addCheck({
+            id: "local_commands",
+            label: "로컬 품질 명령 통과",
+            kind: "local_command",
+            required: true,
+            passed: !failed,
+            penalty: 35,
+            detail: failed ? `${failed.name} 실패(exit=${failed.exitCode})` : "모든 명령 성공",
+          });
+          for (const row of commandResults) {
+            if (row.exitCode !== 0 && row.stderrTail.trim()) {
+              warnings.push(`[${row.name}] ${row.stderrTail}`);
+            }
+          }
+        } catch (error) {
+          addCheck({
+            id: "local_commands",
+            label: "로컬 품질 명령 통과",
+            kind: "local_command",
+            required: true,
+            passed: false,
+            penalty: 35,
+            detail: String(error),
+          });
+        }
+      }
+    }
+  }
+
+  const hardFail = failures.length > 0;
+  const decision: "PASS" | "REJECT" = !hardFail && score >= threshold ? "PASS" : "REJECT";
+
+  return {
+    profile,
+    threshold,
+    score,
+    decision,
+    checks,
+    failures,
+    warnings,
+  };
+}
+
+function summarizeQualityMetrics(nodeMetrics: Record<string, NodeMetric>): QualitySummary {
+  const rows = Object.values(nodeMetrics);
+  if (rows.length === 0) {
+    return { avgScore: 0, passRate: 0, totalNodes: 0, passNodes: 0 };
+  }
+  const passNodes = rows.filter((row) => row.decision === "PASS").length;
+  const avgScore = rows.reduce((sum, row) => sum + row.score, 0) / rows.length;
+  const passRate = passNodes / rows.length;
+  return {
+    avgScore: Math.round(avgScore * 100) / 100,
+    passRate: Math.round(passRate * 10000) / 100,
+    totalNodes: rows.length,
+    passNodes,
+  };
 }
 
 function getByPath(input: unknown, path: string): unknown {
@@ -473,6 +1222,68 @@ function replaceInputPlaceholder(template: string, value: string): string {
   return template.split("{{input}}").join(value);
 }
 
+function defaultKnowledgeConfig(): KnowledgeConfig {
+  return {
+    files: [],
+    topK: KNOWLEDGE_DEFAULT_TOP_K,
+    maxChars: KNOWLEDGE_DEFAULT_MAX_CHARS,
+  };
+}
+
+function normalizeKnowledgeStatus(input: unknown): KnowledgeFileStatus | undefined {
+  if (input === "ready" || input === "missing" || input === "unsupported" || input === "error") {
+    return input;
+  }
+  return undefined;
+}
+
+function normalizeKnowledgeFile(input: unknown): KnowledgeFileRef | null {
+  if (!input || typeof input !== "object") {
+    return null;
+  }
+  const row = input as Record<string, unknown>;
+  const rawPath = String(row.path ?? "").trim();
+  if (!rawPath) {
+    return null;
+  }
+
+  const id = String(row.id ?? "").trim() || rawPath;
+  const name = String(row.name ?? "").trim() || rawPath.split(/[\\/]/).pop() || rawPath;
+  const ext = String(row.ext ?? "").trim();
+  const enabled = typeof row.enabled === "boolean" ? row.enabled : true;
+  const sizeBytes = readNumber(row.sizeBytes);
+  const mtimeMs = readNumber(row.mtimeMs);
+  const status = normalizeKnowledgeStatus(row.status);
+  const statusMessage = typeof row.statusMessage === "string" ? row.statusMessage : undefined;
+
+  return {
+    id,
+    name,
+    path: rawPath,
+    ext,
+    enabled,
+    sizeBytes,
+    mtimeMs,
+    status,
+    statusMessage,
+  };
+}
+
+function normalizeKnowledgeConfig(input: unknown): KnowledgeConfig {
+  if (!input || typeof input !== "object") {
+    return defaultKnowledgeConfig();
+  }
+  const row = input as Record<string, unknown>;
+  const files = Array.isArray(row.files) ? row.files.map(normalizeKnowledgeFile).filter(Boolean) : [];
+  const topK = Math.max(1, Math.min(20, readNumber(row.topK) ?? KNOWLEDGE_DEFAULT_TOP_K));
+  const maxChars = Math.max(300, Math.min(20_000, readNumber(row.maxChars) ?? KNOWLEDGE_DEFAULT_MAX_CHARS));
+  return {
+    files: files as KnowledgeFileRef[],
+    topK,
+    maxChars,
+  };
+}
+
 function cloneGraph(input: GraphData): GraphData {
   return {
     version: input.version,
@@ -484,12 +1295,252 @@ function cloneGraph(input: GraphData): GraphData {
     edges: input.edges.map((edge) => ({
       from: { ...edge.from },
       to: { ...edge.to },
+      control: edge.control ? { ...edge.control } : undefined,
     })),
+    knowledge: {
+      files: (input.knowledge?.files ?? []).map((file) => ({ ...file })),
+      topK: input.knowledge?.topK ?? KNOWLEDGE_DEFAULT_TOP_K,
+      maxChars: input.knowledge?.maxChars ?? KNOWLEDGE_DEFAULT_MAX_CHARS,
+    },
   };
 }
 
 function graphEquals(a: GraphData, b: GraphData): boolean {
   return JSON.stringify(a) === JSON.stringify(b);
+}
+
+function buildRoundedEdgePath(
+  x1: number,
+  y1: number,
+  x2: number,
+  y2: number,
+  withArrow: boolean,
+  fromSide: NodeAnchorSide,
+  toSide: NodeAnchorSide,
+): string {
+  const toVector = (side: NodeAnchorSide): LogicalPoint => {
+    if (side === "left") {
+      return { x: -1, y: 0 };
+    }
+    if (side === "right") {
+      return { x: 1, y: 0 };
+    }
+    if (side === "top") {
+      return { x: 0, y: -1 };
+    }
+    return { x: 0, y: 1 };
+  };
+
+  const offsetPoint = (point: LogicalPoint, side: NodeAnchorSide, distance: number): LogicalPoint => {
+    const vector = toVector(side);
+    return { x: point.x + vector.x * distance, y: point.y + vector.y * distance };
+  };
+
+  const simplifyOrthogonalPoints = (points: LogicalPoint[]): LogicalPoint[] => {
+    const compact: LogicalPoint[] = [];
+    for (const point of points) {
+      const prev = compact[compact.length - 1];
+      if (!prev || Math.abs(prev.x - point.x) > 0.1 || Math.abs(prev.y - point.y) > 0.1) {
+        compact.push(point);
+      }
+    }
+
+    const simplified: LogicalPoint[] = [];
+    for (const point of compact) {
+      const mid = simplified[simplified.length - 1];
+      const head = simplified[simplified.length - 2];
+      if (!mid || !head) {
+        simplified.push(point);
+        continue;
+      }
+      const isCollinearX = Math.abs(head.x - mid.x) <= 0.1 && Math.abs(mid.x - point.x) <= 0.1;
+      const isCollinearY = Math.abs(head.y - mid.y) <= 0.1 && Math.abs(mid.y - point.y) <= 0.1;
+      if (isCollinearX || isCollinearY) {
+        simplified[simplified.length - 1] = point;
+      } else {
+        simplified.push(point);
+      }
+    }
+    return simplified;
+  };
+
+  const roundedPathFromPoints = (points: LogicalPoint[], radius: number): string => {
+    if (points.length < 2) {
+      return "";
+    }
+    if (points.length === 2) {
+      return `M ${points[0].x} ${points[0].y} L ${points[1].x} ${points[1].y}`;
+    }
+
+    let d = `M ${points[0].x} ${points[0].y}`;
+    for (let i = 1; i < points.length - 1; i += 1) {
+      const prev = points[i - 1];
+      const cur = points[i];
+      const next = points[i + 1];
+
+      const inVec = { x: cur.x - prev.x, y: cur.y - prev.y };
+      const outVec = { x: next.x - cur.x, y: next.y - cur.y };
+      const inLen = Math.hypot(inVec.x, inVec.y);
+      const outLen = Math.hypot(outVec.x, outVec.y);
+      if (inLen < 0.1 || outLen < 0.1) {
+        d += ` L ${cur.x} ${cur.y}`;
+        continue;
+      }
+
+      const corner = Math.min(radius, inLen / 2, outLen / 2);
+      const p1 = {
+        x: cur.x - (inVec.x / inLen) * corner,
+        y: cur.y - (inVec.y / inLen) * corner,
+      };
+      const p2 = {
+        x: cur.x + (outVec.x / outLen) * corner,
+        y: cur.y + (outVec.y / outLen) * corner,
+      };
+      d += ` L ${p1.x} ${p1.y} Q ${cur.x} ${cur.y} ${p2.x} ${p2.y}`;
+    }
+    const last = points[points.length - 1];
+    d += ` L ${last.x} ${last.y}`;
+    return d;
+  };
+
+  const start = { x: x1, y: y1 };
+  const end = { x: x2, y: y2 };
+  const alignedVertical =
+    (fromSide === "top" || fromSide === "bottom") &&
+    (toSide === "top" || toSide === "bottom") &&
+    Math.abs(x1 - x2) <= 24;
+  const alignedHorizontal =
+    (fromSide === "left" || fromSide === "right") &&
+    (toSide === "left" || toSide === "right") &&
+    Math.abs(y1 - y2) <= 24;
+  if (alignedVertical || alignedHorizontal) {
+    return `M ${x1} ${y1} L ${x2} ${y2}`;
+  }
+  const baseDistance = Math.hypot(end.x - start.x, end.y - start.y);
+  if (baseDistance <= 1) {
+    return `M ${x1} ${y1} L ${x2} ${y2}`;
+  }
+
+  const arrowLead = withArrow ? 10 : 0;
+  const startStubDistance = 24;
+  const endStubDistance = 24 + arrowLead;
+  const startStub = offsetPoint(start, fromSide, startStubDistance);
+  const endStub = offsetPoint(end, toSide, -endStubDistance);
+
+  const fromHorizontal = fromSide === "left" || fromSide === "right";
+  const toHorizontal = toSide === "left" || toSide === "right";
+
+  const points: LogicalPoint[] = [start, startStub];
+  if (fromHorizontal && toHorizontal) {
+    const midX = (startStub.x + endStub.x) / 2;
+    points.push({ x: midX, y: startStub.y }, { x: midX, y: endStub.y });
+  } else if (!fromHorizontal && !toHorizontal) {
+    const midY = (startStub.y + endStub.y) / 2;
+    points.push({ x: startStub.x, y: midY }, { x: endStub.x, y: midY });
+  } else if (fromHorizontal && !toHorizontal) {
+    points.push({ x: endStub.x, y: startStub.y });
+  } else {
+    points.push({ x: startStub.x, y: endStub.y });
+  }
+  points.push(endStub);
+
+  if (withArrow && arrowLead > 0) {
+    const leadPoint = offsetPoint(end, toSide, -arrowLead);
+    points.push(leadPoint);
+  }
+  points.push(end);
+
+  const simplified = simplifyOrthogonalPoints(points);
+  return roundedPathFromPoints(simplified, 8);
+}
+
+function buildManualEdgePath(
+  x1: number,
+  y1: number,
+  cx: number,
+  cy: number,
+  x2: number,
+  y2: number,
+): string {
+  return `M ${x1} ${y1} L ${cx} ${cy} L ${x2} ${y2}`;
+}
+
+function edgeMidPoint(start: LogicalPoint, end: LogicalPoint): LogicalPoint {
+  return {
+    x: (start.x + end.x) / 2,
+    y: (start.y + end.y) / 2,
+  };
+}
+
+function getNodeAnchorPoint(
+  node: GraphNode,
+  side: NodeAnchorSide,
+  size?: NodeVisualSize,
+): LogicalPoint {
+  const width = size?.width ?? NODE_WIDTH;
+  const height = size?.height ?? NODE_HEIGHT;
+
+  if (side === "top") {
+    return { x: node.position.x + width / 2, y: node.position.y - NODE_ANCHOR_OFFSET };
+  }
+  if (side === "right") {
+    return { x: node.position.x + width + NODE_ANCHOR_OFFSET, y: node.position.y + height / 2 };
+  }
+  if (side === "bottom") {
+    return { x: node.position.x + width / 2, y: node.position.y + height + NODE_ANCHOR_OFFSET };
+  }
+  return { x: node.position.x - NODE_ANCHOR_OFFSET, y: node.position.y + height / 2 };
+}
+
+function getGraphEdgeKey(edge: GraphEdge): string {
+  return `${edge.from.nodeId}:${edge.from.port}->${edge.to.nodeId}:${edge.to.port}`;
+}
+
+function getAutoConnectionSides(fromNode: GraphNode, toNode: GraphNode): {
+  fromSide: NodeAnchorSide;
+  toSide: NodeAnchorSide;
+} {
+  const fromRect = {
+    left: fromNode.position.x,
+    right: fromNode.position.x + NODE_WIDTH,
+    top: fromNode.position.y,
+    bottom: fromNode.position.y + NODE_HEIGHT,
+  };
+  const toRect = {
+    left: toNode.position.x,
+    right: toNode.position.x + NODE_WIDTH,
+    top: toNode.position.y,
+    bottom: toNode.position.y + NODE_HEIGHT,
+  };
+  const overlapX = Math.min(fromRect.right, toRect.right) - Math.max(fromRect.left, toRect.left);
+  const overlapY = Math.min(fromRect.bottom, toRect.bottom) - Math.max(fromRect.top, toRect.top);
+
+  const fromCenterX = fromNode.position.x + NODE_WIDTH / 2;
+  const fromCenterY = fromNode.position.y + NODE_HEIGHT / 2;
+  const toCenterX = toNode.position.x + NODE_WIDTH / 2;
+  const toCenterY = toNode.position.y + NODE_HEIGHT / 2;
+  const dx = toCenterX - fromCenterX;
+  const dy = toCenterY - fromCenterY;
+
+  if (overlapX > 24) {
+    return dy >= 0
+      ? { fromSide: "bottom", toSide: "top" }
+      : { fromSide: "top", toSide: "bottom" };
+  }
+  if (overlapY > 24) {
+    return dx >= 0
+      ? { fromSide: "right", toSide: "left" }
+      : { fromSide: "left", toSide: "right" };
+  }
+
+  if (Math.abs(dx) >= Math.abs(dy)) {
+    return dx >= 0
+      ? { fromSide: "right", toSide: "left" }
+      : { fromSide: "left", toSide: "right" };
+  }
+  return dy >= 0
+    ? { fromSide: "bottom", toSide: "top" }
+    : { fromSide: "top", toSide: "bottom" };
 }
 
 function makeNodeId(type: NodeType): string {
@@ -500,9 +1551,16 @@ function makeNodeId(type: NodeType): string {
 function defaultNodeConfig(type: NodeType): Record<string, unknown> {
   if (type === "turn") {
     return {
-      model: TURN_MODEL_OPTIONS[0],
+      executor: "codex",
+      model: DEFAULT_TURN_MODEL,
+      role: "",
       cwd: ".",
       promptTemplate: "{{input}}",
+      knowledgeEnabled: true,
+      qualityThreshold: QUALITY_DEFAULT_THRESHOLD,
+      artifactType: "none",
+      qualityCommandEnabled: false,
+      qualityCommands: "npm run build",
     };
   }
 
@@ -516,7 +1574,7 @@ function defaultNodeConfig(type: NodeType): Record<string, unknown> {
   }
 
   return {
-    decisionPath: "decision",
+    decisionPath: "DECISION",
     passNodeId: "",
     rejectNodeId: "",
     schemaJson: "",
@@ -526,14 +1584,145 @@ function defaultNodeConfig(type: NodeType): Record<string, unknown> {
 function nodeCardSummary(node: GraphNode): string {
   if (node.type === "turn") {
     const config = node.config as TurnConfig;
-    return `모델: ${String(config.model ?? TURN_MODEL_OPTIONS[0])}`;
+    const executor = getTurnExecutor(config);
+    if (executor !== "codex") {
+      return `에이전트: ${turnExecutorLabel(executor)}`;
+    }
+    return `모델: ${toTurnModelDisplayName(String(config.model ?? DEFAULT_TURN_MODEL))}`;
   }
   if (node.type === "transform") {
     const config = node.config as TransformConfig;
-    return `모드: ${String(config.mode ?? "pick")}`;
+    const mode = String(config.mode ?? "pick");
+    if (mode === "merge") {
+      return "정리 방식: 고정 정보 덧붙이기";
+    }
+    if (mode === "template") {
+      return "정리 방식: 문장 틀로 다시 쓰기";
+    }
+    return "정리 방식: 필요한 값만 꺼내기";
   }
   const config = node.config as GateConfig;
-  return `분기 경로: ${String(config.decisionPath ?? "decision")}`;
+  const path = String(config.decisionPath ?? "DECISION");
+  return `판단값 위치: ${path === "decision" ? "DECISION" : path}`;
+}
+
+function turnModelLabel(node: GraphNode): string {
+  const config = node.config as TurnConfig;
+  const executor = getTurnExecutor(config);
+  if (executor === "ollama") {
+    return `Ollama · ${String(config.ollamaModel ?? "llama3.1:8b")}`;
+  }
+  if (executor !== "codex") {
+    return turnExecutorLabel(executor);
+  }
+  return toTurnModelDisplayName(String(config.model ?? DEFAULT_TURN_MODEL));
+}
+
+function getTurnExecutor(config: TurnConfig): TurnExecutor {
+  const raw = typeof config.executor === "string" ? config.executor : "codex";
+  return TURN_EXECUTOR_OPTIONS.includes(raw as TurnExecutor) ? (raw as TurnExecutor) : "codex";
+}
+
+function turnExecutorLabel(executor: TurnExecutor): string {
+  return TURN_EXECUTOR_LABELS[executor];
+}
+
+function getWebProviderFromExecutor(executor: TurnExecutor): WebProvider | null {
+  if (executor === "web_gemini") {
+    return "gemini";
+  }
+  if (executor === "web_grok") {
+    return "grok";
+  }
+  if (executor === "web_perplexity") {
+    return "perplexity";
+  }
+  if (executor === "web_claude") {
+    return "claude";
+  }
+  return null;
+}
+
+function webProviderLabel(provider: WebProvider): string {
+  if (provider === "gemini") {
+    return "GEMINI";
+  }
+  if (provider === "gpt") {
+    return "GPT";
+  }
+  if (provider === "grok") {
+    return "GROK";
+  }
+  if (provider === "perplexity") {
+    return "PERPLEXITY";
+  }
+  return "CLAUDE";
+}
+
+function toWebProviderHealthMap(raw: unknown): Record<string, WebProviderHealthEntry> {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return {};
+  }
+  const entries = raw as Record<string, unknown>;
+  const next: Record<string, WebProviderHealthEntry> = {};
+  for (const [key, value] of Object.entries(entries)) {
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+      continue;
+    }
+    const row = value as Record<string, unknown>;
+    next[key] = {
+      contextOpen: typeof row.contextOpen === "boolean" ? row.contextOpen : undefined,
+      profileDir: typeof row.profileDir === "string" ? row.profileDir : undefined,
+      url: typeof row.url === "string" ? row.url : row.url == null ? null : undefined,
+      sessionState: typeof row.sessionState === "string" ? row.sessionState : undefined,
+    };
+  }
+  return next;
+}
+
+function providerSessionStateMeta(state?: string | null, contextOpen?: boolean): {
+  label: string;
+  tone: "connected" | "required" | "unknown";
+} {
+  if (!contextOpen) {
+    return { label: "확인 필요", tone: "unknown" };
+  }
+  if (state === "active") {
+    return { label: "연결됨", tone: "connected" };
+  }
+  if (state === "login_required") {
+    return { label: "로그인 필요", tone: "required" };
+  }
+  return { label: "확인 필요", tone: "unknown" };
+}
+
+function turnRoleLabel(node: GraphNode): string {
+  const config = node.config as TurnConfig;
+  const raw = String(config.role ?? "").trim();
+  if (raw) {
+    return raw;
+  }
+
+  const signal = `${node.id} ${String(config.promptTemplate ?? "")}`.toLowerCase();
+  if (signal.includes("search")) {
+    return "SEARCH AGENT";
+  }
+  if (signal.includes("judge") || signal.includes("evaluator") || signal.includes("quality")) {
+    return "EVALUATION AGENT";
+  }
+  if (signal.includes("final") || signal.includes("synth")) {
+    return "SYNTHESIS AGENT";
+  }
+  if (signal.includes("intake") || signal.includes("requirements")) {
+    return "PLANNING AGENT";
+  }
+  if (signal.includes("architect")) {
+    return "ARCHITECTURE AGENT";
+  }
+  if (signal.includes("implementation")) {
+    return "IMPLEMENTATION AGENT";
+  }
+  return FALLBACK_TURN_ROLE;
 }
 
 function nodeTypeLabel(type: NodeType): string {
@@ -543,7 +1732,17 @@ function nodeTypeLabel(type: NodeType): string {
   if (type === "transform") {
     return "데이터 변환";
   }
-  return "분기";
+  return "결정 분기";
+}
+
+function nodeSelectionLabel(node: GraphNode): string {
+  if (node.type === "turn") {
+    return turnModelLabel(node);
+  }
+  if (node.type === "transform") {
+    return "데이터 변환";
+  }
+  return "결정 분기";
 }
 
 function nodeStatusLabel(status: NodeExecutionStatus): string {
@@ -556,16 +1755,35 @@ function nodeStatusLabel(status: NodeExecutionStatus): string {
   if (status === "running") {
     return "실행 중";
   }
+  if (status === "waiting_user") {
+    return "사용자 입력 대기";
+  }
   if (status === "done") {
     return "완료";
   }
   if (status === "failed") {
-    return "실패";
+    return "오류";
   }
   if (status === "skipped") {
     return "건너뜀";
   }
-  return "취소됨";
+  return "정지";
+}
+
+function knowledgeStatusMeta(status?: KnowledgeFileStatus): { label: string; tone: string } {
+  if (status === "ready") {
+    return { label: "준비됨", tone: "ready" };
+  }
+  if (status === "missing") {
+    return { label: "파일 없음", tone: "missing" };
+  }
+  if (status === "unsupported") {
+    return { label: "미지원", tone: "unsupported" };
+  }
+  if (status === "error") {
+    return { label: "오류", tone: "error" };
+  }
+  return { label: "미확인", tone: "unknown" };
 }
 
 function approvalDecisionLabel(decision: ApprovalDecision): string {
@@ -615,13 +1833,6 @@ function NavIcon({ tab }: { tab: WorkspaceTab }) {
       </svg>
     );
   }
-  if (tab === "dev") {
-    return (
-      <svg aria-hidden="true" fill="none" height="20" viewBox="0 0 24 24" width="20">
-        <path d="M6 8L3 12l3 4M18 8l3 4-3 4M14 5l-4 14" stroke="currentColor" strokeLinecap="round" strokeWidth="1.8" />
-      </svg>
-    );
-  }
   if (tab === "settings") {
     return <img alt="" aria-hidden="true" className="nav-workflow-image" src="/setting.svg" />;
   }
@@ -639,6 +1850,149 @@ function NavIcon({ tab }: { tab: WorkspaceTab }) {
   );
 }
 
+function FancySelect({
+  ariaLabel,
+  className,
+  disabled = false,
+  emptyMessage = "항목이 없습니다.",
+  onChange,
+  options,
+  placeholder = "선택",
+  value,
+}: {
+  ariaLabel?: string;
+  className?: string;
+  disabled?: boolean;
+  emptyMessage?: string;
+  onChange: (nextValue: string) => void;
+  options: FancySelectOption[];
+  placeholder?: string;
+  value: string;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+  const selected = options.find((option) => option.value === value) ?? null;
+
+  useEffect(() => {
+    const onWindowMouseDown = (event: MouseEvent) => {
+      if (!rootRef.current) {
+        return;
+      }
+      if (!rootRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    const onWindowKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsOpen(false);
+      }
+    };
+    window.addEventListener("mousedown", onWindowMouseDown);
+    window.addEventListener("keydown", onWindowKeyDown);
+    return () => {
+      window.removeEventListener("mousedown", onWindowMouseDown);
+      window.removeEventListener("keydown", onWindowKeyDown);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isOpen) {
+      return;
+    }
+
+    const root = rootRef.current;
+    const menu = menuRef.current;
+    if (!root || !menu) {
+      return;
+    }
+
+    const container = root.closest(".inspector-content, .childview-view");
+    if (!(container instanceof HTMLElement)) {
+      return;
+    }
+
+    const minBottomGap = 16;
+    const previousGap = container.style.getPropertyValue("--dropdown-open-gap");
+    const requiredGap = 160;
+    container.style.setProperty("--dropdown-open-gap", `${requiredGap}px`);
+
+    const frame = window.requestAnimationFrame(() => {
+      const menuRect = menu.getBoundingClientRect();
+      const containerRect = container.getBoundingClientRect();
+      const overflow = menuRect.bottom + minBottomGap - containerRect.bottom;
+      if (overflow <= 0) {
+        return;
+      }
+      const maxScrollTop = Math.max(0, container.scrollHeight - container.clientHeight);
+      container.scrollTop = Math.min(maxScrollTop, container.scrollTop + overflow);
+    });
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+      if (previousGap) {
+        container.style.setProperty("--dropdown-open-gap", previousGap);
+      } else {
+        container.style.removeProperty("--dropdown-open-gap");
+      }
+    };
+  }, [isOpen]);
+
+  return (
+    <div className={`fancy-select ${className ?? ""} ${isOpen ? "is-open" : ""}`} ref={rootRef}>
+      <button
+        aria-expanded={isOpen}
+        aria-haspopup="listbox"
+        aria-label={ariaLabel}
+        className="fancy-select-trigger"
+        disabled={disabled}
+        onClick={() => {
+          if (disabled) {
+            return;
+          }
+          setIsOpen((prev) => !prev);
+        }}
+        type="button"
+      >
+        <span className={`fancy-select-value ${selected ? "" : "is-placeholder"}`}>
+          {selected ? selected.label : placeholder}
+        </span>
+        <span aria-hidden="true" className="fancy-select-chevron">
+          <img
+            alt=""
+            className="fancy-select-chevron-icon"
+            src={isOpen ? "/up-arrow.svg" : "/down-arrow.svg"}
+          />
+        </span>
+      </button>
+      {isOpen && (
+        <div className="fancy-select-menu" ref={menuRef} role="listbox">
+          {options.length === 0 && <div className="fancy-select-empty">{emptyMessage}</div>}
+          {options.map((option) => (
+            <button
+              aria-selected={option.value === value}
+              className={`fancy-select-option ${option.value === value ? "is-selected" : ""}`}
+              disabled={option.disabled}
+              key={option.value}
+              onClick={() => {
+                if (option.disabled) {
+                  return;
+                }
+                onChange(option.value);
+                setIsOpen(false);
+              }}
+              role="option"
+              type="button"
+            >
+              <span>{option.label}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function authModeLabel(mode: AuthMode): string {
   if (mode === "chatgpt") {
     return "챗지피티";
@@ -649,20 +2003,18 @@ function authModeLabel(mode: AuthMode): string {
   return "미확인";
 }
 
-function loginStateLabel(engineStarted: boolean, loginCompleted: boolean, authMode: AuthMode): string {
-  if (!engineStarted) {
-    return "엔진 꺼짐";
-  }
-  if (loginCompleted) {
-    return `로그인 완료 (${authModeLabel(authMode)})`;
-  }
-  if (authMode === "apikey") {
-    return "API 키 모드";
-  }
-  if (authMode === "chatgpt") {
-    return "세션 확인 중";
-  }
-  return "로그인 필요";
+function InspectorSectionTitle({ title, help }: { title: string; help: string }) {
+  return (
+    <div className="inspector-section-title">
+      <h3>{title}</h3>
+      <span aria-label={`${title} 도움말`} className="help-tooltip" data-tooltip={help} role="note" tabIndex={0}>
+        ?
+      </span>
+      <div className="help-tooltip-panel" role="tooltip">
+        {help}
+      </div>
+    </div>
+  );
 }
 
 function extractFinalAnswer(output: unknown): string {
@@ -699,40 +2051,71 @@ function makePresetNode(
 function buildValidationPreset(): GraphData {
   const nodes: GraphNode[] = [
     makePresetNode("turn-intake", "turn", 120, 120, {
-      model: "gpt-5.1-codex-mini",
+      model: "GPT-5.1-Codex-Mini",
+      role: "PLANNING AGENT",
       cwd: ".",
       promptTemplate:
-        "질문을 분석하고 검증 계획을 3개 불릿으로 요약해줘. 입력 질문: {{input}}",
+        "당신은 검증 설계 에이전트다. 아래 질문을 분석해 검증 계획 JSON만 출력하라.\n" +
+        "출력 형식:\n" +
+        "{\n" +
+        '  "question":"...",\n' +
+        '  "goal":"...",\n' +
+        '  "checkpoints":["...","...","..."],\n' +
+        '  "searchQueries":["...","...","..."]\n' +
+        "}\n" +
+        "질문: {{input}}",
     }),
     makePresetNode("turn-search-a", "turn", 420, 40, {
-      model: "gpt-5.2",
+      model: "GPT-5.2",
+      role: "SEARCH AGENT A",
       cwd: ".",
       promptTemplate:
-        "입력 내용을 바탕으로 찬성 근거를 조사해 JSON으로 정리해줘. {{input}}",
+        "아래 입력에서 주장에 유리한 근거를 찾아 JSON으로 정리하라.\n" +
+        "출력 형식:\n" +
+        '{ "evidences":[{"claim":"...","evidence":"...","sourceHint":"...","confidence":0.0}] }\n' +
+        "조건: 근거가 약하면 confidence를 낮게 주고 추정이라고 표시.\n" +
+        "입력: {{input}}",
     }),
     makePresetNode("turn-search-b", "turn", 420, 220, {
-      model: "gpt-5.2-codex",
+      model: "GPT-5.2-Codex",
+      role: "SEARCH AGENT B",
       cwd: ".",
       promptTemplate:
-        "입력 내용을 바탕으로 반대 근거/한계를 조사해 JSON으로 정리해줘. {{input}}",
+        "아래 입력에서 반례/한계/위험요인을 찾아 JSON으로 정리하라.\n" +
+        "출력 형식:\n" +
+        '{ "risks":[{"point":"...","why":"...","confidence":0.0,"mitigation":"..."}] }\n' +
+        "조건: 모호하면 모호하다고 명시.\n" +
+        "입력: {{input}}",
     }),
     makePresetNode("turn-judge", "turn", 720, 120, {
-      model: "gpt-5.3-codex",
+      model: "GPT-5.3-Codex",
+      role: "EVALUATION AGENT",
       cwd: ".",
       promptTemplate:
-        "근거를 종합해 엄격한 JSON만 출력해라: {\"decision\":\"PASS|REJECT\",\"finalDraft\":\"...\",\"why\":\"...\"}. 입력: {{input}}",
+        "입력을 종합 평가해 JSON만 출력하라.\n" +
+        "출력 형식:\n" +
+        '{ "DECISION":"PASS|REJECT", "finalDraft":"...", "why":["...","..."], "gaps":["..."], "confidence":0.0 }\n' +
+        "판정 기준: 근거 일관성, 반례 대응 가능성, 불확실성 명시 여부.\n" +
+        "입력: {{input}}",
     }),
     makePresetNode("gate-decision", "gate", 1020, 120, {
-      decisionPath: "decision",
+      decisionPath: "DECISION",
       passNodeId: "turn-final",
       rejectNodeId: "transform-reject",
-      schemaJson: "{\"type\":\"object\",\"required\":[\"decision\"]}",
+      schemaJson: "{\"type\":\"object\",\"required\":[\"DECISION\"]}",
     }),
     makePresetNode("turn-final", "turn", 1320, 40, {
-      model: "gpt-5.3-codex",
+      model: "GPT-5.3-Codex",
+      role: "SYNTHESIS AGENT",
       cwd: ".",
       promptTemplate:
-        "decision=PASS로 가정하고 finalDraft와 근거를 정리해 최종 답변을 한국어로 작성해줘. {{input}}",
+        "아래 입력을 바탕으로 최종 답변을 한국어로 작성하라.\n" +
+        "규칙:\n" +
+        "1) 핵심 결론 먼저\n" +
+        "2) 근거 3~5개\n" +
+        "3) 한계/불확실성 분리\n" +
+        "4) 바로 실행 가능한 다음 단계 제시\n" +
+        "입력: {{input}}",
     }),
     makePresetNode("transform-reject", "transform", 1320, 220, {
       mode: "template",
@@ -750,46 +2133,62 @@ function buildValidationPreset(): GraphData {
     { from: { nodeId: "gate-decision", port: "out" }, to: { nodeId: "transform-reject", port: "in" } },
   ];
 
-  return { version: 1, nodes, edges };
+  return { version: GRAPH_SCHEMA_VERSION, nodes, edges, knowledge: defaultKnowledgeConfig() };
 }
 
 function buildDevelopmentPreset(): GraphData {
   const nodes: GraphNode[] = [
     makePresetNode("turn-requirements", "turn", 120, 120, {
-      model: "gpt-5.1-codex-mini",
+      model: "GPT-5.1-Codex-Mini",
+      role: "REQUIREMENTS AGENT",
       cwd: ".",
       promptTemplate:
-        "요구사항을 기능/비기능으로 분해하고 우선순위를 매겨줘. 질문: {{input}}",
+        "아래 요청을 분석해 요구사항 JSON만 출력하라.\n" +
+        '{ "functional":["..."], "nonFunctional":["..."], "constraints":["..."], "priority":["P0","P1","P2"] }\n' +
+        "질문: {{input}}",
     }),
     makePresetNode("turn-architecture", "turn", 420, 40, {
-      model: "gpt-5.2",
+      model: "GPT-5.2",
+      role: "ARCHITECTURE AGENT",
       cwd: ".",
       promptTemplate:
-        "입력을 바탕으로 풀스택 아키텍처를 제안해 JSON으로 출력해줘. {{input}}",
+        "입력을 바탕으로 현실적인 시스템 설계를 JSON으로 제안하라.\n" +
+        '{ "architecture":"...", "components":[...], "tradeoffs":[...], "risks":[...], "decisionLog":[...] }\n' +
+        "과설계 금지, MVP 우선.\n" +
+        "입력: {{input}}",
     }),
     makePresetNode("turn-implementation", "turn", 420, 220, {
-      model: "gpt-5.2-codex",
+      model: "GPT-5.2-Codex",
+      role: "IMPLEMENTATION AGENT",
       cwd: ".",
       promptTemplate:
-        "구현 단계 계획(파일 단위 포함)을 작성해줘. 입력: {{input}}",
+        "입력을 기반으로 구현 계획을 단계별로 작성하라.\n" +
+        "필수: 파일 단위 변경 목록, 테스트 계획, 실패 시 롤백 포인트.\n" +
+        "입력: {{input}}",
     }),
     makePresetNode("turn-evaluator", "turn", 720, 120, {
-      model: "gpt-5.3-codex",
+      model: "GPT-5.3-Codex",
+      role: "QUALITY AGENT",
       cwd: ".",
       promptTemplate:
-        "계획을 검토하고 JSON만 출력: {\"decision\":\"PASS|REJECT\",\"finalDraft\":\"...\",\"risk\":\"...\"}. 입력: {{input}}",
+        "입력을 리뷰해 품질 판정을 JSON으로 출력하라.\n" +
+        '{ "DECISION":"PASS|REJECT", "finalDraft":"...", "risk":["..."], "blockingIssues":["..."] }\n' +
+        "입력: {{input}}",
     }),
     makePresetNode("gate-quality", "gate", 1020, 120, {
-      decisionPath: "decision",
+      decisionPath: "DECISION",
       passNodeId: "turn-final-dev",
       rejectNodeId: "transform-rework",
-      schemaJson: "{\"type\":\"object\",\"required\":[\"decision\"]}",
+      schemaJson: "{\"type\":\"object\",\"required\":[\"DECISION\"]}",
     }),
     makePresetNode("turn-final-dev", "turn", 1320, 40, {
-      model: "gpt-5.3-codex",
+      model: "GPT-5.3-Codex",
+      role: "DEV SYNTHESIS AGENT",
       cwd: ".",
       promptTemplate:
-        "실행 가능한 최종 개발 가이드를 산출해줘. 코드/테스트/배포 체크리스트 포함. {{input}}",
+        "아래 입력으로 최종 개발 가이드를 작성하라.\n" +
+        "구성: 구현 순서, 코드 품질 기준, 테스트 명세, 배포 체크리스트, 운영 리스크 대응.\n" +
+        "입력: {{input}}",
     }),
     makePresetNode("transform-rework", "transform", 1320, 220, {
       mode: "template",
@@ -828,22 +2227,563 @@ function buildDevelopmentPreset(): GraphData {
     },
   ];
 
-  return { version: 1, nodes, edges };
+  return { version: GRAPH_SCHEMA_VERSION, nodes, edges, knowledge: defaultKnowledgeConfig() };
+}
+
+function buildResearchPreset(): GraphData {
+  const nodes: GraphNode[] = [
+    makePresetNode("turn-research-intake", "turn", 120, 120, {
+      model: "GPT-5.1-Codex-Mini",
+      role: "RESEARCH PLANNING AGENT",
+      cwd: ".",
+      promptTemplate:
+        "질문을 조사 계획으로 분해해 JSON만 출력하라.\n" +
+        '{ "researchGoal":"...", "questions":["..."], "evidenceCriteria":["..."], "riskChecks":["..."] }\n' +
+        "질문: {{input}}",
+    }),
+    makePresetNode("turn-research-collector", "turn", 420, 120, {
+      model: "GPT-5.2",
+      role: "SOURCE COLLECTION AGENT",
+      cwd: ".",
+      promptTemplate:
+        "입력 기준으로 핵심 근거 후보를 수집해 JSON으로 정리하라.\n" +
+        '{ "evidences":[{"id":"E1","statement":"...","whyRelevant":"...","confidence":0.0}] }\n' +
+        "입력: {{input}}",
+    }),
+    makePresetNode("turn-research-factcheck", "turn", 720, 120, {
+      model: "GPT-5.2-Codex",
+      role: "FACT CHECK AGENT",
+      cwd: ".",
+      promptTemplate:
+        "수집 근거를 검증하고 JSON으로 출력하라.\n" +
+        '{ "verified":["E1"], "contested":["E2"], "missing":["..."], "notes":["..."] }\n' +
+        "입력: {{input}}",
+    }),
+    makePresetNode("transform-research-brief", "transform", 1020, 120, {
+      mode: "template",
+      template:
+        "자료조사 요약\n- 핵심 사실: {{input}}\n- 검증 포인트: 신뢰도, 최신성, 반례 존재 여부\n- 최종 답변 작성 전 누락 항목 점검",
+    }),
+    makePresetNode("turn-research-final", "turn", 1320, 120, {
+      model: "GPT-5.3-Codex",
+      role: "RESEARCH SYNTHESIS AGENT",
+      cwd: ".",
+      promptTemplate:
+        "근거 중심 최종 답변을 한국어로 작성하라.\n" +
+        "규칙: 주장 옆에 근거 ID(E1, E2) 표시, 불확실성 분리, 과장 금지.\n" +
+        "입력: {{input}}",
+    }),
+  ];
+
+  const edges: GraphEdge[] = [
+    {
+      from: { nodeId: "turn-research-intake", port: "out" },
+      to: { nodeId: "turn-research-collector", port: "in" },
+    },
+    {
+      from: { nodeId: "turn-research-collector", port: "out" },
+      to: { nodeId: "turn-research-factcheck", port: "in" },
+    },
+    {
+      from: { nodeId: "turn-research-factcheck", port: "out" },
+      to: { nodeId: "transform-research-brief", port: "in" },
+    },
+    {
+      from: { nodeId: "transform-research-brief", port: "out" },
+      to: { nodeId: "turn-research-final", port: "in" },
+    },
+  ];
+
+  return { version: GRAPH_SCHEMA_VERSION, nodes, edges, knowledge: defaultKnowledgeConfig() };
+}
+
+function buildExpertPreset(): GraphData {
+  const nodes: GraphNode[] = [
+    makePresetNode("turn-expert-intake", "turn", 120, 120, {
+      model: "GPT-5.1-Codex-Mini",
+      role: "DOMAIN INTAKE AGENT",
+      cwd: ".",
+      promptTemplate:
+        "질문을 전문가 분석용 브리프로 구조화하라.\n" +
+        '{ "domain":"...", "objective":"...", "constraints":["..."], "successCriteria":["..."] }\n' +
+        "입력: {{input}}",
+    }),
+    makePresetNode("turn-expert-analysis", "turn", 420, 40, {
+      model: "GPT-5.2-Codex",
+      role: "DOMAIN EXPERT AGENT",
+      cwd: ".",
+      promptTemplate:
+        "도메인 전문가 관점의 해결 전략을 작성하라.\n" +
+        "필수: 핵심 원리, 실제 적용 절차, 실패 조건, 대안 전략.\n" +
+        "입력: {{input}}",
+    }),
+    makePresetNode("turn-expert-review", "turn", 420, 220, {
+      model: "GPT-5.2",
+      role: "PEER REVIEW AGENT",
+      cwd: ".",
+      promptTemplate:
+        "전략의 취약점과 반례를 엄격히 리뷰해 JSON으로 출력하라.\n" +
+        '{ "DECISION":"PASS|REJECT", "criticalIssues":["..."], "improvements":["..."] }\n' +
+        "입력: {{input}}",
+    }),
+    makePresetNode("gate-expert", "gate", 720, 120, {
+      decisionPath: "DECISION",
+      passNodeId: "turn-expert-final",
+      rejectNodeId: "transform-expert-rework",
+      schemaJson: "{\"type\":\"object\",\"required\":[\"DECISION\"]}",
+    }),
+    makePresetNode("turn-expert-final", "turn", 1020, 40, {
+      model: "GPT-5.3-Codex",
+      role: "EXPERT SYNTHESIS AGENT",
+      cwd: ".",
+      promptTemplate:
+        "최종 전문가 답변을 작성하라.\n" +
+        "구성: 핵심 결론, 단계별 실행안, 검증 체크리스트, 실패 시 대체안.\n" +
+        "입력: {{input}}",
+    }),
+    makePresetNode("transform-expert-rework", "transform", 1020, 220, {
+      mode: "template",
+      template: "REJECT. 전문가 전략을 보완해야 합니다. 보완 항목 목록을 작성하세요. 원문: {{input}}",
+    }),
+  ];
+
+  const edges: GraphEdge[] = [
+    { from: { nodeId: "turn-expert-intake", port: "out" }, to: { nodeId: "turn-expert-analysis", port: "in" } },
+    { from: { nodeId: "turn-expert-intake", port: "out" }, to: { nodeId: "turn-expert-review", port: "in" } },
+    { from: { nodeId: "turn-expert-analysis", port: "out" }, to: { nodeId: "gate-expert", port: "in" } },
+    { from: { nodeId: "turn-expert-review", port: "out" }, to: { nodeId: "gate-expert", port: "in" } },
+    { from: { nodeId: "gate-expert", port: "out" }, to: { nodeId: "turn-expert-final", port: "in" } },
+    { from: { nodeId: "gate-expert", port: "out" }, to: { nodeId: "transform-expert-rework", port: "in" } },
+  ];
+
+  return { version: GRAPH_SCHEMA_VERSION, nodes, edges, knowledge: defaultKnowledgeConfig() };
+}
+
+function buildUnityGamePreset(): GraphData {
+  const nodes: GraphNode[] = [
+    makePresetNode("turn-unity-intake", "turn", 120, 120, {
+      model: "GPT-5.1-Codex-Mini",
+      role: "UNITY CONCEPT AGENT",
+      cwd: ".",
+      promptTemplate:
+        "입력 요청을 유니티 게임 기획 브리프로 구조화하라.\n" +
+        '{ "genre":"...", "coreLoop":"...", "targetPlatform":["..."], "scope":"MVP", "mustHave":["..."] }\n' +
+        "입력: {{input}}",
+    }),
+    makePresetNode("turn-unity-system", "turn", 420, 40, {
+      model: "GPT-5.2-Codex",
+      role: "UNITY SYSTEM DESIGN AGENT",
+      cwd: ".",
+      promptTemplate:
+        "유니티 시스템 설계안을 작성하라.\n" +
+        "필수: 씬 구조, 게임 상태 관리, 입력 시스템, 데이터 저장 전략.\n" +
+        "출력은 JSON 우선.\n" +
+        "입력: {{input}}",
+    }),
+    makePresetNode("turn-unity-implementation", "turn", 420, 220, {
+      model: "GPT-5.2-Codex",
+      role: "UNITY IMPLEMENTATION AGENT",
+      cwd: ".",
+      promptTemplate:
+        "구현 계획을 작성하라.\n" +
+        "필수: C# 스크립트 목록, 폴더 구조, 단계별 구현 순서, 테스트 포인트.\n" +
+        "입력: {{input}}",
+    }),
+    makePresetNode("turn-unity-qa", "turn", 720, 120, {
+      model: "GPT-5.2",
+      role: "UNITY QA AGENT",
+      cwd: ".",
+      promptTemplate:
+        "설계/구현 계획을 리뷰해 JSON 판정을 출력하라.\n" +
+        '{ "DECISION":"PASS|REJECT", "bugsToWatch":["..."], "performanceRisks":["..."], "finalDraft":"..." }\n' +
+        "입력: {{input}}",
+    }),
+    makePresetNode("gate-unity", "gate", 1020, 120, {
+      decisionPath: "DECISION",
+      passNodeId: "turn-unity-final",
+      rejectNodeId: "transform-unity-rework",
+      schemaJson: "{\"type\":\"object\",\"required\":[\"DECISION\"]}",
+    }),
+    makePresetNode("turn-unity-final", "turn", 1320, 40, {
+      model: "GPT-5.3-Codex",
+      role: "UNITY FINALIZATION AGENT",
+      cwd: ".",
+      promptTemplate:
+        "유니티 개발 실행 가이드를 최종 작성하라.\n" +
+        "구성: 1주차~N주차 스프린트, 우선순위, 검증 체크리스트, 리스크 대응.\n" +
+        "입력: {{input}}",
+    }),
+    makePresetNode("transform-unity-rework", "transform", 1320, 220, {
+      mode: "template",
+      template:
+        "REJECT. 유니티 계획 재작성 필요.\n보완 항목:\n1) 성능 병목\n2) 콘텐츠 제작 범위\n3) 테스트 자동화\n원문: {{input}}",
+    }),
+  ];
+
+  const edges: GraphEdge[] = [
+    { from: { nodeId: "turn-unity-intake", port: "out" }, to: { nodeId: "turn-unity-system", port: "in" } },
+    {
+      from: { nodeId: "turn-unity-intake", port: "out" },
+      to: { nodeId: "turn-unity-implementation", port: "in" },
+    },
+    { from: { nodeId: "turn-unity-system", port: "out" }, to: { nodeId: "turn-unity-qa", port: "in" } },
+    {
+      from: { nodeId: "turn-unity-implementation", port: "out" },
+      to: { nodeId: "turn-unity-qa", port: "in" },
+    },
+    { from: { nodeId: "turn-unity-qa", port: "out" }, to: { nodeId: "gate-unity", port: "in" } },
+    { from: { nodeId: "gate-unity", port: "out" }, to: { nodeId: "turn-unity-final", port: "in" } },
+    { from: { nodeId: "gate-unity", port: "out" }, to: { nodeId: "transform-unity-rework", port: "in" } },
+  ];
+
+  return { version: GRAPH_SCHEMA_VERSION, nodes, edges, knowledge: defaultKnowledgeConfig() };
+}
+
+function buildFullstackPreset(): GraphData {
+  const nodes: GraphNode[] = [
+    makePresetNode("turn-fullstack-intake", "turn", 120, 120, {
+      model: "GPT-5.1-Codex-Mini",
+      role: "PRODUCT SPEC AGENT",
+      cwd: ".",
+      promptTemplate:
+        "요청을 풀스택 제품 명세로 구조화하라.\n" +
+        '{ "personas":["..."], "features":["..."], "nonFunctional":["..."], "mvpScope":["..."] }\n' +
+        "입력: {{input}}",
+    }),
+    makePresetNode("turn-fullstack-backend", "turn", 420, 40, {
+      model: "GPT-5.2-Codex",
+      role: "BACKEND AGENT",
+      cwd: ".",
+      promptTemplate:
+        "백엔드 설계안을 작성하라.\n" +
+        "필수: API 계약, DB 스키마, 인증/권한, 오류 처리, 관측성.\n" +
+        "입력: {{input}}",
+    }),
+    makePresetNode("turn-fullstack-frontend", "turn", 420, 220, {
+      model: "GPT-5.2-Codex",
+      role: "FRONTEND AGENT",
+      cwd: ".",
+      promptTemplate:
+        "프론트엔드 구현 계획을 작성하라.\n" +
+        "필수: 정보구조, 화면 흐름, 상태관리, 접근성, 테스트 포인트.\n" +
+        "입력: {{input}}",
+    }),
+    makePresetNode("turn-fullstack-ops", "turn", 720, 120, {
+      model: "GPT-5.2",
+      role: "OPS & SECURITY AGENT",
+      cwd: ".",
+      promptTemplate:
+        "운영/보안 리뷰 결과를 JSON으로 출력하라.\n" +
+        '{ "DECISION":"PASS|REJECT", "securityRisks":["..."], "deployChecklist":["..."], "finalDraft":"..." }\n' +
+        "입력: {{input}}",
+    }),
+    makePresetNode("gate-fullstack", "gate", 1020, 120, {
+      decisionPath: "DECISION",
+      passNodeId: "turn-fullstack-final",
+      rejectNodeId: "transform-fullstack-rework",
+      schemaJson: "{\"type\":\"object\",\"required\":[\"DECISION\"]}",
+    }),
+    makePresetNode("turn-fullstack-final", "turn", 1320, 40, {
+      model: "GPT-5.3-Codex",
+      role: "FULLSTACK DELIVERY AGENT",
+      cwd: ".",
+      promptTemplate:
+        "풀스택 실행 가이드를 최종 작성하라.\n" +
+        "구성: 개발 순서, 마일스톤, 테스트 전략, 배포 전략, 운영 가드레일.\n" +
+        "입력: {{input}}",
+    }),
+    makePresetNode("transform-fullstack-rework", "transform", 1320, 220, {
+      mode: "template",
+      template:
+        "REJECT. 풀스택 계획 재작업 필요.\n핵심 보완: 보안, 장애복구, 테스트 커버리지.\n원문: {{input}}",
+    }),
+  ];
+
+  const edges: GraphEdge[] = [
+    {
+      from: { nodeId: "turn-fullstack-intake", port: "out" },
+      to: { nodeId: "turn-fullstack-backend", port: "in" },
+    },
+    {
+      from: { nodeId: "turn-fullstack-intake", port: "out" },
+      to: { nodeId: "turn-fullstack-frontend", port: "in" },
+    },
+    {
+      from: { nodeId: "turn-fullstack-backend", port: "out" },
+      to: { nodeId: "turn-fullstack-ops", port: "in" },
+    },
+    {
+      from: { nodeId: "turn-fullstack-frontend", port: "out" },
+      to: { nodeId: "turn-fullstack-ops", port: "in" },
+    },
+    {
+      from: { nodeId: "turn-fullstack-ops", port: "out" },
+      to: { nodeId: "gate-fullstack", port: "in" },
+    },
+    {
+      from: { nodeId: "gate-fullstack", port: "out" },
+      to: { nodeId: "turn-fullstack-final", port: "in" },
+    },
+    {
+      from: { nodeId: "gate-fullstack", port: "out" },
+      to: { nodeId: "transform-fullstack-rework", port: "in" },
+    },
+  ];
+
+  return { version: GRAPH_SCHEMA_VERSION, nodes, edges, knowledge: defaultKnowledgeConfig() };
+}
+
+function buildCreativePreset(): GraphData {
+  const nodes: GraphNode[] = [
+    makePresetNode("turn-creative-intake", "turn", 120, 120, {
+      model: "GPT-5.1-Codex-Mini",
+      role: "PROBLEM REFRAME AGENT",
+      cwd: ".",
+      promptTemplate:
+        "입력 문제를 창의 탐색용으로 재정의하라.\n" +
+        '{ "coreProblem":"...", "hiddenConstraints":["..."], "challengeStatement":"..." }\n' +
+        "입력: {{input}}",
+    }),
+    makePresetNode("turn-creative-diverge", "turn", 420, 40, {
+      model: "GPT-5.2",
+      role: "IDEA DIVERGENCE AGENT",
+      cwd: ".",
+      promptTemplate:
+        "상호 성격이 다른 아이디어 8개를 제시하라.\n" +
+        "조건: 서로 중복 금지, 평범한 해법 금지, 실행 가능성도 함께 표기.\n" +
+        "입력: {{input}}",
+    }),
+    makePresetNode("turn-creative-critic", "turn", 420, 220, {
+      model: "GPT-5.2-Codex",
+      role: "IDEA CRITIC AGENT",
+      cwd: ".",
+      promptTemplate:
+        "아이디어를 냉정하게 평가해 JSON으로 출력하라.\n" +
+        '{ "DECISION":"PASS|REJECT", "topIdeas":[{"idea":"...","reason":"...","risk":"..."}], "rejectedReasons":["..."] }\n' +
+        "입력: {{input}}",
+    }),
+    makePresetNode("gate-creative", "gate", 720, 120, {
+      decisionPath: "DECISION",
+      passNodeId: "turn-creative-final",
+      rejectNodeId: "transform-creative-rework",
+      schemaJson: "{\"type\":\"object\",\"required\":[\"DECISION\"]}",
+    }),
+    makePresetNode("turn-creative-final", "turn", 1020, 40, {
+      model: "GPT-5.3-Codex",
+      role: "CREATIVE SYNTHESIS AGENT",
+      cwd: ".",
+      promptTemplate:
+        "선정된 아이디어를 실전용 제안서로 작성하라.\n" +
+        "구성: 컨셉, 차별점, 실행 단계, 리스크 대응, 성공 지표.\n" +
+        "입력: {{input}}",
+    }),
+    makePresetNode("transform-creative-rework", "transform", 1020, 220, {
+      mode: "template",
+      template:
+        "REJECT. 아이디어를 더 과감하고 차별적으로 재작성하세요.\n평가에서 낮았던 이유를 반드시 반영.\n원문: {{input}}",
+    }),
+  ];
+
+  const edges: GraphEdge[] = [
+    {
+      from: { nodeId: "turn-creative-intake", port: "out" },
+      to: { nodeId: "turn-creative-diverge", port: "in" },
+    },
+    {
+      from: { nodeId: "turn-creative-diverge", port: "out" },
+      to: { nodeId: "turn-creative-critic", port: "in" },
+    },
+    {
+      from: { nodeId: "turn-creative-critic", port: "out" },
+      to: { nodeId: "gate-creative", port: "in" },
+    },
+    {
+      from: { nodeId: "gate-creative", port: "out" },
+      to: { nodeId: "turn-creative-final", port: "in" },
+    },
+    {
+      from: { nodeId: "gate-creative", port: "out" },
+      to: { nodeId: "transform-creative-rework", port: "in" },
+    },
+  ];
+
+  return { version: GRAPH_SCHEMA_VERSION, nodes, edges, knowledge: defaultKnowledgeConfig() };
+}
+
+function buildNewsTrendPreset(): GraphData {
+  const nodes: GraphNode[] = [
+    makePresetNode("turn-news-intake", "turn", 120, 120, {
+      model: "GPT-5.1-Codex-Mini",
+      role: "NEWS BRIEF AGENT",
+      cwd: ".",
+      promptTemplate:
+        "질문을 최신 뉴스/트렌드 조사 쿼리로 분해하라.\n" +
+        '{ "timeWindow":"최근 7일 또는 30일", "queries":["..."], "mustVerify":["..."] }\n' +
+        "입력: {{input}}",
+    }),
+    makePresetNode("turn-news-scan-a", "turn", 420, 40, {
+      executor: "web_gemini",
+      webResultMode: "auto",
+      webTimeoutMs: 120000,
+      model: "GPT-5.2",
+      role: "WEB NEWS SCAN AGENT A",
+      cwd: ".",
+      promptTemplate:
+        "최신 뉴스 관점으로 핵심 이슈 5개를 수집하고 날짜/출처/핵심포인트를 요약해줘.\n입력: {{input}}",
+    }),
+    makePresetNode("turn-news-scan-b", "turn", 420, 220, {
+      executor: "web_gemini",
+      webResultMode: "auto",
+      webTimeoutMs: 120000,
+      model: "GPT-5.2-Codex",
+      role: "WEB TREND SCAN AGENT B",
+      cwd: ".",
+      promptTemplate:
+        "트렌드 관점으로 신호(증가/감소/변곡점)를 찾아 요약해줘.\n입력: {{input}}",
+    }),
+    makePresetNode("turn-news-check", "turn", 720, 120, {
+      model: "GPT-5.2-Codex",
+      role: "NEWS FACT CHECK AGENT",
+      cwd: ".",
+      promptTemplate:
+        "두 수집 결과를 교차검증해 JSON으로 출력하라.\n" +
+        '{ "DECISION":"PASS|REJECT", "confirmed":["..."], "conflicts":["..."], "finalDraft":"..." }\n' +
+        "입력: {{input}}",
+    }),
+    makePresetNode("gate-news", "gate", 1020, 120, {
+      decisionPath: "DECISION",
+      passNodeId: "turn-news-final",
+      rejectNodeId: "transform-news-rework",
+      schemaJson: "{\"type\":\"object\",\"required\":[\"DECISION\"]}",
+    }),
+    makePresetNode("turn-news-final", "turn", 1320, 40, {
+      model: "GPT-5.3-Codex",
+      role: "NEWS SYNTHESIS AGENT",
+      cwd: ".",
+      promptTemplate:
+        "최신 뉴스/트렌드 브리핑을 작성하라.\n" +
+        "구성: 핵심 변화, 영향 분석, 향후 2주 시나리오, 확인 필요 항목.\n" +
+        "입력: {{input}}",
+    }),
+    makePresetNode("transform-news-rework", "transform", 1320, 220, {
+      mode: "template",
+      template:
+        "REJECT. 최신성/출처 신뢰성 검증이 부족합니다.\n추가 확인 항목을 먼저 보강하세요.\n원문: {{input}}",
+    }),
+  ];
+
+  const edges: GraphEdge[] = [
+    { from: { nodeId: "turn-news-intake", port: "out" }, to: { nodeId: "turn-news-scan-a", port: "in" } },
+    { from: { nodeId: "turn-news-intake", port: "out" }, to: { nodeId: "turn-news-scan-b", port: "in" } },
+    { from: { nodeId: "turn-news-scan-a", port: "out" }, to: { nodeId: "turn-news-check", port: "in" } },
+    { from: { nodeId: "turn-news-scan-b", port: "out" }, to: { nodeId: "turn-news-check", port: "in" } },
+    { from: { nodeId: "turn-news-check", port: "out" }, to: { nodeId: "gate-news", port: "in" } },
+    { from: { nodeId: "gate-news", port: "out" }, to: { nodeId: "turn-news-final", port: "in" } },
+    { from: { nodeId: "gate-news", port: "out" }, to: { nodeId: "transform-news-rework", port: "in" } },
+  ];
+
+  return { version: GRAPH_SCHEMA_VERSION, nodes, edges, knowledge: defaultKnowledgeConfig() };
 }
 
 function normalizeGraph(input: unknown): GraphData {
   if (!input || typeof input !== "object") {
-    return { version: 1, nodes: [], edges: [] };
+    return { version: GRAPH_SCHEMA_VERSION, nodes: [], edges: [], knowledge: defaultKnowledgeConfig() };
   }
 
   const data = input as Record<string, unknown>;
   const nodes = Array.isArray(data.nodes) ? data.nodes : [];
   const edges = Array.isArray(data.edges) ? data.edges : [];
+  const version = typeof data.version === "number" ? data.version : 1;
+
+  const normalizedNodes = nodes
+    .filter((node): node is GraphNode => Boolean(node))
+    .map((node) => {
+      if (node.type !== "turn") {
+        return node;
+      }
+      const config = (node.config ?? {}) as Record<string, unknown>;
+      const rawExecutor = typeof config.executor === "string" ? config.executor : "codex";
+      const executor = TURN_EXECUTOR_OPTIONS.includes(rawExecutor as TurnExecutor)
+        ? rawExecutor
+        : "codex";
+      const normalizedConfig = {
+        ...config,
+        executor,
+        model: toTurnModelDisplayName(String(config.model ?? DEFAULT_TURN_MODEL)),
+        knowledgeEnabled:
+          typeof config.knowledgeEnabled === "boolean" ? config.knowledgeEnabled : true,
+        qualityProfile: toQualityProfileId(config.qualityProfile) ?? undefined,
+        qualityThreshold: Math.max(
+          0,
+          Math.min(
+            100,
+            Number(
+              readNumber(config.qualityThreshold) ?? QUALITY_DEFAULT_THRESHOLD,
+            ) || QUALITY_DEFAULT_THRESHOLD,
+          ),
+        ),
+        qualityCommandEnabled:
+          typeof config.qualityCommandEnabled === "boolean" ? config.qualityCommandEnabled : false,
+        qualityCommands: String(config.qualityCommands ?? "npm run build"),
+        artifactType: toArtifactType(config.artifactType),
+      };
+      return {
+        ...node,
+        config: normalizedConfig,
+      };
+    });
+
+  const normalizedEdges = edges
+    .map((edge) => {
+      if (!edge || typeof edge !== "object") {
+        return null;
+      }
+      const row = edge as Record<string, unknown>;
+      const from = row.from as Record<string, unknown> | undefined;
+      const to = row.to as Record<string, unknown> | undefined;
+      if (!from || !to) {
+        return null;
+      }
+      const fromNodeId = String(from.nodeId ?? "").trim();
+      const toNodeId = String(to.nodeId ?? "").trim();
+      if (!fromNodeId || !toNodeId) {
+        return null;
+      }
+      const controlRow =
+        row.control && typeof row.control === "object"
+          ? (row.control as Record<string, unknown>)
+          : null;
+      const controlX = controlRow ? readNumber(controlRow.x) : undefined;
+      const controlY = controlRow ? readNumber(controlRow.y) : undefined;
+      return {
+        from: {
+          nodeId: fromNodeId,
+          port: "out" as PortType,
+          side:
+            from.side === "top" || from.side === "right" || from.side === "bottom" || from.side === "left"
+              ? (from.side as NodeAnchorSide)
+              : undefined,
+        },
+        to: {
+          nodeId: toNodeId,
+          port: "in" as PortType,
+          side: to.side === "top" || to.side === "right" || to.side === "bottom" || to.side === "left"
+            ? (to.side as NodeAnchorSide)
+            : undefined,
+        },
+        control:
+          typeof controlX === "number" && typeof controlY === "number"
+            ? { x: controlX, y: controlY }
+            : undefined,
+      } as GraphEdge;
+    })
+    .filter(Boolean) as GraphEdge[];
 
   return {
-    version: typeof data.version === "number" ? data.version : 1,
-    nodes: nodes.filter(Boolean) as GraphNode[],
-    edges: edges.filter(Boolean) as GraphEdge[],
+    version: Math.max(version, GRAPH_SCHEMA_VERSION),
+    nodes: normalizedNodes,
+    edges: normalizedEdges,
+    knowledge: normalizeKnowledgeConfig(data.knowledge),
   };
 }
 
@@ -936,35 +2876,56 @@ function App() {
   const defaultCwd = useMemo(() => ".", []);
 
   const [workspaceTab, setWorkspaceTab] = useState<WorkspaceTab>("workflow");
-  const [isInspectorWide, setIsInspectorWide] = useState(false);
 
   const [cwd, setCwd] = useState(defaultCwd);
-  const [model, setModel] = useState<string>(TURN_MODEL_OPTIONS[0]);
+  const [model, setModel] = useState<string>(DEFAULT_TURN_MODEL);
+  const [costPreset, setCostPreset] = useState<CostPreset>("balanced");
   const [workflowQuestion, setWorkflowQuestion] = useState(
     "언어 학습에서 AI가 기존 학습 패러다임을 어떻게 개선할 수 있는지 분석해줘.",
   );
-  const [threadId, setThreadId] = useState("");
-  const [text, setText] = useState("안녕하세요. 지금 상태를 3줄로 요약해줘.");
 
   const [engineStarted, setEngineStarted] = useState(false);
   const [status, setStatus] = useState("대기 중");
   const [running, setRunning] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setErrorState] = useState("");
+  const [, setErrorLogs] = useState<string[]>([]);
 
-  const [authUrl, setAuthUrl] = useState("");
   const [usageSourceMethod, setUsageSourceMethod] = useState("");
   const [usageInfoText, setUsageInfoText] = useState("");
   const [authMode, setAuthMode] = useState<AuthMode>("unknown");
   const [loginCompleted, setLoginCompleted] = useState(false);
-  const [streamText, setStreamText] = useState("");
-  const [events, setEvents] = useState<string[]>([]);
   const [pendingApprovals, setPendingApprovals] = useState<PendingApproval[]>([]);
   const [approvalSubmitting, setApprovalSubmitting] = useState(false);
+  const [pendingWebTurn, setPendingWebTurn] = useState<PendingWebTurn | null>(null);
+  const [pendingWebLogin, setPendingWebLogin] = useState<PendingWebLogin | null>(null);
+  const [webResponseDraft, setWebResponseDraft] = useState("");
+  const [webWorkerHealth, setWebWorkerHealth] = useState<WebWorkerHealth>({
+    running: false,
+  });
+  const [webWorkerBusy, setWebWorkerBusy] = useState(false);
+  const [providerChildViewOpen, setProviderChildViewOpen] = useState<Record<WebProvider, boolean>>({
+    gemini: false,
+    gpt: false,
+    grok: false,
+    perplexity: false,
+    claude: false,
+  });
 
-  const [graph, setGraph] = useState<GraphData>({ version: 1, nodes: [], edges: [] });
+  const [graph, setGraph] = useState<GraphData>({
+    version: GRAPH_SCHEMA_VERSION,
+    nodes: [],
+    edges: [],
+    knowledge: defaultKnowledgeConfig(),
+  });
   const [selectedNodeId, setSelectedNodeId] = useState<string>("");
+  const [selectedNodeIds, setSelectedNodeIds] = useState<string[]>([]);
+  const [selectedEdgeKey, setSelectedEdgeKey] = useState<string>("");
   const [connectFromNodeId, setConnectFromNodeId] = useState<string>("");
-  const [graphFileName, setGraphFileName] = useState("sample.json");
+  const [connectFromSide, setConnectFromSide] = useState<NodeAnchorSide | null>(null);
+  const [connectPreviewStartPoint, setConnectPreviewStartPoint] = useState<LogicalPoint | null>(null);
+  const [connectPreviewPoint, setConnectPreviewPoint] = useState<LogicalPoint | null>(null);
+  const [isConnectingDrag, setIsConnectingDrag] = useState(false);
+  const [graphFileName, setGraphFileName] = useState("");
   const [graphFiles, setGraphFiles] = useState<string[]>([]);
   const [runFiles, setRunFiles] = useState<string[]>([]);
   const [selectedRunFile, setSelectedRunFile] = useState("");
@@ -975,22 +2936,83 @@ function App() {
   const [canvasZoom, setCanvasZoom] = useState(1);
   const [panMode, setPanMode] = useState(false);
   const [canvasFullscreen, setCanvasFullscreen] = useState(false);
+  const [canvasLogicalViewport, setCanvasLogicalViewport] = useState({
+    width: DEFAULT_STAGE_WIDTH,
+    height: DEFAULT_STAGE_HEIGHT,
+  });
   const [undoStack, setUndoStack] = useState<GraphData[]>([]);
   const [redoStack, setRedoStack] = useState<GraphData[]>([]);
+  const [, setNodeSizeVersion] = useState(0);
+  const [marqueeSelection, setMarqueeSelection] = useState<MarqueeSelection | null>(null);
 
   const dragRef = useRef<DragState | null>(null);
+  const edgeDragRef = useRef<EdgeDragState | null>(null);
   const graphCanvasRef = useRef<HTMLDivElement | null>(null);
+  const nodeSizeMapRef = useRef<Record<string, NodeVisualSize>>({});
+  const questionInputRef = useRef<HTMLTextAreaElement | null>(null);
   const panRef = useRef<PanState | null>(null);
+  const dragPointerRef = useRef<PointerState | null>(null);
+  const dragAutoPanFrameRef = useRef<number | null>(null);
+  const dragWindowMoveHandlerRef = useRef<((event: MouseEvent) => void) | null>(null);
+  const dragWindowUpHandlerRef = useRef<((event: MouseEvent) => void) | null>(null);
   const dragStartSnapshotRef = useRef<GraphData | null>(null);
+  const edgeDragStartSnapshotRef = useRef<GraphData | null>(null);
+  const edgeDragWindowMoveHandlerRef = useRef<((event: MouseEvent) => void) | null>(null);
+  const edgeDragWindowUpHandlerRef = useRef<((event: MouseEvent) => void) | null>(null);
+  const zoomStatusTimerRef = useRef<number | null>(null);
   const cancelRequestedRef = useRef(false);
   const activeTurnNodeIdRef = useRef<string>("");
+  const activeWebNodeIdRef = useRef<string>("");
+  const activeWebProviderRef = useRef<WebProvider | null>(null);
   const turnTerminalResolverRef = useRef<((terminal: TurnTerminal) => void) | null>(null);
+  const webTurnResolverRef = useRef<((result: { ok: boolean; output?: unknown; error?: string }) => void) | null>(
+    null,
+  );
+  const webLoginResolverRef = useRef<((retry: boolean) => void) | null>(null);
   const activeRunDeltaRef = useRef<Record<string, string>>({});
   const collectingRunRef = useRef(false);
   const runLogCollectorRef = useRef<Record<string, string[]>>({});
 
   const activeApproval = pendingApprovals[0];
   const selectedNode = graph.nodes.find((node) => node.id === selectedNodeId) ?? null;
+  const graphKnowledge = normalizeKnowledgeConfig(graph.knowledge);
+  const enabledKnowledgeFiles = graphKnowledge.files.filter((row) => row.enabled);
+  const selectedKnowledgeMaxCharsOption = closestNumericOptionValue(
+    KNOWLEDGE_MAX_CHARS_OPTIONS,
+    graphKnowledge.maxChars,
+    KNOWLEDGE_DEFAULT_MAX_CHARS,
+  );
+
+  function setError(next: string) {
+    setErrorState(next);
+    const trimmed = next.trim();
+    if (!trimmed) {
+      return;
+    }
+    const at = new Date().toISOString();
+    setErrorLogs((prev) => [`[${at}] ${trimmed}`, ...prev].slice(0, 600));
+  }
+
+  function getNodeVisualSize(nodeId: string): NodeVisualSize {
+    return nodeSizeMapRef.current[nodeId] ?? { width: NODE_WIDTH, height: NODE_HEIGHT };
+  }
+
+  function setNodeSelection(nextIds: string[], primaryId?: string) {
+    const deduped = nextIds.filter((id, index, arr) => arr.indexOf(id) === index);
+    setSelectedNodeIds(deduped);
+    if (deduped.length === 0) {
+      setSelectedNodeId("");
+      return;
+    }
+    if (primaryId && deduped.includes(primaryId)) {
+      setSelectedNodeId(primaryId);
+      return;
+    }
+    if (selectedNodeId && deduped.includes(selectedNodeId)) {
+      return;
+    }
+    setSelectedNodeId(deduped[deduped.length - 1]);
+  }
 
   function addNodeLog(nodeId: string, message: string) {
     if (collectingRunRef.current) {
@@ -1035,6 +3057,54 @@ function App() {
           ...patch,
         },
       };
+    });
+  }
+
+  function markCodexNodesStatusOnEngineIssue(
+    nextStatus: "failed" | "cancelled",
+    message: string,
+    includeIdle = false,
+  ) {
+    const now = Date.now();
+    const finishedAt = new Date(now).toISOString();
+    const nodeById = new Map(graph.nodes.map((node) => [node.id, node]));
+
+    const isTerminal = (status: NodeExecutionStatus) =>
+      status === "done" || status === "failed" || status === "skipped" || status === "cancelled";
+
+    setNodeStates((prev) => {
+      const next: Record<string, NodeRunState> = { ...prev };
+      let changed = false;
+
+      for (const [nodeId, current] of Object.entries(prev)) {
+        const node = nodeById.get(nodeId);
+        if (!node || node.type !== "turn") {
+          continue;
+        }
+        if (getTurnExecutor(node.config as TurnConfig) !== "codex") {
+          continue;
+        }
+        if (isTerminal(current.status)) {
+          continue;
+        }
+        if (!includeIdle && current.status === "idle") {
+          continue;
+        }
+
+        changed = true;
+        next[nodeId] = {
+          ...current,
+          status: nextStatus,
+          error: nextStatus === "failed" ? message : current.error,
+          finishedAt,
+          durationMs: current.startedAt
+            ? Math.max(0, now - new Date(current.startedAt).getTime())
+            : current.durationMs,
+          logs: [...current.logs, message].slice(-300),
+        };
+      }
+
+      return changed ? next : prev;
     });
   }
 
@@ -1102,6 +3172,29 @@ function App() {
 
   useEffect(() => {
     let cancelled = false;
+    const bootstrapWorker = async () => {
+      try {
+        await invoke("web_worker_start");
+      } catch {
+        // non-fatal: fallback path handles worker unavailable
+      }
+      try {
+        const health = await invoke<WebWorkerHealth>("web_provider_health");
+        if (!cancelled) {
+          setWebWorkerHealth(health);
+        }
+      } catch {
+        // silent: settings panel refresh button shows latest state on demand
+      }
+    };
+    void bootstrapWorker();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
 
     const attach = async () => {
       const unlistenNotification = await listen<EngineNotificationEvent>(
@@ -1109,10 +3202,6 @@ function App() {
         (event) => {
           try {
             const payload = event.payload;
-            const now = new Date().toLocaleTimeString();
-            const line = `[${now}] ${payload.method} ${formatUnknown(payload.params)}`;
-
-            setEvents((prev) => [line, ...prev].slice(0, 200));
 
             if (payload.method === "item/agentMessage/delta") {
               const delta = extractDeltaText(payload.params);
@@ -1121,9 +3210,6 @@ function App() {
                 activeRunDeltaRef.current[activeNodeId] =
                   (activeRunDeltaRef.current[activeNodeId] ?? "") + delta;
                 addNodeLog(activeNodeId, delta);
-              }
-              if (delta) {
-                setStreamText((prev) => prev + delta);
               }
             }
 
@@ -1140,6 +3226,22 @@ function App() {
               } else {
                 setStatus("계정 상태 갱신 수신 (인증 모드 미확인)");
               }
+            }
+
+            if (payload.method === "web/progress") {
+              const message = extractStringByPaths(payload.params, ["message", "stage", "error"]);
+              const activeWebNodeId = activeWebNodeIdRef.current;
+              if (activeWebNodeId && message) {
+                addNodeLog(activeWebNodeId, `[WEB] ${message}`);
+              }
+            }
+
+            if (payload.method === "web/worker/ready") {
+              setWebWorkerHealth((prev) => ({ ...prev, running: true }));
+            }
+
+            if (payload.method === "web/worker/stopped") {
+              setWebWorkerHealth((prev) => ({ ...prev, running: false, activeProvider: null }));
             }
 
             const terminal = isTurnTerminalEvent(payload.method, payload.params);
@@ -1193,12 +3295,16 @@ function App() {
             }
             if (payload.state === "stopped" || payload.state === "disconnected") {
               setEngineStarted(false);
+              markCodexNodesStatusOnEngineIssue("cancelled", "엔진 중지 또는 연결 끊김");
               setAuthMode("unknown");
               setLoginCompleted(false);
               setUsageSourceMethod("");
               setUsageInfoText("");
               setPendingApprovals([]);
               setApprovalSubmitting(false);
+            }
+            if (payload.state === "parseError" || payload.state === "readError" || payload.state === "stderrError") {
+              markCodexNodesStatusOnEngineIssue("failed", "엔진/프로토콜 오류");
             }
           } catch (handlerError) {
             reportSoftError("lifecycle handler failed", handlerError);
@@ -1258,10 +3364,10 @@ function App() {
     setError("");
     try {
       const runsDir = await invoke<string>("run_directory");
-      await openPath(runsDir);
+      await revealItemInDir(runsDir);
       setStatus("실행 기록 폴더 열림");
     } catch (e) {
-      setError(`실행 기록 폴더 열기 실패: ${String(e)}`);
+      setError(toOpenRunsFolderErrorMessage(e));
     }
   }
 
@@ -1277,6 +3383,25 @@ function App() {
       setSelectedRunDetail(run);
     } catch (e) {
       setError(String(e));
+    }
+  }
+
+  async function onDeleteSelectedRun() {
+    const target = selectedRunFile.trim();
+    if (!target) {
+      return;
+    }
+
+    setError("");
+    try {
+      await invoke("run_delete", { name: target });
+      const files = await invoke<string[]>("run_list");
+      setRunFiles(files);
+      setSelectedRunFile("");
+      setSelectedRunDetail(null);
+      setStatus(`실행 기록 삭제: ${target}`);
+    } catch (e) {
+      setError(`실행 기록 삭제 실패: ${String(e)}`);
     }
   }
 
@@ -1338,31 +3463,12 @@ function App() {
     try {
       await invoke("engine_stop");
       setEngineStarted(false);
+      markCodexNodesStatusOnEngineIssue("cancelled", "엔진 정지");
       setStatus("중지됨");
       setRunning(false);
       setIsGraphRunning(false);
       setUsageSourceMethod("");
       setUsageInfoText("");
-    } catch (e) {
-      setError(String(e));
-    }
-  }
-
-  async function onLoginChatgpt() {
-    setError("");
-    setLoginCompleted(false);
-    try {
-      await ensureEngineStarted();
-      const result = await invoke<LoginChatgptResult>("login_chatgpt");
-      setAuthUrl(result.authUrl);
-      setStatus("인증 URL 수신");
-      try {
-        await openUrl(result.authUrl);
-        setStatus("외부 브라우저에서 인증 URL 열림");
-      } catch (openErr) {
-        setStatus("브라우저 열기 실패, URL 복사 후 수동 진행");
-        setError(`openUrl failed: ${String(openErr)}`);
-      }
     } catch (e) {
       setError(String(e));
     }
@@ -1377,21 +3483,273 @@ function App() {
       setUsageInfoText(JSON.stringify(result.raw, null, 2));
       setStatus(`사용량 조회 완료 (${result.sourceMethod})`);
     } catch (e) {
-      setError(String(e));
+      setError(toUsageCheckErrorMessage(e));
       setStatus("사용량 조회 실패");
     }
   }
 
-  async function onCopyAuthUrl() {
-    if (!authUrl) {
+  async function onSelectCwdDirectory() {
+    setError("");
+    try {
+      const selected = await invoke<string | null>("dialog_pick_directory");
+      const selectedDirectory = typeof selected === "string" ? selected.trim() : "";
+      if (!selectedDirectory) {
+        return;
+      }
+      setCwd(selectedDirectory);
+      setStatus(`작업 경로 선택됨: ${selectedDirectory}`);
+    } catch (error) {
+      setError(`작업 경로 선택 실패: ${String(error)}`);
+    }
+  }
+
+  async function attachKnowledgeFiles(paths: string[]) {
+    const uniquePaths = Array.from(new Set(paths.map((path) => path.trim()).filter(Boolean)));
+    if (uniquePaths.length === 0) {
+      setError("선택한 파일 경로를 읽지 못했습니다. 다시 선택해주세요.");
+      return;
+    }
+
+    setError("");
+    try {
+      const probed = await invoke<KnowledgeFileRef[]>("knowledge_probe", { paths: uniquePaths });
+      applyGraphChange((prev) => {
+        const existingByPath = new Map(
+          (prev.knowledge?.files ?? []).map((row) => [row.path, row] as const),
+        );
+        for (const row of probed) {
+          const existing = existingByPath.get(row.path);
+          existingByPath.set(row.path, {
+            ...row,
+            enabled: existing ? existing.enabled : row.enabled,
+          });
+        }
+        return {
+          ...prev,
+          knowledge: {
+            ...(prev.knowledge ?? defaultKnowledgeConfig()),
+            files: Array.from(existingByPath.values()),
+          },
+        };
+      });
+      setStatus(`첨부 자료 ${uniquePaths.length}개 추가됨`);
+    } catch (error) {
+      setError(`첨부 자료 추가 실패: ${String(error)}`);
+    }
+  }
+
+  async function onOpenKnowledgeFilePicker() {
+    try {
+      const selectedPaths = await invoke<string[]>("dialog_pick_knowledge_files");
+      if (selectedPaths.length === 0) {
+        return;
+      }
+      await attachKnowledgeFiles(selectedPaths);
+    } catch (error) {
+      setError(`첨부 파일 선택 실패: ${String(error)}`);
+    }
+  }
+
+  function onRemoveKnowledgeFile(fileId: string) {
+    applyGraphChange((prev) => ({
+      ...prev,
+      knowledge: {
+        ...(prev.knowledge ?? defaultKnowledgeConfig()),
+        files: (prev.knowledge?.files ?? []).filter((row) => row.id !== fileId),
+      },
+    }));
+  }
+
+  function onToggleKnowledgeFileEnabled(fileId: string) {
+    applyGraphChange((prev) => ({
+      ...prev,
+      knowledge: {
+        ...(prev.knowledge ?? defaultKnowledgeConfig()),
+        files: (prev.knowledge?.files ?? []).map((row) =>
+          row.id === fileId ? { ...row, enabled: !row.enabled } : row,
+        ),
+      },
+    }));
+  }
+
+  async function onOpenPendingProviderWindow() {
+    if (!pendingWebTurn) {
       return;
     }
     try {
-      await navigator.clipboard.writeText(authUrl);
-      setStatus("인증 URL 복사 완료");
-    } catch (e) {
-      setError(`clipboard copy failed: ${String(e)}`);
+      await invoke("provider_window_open", { provider: pendingWebTurn.provider });
+    } catch (error) {
+      setError(String(error));
     }
+  }
+
+  async function onOpenProviderChildView(provider: WebProvider) {
+    try {
+      await invoke("provider_child_view_open", { provider });
+      setProviderChildViewOpen((prev) => ({ ...prev, [provider]: true }));
+      setStatus(`${webProviderLabel(provider)} child view 열림`);
+    } catch (error) {
+      setError(String(error));
+    }
+  }
+
+  async function onCloseProviderChildView(provider: WebProvider) {
+    try {
+      await invoke("provider_child_view_hide", { provider });
+      setProviderChildViewOpen((prev) => ({ ...prev, [provider]: false }));
+      setStatus(`${webProviderLabel(provider)} child view 숨김`);
+    } catch (error) {
+      const message = String(error);
+      if (message.includes("provider child view not found")) {
+        setProviderChildViewOpen((prev) => ({ ...prev, [provider]: false }));
+        setStatus(`${webProviderLabel(provider)} child view 숨김`);
+        return;
+      }
+      setError(message);
+    }
+  }
+
+  useEffect(() => {
+    if (workspaceTab === "workflow") {
+      return;
+    }
+    const openProviders = WEB_PROVIDER_OPTIONS.filter((provider) => providerChildViewOpen[provider]);
+    if (openProviders.length === 0) {
+      return;
+    }
+    for (const provider of openProviders) {
+      onCloseProviderChildView(provider);
+    }
+  }, [workspaceTab, providerChildViewOpen]);
+
+  async function refreshWebWorkerHealth(silent = false) {
+    try {
+      const health = await invoke<WebWorkerHealth>("web_provider_health");
+      setWebWorkerHealth(health);
+      return health;
+    } catch (error) {
+      if (!silent) {
+        setError(`웹 워커 상태 조회 실패: ${String(error)}`);
+      }
+      return null;
+    }
+  }
+
+  async function onOpenProviderSession(provider: WebProvider) {
+    setWebWorkerBusy(true);
+    setError("");
+    try {
+      const result = await invoke<{ ok?: boolean; error?: string; errorCode?: string }>(
+        "web_provider_open_session",
+        { provider },
+      );
+      if (result && result.ok === false) {
+        throw new Error(result.error || result.errorCode || "세션 창을 열지 못했습니다.");
+      }
+      await refreshWebWorkerHealth(true);
+      window.setTimeout(() => {
+        void refreshWebWorkerHealth(true);
+      }, 900);
+      setStatus(`${webProviderLabel(provider)} 로그인 세션 창 열림`);
+    } catch (error) {
+      setError(`${webProviderLabel(provider)} 로그인 세션 열기 실패: ${String(error)}`);
+    } finally {
+      setWebWorkerBusy(false);
+    }
+  }
+
+  async function onResetProviderSession(provider: WebProvider) {
+    setWebWorkerBusy(true);
+    setError("");
+    try {
+      await invoke("web_provider_reset_session", { provider });
+      await refreshWebWorkerHealth(true);
+      setStatus(`${webProviderLabel(provider)} 세션 리셋 완료`);
+    } catch (error) {
+      setError(`${webProviderLabel(provider)} 세션 리셋 실패: ${String(error)}`);
+    } finally {
+      setWebWorkerBusy(false);
+    }
+  }
+
+  useEffect(() => {
+    if (workspaceTab !== "settings") {
+      return;
+    }
+
+    void refreshWebWorkerHealth(true);
+    const intervalId = window.setInterval(() => {
+      void refreshWebWorkerHealth(true);
+    }, 1800);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [workspaceTab]);
+
+  async function ensureWebWorkerReady() {
+    try {
+      await invoke("web_worker_start");
+      const health = await refreshWebWorkerHealth(true);
+      if (!health?.running) {
+        return false;
+      }
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  function resolvePendingWebLogin(retry: boolean) {
+    const resolver = webLoginResolverRef.current;
+    webLoginResolverRef.current = null;
+    setPendingWebLogin(null);
+    if (resolver) {
+      resolver(retry);
+    }
+  }
+
+  function requestWebLogin(nodeId: string, provider: WebProvider, reason: string): Promise<boolean> {
+    setPendingWebLogin({
+      nodeId,
+      provider,
+      reason,
+    });
+    return new Promise((resolve) => {
+      webLoginResolverRef.current = resolve;
+    });
+  }
+
+  async function onCopyPendingWebPrompt() {
+    if (!pendingWebTurn) {
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(pendingWebTurn.prompt);
+      setStatus("웹 프롬프트 복사 완료");
+    } catch (error) {
+      setError(`clipboard copy failed: ${String(error)}`);
+    }
+  }
+
+  function onSubmitPendingWebTurn() {
+    if (!pendingWebTurn) {
+      return;
+    }
+    const normalized = normalizeWebTurnOutput(
+      pendingWebTurn.provider,
+      pendingWebTurn.mode,
+      webResponseDraft,
+    );
+    if (!normalized.ok) {
+      setError(normalized.error ?? "웹 응답 처리 실패");
+      return;
+    }
+    resolvePendingWebTurn({ ok: true, output: normalized.output });
+  }
+
+  function onCancelPendingWebTurn() {
+    resolvePendingWebTurn({ ok: false, error: "사용자 취소" });
   }
 
   async function onRespondApproval(decision: ApprovalDecision) {
@@ -1417,94 +3775,424 @@ function App() {
     }
   }
 
+  function getCanvasViewportCenterLogical(): { x: number; y: number } | null {
+    const canvas = graphCanvasRef.current;
+    if (!canvas) {
+      return null;
+    }
+    return {
+      x: (canvas.scrollLeft + canvas.clientWidth / 2 - GRAPH_STAGE_INSET_X) / canvasZoom,
+      y: (canvas.scrollTop + canvas.clientHeight / 2 - GRAPH_STAGE_INSET_Y) / canvasZoom,
+    };
+  }
+
   function addNode(type: NodeType) {
+    const center = getCanvasViewportCenterLogical();
+    const fallbackIndex = graph.nodes.length;
+    const minPos = -NODE_DRAG_MARGIN;
+    const maxX = Math.max(minPos, boundedStageWidth - NODE_WIDTH + NODE_DRAG_MARGIN);
+    const maxY = Math.max(minPos, boundedStageHeight - NODE_HEIGHT + NODE_DRAG_MARGIN);
+    const baseX = center
+      ? Math.round(center.x - NODE_WIDTH / 2)
+      : 40 + (fallbackIndex % 4) * 280;
+    const baseY = center
+      ? Math.round(center.y - NODE_HEIGHT / 2)
+      : 40 + Math.floor(fallbackIndex / 4) * 180;
+    const node: GraphNode = {
+      id: makeNodeId(type),
+      type,
+      position: {
+        x: Math.min(maxX, Math.max(minPos, baseX)),
+        y: Math.min(maxY, Math.max(minPos, baseY)),
+      },
+      config: defaultNodeConfig(type),
+    };
+
     applyGraphChange((prev) => {
-      const index = prev.nodes.length;
-      const node: GraphNode = {
-        id: makeNodeId(type),
-        type,
-        position: {
-          x: 40 + (index % 4) * 280,
-          y: 40 + Math.floor(index / 4) * 180,
-        },
-        config: defaultNodeConfig(type),
-      };
       return {
         ...prev,
         nodes: [...prev.nodes, node],
       };
     });
+
+    setNodeSelection([node.id], node.id);
+    setSelectedEdgeKey("");
   }
 
-  function applyPreset(kind: "validation" | "development") {
-    const preset = kind === "validation" ? buildValidationPreset() : buildDevelopmentPreset();
-    setGraph(cloneGraph(preset));
+  function applyPreset(
+    kind:
+      | "validation"
+      | "development"
+      | "research"
+      | "expert"
+      | "unityGame"
+      | "fullstack"
+      | "creative"
+      | "newsTrend",
+  ) {
+    let preset: GraphData;
+    if (kind === "validation") {
+      preset = buildValidationPreset();
+    } else if (kind === "development") {
+      preset = buildDevelopmentPreset();
+    } else if (kind === "research") {
+      preset = buildResearchPreset();
+    } else if (kind === "unityGame") {
+      preset = buildUnityGamePreset();
+    } else if (kind === "fullstack") {
+      preset = buildFullstackPreset();
+    } else if (kind === "creative") {
+      preset = buildCreativePreset();
+    } else if (kind === "newsTrend") {
+      preset = buildNewsTrendPreset();
+    } else {
+      preset = buildExpertPreset();
+    }
+    const nextPreset = {
+      ...preset,
+      knowledge: normalizeKnowledgeConfig(graph.knowledge),
+    };
+    setGraph(cloneGraph(nextPreset));
     setUndoStack([]);
     setRedoStack([]);
-    setSelectedNodeId(preset.nodes[0]?.id ?? "");
+    setNodeSelection(nextPreset.nodes.map((node) => node.id).slice(0, 1), nextPreset.nodes[0]?.id);
+    setSelectedEdgeKey("");
     setNodeStates({});
     setConnectFromNodeId("");
-    setStatus(
-      kind === "validation"
-        ? "검증형 5-에이전트 프리셋 로드됨"
-        : "개발형 5-에이전트 프리셋 로드됨",
-    );
+    setConnectFromSide(null);
+    setConnectPreviewStartPoint(null);
+    setConnectPreviewPoint(null);
+    setIsConnectingDrag(false);
+    setMarqueeSelection(null);
+    if (kind === "validation") {
+      setStatus("검증형 에이전트 템플릿 로드됨");
+    } else if (kind === "development") {
+      setStatus("개방형 에이전트 템플릿 로드됨");
+    } else if (kind === "research") {
+      setStatus("자료조사 템플릿 로드됨");
+    } else if (kind === "unityGame") {
+      setStatus("유니티 게임개발 템플릿 로드됨");
+    } else if (kind === "fullstack") {
+      setStatus("풀스택 개발 템플릿 로드됨");
+    } else if (kind === "creative") {
+      setStatus("창의적 답변 템플릿 로드됨");
+    } else if (kind === "newsTrend") {
+      setStatus("최신 뉴스·트렌드 템플릿 로드됨");
+    } else {
+      setStatus("전문가 템플릿 로드됨");
+    }
   }
 
-  function deleteNode(nodeId: string) {
-    applyGraphChange((prev) => ({
-      ...prev,
-      nodes: prev.nodes.filter((n) => n.id !== nodeId),
-      edges: prev.edges.filter((e) => e.from.nodeId !== nodeId && e.to.nodeId !== nodeId),
-    }));
-    setSelectedNodeId((prev) => (prev === nodeId ? "" : prev));
-    setNodeStates((prev) => {
-      const next = { ...prev };
-      delete next[nodeId];
-      return next;
+  function applyCostPreset(preset: CostPreset) {
+    const codexTurnNodes = graph.nodes.filter((node) => {
+      if (node.type !== "turn") {
+        return false;
+      }
+      const config = node.config as TurnConfig;
+      return getTurnExecutor(config) === "codex";
     });
-  }
 
-  function onPortOutClick(nodeId: string) {
-    setConnectFromNodeId(nodeId);
-  }
+    setCostPreset(preset);
+    setModel(COST_PRESET_DEFAULT_MODEL[preset]);
 
-  function onPortInClick(targetNodeId: string) {
-    if (!connectFromNodeId || connectFromNodeId === targetNodeId) {
+    if (codexTurnNodes.length === 0) {
+      setStatus(`비용 프리셋(${costPresetLabel(preset)}) 적용 대상이 없습니다.`);
       return;
     }
 
+    let changed = 0;
+    const nextNodes = graph.nodes.map((node) => {
+      if (node.type !== "turn") {
+        return node;
+      }
+      const config = node.config as TurnConfig;
+      if (getTurnExecutor(config) !== "codex") {
+        return node;
+      }
+      const targetModel = getCostPresetTargetModel(preset, isCriticalTurnNode(node));
+      const currentModel = toTurnModelDisplayName(String(config.model ?? DEFAULT_TURN_MODEL));
+      if (currentModel === targetModel) {
+        return node;
+      }
+      changed += 1;
+      return {
+        ...node,
+        config: {
+          ...config,
+          model: targetModel,
+        },
+      };
+    });
+
+    if (changed === 0) {
+      setStatus(`비용 프리셋(${costPresetLabel(preset)}) 이미 적용됨`);
+      return;
+    }
+
+    applyGraphChange((prev) => ({ ...prev, nodes: nextNodes }));
+    setStatus(`비용 프리셋(${costPresetLabel(preset)}) 적용: ${changed}/${codexTurnNodes.length}개 노드`);
+  }
+
+  function deleteNodes(nodeIds: string[]) {
+    const targets = nodeIds.filter((id, index, arr) => arr.indexOf(id) === index);
+    if (targets.length === 0) {
+      return;
+    }
+    const targetSet = new Set(targets);
+    applyGraphChange((prev) => ({
+      ...prev,
+      nodes: prev.nodes.filter((n) => !targetSet.has(n.id)),
+      edges: prev.edges.filter((e) => !targetSet.has(e.from.nodeId) && !targetSet.has(e.to.nodeId)),
+    }));
+    setNodeSelection(selectedNodeIds.filter((id) => !targetSet.has(id)));
+    setSelectedEdgeKey("");
+    setNodeStates((prev) => {
+      const next = { ...prev };
+      for (const nodeId of targetSet) {
+        delete next[nodeId];
+      }
+      return next;
+    });
+    if (connectFromNodeId && targetSet.has(connectFromNodeId)) {
+      setConnectFromNodeId("");
+      setConnectFromSide(null);
+      setConnectPreviewStartPoint(null);
+      setConnectPreviewPoint(null);
+      setIsConnectingDrag(false);
+      setMarqueeSelection(null);
+    }
+  }
+
+  function deleteNode(nodeId: string) {
+    deleteNodes([nodeId]);
+  }
+
+  function createEdgeConnection(
+    fromNodeId: string,
+    toNodeId: string,
+    fromSide?: NodeAnchorSide,
+    toSide?: NodeAnchorSide,
+  ) {
+    if (!fromNodeId || !toNodeId || fromNodeId === toNodeId) {
+      return;
+    }
+
+    const reverseExistsNow = graph.edges.some(
+      (edge) => edge.from.nodeId === toNodeId && edge.to.nodeId === fromNodeId,
+    );
+    if (reverseExistsNow) {
+      setStatus("양방향 연결은 허용되지 않습니다.");
+      return;
+    }
+
+    const fromNode = graph.nodes.find((node) => node.id === fromNodeId);
+    const toNode = graph.nodes.find((node) => node.id === toNodeId);
+    if (!fromNode || !toNode) {
+      return;
+    }
+
+    const auto = getAutoConnectionSides(fromNode, toNode);
+    const resolvedFromSide = fromSide ?? auto.fromSide;
+    const resolvedToSide = toSide ?? auto.toSide;
+
     applyGraphChange((prev) => {
       const exists = prev.edges.some(
-        (edge) => edge.from.nodeId === connectFromNodeId && edge.to.nodeId === targetNodeId,
+        (edge) => edge.from.nodeId === fromNodeId && edge.to.nodeId === toNodeId,
       );
       if (exists) {
         return prev;
       }
+      const reverseExists = prev.edges.some(
+        (edge) => edge.from.nodeId === toNodeId && edge.to.nodeId === fromNodeId,
+      );
+      if (reverseExists) {
+        return prev;
+      }
       const edge: GraphEdge = {
-        from: { nodeId: connectFromNodeId, port: "out" },
-        to: { nodeId: targetNodeId, port: "in" },
+        from: { nodeId: fromNodeId, port: "out", side: resolvedFromSide },
+        to: { nodeId: toNodeId, port: "in", side: resolvedToSide },
       };
       return { ...prev, edges: [...prev.edges, edge] };
     });
+  }
+
+  function onNodeAnchorDragStart(
+    e: ReactMouseEvent<HTMLButtonElement>,
+    nodeId: string,
+    side: NodeAnchorSide,
+  ) {
+    e.preventDefault();
+    e.stopPropagation();
+    const sourceNode = graph.nodes.find((node) => node.id === nodeId);
+    if (!sourceNode) {
+      return;
+    }
+    const point = getNodeAnchorPoint(sourceNode, side, getNodeVisualSize(sourceNode.id));
+    setConnectFromNodeId(nodeId);
+    setConnectFromSide(side);
+    setConnectPreviewStartPoint(point);
+    setConnectPreviewPoint(point);
+    setIsConnectingDrag(true);
+  }
+
+  function onNodeAnchorDrop(
+    e: ReactMouseEvent<HTMLButtonElement>,
+    targetNodeId: string,
+    targetSide: NodeAnchorSide,
+  ) {
+    if (!connectFromNodeId) {
+      return;
+    }
+    e.preventDefault();
+    e.stopPropagation();
+    createEdgeConnection(connectFromNodeId, targetNodeId, connectFromSide ?? undefined, targetSide);
     setConnectFromNodeId("");
+    setConnectFromSide(null);
+    setConnectPreviewStartPoint(null);
+    setConnectPreviewPoint(null);
+    setIsConnectingDrag(false);
+  }
+
+  function onNodeConnectDrop(targetNodeId: string) {
+    if (!connectFromNodeId || connectFromNodeId === targetNodeId) {
+      return;
+    }
+    createEdgeConnection(connectFromNodeId, targetNodeId, connectFromSide ?? undefined);
+    setConnectFromNodeId("");
+    setConnectFromSide(null);
+    setConnectPreviewStartPoint(null);
+    setConnectPreviewPoint(null);
+    setIsConnectingDrag(false);
   }
 
   function clampCanvasZoom(nextZoom: number): number {
     return Math.max(MIN_CANVAS_ZOOM, Math.min(MAX_CANVAS_ZOOM, nextZoom));
   }
 
-  function clientToCanvasPoint(clientX: number, clientY: number): { x: number; y: number } | null {
+  function scheduleZoomStatus(nextZoom: number) {
+    if (zoomStatusTimerRef.current != null) {
+      window.clearTimeout(zoomStatusTimerRef.current);
+    }
+    zoomStatusTimerRef.current = window.setTimeout(() => {
+      setStatus(`그래프 배율 ${Math.round(nextZoom * 100)}%`);
+      zoomStatusTimerRef.current = null;
+    }, 120);
+  }
+
+  function syncQuestionInputHeight() {
+    const input = questionInputRef.current;
+    if (!input) {
+      return;
+    }
+    input.style.height = "auto";
+    const nextHeight = Math.min(QUESTION_INPUT_MAX_HEIGHT, input.scrollHeight);
+    input.style.height = `${nextHeight}px`;
+    input.style.overflowY = input.scrollHeight > QUESTION_INPUT_MAX_HEIGHT ? "auto" : "hidden";
+  }
+
+  function syncCanvasLogicalViewport() {
+    const canvas = graphCanvasRef.current;
+    if (!canvas) {
+      return;
+    }
+    const visibleWidth = canvas.clientWidth / canvasZoom;
+    const visibleHeight = canvas.clientHeight / canvasZoom;
+    setCanvasLogicalViewport((prev) => {
+      if (Math.abs(prev.width - visibleWidth) < 0.5 && Math.abs(prev.height - visibleHeight) < 0.5) {
+        return prev;
+      }
+      return { width: visibleWidth, height: visibleHeight };
+    });
+  }
+
+  function clientToLogicalPoint(clientX: number, clientY: number, zoomValue = canvasZoom): { x: number; y: number } | null {
     const canvas = graphCanvasRef.current;
     if (!canvas) {
       return null;
     }
     const rect = canvas.getBoundingClientRect();
-    const stageOffset = GRAPH_PAN_PADDING / 2;
+    const stageOffsetX = GRAPH_STAGE_INSET_X;
+    const stageOffsetY = GRAPH_STAGE_INSET_Y;
     return {
-      x: (clientX - rect.left + canvas.scrollLeft - stageOffset) / canvasZoom,
-      y: (clientY - rect.top + canvas.scrollTop - stageOffset) / canvasZoom,
+      x: (clientX - rect.left + canvas.scrollLeft - stageOffsetX) / zoomValue,
+      y: (clientY - rect.top + canvas.scrollTop - stageOffsetY) / zoomValue,
     };
+  }
+
+  function applyEdgeControlPosition(clientX: number, clientY: number) {
+    if (!edgeDragRef.current) {
+      return;
+    }
+    const logicalPoint = clientToLogicalPoint(clientX, clientY);
+    if (!logicalPoint) {
+      return;
+    }
+
+    const minPos = -NODE_DRAG_MARGIN;
+    const maxX = Math.max(minPos, boundedStageWidth + NODE_DRAG_MARGIN);
+    const maxY = Math.max(minPos, boundedStageHeight + NODE_DRAG_MARGIN);
+    const { edgeKey, pointerStart, startControl } = edgeDragRef.current;
+    const dx = logicalPoint.x - pointerStart.x;
+    const dy = logicalPoint.y - pointerStart.y;
+    const nextControl = {
+      x: Math.min(maxX, Math.max(minPos, startControl.x + dx)),
+      y: Math.min(maxY, Math.max(minPos, startControl.y + dy)),
+    };
+
+    setGraph((prev) => ({
+      ...prev,
+      edges: prev.edges.map((edge) =>
+        getGraphEdgeKey(edge) === edgeKey
+          ? {
+              ...edge,
+              control: nextControl,
+            }
+          : edge,
+      ),
+    }));
+  }
+
+  function onEdgeDragStart(
+    event: ReactMouseEvent<SVGPathElement>,
+    edgeKey: string,
+    defaultControl: LogicalPoint,
+  ) {
+    if (panMode || isConnectingDrag) {
+      return;
+    }
+    if (event.button !== 0) {
+      return;
+    }
+    const pointer = clientToLogicalPoint(event.clientX, event.clientY);
+    if (!pointer) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    setNodeSelection([]);
+    setSelectedEdgeKey(edgeKey);
+    edgeDragStartSnapshotRef.current = cloneGraph(graph);
+    edgeDragRef.current = {
+      edgeKey,
+      pointerStart: pointer,
+      startControl: defaultControl,
+    };
+
+    if (!edgeDragWindowMoveHandlerRef.current) {
+      edgeDragWindowMoveHandlerRef.current = (nextEvent: MouseEvent) => {
+        if (!edgeDragRef.current) {
+          return;
+        }
+        applyEdgeControlPosition(nextEvent.clientX, nextEvent.clientY);
+      };
+      window.addEventListener("mousemove", edgeDragWindowMoveHandlerRef.current);
+    }
+    if (!edgeDragWindowUpHandlerRef.current) {
+      edgeDragWindowUpHandlerRef.current = () => {
+        onCanvasMouseUp();
+      };
+      window.addEventListener("mouseup", edgeDragWindowUpHandlerRef.current);
+    }
   }
 
   function zoomAtClientPoint(nextZoom: number, clientX: number, clientY: number) {
@@ -1515,11 +4203,12 @@ function App() {
     }
 
     const rect = canvas.getBoundingClientRect();
-    const stageOffset = GRAPH_PAN_PADDING / 2;
+    const stageOffsetX = GRAPH_STAGE_INSET_X;
+    const stageOffsetY = GRAPH_STAGE_INSET_Y;
     const pointerX = clientX - rect.left + canvas.scrollLeft;
     const pointerY = clientY - rect.top + canvas.scrollTop;
-    const logicalX = (pointerX - stageOffset) / canvasZoom;
-    const logicalY = (pointerY - stageOffset) / canvasZoom;
+    const logicalX = (pointerX - stageOffsetX) / canvasZoom;
+    const logicalY = (pointerY - stageOffsetY) / canvasZoom;
 
     setCanvasZoom(nextZoom);
     requestAnimationFrame(() => {
@@ -1527,32 +4216,154 @@ function App() {
       if (!currentCanvas) {
         return;
       }
-      currentCanvas.scrollLeft = logicalX * nextZoom + stageOffset - (clientX - rect.left);
-      currentCanvas.scrollTop = logicalY * nextZoom + stageOffset - (clientY - rect.top);
+      currentCanvas.scrollLeft = logicalX * nextZoom + stageOffsetX - (clientX - rect.left);
+      currentCanvas.scrollTop = logicalY * nextZoom + stageOffsetY - (clientY - rect.top);
     });
+  }
+
+  function applyDragPosition(clientX: number, clientY: number) {
+    if (!dragRef.current) {
+      return;
+    }
+    const logicalPoint = clientToLogicalPoint(clientX, clientY);
+    if (!logicalPoint) {
+      return;
+    }
+
+    const { nodeIds, pointerStart, startPositions } = dragRef.current;
+    if (nodeIds.length === 0) {
+      return;
+    }
+    const dx = logicalPoint.x - pointerStart.x;
+    const dy = logicalPoint.y - pointerStart.y;
+    const minPos = -NODE_DRAG_MARGIN;
+    const nodeIdSet = new Set(nodeIds);
+
+    setGraph((prev) => ({
+      ...prev,
+      nodes: prev.nodes.map((node) => {
+        if (!nodeIdSet.has(node.id)) {
+          return node;
+        }
+        const start = startPositions[node.id];
+        if (!start) {
+          return node;
+        }
+        const size = getNodeVisualSize(node.id);
+        const maxX = Math.max(minPos, boundedStageWidth - size.width + NODE_DRAG_MARGIN);
+        const maxY = Math.max(minPos, boundedStageHeight - size.height + NODE_DRAG_MARGIN);
+        return {
+          ...node,
+          position: {
+            x: Math.min(maxX, Math.max(minPos, start.x + dx)),
+            y: Math.min(maxY, Math.max(minPos, start.y + dy)),
+          },
+        };
+      }),
+    }));
+  }
+
+  function ensureDragAutoPanLoop() {
+    if (dragAutoPanFrameRef.current != null) {
+      return;
+    }
+
+    const tick = () => {
+      if (!dragRef.current) {
+        dragAutoPanFrameRef.current = null;
+        return;
+      }
+
+      const pointer = dragPointerRef.current;
+      const canvas = graphCanvasRef.current;
+      if (pointer && canvas) {
+        const rect = canvas.getBoundingClientRect();
+        const edge = 30;
+        const maxSpeed = 14;
+        let dx = 0;
+        let dy = 0;
+
+        if (pointer.clientX < rect.left + edge) {
+          dx = -Math.ceil(((rect.left + edge - pointer.clientX) / edge) * maxSpeed);
+        } else if (pointer.clientX > rect.right - edge) {
+          dx = Math.ceil(((pointer.clientX - (rect.right - edge)) / edge) * maxSpeed);
+        }
+        if (pointer.clientY < rect.top + edge) {
+          dy = -Math.ceil(((rect.top + edge - pointer.clientY) / edge) * maxSpeed);
+        } else if (pointer.clientY > rect.bottom - edge) {
+          dy = Math.ceil(((pointer.clientY - (rect.bottom - edge)) / edge) * maxSpeed);
+        }
+
+        if (dx !== 0 || dy !== 0) {
+          const maxLeft = Math.max(0, canvas.scrollWidth - canvas.clientWidth);
+          const maxTop = Math.max(0, canvas.scrollHeight - canvas.clientHeight);
+          canvas.scrollLeft = Math.max(0, Math.min(maxLeft, canvas.scrollLeft + dx));
+          canvas.scrollTop = Math.max(0, Math.min(maxTop, canvas.scrollTop + dy));
+          applyDragPosition(pointer.clientX, pointer.clientY);
+        }
+      }
+
+      dragAutoPanFrameRef.current = requestAnimationFrame(tick);
+    };
+
+    dragAutoPanFrameRef.current = requestAnimationFrame(tick);
   }
 
   function onNodeDragStart(e: ReactMouseEvent<HTMLDivElement>, nodeId: string) {
     if (panMode) {
       return;
     }
+    e.preventDefault();
+    e.stopPropagation();
 
     const node = graph.nodes.find((item) => item.id === nodeId);
     if (!node) {
       return;
     }
 
-    const canvasPoint = clientToCanvasPoint(e.clientX, e.clientY);
+    const canvasPoint = clientToLogicalPoint(e.clientX, e.clientY);
     if (!canvasPoint) {
       return;
     }
 
+    const activeNodeIds = selectedNodeIds.includes(nodeId) ? selectedNodeIds : [nodeId];
+    if (!selectedNodeIds.includes(nodeId)) {
+      setNodeSelection([nodeId], nodeId);
+    }
+    const startPositions = Object.fromEntries(
+      graph.nodes
+        .filter((item) => activeNodeIds.includes(item.id))
+        .map((item) => [item.id, { x: item.position.x, y: item.position.y }]),
+    );
+    if (Object.keys(startPositions).length === 0) {
+      return;
+    }
+
     dragStartSnapshotRef.current = cloneGraph(graph);
+    setMarqueeSelection(null);
+    dragPointerRef.current = { clientX: e.clientX, clientY: e.clientY };
+    ensureDragAutoPanLoop();
+    if (!dragWindowMoveHandlerRef.current) {
+      dragWindowMoveHandlerRef.current = (event: MouseEvent) => {
+        if (!dragRef.current) {
+          return;
+        }
+        dragPointerRef.current = { clientX: event.clientX, clientY: event.clientY };
+        applyDragPosition(event.clientX, event.clientY);
+      };
+      window.addEventListener("mousemove", dragWindowMoveHandlerRef.current);
+    }
+    if (!dragWindowUpHandlerRef.current) {
+      dragWindowUpHandlerRef.current = () => {
+        onCanvasMouseUp();
+      };
+      window.addEventListener("mouseup", dragWindowUpHandlerRef.current);
+    }
 
     dragRef.current = {
-      nodeId,
-      offsetX: canvasPoint.x - node.position.x,
-      offsetY: canvasPoint.y - node.position.y,
+      nodeIds: activeNodeIds,
+      pointerStart: canvasPoint,
+      startPositions,
     };
   }
 
@@ -1566,29 +4377,101 @@ function App() {
       return;
     }
 
+    if (edgeDragRef.current) {
+      applyEdgeControlPosition(e.clientX, e.clientY);
+      return;
+    }
+
+    if (isConnectingDrag && connectFromNodeId) {
+      const point = clientToLogicalPoint(e.clientX, e.clientY);
+      if (point) {
+        setConnectPreviewPoint(point);
+      }
+      return;
+    }
+
+    if (marqueeSelection) {
+      const point = clientToLogicalPoint(e.clientX, e.clientY);
+      if (point) {
+        setMarqueeSelection((prev) => (prev ? { ...prev, current: point } : prev));
+      }
+      return;
+    }
+
     if (!dragRef.current) {
       return;
     }
 
-    const canvasPoint = clientToCanvasPoint(e.clientX, e.clientY);
-    if (!canvasPoint) {
-      return;
-    }
-
-    const { nodeId, offsetX, offsetY } = dragRef.current;
-    const x = Math.max(0, canvasPoint.x - offsetX);
-    const y = Math.max(0, canvasPoint.y - offsetY);
-
-    setGraph((prev) => ({
-      ...prev,
-      nodes: prev.nodes.map((node) =>
-        node.id === nodeId ? { ...node, position: { x, y } } : node,
-      ),
-    }));
+    dragPointerRef.current = { clientX: e.clientX, clientY: e.clientY };
+    applyDragPosition(e.clientX, e.clientY);
   }
 
   function onCanvasMouseUp() {
     panRef.current = null;
+
+    if (edgeDragRef.current) {
+      if (edgeDragWindowMoveHandlerRef.current) {
+        window.removeEventListener("mousemove", edgeDragWindowMoveHandlerRef.current);
+        edgeDragWindowMoveHandlerRef.current = null;
+      }
+      if (edgeDragWindowUpHandlerRef.current) {
+        window.removeEventListener("mouseup", edgeDragWindowUpHandlerRef.current);
+        edgeDragWindowUpHandlerRef.current = null;
+      }
+
+      const edgeSnapshot = edgeDragStartSnapshotRef.current;
+      if (edgeSnapshot && !graphEquals(edgeSnapshot, graph)) {
+        setUndoStack((stack) => [...stack.slice(-79), cloneGraph(edgeSnapshot)]);
+        setRedoStack([]);
+      }
+      edgeDragRef.current = null;
+      edgeDragStartSnapshotRef.current = null;
+    }
+
+    if (isConnectingDrag) {
+      setIsConnectingDrag(false);
+      setConnectPreviewStartPoint(null);
+      setConnectPreviewPoint(null);
+      setConnectFromNodeId("");
+      setConnectFromSide(null);
+    }
+
+    if (marqueeSelection) {
+      const minX = Math.min(marqueeSelection.start.x, marqueeSelection.current.x);
+      const maxX = Math.max(marqueeSelection.start.x, marqueeSelection.current.x);
+      const minY = Math.min(marqueeSelection.start.y, marqueeSelection.current.y);
+      const maxY = Math.max(marqueeSelection.start.y, marqueeSelection.current.y);
+      const selectedByBox = graph.nodes
+        .filter((node) => {
+          const size = getNodeVisualSize(node.id);
+          const nodeLeft = node.position.x;
+          const nodeTop = node.position.y;
+          const nodeRight = node.position.x + size.width;
+          const nodeBottom = node.position.y + size.height;
+          return !(nodeRight < minX || nodeLeft > maxX || nodeBottom < minY || nodeTop > maxY);
+        })
+        .map((node) => node.id);
+      const nextSelected = marqueeSelection.append
+        ? Array.from(new Set([...selectedNodeIds, ...selectedByBox]))
+        : selectedByBox;
+      setNodeSelection(nextSelected, nextSelected[nextSelected.length - 1]);
+      setMarqueeSelection(null);
+      setSelectedEdgeKey("");
+    }
+
+    dragPointerRef.current = null;
+    if (dragAutoPanFrameRef.current != null) {
+      cancelAnimationFrame(dragAutoPanFrameRef.current);
+      dragAutoPanFrameRef.current = null;
+    }
+    if (dragWindowMoveHandlerRef.current) {
+      window.removeEventListener("mousemove", dragWindowMoveHandlerRef.current);
+      dragWindowMoveHandlerRef.current = null;
+    }
+    if (dragWindowUpHandlerRef.current) {
+      window.removeEventListener("mouseup", dragWindowUpHandlerRef.current);
+      dragWindowUpHandlerRef.current = null;
+    }
     const dragSnapshot = dragStartSnapshotRef.current;
     if (dragSnapshot && !graphEquals(dragSnapshot, graph)) {
       setUndoStack((stack) => [...stack.slice(-79), cloneGraph(dragSnapshot)]);
@@ -1599,15 +4482,43 @@ function App() {
   }
 
   function onCanvasMouseDown(e: ReactMouseEvent<HTMLDivElement>) {
+    const target = e.target as HTMLElement;
+    const clickedNodeOrPorts = target.closest(".graph-node, .node-anchors, .node-ports");
+    const clickedEdge = target.closest(".edge-path, .edge-path-hit");
+    const clickedOverlay = target.closest(".canvas-overlay");
+    const clickedControl = target.closest(".canvas-zoom-controls, .canvas-runbar");
+
+    if (!clickedNodeOrPorts && !clickedEdge && !clickedOverlay) {
+      if (!e.shiftKey) {
+        setNodeSelection([]);
+      }
+      setSelectedEdgeKey("");
+    }
+
     if (!panMode) {
+      if (e.button !== 0 || clickedControl || clickedOverlay || clickedNodeOrPorts || clickedEdge) {
+        return;
+      }
+      const point = clientToLogicalPoint(e.clientX, e.clientY);
+      if (!point) {
+        return;
+      }
+      e.preventDefault();
+      setMarqueeSelection({
+        start: point,
+        current: point,
+        append: e.shiftKey,
+      });
       return;
     }
     const canvas = graphCanvasRef.current;
     if (!canvas) {
       return;
     }
-    const target = e.target as HTMLElement;
-    if (target.closest(".canvas-zoom-controls, .canvas-runbar")) {
+    if (clickedControl) {
+      return;
+    }
+    if (clickedEdge) {
       return;
     }
     e.preventDefault();
@@ -1630,7 +4541,7 @@ function App() {
       return;
     }
     zoomAtClientPoint(nextZoom, e.clientX, e.clientY);
-    setStatus(`그래프 배율 ${Math.round(nextZoom * 100)}%`);
+    scheduleZoomStatus(nextZoom);
   }
 
   function zoomAtCanvasCenter(nextZoom: number) {
@@ -1649,7 +4560,7 @@ function App() {
       return;
     }
     zoomAtCanvasCenter(nextZoom);
-    setStatus(`그래프 배율 ${Math.round(nextZoom * 100)}%`);
+    scheduleZoomStatus(nextZoom);
   }
 
   function onCanvasZoomOut() {
@@ -1658,7 +4569,7 @@ function App() {
       return;
     }
     zoomAtCanvasCenter(nextZoom);
-    setStatus(`그래프 배율 ${Math.round(nextZoom * 100)}%`);
+    scheduleZoomStatus(nextZoom);
   }
 
   function onCanvasKeyDown(e: ReactKeyboardEvent<HTMLDivElement>) {
@@ -1679,7 +4590,7 @@ function App() {
       e.preventDefault();
       const nextZoom = clampCanvasZoom(canvasZoom * 1.08);
       zoomAtClientPoint(nextZoom, centerX, centerY);
-      setStatus(`그래프 배율 ${Math.round(nextZoom * 100)}%`);
+      scheduleZoomStatus(nextZoom);
       return;
     }
 
@@ -1687,18 +4598,18 @@ function App() {
       e.preventDefault();
       const nextZoom = clampCanvasZoom(canvasZoom * 0.92);
       zoomAtClientPoint(nextZoom, centerX, centerY);
-      setStatus(`그래프 배율 ${Math.round(nextZoom * 100)}%`);
+      scheduleZoomStatus(nextZoom);
       return;
     }
 
     if (e.key === "0") {
       e.preventDefault();
       zoomAtClientPoint(1, centerX, centerY);
-      setStatus("그래프 배율 100%");
+      scheduleZoomStatus(1);
     }
   }
 
-  function updateSelectedNodeConfig(key: string, value: string) {
+  function updateSelectedNodeConfig(key: string, value: unknown) {
     if (!selectedNode) {
       return;
     }
@@ -1722,12 +4633,14 @@ function App() {
   async function saveGraph() {
     setError("");
     try {
+      const saveTarget = graphFileName.trim() || "sample.json";
       await invoke("graph_save", {
-        name: graphFileName,
+        name: saveTarget,
         graph,
       });
       await refreshGraphFiles();
-      setStatus(`그래프 저장 완료 (${graphFileName})`);
+      setGraphFileName(saveTarget);
+      setStatus(`그래프 저장 완료 (${saveTarget})`);
     } catch (e) {
       setError(String(e));
     }
@@ -1746,8 +4659,14 @@ function App() {
       setGraph(cloneGraph(normalized));
       setUndoStack([]);
       setRedoStack([]);
-      setSelectedNodeId(normalized.nodes[0]?.id ?? "");
+      setNodeSelection(normalized.nodes.map((node) => node.id).slice(0, 1), normalized.nodes[0]?.id);
+      setSelectedEdgeKey("");
       setNodeStates({});
+      setConnectFromNodeId("");
+      setConnectFromSide(null);
+      setConnectPreviewStartPoint(null);
+      setConnectPreviewPoint(null);
+      setIsConnectingDrag(false);
       setStatus(`그래프 불러오기 완료 (${target})`);
       setGraphFileName(target);
     } catch (e) {
@@ -1756,14 +4675,36 @@ function App() {
   }
 
   useEffect(() => {
-    if (!selectedNodeId) {
+    const nodeIdSet = new Set(graph.nodes.map((node) => node.id));
+    const filteredSelected = selectedNodeIds.filter((id) => nodeIdSet.has(id));
+    if (filteredSelected.length !== selectedNodeIds.length) {
+      setSelectedNodeIds(filteredSelected);
+    }
+
+    if (selectedNodeId && !nodeIdSet.has(selectedNodeId)) {
+      setSelectedNodeId(filteredSelected[0] ?? "");
       return;
     }
-    const exists = graph.nodes.some((node) => node.id === selectedNodeId);
-    if (!exists) {
-      setSelectedNodeId("");
+
+    if (!selectedNodeId && filteredSelected.length > 0) {
+      setSelectedNodeId(filteredSelected[0]);
+      return;
     }
-  }, [graph.nodes, selectedNodeId]);
+
+    if (selectedNodeId && !filteredSelected.includes(selectedNodeId)) {
+      setSelectedNodeIds((prev) => [...prev, selectedNodeId]);
+    }
+  }, [graph.nodes, selectedNodeIds, selectedNodeId]);
+
+  useEffect(() => {
+    if (!selectedEdgeKey) {
+      return;
+    }
+    const exists = graph.edges.some((edge) => getGraphEdgeKey(edge) === selectedEdgeKey);
+    if (!exists) {
+      setSelectedEdgeKey("");
+    }
+  }, [graph.edges, selectedEdgeKey]);
 
   useEffect(() => {
     if (workspaceTab !== "workflow" && canvasFullscreen) {
@@ -1784,6 +4725,285 @@ function App() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [canvasFullscreen]);
 
+  useEffect(() => {
+    if (workspaceTab !== "workflow") {
+      return;
+    }
+    const onWindowKeyDown = (event: KeyboardEvent) => {
+      if (event.repeat || event.metaKey || event.ctrlKey || event.altKey) {
+        return;
+      }
+      if (event.key.toLowerCase() !== "h") {
+        return;
+      }
+      if (isEditableTarget(event.target)) {
+        return;
+      }
+      event.preventDefault();
+      setPanMode((prev) => {
+        const next = !prev;
+        setStatus(next ? "캔버스 이동 모드 켜짐 (H)" : "캔버스 이동 모드 꺼짐 (H)");
+        return next;
+      });
+    };
+    window.addEventListener("keydown", onWindowKeyDown);
+    return () => window.removeEventListener("keydown", onWindowKeyDown);
+  }, [workspaceTab]);
+
+  useEffect(() => {
+    if (workspaceTab !== "workflow") {
+      return;
+    }
+
+    const onShiftAlign = (event: KeyboardEvent) => {
+      if (event.repeat || event.metaKey || event.ctrlKey || event.altKey) {
+        return;
+      }
+      if (event.key !== "Shift") {
+        return;
+      }
+      if (isEditableTarget(event.target)) {
+        return;
+      }
+      if (!selectedNodeId) {
+        return;
+      }
+      const current = graph.nodes.find((node) => node.id === selectedNodeId);
+      if (!current) {
+        return;
+      }
+      const others = graph.nodes.filter((node) => node.id !== selectedNodeId);
+      if (others.length === 0) {
+        return;
+      }
+
+      let nearest: GraphNode | null = null;
+      let nearestDistance = Number.POSITIVE_INFINITY;
+      for (const candidate of others) {
+        const dx = candidate.position.x - current.position.x;
+        const dy = candidate.position.y - current.position.y;
+        const distance = Math.hypot(dx, dy);
+        if (distance < nearestDistance) {
+          nearestDistance = distance;
+          nearest = candidate;
+        }
+      }
+
+      if (!nearest) {
+        return;
+      }
+
+      event.preventDefault();
+      const alignByX =
+        Math.abs(nearest.position.x - current.position.x) <= Math.abs(nearest.position.y - current.position.y);
+      applyGraphChange((prev) => ({
+        ...prev,
+        nodes: prev.nodes.map((node) => {
+          if (node.id !== selectedNodeId) {
+            return node;
+          }
+          return {
+            ...node,
+            position: {
+              x: alignByX ? nearest.position.x : node.position.x,
+              y: alignByX ? node.position.y : nearest.position.y,
+            },
+          };
+        }),
+      }));
+      setStatus(alignByX ? "노드 X축 자동 정렬됨 (Shift)" : "노드 Y축 자동 정렬됨 (Shift)");
+    };
+
+    window.addEventListener("keydown", onShiftAlign);
+    return () => window.removeEventListener("keydown", onShiftAlign);
+  }, [workspaceTab, selectedNodeId, graph.nodes]);
+
+  useEffect(() => {
+    if (workspaceTab !== "workflow") {
+      return;
+    }
+    const onSelectAll = (event: KeyboardEvent) => {
+      if (!(event.metaKey || event.ctrlKey) || event.altKey) {
+        return;
+      }
+      if (event.key.toLowerCase() !== "a") {
+        return;
+      }
+      if (isEditableTarget(event.target)) {
+        return;
+      }
+      event.preventDefault();
+      const allNodeIds = graph.nodes.map((node) => node.id);
+      setNodeSelection(allNodeIds, allNodeIds[0]);
+      setSelectedEdgeKey("");
+      setStatus(allNodeIds.length > 0 ? `노드 ${allNodeIds.length}개 선택됨` : "선택할 노드가 없습니다");
+    };
+    window.addEventListener("keydown", onSelectAll);
+    return () => window.removeEventListener("keydown", onSelectAll);
+  }, [workspaceTab, graph.nodes]);
+
+  useEffect(() => {
+    if (workspaceTab !== "workflow") {
+      return;
+    }
+
+    const onDeleteSelection = (event: KeyboardEvent) => {
+      if (event.repeat || event.metaKey || event.ctrlKey || event.altKey) {
+        return;
+      }
+      if (isEditableTarget(event.target)) {
+        return;
+      }
+      if (event.key !== "Backspace" && event.key !== "Delete") {
+        return;
+      }
+
+      if (selectedEdgeKey) {
+        const hasEdge = graph.edges.some((edge) => getGraphEdgeKey(edge) === selectedEdgeKey);
+        if (!hasEdge) {
+          setSelectedEdgeKey("");
+          return;
+        }
+        event.preventDefault();
+        applyGraphChange((prev) => ({
+          ...prev,
+          edges: prev.edges.filter((edge) => getGraphEdgeKey(edge) !== selectedEdgeKey),
+        }));
+        setSelectedEdgeKey("");
+        setStatus("연결선 삭제됨");
+        return;
+      }
+
+      if (selectedNodeIds.length > 0) {
+        const targets = selectedNodeIds.filter((id) => graph.nodes.some((node) => node.id === id));
+        if (targets.length === 0) {
+          setNodeSelection([]);
+          return;
+        }
+        event.preventDefault();
+        deleteNodes(targets);
+        setStatus(targets.length > 1 ? "선택 노드 삭제됨" : "노드 삭제됨");
+      }
+    };
+
+    window.addEventListener("keydown", onDeleteSelection);
+    return () => window.removeEventListener("keydown", onDeleteSelection);
+  }, [workspaceTab, selectedEdgeKey, selectedNodeIds, graph.edges, graph.nodes]);
+
+  useEffect(() => {
+    syncQuestionInputHeight();
+  }, [workflowQuestion]);
+
+  useEffect(() => {
+    syncCanvasLogicalViewport();
+    const canvas = graphCanvasRef.current;
+    if (!canvas) {
+      return;
+    }
+    const onScrollOrResize = () => syncCanvasLogicalViewport();
+    canvas.addEventListener("scroll", onScrollOrResize, { passive: true });
+    window.addEventListener("resize", onScrollOrResize);
+    return () => {
+      canvas.removeEventListener("scroll", onScrollOrResize);
+      window.removeEventListener("resize", onScrollOrResize);
+    };
+  }, [canvasZoom, canvasFullscreen, workspaceTab]);
+
+  useEffect(() => {
+    syncCanvasLogicalViewport();
+  }, [graph.nodes, canvasZoom]);
+
+  useEffect(() => {
+    if (workspaceTab !== "workflow") {
+      return;
+    }
+    const canvas = graphCanvasRef.current;
+    if (!canvas) {
+      return;
+    }
+
+    const elements = Array.from(canvas.querySelectorAll<HTMLDivElement>(".graph-node[data-node-id]"));
+    const seen = new Set<string>();
+    let changed = false;
+
+    for (const element of elements) {
+      const nodeId = element.dataset.nodeId;
+      if (!nodeId) {
+        continue;
+      }
+      seen.add(nodeId);
+      const nextSize: NodeVisualSize = { width: element.offsetWidth, height: element.offsetHeight };
+      const prevSize = nodeSizeMapRef.current[nodeId];
+      if (!prevSize || prevSize.width !== nextSize.width || prevSize.height !== nextSize.height) {
+        nodeSizeMapRef.current[nodeId] = nextSize;
+        changed = true;
+      }
+    }
+
+    for (const knownId of Object.keys(nodeSizeMapRef.current)) {
+      if (!seen.has(knownId)) {
+        delete nodeSizeMapRef.current[knownId];
+        changed = true;
+      }
+    }
+
+    if (changed) {
+      setNodeSizeVersion((version) => version + 1);
+    }
+  });
+
+  useEffect(() => {
+    return () => {
+      if (dragAutoPanFrameRef.current != null) {
+        cancelAnimationFrame(dragAutoPanFrameRef.current);
+      }
+      if (dragWindowMoveHandlerRef.current) {
+        window.removeEventListener("mousemove", dragWindowMoveHandlerRef.current);
+      }
+      if (dragWindowUpHandlerRef.current) {
+        window.removeEventListener("mouseup", dragWindowUpHandlerRef.current);
+      }
+      if (edgeDragWindowMoveHandlerRef.current) {
+        window.removeEventListener("mousemove", edgeDragWindowMoveHandlerRef.current);
+      }
+      if (edgeDragWindowUpHandlerRef.current) {
+        window.removeEventListener("mouseup", edgeDragWindowUpHandlerRef.current);
+      }
+      if (zoomStatusTimerRef.current != null) {
+        window.clearTimeout(zoomStatusTimerRef.current);
+      }
+      if (webTurnResolverRef.current) {
+        webTurnResolverRef.current({ ok: false, error: "화면이 닫혀 실행이 취소되었습니다." });
+        webTurnResolverRef.current = null;
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isConnectingDrag || !connectFromNodeId) {
+      return;
+    }
+    const onWindowMove = (event: MouseEvent) => {
+      const point = clientToLogicalPoint(event.clientX, event.clientY);
+      if (point) {
+        setConnectPreviewPoint(point);
+      }
+    };
+    const onWindowUp = () => {
+      setIsConnectingDrag(false);
+      setConnectPreviewStartPoint(null);
+      setConnectPreviewPoint(null);
+      setConnectFromNodeId("");
+      setConnectFromSide(null);
+    };
+    window.addEventListener("mousemove", onWindowMove);
+    window.addEventListener("mouseup", onWindowUp);
+    return () => {
+      window.removeEventListener("mousemove", onWindowMove);
+      window.removeEventListener("mouseup", onWindowUp);
+    };
+  }, [isConnectingDrag, connectFromNodeId, canvasZoom]);
+
   async function saveRunRecord(runRecord: RunRecord) {
     const fileName = `run-${runRecord.runId}.json`;
     try {
@@ -1795,6 +5015,82 @@ function App() {
       await refreshRunFiles();
     } catch (e) {
       setError(String(e));
+    }
+  }
+
+  function questionSignature(question?: string): string {
+    return (question ?? "").trim().replace(/\s+/g, " ").toLowerCase();
+  }
+
+  function graphSignature(graphData: GraphData): string {
+    const nodeSig = graphData.nodes
+      .map((node) => `${node.id}:${node.type}`)
+      .sort()
+      .join("|");
+    const edgeSig = graphData.edges
+      .map((edge) => `${edge.from.nodeId}->${edge.to.nodeId}`)
+      .sort()
+      .join("|");
+    return `${nodeSig}::${edgeSig}`;
+  }
+
+  async function buildRegressionSummary(currentRun: RunRecord): Promise<RegressionSummary> {
+    if (!currentRun.qualitySummary) {
+      return { status: "unknown", note: "비교할 품질 요약이 없습니다." };
+    }
+
+    try {
+      const files = await invoke<string[]>("run_list");
+      const currentFile = `run-${currentRun.runId}.json`;
+      const targetSignature = graphSignature(currentRun.graphSnapshot);
+      const targetQuestion = questionSignature(currentRun.question);
+      const sortedCandidates = files
+        .filter((file) => file !== currentFile)
+        .sort((a, b) => b.localeCompare(a))
+        .slice(0, 30);
+
+      for (const file of sortedCandidates) {
+        const previous = await invoke<RunRecord>("run_load", { name: file });
+        if (!previous.qualitySummary) {
+          continue;
+        }
+        if (graphSignature(previous.graphSnapshot) !== targetSignature) {
+          continue;
+        }
+        if (questionSignature(previous.question) !== targetQuestion) {
+          continue;
+        }
+
+        const avgScoreDelta =
+          Math.round((currentRun.qualitySummary.avgScore - previous.qualitySummary.avgScore) * 100) /
+          100;
+        const passRateDelta =
+          Math.round((currentRun.qualitySummary.passRate - previous.qualitySummary.passRate) * 100) /
+          100;
+
+        let status: RegressionSummary["status"] = "stable";
+        if (avgScoreDelta >= 3 || passRateDelta >= 8) {
+          status = "improved";
+        } else if (avgScoreDelta <= -5 || passRateDelta <= -12) {
+          status = "degraded";
+        }
+
+        return {
+          baselineRunId: previous.runId,
+          avgScoreDelta,
+          passRateDelta,
+          status,
+          note:
+            status === "improved"
+              ? "이전 실행 대비 품질이 개선되었습니다."
+              : status === "degraded"
+                ? "이전 실행 대비 품질이 악화되었습니다."
+                : "이전 실행과 유사한 품질입니다.",
+        };
+      }
+      return { status: "unknown", note: "비교 가능한 이전 실행이 없습니다." };
+    } catch (error) {
+      return { status: "unknown", note: `회귀 비교 실패: ${String(error)}` };
     }
   }
 
@@ -1902,8 +5198,11 @@ function App() {
       }
     }
 
-    const decisionPath = String(config.decisionPath ?? "decision");
-    const decisionRaw = getByPath(input, decisionPath);
+    const decisionPath = String(config.decisionPath ?? "DECISION");
+    const decisionRaw =
+      getByPath(input, decisionPath) ??
+      (decisionPath === "DECISION" ? getByPath(input, "decision") : undefined) ??
+      (decisionPath === "decision" ? getByPath(input, "DECISION") : undefined);
     const decision = String(decisionRaw ?? "").toUpperCase();
 
     if (decision !== "PASS" && decision !== "REJECT") {
@@ -1944,6 +5243,130 @@ function App() {
     };
   }
 
+  function normalizeWebTurnOutput(
+    provider: WebProvider,
+    mode: WebResultMode,
+    rawInput: string,
+  ): { ok: boolean; output?: unknown; error?: string } {
+    const trimmed = rawInput.trim();
+    if (!trimmed) {
+      return { ok: false, error: "웹 응답 입력이 비어 있습니다." };
+    }
+
+    if (mode === "manualPasteJson") {
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(trimmed);
+      } catch (error) {
+        return { ok: false, error: `JSON 파싱 실패: ${String(error)}` };
+      }
+      return {
+        ok: true,
+        output: {
+          provider,
+          timestamp: new Date().toISOString(),
+          data: parsed,
+          text: extractFinalAnswer(parsed),
+        },
+      };
+    }
+
+    return {
+      ok: true,
+      output: {
+        provider,
+        timestamp: new Date().toISOString(),
+        text: trimmed,
+      },
+    };
+  }
+
+  function resolvePendingWebTurn(result: { ok: boolean; output?: unknown; error?: string }) {
+    const resolver = webTurnResolverRef.current;
+    webTurnResolverRef.current = null;
+    setPendingWebTurn(null);
+    setWebResponseDraft("");
+    if (resolver) {
+      resolver(result);
+    }
+  }
+
+  async function requestWebTurnResponse(
+    nodeId: string,
+    provider: WebProvider,
+    prompt: string,
+    mode: WebResultMode,
+  ): Promise<{ ok: boolean; output?: unknown; error?: string }> {
+    setWebResponseDraft("");
+    setPendingWebTurn({
+      nodeId,
+      provider,
+      prompt,
+      mode,
+    });
+    return new Promise((resolve) => {
+      webTurnResolverRef.current = resolve;
+    });
+  }
+
+  async function injectKnowledgeContext(
+    node: GraphNode,
+    prompt: string,
+    config: TurnConfig,
+  ): Promise<{ prompt: string; trace: KnowledgeTraceEntry[] }> {
+    const knowledgeEnabled = config.knowledgeEnabled !== false;
+    if (!knowledgeEnabled) {
+      return { prompt, trace: [] };
+    }
+
+    if (enabledKnowledgeFiles.length === 0) {
+      return { prompt, trace: [] };
+    }
+
+    try {
+      const result = await invoke<KnowledgeRetrieveResult>("knowledge_retrieve", {
+        files: enabledKnowledgeFiles,
+        query: prompt,
+        topK: graphKnowledge.topK,
+        maxChars: graphKnowledge.maxChars,
+      });
+
+      for (const warning of result.warnings) {
+        addNodeLog(node.id, `[첨부] ${warning}`);
+      }
+
+      if (result.snippets.length === 0) {
+        addNodeLog(node.id, "[첨부] 관련 문단을 찾지 못해 기본 프롬프트로 실행합니다.");
+        return { prompt, trace: [] };
+      }
+
+      const contextLines = result.snippets.map(
+        (snippet) => `- [source: ${snippet.fileName}#${snippet.chunkIndex}] ${snippet.text}`,
+      );
+      const mergedPrompt = `[첨부 참고자료]
+${contextLines.join("\n")}
+[/첨부 참고자료]
+
+[요청]
+${prompt}`;
+
+      addNodeLog(node.id, `[첨부] ${result.snippets.length}개 문단 반영`);
+
+      const trace = result.snippets.map((snippet) => ({
+        nodeId: node.id,
+        fileId: snippet.fileId,
+        fileName: snippet.fileName,
+        chunkIndex: snippet.chunkIndex,
+        score: snippet.score,
+      }));
+
+      return { prompt: mergedPrompt, trace };
+    } catch (error) {
+      addNodeLog(node.id, `[첨부] 검색 실패: ${String(error)}`);
+      return { prompt, trace: [] };
+    }
+  }
+
   async function executeTurnNode(
     node: GraphNode,
     input: unknown,
@@ -1954,28 +5377,189 @@ function App() {
     threadId?: string;
     turnId?: string;
     usage?: UsageStats;
+    executor: TurnExecutor;
+    provider: string;
+    knowledgeTrace?: KnowledgeTraceEntry[];
   }> {
     const config = node.config as TurnConfig;
-    const nodeModel = String(config.model ?? model).trim() || model;
+    const executor = getTurnExecutor(config);
+    const nodeModel = toTurnModelDisplayName(String(config.model ?? model).trim() || model);
+    const nodeModelEngine = toTurnModelEngineId(nodeModel);
     const nodeCwd = String(config.cwd ?? cwd).trim() || cwd;
     const promptTemplate = String(config.promptTemplate ?? "{{input}}");
+    const nodeOllamaModel = String(config.ollamaModel ?? "llama3.1:8b").trim() || "llama3.1:8b";
 
     const inputText = stringifyInput(input);
-    const textToSend = promptTemplate.includes("{{input}}")
+    const basePrompt = promptTemplate.includes("{{input}}")
       ? replaceInputPlaceholder(promptTemplate, inputText)
       : `${promptTemplate}${inputText ? `\n${inputText}` : ""}`;
+    const withKnowledge = await injectKnowledgeContext(node, basePrompt, config);
+    const textToSend = withKnowledge.prompt;
+    const knowledgeTrace = withKnowledge.trace;
+
+    if (executor === "ollama") {
+      try {
+        const raw = await invoke<unknown>("ollama_generate", {
+          model: nodeOllamaModel,
+          prompt: textToSend,
+        });
+        const text =
+          extractStringByPaths(raw, ["response", "message.content", "content"]) ??
+          stringifyInput(raw);
+        return {
+          ok: true,
+          output: {
+            provider: "ollama",
+            timestamp: new Date().toISOString(),
+            text,
+            raw,
+          },
+          executor,
+          provider: "ollama",
+          knowledgeTrace,
+        };
+      } catch (error) {
+        return {
+          ok: false,
+          error: `Ollama 실행 실패: ${String(error)}`,
+          executor,
+          provider: "ollama",
+          knowledgeTrace,
+        };
+      }
+    }
+
+    const webProvider = getWebProviderFromExecutor(executor);
+    if (webProvider) {
+      const webResultMode =
+        config.webResultMode ?? (webProvider === "gemini" ? "auto" : "manualPasteText");
+      const webTimeoutMs = Math.max(5_000, Number(config.webTimeoutMs ?? 90_000) || 90_000);
+
+      if (webProvider === "gemini" && webResultMode === "auto") {
+        activeWebNodeIdRef.current = node.id;
+        activeWebProviderRef.current = webProvider;
+        addNodeLog(node.id, "[WEB] GEMINI 자동화 시작");
+        const workerReady = await ensureWebWorkerReady();
+        if (!workerReady) {
+          addNodeLog(node.id, "[WEB] 자동화 워커 준비 실패. 수동 입력으로 전환");
+        } else {
+          const runAutomation = async () =>
+            invoke<WebProviderRunResult>("web_provider_run", {
+              provider: webProvider,
+              prompt: textToSend,
+              timeoutMs: webTimeoutMs,
+              mode: "auto",
+            });
+
+          let result: WebProviderRunResult | null = null;
+          try {
+            result = await runAutomation();
+            if (!result.ok && result.errorCode === "NOT_LOGGED_IN") {
+              addNodeLog(node.id, "[WEB] 로그인 필요 감지");
+              await onOpenProviderChildView(webProvider);
+              const shouldRetry = await requestWebLogin(
+                node.id,
+                webProvider,
+                result.error ?? "GEMINI 로그인 후 계속을 눌러주세요.",
+              );
+              if (cancelRequestedRef.current) {
+                return {
+                  ok: false,
+                  error: "사용자 취소",
+                  executor,
+                  provider: webProvider,
+                  knowledgeTrace,
+                };
+              }
+              if (shouldRetry) {
+                addNodeLog(node.id, "[WEB] 로그인 완료 확인, 자동화를 재시도합니다.");
+                result = await runAutomation();
+              }
+            }
+
+            if (result.ok && result.text) {
+              addNodeLog(node.id, "[WEB] GEMINI 응답 추출 완료");
+              return {
+                ok: true,
+                output: {
+                  provider: webProvider,
+                  timestamp: new Date().toISOString(),
+                  text: result.text,
+                  raw: result.raw,
+                  meta: result.meta,
+                },
+                executor,
+                provider: webProvider,
+                knowledgeTrace,
+              };
+            }
+
+            const fallbackReason = `[WEB] 자동화 실패 (${result?.errorCode ?? "UNKNOWN"}): ${
+              result?.error ?? "unknown error"
+            }`;
+            addNodeLog(node.id, fallbackReason);
+            if (result?.errorCode === "BROWSER_MISSING") {
+              addNodeLog(
+                node.id,
+                "[WEB] playwright/playwright-core 설치가 필요할 수 있습니다. 자동으로 수동 입력으로 전환합니다.",
+              );
+            }
+            setNodeStatus(node.id, "waiting_user", "자동화 실패, 수동 입력으로 전환");
+          } catch (error) {
+            addNodeLog(node.id, `[WEB] 자동화 예외: ${String(error)}`);
+            setNodeStatus(node.id, "waiting_user", "자동화 예외, 수동 입력으로 전환");
+          } finally {
+            activeWebNodeIdRef.current = "";
+            activeWebProviderRef.current = null;
+          }
+        }
+      }
+
+      try {
+        await invoke("provider_window_open", { provider: webProvider });
+      } catch (error) {
+        return {
+          ok: false,
+          error: `웹 서비스 창 열기 실패(${webProvider}): ${String(error)}`,
+          executor,
+          provider: webProvider,
+          knowledgeTrace,
+        };
+      }
+      setNodeStatus(node.id, "waiting_user", `${webProvider} 응답 입력 대기`);
+      setNodeRuntimeFields(node.id, {
+        status: "waiting_user",
+      });
+      return requestWebTurnResponse(
+        node.id,
+        webProvider,
+        textToSend,
+        webResultMode === "auto" ? "manualPasteText" : webResultMode,
+      ).then((result) => ({
+        ...result,
+        executor,
+        provider: webProvider,
+        knowledgeTrace,
+      }));
+    }
 
     let activeThreadId = extractStringByPaths(nodeStates[node.id], ["threadId"]);
     if (!activeThreadId) {
       const threadStart = await invoke<ThreadStartResult>("thread_start", {
-        model: nodeModel,
+        model: nodeModelEngine,
         cwd: nodeCwd,
       });
       activeThreadId = threadStart.threadId;
     }
 
     if (!activeThreadId) {
-      return { ok: false, error: "threadId를 가져오지 못했습니다." };
+      return {
+        ok: false,
+        error: "threadId를 가져오지 못했습니다.",
+        executor,
+        provider: "codex",
+        knowledgeTrace,
+      };
     }
 
     setNodeRuntimeFields(node.id, { threadId: activeThreadId });
@@ -2013,6 +5597,9 @@ function App() {
         ok: false,
         error: String(e),
         threadId: activeThreadId,
+        executor: "codex",
+        provider: "codex",
+        knowledgeTrace,
       };
     }
 
@@ -2035,6 +5622,9 @@ function App() {
         threadId: activeThreadId,
         turnId: turnId ?? undefined,
         usage,
+        executor: "codex",
+        provider: "codex",
+        knowledgeTrace,
       };
     }
 
@@ -2047,6 +5637,9 @@ function App() {
       threadId: activeThreadId,
       turnId: turnId ?? undefined,
       usage,
+      executor: "codex",
+      provider: "codex",
+      knowledgeTrace,
     };
   }
 
@@ -2083,10 +5676,21 @@ function App() {
       summaryLogs: [],
       nodeLogs: {},
       threadTurnMap: {},
+      providerTrace: [],
+      knowledgeTrace: [],
+      nodeMetrics: {},
     };
 
     try {
-      await ensureEngineStarted();
+      const requiresCodexEngine = graph.nodes.some((node) => {
+        if (node.type !== "turn") {
+          return false;
+        }
+        return getTurnExecutor(node.config as TurnConfig) === "codex";
+      });
+      if (requiresCodexEngine) {
+        await ensureEngineStarted();
+      }
 
       const nodeMap = new Map(graph.nodes.map((node) => [node.id, node]));
       const indegree = new Map<string, number>();
@@ -2154,6 +5758,9 @@ function App() {
 
           if (node.type === "turn") {
             const result = await executeTurnNode(node, input);
+            if (result.knowledgeTrace && result.knowledgeTrace.length > 0) {
+              runRecord.knowledgeTrace?.push(...result.knowledgeTrace);
+            }
             if (!result.ok) {
               const finishedAtIso = new Date().toISOString();
               setNodeStatus(nodeId, "failed", result.error ?? "턴 실행 실패");
@@ -2166,15 +5773,92 @@ function App() {
                 finishedAt: finishedAtIso,
                 durationMs: Date.now() - startedAtMs,
               });
+              runRecord.providerTrace?.push({
+                nodeId,
+                executor: result.executor,
+                provider: result.provider,
+                status: cancelRequestedRef.current ? "cancelled" : "failed",
+                startedAt: startedAtIso,
+                finishedAt: finishedAtIso,
+                summary: result.error ?? "턴 실행 실패",
+              });
               transition(runRecord, nodeId, "failed", result.error ?? "턴 실행 실패");
               break;
             }
 
+            const config = node.config as TurnConfig;
+            const artifactType = toArtifactType(config.artifactType);
+            const normalizedArtifact = normalizeArtifactOutput(nodeId, artifactType, result.output);
+            for (const warning of normalizedArtifact.warnings) {
+              addNodeLog(nodeId, `[아티팩트] ${warning}`);
+            }
+            const normalizedOutput = normalizedArtifact.output;
+            const qualityReport = await buildQualityReport({
+              node,
+              config,
+              output: normalizedOutput,
+              cwd: String(config.cwd ?? cwd).trim() || cwd,
+            });
+            const nodeMetric: NodeMetric = {
+              nodeId,
+              profile: qualityReport.profile,
+              score: qualityReport.score,
+              decision: qualityReport.decision,
+              threshold: qualityReport.threshold,
+              failedChecks: qualityReport.failures.length,
+              warningCount: qualityReport.warnings.length,
+            };
+            runRecord.nodeMetrics = {
+              ...(runRecord.nodeMetrics ?? {}),
+              [nodeId]: nodeMetric,
+            };
+            for (const warning of qualityReport.warnings) {
+              addNodeLog(nodeId, `[품질] ${warning}`);
+            }
+
+            if (qualityReport.decision !== "PASS") {
+              const finishedAtIso = new Date().toISOString();
+              setNodeStatus(nodeId, "failed", "품질 게이트 REJECT");
+              setNodeRuntimeFields(nodeId, {
+                status: "failed",
+                output: normalizedOutput,
+                qualityReport,
+                error: `품질 게이트 REJECT (점수 ${qualityReport.score}/${qualityReport.threshold})`,
+                threadId: result.threadId,
+                turnId: result.turnId,
+                usage: result.usage,
+                finishedAt: finishedAtIso,
+                durationMs: Date.now() - startedAtMs,
+              });
+              runRecord.threadTurnMap[nodeId] = {
+                threadId: result.threadId,
+                turnId: result.turnId,
+              };
+              runRecord.providerTrace?.push({
+                nodeId,
+                executor: result.executor,
+                provider: result.provider,
+                status: "failed",
+                startedAt: startedAtIso,
+                finishedAt: finishedAtIso,
+                summary: `품질 REJECT (${qualityReport.score}/${qualityReport.threshold})`,
+              });
+              transition(
+                runRecord,
+                nodeId,
+                "failed",
+                `품질 REJECT (${qualityReport.score}/${qualityReport.threshold})`,
+              );
+              break;
+            }
+
             const finishedAtIso = new Date().toISOString();
-            outputs[nodeId] = result.output;
+            outputs[nodeId] = normalizedOutput;
+            addNodeLog(nodeId, `[품질] PASS (${qualityReport.score}/${qualityReport.threshold})`);
             setNodeRuntimeFields(nodeId, {
               status: "done",
-              output: result.output,
+              output: normalizedOutput,
+              qualityReport,
               threadId: result.threadId,
               turnId: result.turnId,
               usage: result.usage,
@@ -2186,6 +5870,15 @@ function App() {
               threadId: result.threadId,
               turnId: result.turnId,
             };
+            runRecord.providerTrace?.push({
+              nodeId,
+              executor: result.executor,
+              provider: result.provider,
+              status: "done",
+              startedAt: startedAtIso,
+              finishedAt: finishedAtIso,
+              summary: "턴 실행 완료",
+            });
             transition(runRecord, nodeId, "done", "턴 실행 완료");
             lastDoneNodeId = nodeId;
           } else if (node.type === "transform") {
@@ -2274,20 +5967,32 @@ function App() {
       }
 
       runRecord.nodeLogs = runLogCollectorRef.current;
+      if (runRecord.nodeMetrics && Object.keys(runRecord.nodeMetrics).length > 0) {
+        runRecord.qualitySummary = summarizeQualityMetrics(runRecord.nodeMetrics);
+      }
       if (lastDoneNodeId && lastDoneNodeId in outputs) {
         runRecord.finalAnswer = extractFinalAnswer(outputs[lastDoneNodeId]);
       }
       runRecord.finishedAt = new Date().toISOString();
+      runRecord.regression = await buildRegressionSummary(runRecord);
       await saveRunRecord(runRecord);
       setSelectedRunDetail(runRecord);
       setSelectedRunFile(`run-${runRecord.runId}.json`);
       setStatus("그래프 실행 완료");
     } catch (e) {
+      markCodexNodesStatusOnEngineIssue("failed", `그래프 실행 실패: ${String(e)}`, true);
       setError(String(e));
       setStatus("그래프 실행 실패");
     } finally {
       turnTerminalResolverRef.current = null;
+      webTurnResolverRef.current = null;
+      webLoginResolverRef.current = null;
+      setPendingWebTurn(null);
+      setPendingWebLogin(null);
+      setWebResponseDraft("");
       activeTurnNodeIdRef.current = "";
+      activeWebNodeIdRef.current = "";
+      activeWebProviderRef.current = null;
       setIsGraphRunning(false);
       cancelRequestedRef.current = false;
       collectingRunRef.current = false;
@@ -2297,6 +6002,27 @@ function App() {
   async function onCancelGraphRun() {
     cancelRequestedRef.current = true;
     setStatus("취소 요청됨");
+
+    if (pendingWebLogin) {
+      resolvePendingWebLogin(false);
+      return;
+    }
+
+    const activeWebNodeId = activeWebNodeIdRef.current;
+    const activeWebProvider = activeWebProviderRef.current;
+    if (activeWebNodeId && activeWebProvider) {
+      try {
+        await invoke("web_provider_cancel", { provider: activeWebProvider });
+        addNodeLog(activeWebNodeId, "[WEB] 취소 요청 전송");
+      } catch (e) {
+        setError(String(e));
+      }
+    }
+
+    if (pendingWebTurn) {
+      resolvePendingWebTurn({ ok: false, error: "사용자 취소" });
+      return;
+    }
 
     const activeNodeId = activeTurnNodeIdRef.current;
     if (!activeNodeId) {
@@ -2316,100 +6042,61 @@ function App() {
     }
   }
 
-  async function onRunTurnDev(e: FormEvent) {
-    e.preventDefault();
-    setError("");
-    setRunning(true);
-
-    try {
-      await ensureEngineStarted();
-
-      let activeThreadId = threadId.trim();
-      if (!activeThreadId) {
-        const result = await invoke<ThreadStartResult>("thread_start", {
-          model,
-          cwd,
-        });
-        activeThreadId = result.threadId;
-        setThreadId(activeThreadId);
-      }
-
-      setStreamText((prev) => (prev ? `${prev}\n\n` : prev));
-      await invoke("turn_start", {
-        threadId: activeThreadId,
-        text,
-      });
-      setStatus(`개발 테스트 실행 시작 (스레드: ${activeThreadId})`);
-    } catch (err) {
-      setError(String(err));
-    } finally {
-      setRunning(false);
-    }
-  }
-
-  async function onInterruptDev() {
-    if (!threadId.trim()) {
-      return;
-    }
-    setError("");
-    try {
-      await invoke("turn_interrupt", { threadId });
-      setStatus("중단 요청됨");
-    } catch (e) {
-      setError(String(e));
-    }
-  }
-
   function renderSettingsPanel(compact = false) {
     return (
       <section className={`controls ${compact ? "settings-compact" : ""}`}>
         <h2>엔진 및 계정</h2>
-        <div className="settings-badges">
-          <span className={`status-tag ${engineStarted ? "on" : "off"}`}>
-            {engineStarted ? "엔진 연결됨" : "엔진 대기"}
-          </span>
-          <span className={`status-tag ${loginCompleted ? "on" : "off"}`}>
-            {loginCompleted ? "로그인 완료" : "로그인 필요"}
-          </span>
-          <span className="status-tag neutral">인증: {authModeLabel(authMode)}</span>
-        </div>
+        {!compact && (
+          <div className="settings-badges">
+            <span className={`status-tag ${engineStarted ? "on" : "off"}`}>
+              {engineStarted ? "엔진 연결됨" : "엔진 대기"}
+            </span>
+            <span className={`status-tag ${loginCompleted ? "on" : "off"}`}>
+              {loginCompleted ? "로그인 완료" : "로그인 필요"}
+            </span>
+            <span className="status-tag neutral">인증: {authModeLabel(authMode)}</span>
+          </div>
+        )}
         <label>
           작업 경로(CWD)
-          <input value={cwd} onChange={(e) => setCwd(e.currentTarget.value)} />
+          <div className="settings-cwd-row">
+            <input readOnly value={cwd} />
+            <button className="settings-cwd-picker" onClick={onSelectCwdDirectory} type="button">
+              폴더 선택
+            </button>
+          </div>
         </label>
         <label>
           기본 모델
-          <select className="modern-select" value={model} onChange={(e) => setModel(e.currentTarget.value)}>
-            {TURN_MODEL_OPTIONS.map((option) => (
-              <option key={option} value={option}>
-                {option}
-              </option>
-            ))}
-          </select>
+          <FancySelect
+            ariaLabel="기본 모델"
+            className="modern-select"
+            onChange={setModel}
+            options={TURN_MODEL_OPTIONS.map((option) => ({ value: option, label: option }))}
+            value={model}
+          />
         </label>
-        <div className="button-row">
-          <button onClick={onStartEngine} disabled={running || isGraphRunning} type="button">
-            엔진 시작
-          </button>
-          <button onClick={onStopEngine} type="button">
-            엔진 중지
-          </button>
-          <button onClick={onLoginChatgpt} disabled={running || isGraphRunning} type="button">
-            ChatGPT 로그인
-          </button>
-          <button onClick={onCheckUsage} disabled={running || isGraphRunning} type="button">
-            사용량 확인
-          </button>
-        </div>
-        {authUrl && (
-          <div className="auth-url-box">
-            <span>인증 URL</span>
-            <code>{authUrl}</code>
-            <button onClick={onCopyAuthUrl} type="button">
-              복사
+        {!compact && (
+          <div className="button-row">
+            <button
+              className="settings-engine-button"
+              onClick={engineStarted ? onStopEngine : onStartEngine}
+              disabled={running || isGraphRunning}
+              type="button"
+            >
+              <span className="settings-button-label">{engineStarted ? "엔진 중지" : "엔진 시작"}</span>
+            </button>
+            <button
+              className="settings-usage-button"
+              onClick={onCheckUsage}
+              disabled={running || isGraphRunning}
+              type="button"
+            >
+              <span className="settings-button-label">사용량 확인</span>
             </button>
           </div>
         )}
+        <div className="usage-method">최근 상태: {status}</div>
         {usageSourceMethod && (
           <div className="usage-method">
             사용량 조회 메서드: <code>{usageSourceMethod}</code>
@@ -2425,6 +6112,84 @@ function App() {
     );
   }
 
+  function renderWebAutomationPanel() {
+    const providerHealthMap = toWebProviderHealthMap(webWorkerHealth.providers);
+    const activeProviderRaw =
+      typeof webWorkerHealth.activeProvider === "string" ? webWorkerHealth.activeProvider.trim() : "";
+    const activeProviderLabel = activeProviderRaw
+      ? WEB_PROVIDER_OPTIONS.includes(activeProviderRaw as WebProvider)
+        ? webProviderLabel(activeProviderRaw as WebProvider)
+        : activeProviderRaw.toUpperCase()
+      : "없음";
+    return (
+      <section className="controls web-automation-panel">
+        <div className="web-automation-head">
+          <h2>웹 계정 연동</h2>
+          <button
+            aria-label="상태 동기화"
+            className="settings-refresh-button settings-refresh-icon-button"
+            disabled={webWorkerBusy}
+            onClick={() => refreshWebWorkerHealth()}
+            title="상태 동기화"
+            type="button"
+          >
+            <img alt="" aria-hidden="true" className="settings-refresh-icon" src="/reload.svg" />
+          </button>
+        </div>
+        <div className="settings-badges">
+          <span className="status-tag neutral">활성 Provider: {activeProviderLabel}</span>
+          <span className="status-tag neutral">
+            상태 동기화: {webWorkerHealth.running ? "준비됨" : "초기화 필요"}
+          </span>
+        </div>
+        <div className="usage-method">
+          각 서비스의 로그인 상태를 확인하고, 필요한 서비스만 로그인하세요.
+        </div>
+        <section className="provider-hub">
+          <h3>서비스 로그인 상태</h3>
+          <div className="provider-hub-list">
+            {WEB_PROVIDER_OPTIONS.map((provider) => {
+              const row = providerHealthMap[provider];
+              const hasContext = row?.contextOpen === true;
+              const session = providerSessionStateMeta(row?.sessionState, hasContext);
+              return (
+                <div className="provider-hub-row" key={`session-${provider}`}>
+                  <div className="provider-hub-meta">
+                    <span className="provider-hub-name">{webProviderLabel(provider)}</span>
+                    <span className={`provider-session-pill ${session.tone}`}>
+                      <span className="provider-session-label">{session.label}</span>
+                    </span>
+                  </div>
+                  <div className="button-row provider-session-actions">
+                    <button
+                      className="provider-session-toggle"
+                      disabled={webWorkerBusy}
+                      onClick={() => onOpenProviderSession(provider)}
+                      type="button"
+                    >
+                      <span className="settings-button-label">로그인</span>
+                    </button>
+                    <button
+                      className={`provider-session-toggle provider-session-manage ${hasContext ? "is-active" : ""}`}
+                      disabled={webWorkerBusy || !hasContext}
+                      onClick={() => onResetProviderSession(provider)}
+                      type="button"
+                    >
+                      <span className="settings-button-label">세션 관리</span>
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <div className="usage-method">
+            세션 데이터는 로컬 프로필에만 저장되며, 토큰/쿠키 값은 UI와 로그에 출력하지 않습니다.
+          </div>
+        </section>
+      </section>
+    );
+  }
+
   const edgeLines = graph.edges
     .map((edge, index) => {
       const fromNode = graph.nodes.find((node) => node.id === edge.from.nodeId);
@@ -2433,37 +6198,148 @@ function App() {
         return null;
       }
 
-      const x1 = fromNode.position.x + NODE_WIDTH;
-      const y1 = fromNode.position.y + NODE_HEIGHT / 2;
-      const x2 = toNode.position.x;
-      const y2 = toNode.position.y + NODE_HEIGHT / 2;
-      const direction = x2 >= x1 ? 1 : -1;
-      const horizontalGap = Math.max(64, Math.min(180, Math.abs(x2 - x1) * 0.5));
-      const bendX = x1 + horizontalGap * direction;
-      const arrowLeadX = x2 - 12 * direction;
-      const path = `M ${x1} ${y1} L ${bendX} ${y1} L ${bendX} ${y2} L ${arrowLeadX} ${y2} L ${x2} ${y2}`;
+      const auto = getAutoConnectionSides(fromNode, toNode);
+      const hasManualControl =
+        typeof edge.control?.x === "number" && typeof edge.control?.y === "number";
+      const resolvedFromSide = hasManualControl ? (edge.from.side ?? auto.fromSide) : auto.fromSide;
+      const resolvedToSide = hasManualControl ? (edge.to.side ?? auto.toSide) : auto.toSide;
+      const fromPoint = getNodeAnchorPoint(
+        fromNode,
+        resolvedFromSide,
+        getNodeVisualSize(fromNode.id),
+      );
+      const toPoint = getNodeAnchorPoint(
+        toNode,
+        resolvedToSide,
+        getNodeVisualSize(toNode.id),
+      );
+      const edgeKey = getGraphEdgeKey(edge);
+      const defaultControl = edgeMidPoint(fromPoint, toPoint);
+      const control = edge.control ?? defaultControl;
 
       return {
-        key: `${edge.from.nodeId}-${edge.to.nodeId}-${index}`,
-        path,
+        key: `${edgeKey}-${index}`,
+        edgeKey,
+        startPoint: fromPoint,
+        endPoint: toPoint,
+        controlPoint: control,
+        hasManualControl,
+        path: hasManualControl
+          ? buildManualEdgePath(fromPoint.x, fromPoint.y, control.x, control.y, toPoint.x, toPoint.y)
+          : buildRoundedEdgePath(
+              fromPoint.x,
+              fromPoint.y,
+              toPoint.x,
+              toPoint.y,
+              true,
+              resolvedFromSide,
+              resolvedToSide,
+            ),
       };
     })
-    .filter(Boolean) as Array<{ key: string; path: string }>;
+    .filter(Boolean) as Array<{
+      key: string;
+      edgeKey: string;
+      path: string;
+      startPoint: LogicalPoint;
+      endPoint: LogicalPoint;
+      controlPoint: LogicalPoint;
+      hasManualControl: boolean;
+    }>;
+  const connectPreviewLine = (() => {
+    if (!connectFromNodeId || !connectPreviewPoint) {
+      return null;
+    }
+    const startPoint = (() => {
+      if (connectPreviewStartPoint) {
+        return connectPreviewStartPoint;
+      }
+      const fromNode = graph.nodes.find((node) => node.id === connectFromNodeId);
+      if (!fromNode) {
+        return null;
+      }
+      return getNodeAnchorPoint(
+        fromNode,
+        connectFromSide ?? "right",
+        getNodeVisualSize(fromNode.id),
+      );
+    })();
+    if (!startPoint) {
+      return null;
+    }
+    const dx = connectPreviewPoint.x - startPoint.x;
+    const dy = connectPreviewPoint.y - startPoint.y;
+    const guessedToSide: NodeAnchorSide =
+      Math.abs(dx) >= Math.abs(dy)
+        ? dx >= 0
+          ? "left"
+          : "right"
+        : dy >= 0
+          ? "top"
+          : "bottom";
+    return buildRoundedEdgePath(
+      startPoint.x,
+      startPoint.y,
+      connectPreviewPoint.x,
+      connectPreviewPoint.y,
+      false,
+      connectFromSide ?? "right",
+      guessedToSide,
+    );
+  })();
 
   const selectedNodeState = selectedNodeId ? nodeStates[selectedNodeId] : undefined;
+  const selectedTurnConfig: TurnConfig | null =
+    selectedNode?.type === "turn" ? (selectedNode.config as TurnConfig) : null;
+  const selectedTurnExecutor: TurnExecutor =
+    selectedTurnConfig ? getTurnExecutor(selectedTurnConfig) : "codex";
+  const selectedQualityProfile: QualityProfileId =
+    selectedNode?.type === "turn" && selectedTurnConfig
+      ? inferQualityProfile(selectedNode, selectedTurnConfig)
+      : "generic";
+  const selectedArtifactType: ArtifactType = toArtifactType(selectedTurnConfig?.artifactType);
   const outgoingFromSelected = selectedNode
     ? graph.edges
         .filter((edge) => edge.from.nodeId === selectedNode.id)
         .map((edge) => edge.to.nodeId)
         .filter((value, index, arr) => arr.indexOf(value) === index)
     : [];
+  const outgoingNodeOptions = outgoingFromSelected.map((nodeId) => {
+    const target = graph.nodes.find((node) => node.id === nodeId);
+    return {
+      value: nodeId,
+      label: target ? nodeSelectionLabel(target) : "연결된 노드",
+    };
+  });
   const isActiveTab = (tab: WorkspaceTab): boolean => workspaceTab === tab;
-
+  const viewportWidth = Math.ceil(canvasLogicalViewport.width);
+  const viewportHeight = Math.ceil(canvasLogicalViewport.height);
+  const stagePadding = graph.nodes.length > 0 ? STAGE_GROW_MARGIN : 0;
+  const maxNodeRight = graph.nodes.reduce((max, node) => Math.max(max, node.position.x + NODE_WIDTH), 0);
+  const maxNodeBottom = graph.nodes.reduce((max, node) => Math.max(max, node.position.y + NODE_HEIGHT), 0);
+  const softMaxWidth = viewportWidth + STAGE_GROW_LIMIT;
+  const softMaxHeight = viewportHeight + STAGE_GROW_LIMIT;
+  const stageWidth = Math.max(
+    viewportWidth,
+    Math.min(softMaxWidth, Math.max(viewportWidth, maxNodeRight + stagePadding)),
+  );
+  const stageHeight = Math.max(
+    viewportHeight,
+    Math.min(softMaxHeight, Math.max(viewportHeight, maxNodeBottom + stagePadding)),
+  );
+  const boundedStageWidth = Math.min(stageWidth, MAX_STAGE_WIDTH);
+  const boundedStageHeight = Math.min(stageHeight, MAX_STAGE_HEIGHT);
   return (
     <main className={`app-shell ${canvasFullscreen ? "canvas-fullscreen-mode" : ""}`}>
       <aside className="left-nav">
-        <div className="brand-spacer" />
-        <nav className="nav-list">
+        <nav
+          className="nav-list"
+          style={{
+            // alignContent: "center",
+            height: "100%",
+            display: "grid",
+          }}
+        >
           <button
             className={isActiveTab("workflow") ? "is-active" : ""}
             onClick={() => setWorkspaceTab("workflow")}
@@ -2485,16 +6361,6 @@ function App() {
             <span className="nav-label">기록</span>
           </button>
           <button
-            className={isActiveTab("dev") ? "is-active" : ""}
-            onClick={() => setWorkspaceTab("dev")}
-            aria-label="개발"
-            title="개발"
-            type="button"
-          >
-            <span className="nav-icon"><NavIcon tab="dev" /></span>
-            <span className="nav-label">개발</span>
-          </button>
-          <button
             className={isActiveTab("settings") ? "is-active" : ""}
             onClick={() => setWorkspaceTab("settings")}
             aria-label="설정"
@@ -2510,35 +6376,254 @@ function App() {
       <section className={`workspace ${canvasFullscreen ? "canvas-fullscreen-active" : ""}`}>
         {!canvasFullscreen && <header className="workspace-header workspace-header-spacer" />}
 
-        {error && <div className="error">오류: {error}</div>}
+        {error && (
+          <div className="error">
+            <span>오류: {error}</span>
+            <button
+              aria-label="오류 닫기"
+              className="error-close"
+              onClick={() => setError("")}
+              type="button"
+            >
+              ×
+            </button>
+          </div>
+        )}
 
         {workspaceTab === "workflow" && (
-          <div
-            className={`workflow-layout ${isInspectorWide ? "inspector-wide" : ""} ${
-              canvasFullscreen ? "canvas-only-layout" : ""
-            }`}
-          >
+          <div className={`workflow-layout ${canvasFullscreen ? "canvas-only-layout" : ""}`}>
             <section className="canvas-pane">
-              <div
-                className={`graph-canvas ${panMode ? "pan-mode" : ""}`}
-                onKeyDown={onCanvasKeyDown}
-                onMouseDown={onCanvasMouseDown}
-                onMouseLeave={onCanvasMouseUp}
-                onMouseMove={onCanvasMouseMove}
-                onMouseUp={onCanvasMouseUp}
-                onWheel={onCanvasWheel}
-                ref={graphCanvasRef}
-                tabIndex={0}
-              >
+              <div className="graph-canvas-shell">
+                <div
+                  className={`graph-canvas ${panMode ? "pan-mode" : ""}`}
+                  onKeyDown={onCanvasKeyDown}
+                  onMouseDown={onCanvasMouseDown}
+                  onMouseMove={onCanvasMouseMove}
+                  onMouseUp={onCanvasMouseUp}
+                  onWheel={onCanvasWheel}
+                  ref={graphCanvasRef}
+                  tabIndex={-1}
+                >
+                <div
+                  className="graph-stage-shell"
+                  style={{
+                    width: Math.round(boundedStageWidth * canvasZoom + GRAPH_STAGE_INSET_X * 2),
+                    height: Math.round(boundedStageHeight * canvasZoom + GRAPH_STAGE_INSET_Y * 2),
+                  }}
+                >
+                  <div
+                    className="graph-stage"
+                    style={{
+                      left: GRAPH_STAGE_INSET_X,
+                      top: GRAPH_STAGE_INSET_Y,
+                      transform: `scale(${canvasZoom})`,
+                      width: boundedStageWidth,
+                      height: boundedStageHeight,
+                    }}
+                  >
+                    <svg className="edge-layer">
+                      <defs>
+                        <marker
+                          id="edge-arrow"
+                          markerHeight="7"
+                          markerUnits="userSpaceOnUse"
+                          markerWidth="7"
+                          orient="auto"
+                          refX="6"
+                          refY="3.5"
+                        >
+                          <path d="M0 0 L7 3.5 L0 7 Z" fill="#70848a" />
+                        </marker>
+                      </defs>
+                      {edgeLines.map((line) => (
+                        <g key={line.key}>
+                          <path
+                            className="edge-path-hit"
+                            d={line.path}
+                            fill="none"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setNodeSelection([]);
+                              setSelectedEdgeKey(line.edgeKey);
+                            }}
+                            onMouseDown={(e) => onEdgeDragStart(e, line.edgeKey, line.controlPoint)}
+                            pointerEvents="stroke"
+                            stroke="transparent"
+                            strokeWidth={(selectedEdgeKey === line.edgeKey ? 3 : 2) + 2}
+                          />
+                          <path
+                            className={selectedEdgeKey === line.edgeKey ? "edge-path selected" : "edge-path"}
+                            d={line.path}
+                            fill="none"
+                            markerEnd="url(#edge-arrow)"
+                            pointerEvents="none"
+                            stroke={selectedEdgeKey === line.edgeKey ? "#4f83ff" : "#70848a"}
+                            strokeLinejoin="round"
+                            strokeLinecap="round"
+                            strokeWidth={selectedEdgeKey === line.edgeKey ? 3 : 2}
+                          />
+                          {selectedEdgeKey === line.edgeKey && (
+                            <circle
+                              className="edge-control-point"
+                              cx={line.controlPoint.x}
+                              cy={line.controlPoint.y}
+                              fill="#ffffff"
+                              r={5}
+                              stroke="#4f83ff"
+                              strokeWidth={1.4}
+                            />
+                          )}
+                        </g>
+                      ))}
+                      {connectPreviewLine && (
+                        <path
+                          d={connectPreviewLine}
+                          fill="none"
+                          pointerEvents="none"
+                          stroke="#5b8cff"
+                          strokeDasharray="5 4"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                        />
+                      )}
+                    </svg>
+
+                    {graph.nodes.map((node) => {
+                      const runState = nodeStates[node.id];
+                      const nodeStatus = runState?.status ?? "idle";
+                      const isNodeSelected = selectedNodeIds.includes(node.id);
+                      const showNodeAnchors = selectedNodeId === node.id || isConnectingDrag;
+                      return (
+                        <div
+                          className={`graph-node node-${node.type} ${isNodeSelected ? "selected" : ""}`}
+                          data-node-id={node.id}
+                          key={node.id}
+                          onClick={(event) => {
+                            if (event.shiftKey) {
+                              const toggled = selectedNodeIds.includes(node.id)
+                                ? selectedNodeIds.filter((id) => id !== node.id)
+                                : [...selectedNodeIds, node.id];
+                              setNodeSelection(toggled, node.id);
+                            } else {
+                              setNodeSelection([node.id], node.id);
+                            }
+                            setSelectedEdgeKey("");
+                          }}
+                          onMouseUp={(e) => {
+                            if (!isConnectingDrag) {
+                              return;
+                            }
+                            e.stopPropagation();
+                            onNodeConnectDrop(node.id);
+                          }}
+                          onMouseDown={(event) => {
+                            if (!isNodeDragAllowedTarget(event.target)) {
+                              return;
+                            }
+                            if (event.button !== 0 || isConnectingDrag) {
+                              return;
+                            }
+                            onNodeDragStart(event, node.id);
+                          }}
+                          style={{ left: node.position.x, top: node.position.y }}
+                        >
+                          <div className="node-head">
+                            <div className="node-head-main">
+                              {node.type === "turn" ? (
+                                <>
+                                  <strong>{turnModelLabel(node)}</strong>
+                                  <span className="node-head-subtitle">{turnRoleLabel(node)}</span>
+                                </>
+                              ) : (
+                                <strong>{nodeTypeLabel(node.type)}</strong>
+                              )}
+                            </div>
+                            <button onClick={() => deleteNode(node.id)} type="button">
+                              삭제
+                            </button>
+                          </div>
+                          <div className="node-body">
+                            <div className="node-summary-row">
+                              <div>{nodeCardSummary(node)}</div>
+                              <div className={`status-pill status-${nodeStatus}`}>
+                                <span className="node-status-text">{nodeStatusLabel(nodeStatus)}</span>
+                              </div>
+                            </div>
+                            <div className="node-runtime-meta">
+                              <div>
+                                완료 여부:{" "}
+                                {nodeStatus === "done"
+                                  ? "완료"
+                                  : nodeStatus === "failed"
+                                    ? "오류"
+                                    : nodeStatus === "cancelled"
+                                      ? "정지"
+                                      : "대기"}
+                              </div>
+                              <div>생성 시간: {formatDuration(runState?.durationMs)}</div>
+                              <div>사용량: {formatUsage(runState?.usage)}</div>
+                            </div>
+                            <div className="node-snippet">
+                              {String(
+                                extractFinalAnswer(runState?.output) ||
+                                  (runState?.logs ?? []).slice(-1)[0] ||
+                                  "아직 실행 로그가 없습니다.",
+                              ).slice(0, 180)}
+                            </div>
+                          </div>
+                          {showNodeAnchors && (
+                            <div className="node-anchors">
+                              {NODE_ANCHOR_SIDES.map((side) => (
+                                <button
+                                  aria-label={`연결 ${side}`}
+                                  className={`node-anchor node-anchor-${side}`}
+                                  key={`${node.id}-${side}`}
+                                  onMouseDown={(e) => onNodeAnchorDragStart(e, node.id, side)}
+                                  onMouseUp={(e) => onNodeAnchorDrop(e, node.id, side)}
+                                  type="button"
+                                />
+                              ))}
+                            </div>
+                          )}
+                          <div className="node-ports">
+                            <button className="node-port-btn is-passive" disabled type="button">
+                              입력
+                            </button>
+                            <button className="node-port-btn is-passive" disabled type="button">
+                              출력
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                    {marqueeSelection && (
+                      <div
+                        className="marquee-selection"
+                        style={{
+                          left: Math.min(marqueeSelection.start.x, marqueeSelection.current.x),
+                          top: Math.min(marqueeSelection.start.y, marqueeSelection.current.y),
+                          width: Math.abs(marqueeSelection.current.x - marqueeSelection.start.x),
+                          height: Math.abs(marqueeSelection.current.y - marqueeSelection.start.y),
+                        }}
+                      />
+                    )}
+                  </div>
+                </div>
+                </div>
+
                 <div className="canvas-overlay">
                   <div className="canvas-zoom-controls">
-                    <button onClick={onCanvasZoomIn} type="button">
-                      +
-                    </button>
-                    <button onClick={onCanvasZoomOut} type="button">
-                      −
-                    </button>
+                    <div className="canvas-zoom-group">
+                      <button onClick={onCanvasZoomIn} title="확대" type="button">
+                        <img alt="" aria-hidden="true" className="canvas-control-icon" src="/plus.svg" />
+                      </button>
+                      <button onClick={onCanvasZoomOut} title="축소" type="button">
+                        <img alt="" aria-hidden="true" className="canvas-control-icon" src="/minus.svg" />
+                      </button>
+                    </div>
                     <button
+                      className="canvas-zoom-single"
                       onClick={() => setCanvasFullscreen((prev) => !prev)}
                       title={canvasFullscreen ? "캔버스 기본 보기" : "캔버스 전체 보기"}
                       type="button"
@@ -2552,12 +6637,12 @@ function App() {
                     </button>
                     <button
                       aria-label="이동"
-                      className={panMode ? "is-active" : ""}
+                      className={`canvas-zoom-single ${panMode ? "is-active" : ""}`}
                       onClick={() => setPanMode((prev) => !prev)}
                       title="캔버스 이동"
                       type="button"
                     >
-                      ↕
+                      <img alt="" aria-hidden="true" className="canvas-control-icon" src="/scroll.svg" />
                     </button>
                   </div>
 
@@ -2604,113 +6689,24 @@ function App() {
                     </button>
                   </div>
                 </div>
-
-                <div
-                  className="graph-stage-shell"
-                  style={{
-                    width: Math.round(GRAPH_STAGE_WIDTH * canvasZoom + GRAPH_PAN_PADDING),
-                    height: Math.round(GRAPH_STAGE_HEIGHT * canvasZoom + GRAPH_PAN_PADDING),
-                  }}
-                >
-                  <div
-                    className="graph-stage"
-                    style={{
-                      left: GRAPH_PAN_PADDING / 2,
-                      top: GRAPH_PAN_PADDING / 2,
-                      transform: `scale(${canvasZoom})`,
-                      width: GRAPH_STAGE_WIDTH,
-                      height: GRAPH_STAGE_HEIGHT,
-                    }}
-                  >
-                    <svg className="edge-layer">
-                      <defs>
-                        <marker
-                          id="edge-arrow"
-                          markerHeight="6"
-                          markerUnits="userSpaceOnUse"
-                          markerWidth="6"
-                          orient="auto"
-                          refX="5"
-                          refY="3"
-                        >
-                          <path d="M0 0 L6 3 L0 6 Z" fill="#70848a" />
-                        </marker>
-                      </defs>
-                      {edgeLines.map((line) => (
-                        <path
-                          d={line.path}
-                          fill="none"
-                          key={line.key}
-                          markerEnd="url(#edge-arrow)"
-                          stroke="#70848a"
-                          strokeWidth={2}
-                        />
-                      ))}
-                    </svg>
-
-                    {graph.nodes.map((node) => {
-                      const runState = nodeStates[node.id];
-                      const nodeStatus = runState?.status ?? "idle";
-                      return (
-                        <div
-                          className={`graph-node node-${node.type} ${selectedNodeId === node.id ? "selected" : ""}`}
-                          key={node.id}
-                          onClick={() => setSelectedNodeId(node.id)}
-                          style={{ left: node.position.x, top: node.position.y }}
-                        >
-                          <div className="node-head" onMouseDown={(e) => onNodeDragStart(e, node.id)}>
-                            <strong>{nodeTypeLabel(node.type)}</strong>
-                            <button onClick={() => deleteNode(node.id)} type="button">
-                              삭제
-                            </button>
-                          </div>
-                          <div className="node-body">
-                            <div className="node-id">{node.id}</div>
-                            <div className={`status-pill status-${nodeStatus}`}>
-                              {nodeStatusLabel(nodeStatus)}
-                            </div>
-                            <div>{nodeCardSummary(node)}</div>
-                            <div className="node-runtime-meta">
-                              <div>완료 여부: {nodeStatus === "done" ? "완료" : nodeStatus === "failed" ? "실패" : "대기"}</div>
-                              <div>생성 시간: {formatDuration(runState?.durationMs)}</div>
-                              <div>사용량: {formatUsage(runState?.usage)}</div>
-                            </div>
-                            <div className="node-snippet">
-                              {String(
-                                extractFinalAnswer(runState?.output) ||
-                                  (runState?.logs ?? []).slice(-1)[0] ||
-                                  "아직 실행 로그가 없습니다.",
-                              ).slice(0, 180)}
-                            </div>
-                          </div>
-                          <div className="node-ports">
-                            <button onClick={() => onPortInClick(node.id)} type="button">
-                              입력
-                            </button>
-                            <button onClick={() => onPortOutClick(node.id)} type="button">
-                              {connectFromNodeId === node.id ? "출력*" : "출력"}
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
               </div>
 
               <div className="canvas-topbar">
-                <label className="question-input">
-                  질문 입력
+                <div className="question-input">
                   <textarea
-                    onChange={(e) => setWorkflowQuestion(e.currentTarget.value)}
-                    rows={3}
+                    onChange={(e) => {
+                      setWorkflowQuestion(e.currentTarget.value);
+                    }}
+                    placeholder="질문 입력"
+                    ref={questionInputRef}
+                    rows={1}
                     value={workflowQuestion}
                   />
-                </label>
-                <div className="canvas-topbar-actions">
-                  <button className="primary-action" type="button">
-                    생성
-                  </button>
+                  <div className="question-input-footer">
+                    <button className="primary-action question-create-button" type="button">
+                      <img alt="" aria-hidden="true" className="question-create-icon" src="/up.svg" />
+                    </button>
+                  </div>
                 </div>
               </div>
             </section>
@@ -2718,126 +6714,404 @@ function App() {
             {!canvasFullscreen && <aside className="inspector-pane">
               <div className="inspector-head">
                 <div className="inspector-title-chip">노드 설정</div>
-                <button
-                  className="inspector-resize"
-                  onClick={() => setIsInspectorWide((prev) => !prev)}
-                  title={isInspectorWide ? "패널 폭 줄이기" : "패널 폭 넓히기"}
-                  type="button"
-                >
-                  ↔
-                </button>
               </div>
               <div className="inspector-content">
                 <div className="inspector-section">
                   <section className="inspector-block">
-                    <h3>그래프 도구</h3>
-                    <div className="button-row">
-                      <button onClick={() => addNode("turn")} type="button">
-                        + 응답 에이전트
-                      </button>
-                      <button onClick={() => addNode("transform")} type="button">
-                        + 데이터 변환
-                      </button>
-                      <button onClick={() => addNode("gate")} type="button">
-                        + 분기
-                      </button>
-                      <button disabled={!connectFromNodeId} onClick={() => setConnectFromNodeId("")} type="button">
-                        연결 취소
-                      </button>
-                    </div>
-
-                    <div className="button-row">
-                      <button onClick={() => applyPreset("validation")} type="button">
-                        검증형 5에이전트
-                      </button>
-                      <button onClick={() => applyPreset("development")} type="button">
-                        개발형 5에이전트
-                      </button>
-                    </div>
-
-                    <div className="save-row">
-                      <input
-                        value={graphFileName}
-                        onChange={(e) => setGraphFileName(e.currentTarget.value)}
-                        placeholder="저장할 그래프 파일 이름"
+                    <InspectorSectionTitle
+                      help="노드 추가, 템플릿 불러오기, 비용 프리셋 적용, 그래프 저장/불러오기를 관리합니다."
+                      title="그래프 도구"
+                    />
+                    <div className="tool-dropdown-group">
+                      <h4>노드 선택</h4>
+                      <FancySelect
+                        ariaLabel="노드 선택"
+                        className="modern-select"
+                        emptyMessage="선택 가능한 노드가 없습니다."
+                        onChange={(value) => {
+                          if (value === "turn") {
+                            addNode("turn");
+                          } else if (value === "transform") {
+                            addNode("transform");
+                          } else if (value === "gate") {
+                            addNode("gate");
+                          }
+                        }}
+                        options={[
+                          { value: "turn", label: "응답 에이전트" },
+                          { value: "transform", label: "데이터 변환" },
+                          { value: "gate", label: "분기" },
+                        ]}
+                        placeholder="노드 선택"
+                        value=""
                       />
-                      <button onClick={saveGraph} type="button">
-                        저장
-                      </button>
-                      <button onClick={() => loadGraph()} type="button">
-                        불러오기
-                      </button>
-                      <button onClick={refreshGraphFiles} type="button">
-                        새로고침
-                      </button>
-                      <select
+                    </div>
+
+                    <div className="tool-dropdown-group">
+                      <h4>템플릿</h4>
+                      <FancySelect
+                        ariaLabel="템플릿 선택"
+                        className="modern-select template-select"
+                        emptyMessage="선택 가능한 템플릿이 없습니다."
+                        onChange={(value) => {
+                          if (value === "validation") {
+                            applyPreset("validation");
+                          } else if (value === "development") {
+                            applyPreset("development");
+                          } else if (value === "research") {
+                            applyPreset("research");
+                          } else if (value === "unityGame") {
+                            applyPreset("unityGame");
+                          } else if (value === "fullstack") {
+                            applyPreset("fullstack");
+                          } else if (value === "creative") {
+                            applyPreset("creative");
+                          } else if (value === "newsTrend") {
+                            applyPreset("newsTrend");
+                          }
+                        }}
+                        options={[
+                          { value: "validation", label: "검증형 에이전트" },
+                          { value: "development", label: "개방형 에이전트" },
+                          { value: "research", label: "자료조사 템플릿" },
+                          { value: "unityGame", label: "유니티 게임개발 템플릿" },
+                          { value: "fullstack", label: "풀스택 개발 템플릿" },
+                          { value: "creative", label: "창의적 답변 템플릿" },
+                          { value: "newsTrend", label: "최신 뉴스·트렌드 템플릿" },
+                        ]}
+                        placeholder="템플릿 선택"
+                        value=""
+                      />
+                    </div>
+
+                    <div className="tool-dropdown-group">
+                      <h4>비용 프리셋</h4>
+                      <FancySelect
+                        ariaLabel="비용 프리셋"
+                        className="modern-select"
+                        emptyMessage="선택 가능한 프리셋이 없습니다."
+                        onChange={(value) => {
+                          if (isCostPreset(value)) {
+                            applyCostPreset(value);
+                          }
+                        }}
+                        options={COST_PRESET_OPTIONS}
+                        value={costPreset}
+                      />
+                    </div>
+
+                    <div className="tool-dropdown-group">
+                      <h4>그래프 파일</h4>
+                      <FancySelect
+                        ariaLabel="그래프 파일 선택"
                         className="graph-file-select modern-select"
-                        onChange={(e) => {
-                          const value = e.currentTarget.value;
+                        emptyMessage="저장된 그래프가 없습니다."
+                        onChange={(value) => {
                           if (value) {
+                            setGraphFileName(value);
                             loadGraph(value);
                           }
                         }}
-                        value=""
-                      >
-                        <option value="">그래프 파일 선택</option>
-                        {graphFiles.map((file) => (
-                          <option key={file} value={file}>
-                            {file}
-                          </option>
-                        ))}
-                      </select>
+                        options={graphFiles.map((file) => ({ value: file, label: file }))}
+                        placeholder="그래프 파일 선택"
+                        value={graphFiles.includes(graphFileName) ? graphFileName : ""}
+                      />
+                      <div className="graph-file-actions">
+                        <button className="mini-action-button" onClick={saveGraph} type="button">
+                          <span className="mini-action-button-label">저장</span>
+                        </button>
+                        <button className="mini-action-button" onClick={refreshGraphFiles} type="button">
+                          <span className="mini-action-button-label">새로고침</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="tool-dropdown-group">
+                      <h4>첨부 자료</h4>
+                      <div className="graph-file-actions">
+                        <button className="mini-action-button" onClick={onOpenKnowledgeFilePicker} type="button">
+                          <span className="mini-action-button-label">파일 추가</span>
+                        </button>
+                      </div>
+                      <div className="knowledge-file-list">
+                        {graphKnowledge.files.length === 0 && (
+                          <div className="knowledge-file-empty">첨부된 자료가 없습니다.</div>
+                        )}
+                        {graphKnowledge.files.map((file) => {
+                          const statusMeta = knowledgeStatusMeta(file.status);
+                          return (
+                            <div className="knowledge-file-item" key={file.id}>
+                              <div className="knowledge-file-main">
+                                <span className="knowledge-file-name" title={file.path}>
+                                  {file.name}
+                                </span>
+                                <span className={`knowledge-status-pill ${statusMeta.tone}`}>
+                                  {statusMeta.label}
+                                </span>
+                              </div>
+                              <div className="knowledge-file-actions">
+                                <button
+                                  className={`mini-action-button ${file.enabled ? "is-enabled" : ""}`}
+                                  onClick={() => onToggleKnowledgeFileEnabled(file.id)}
+                                  type="button"
+                                >
+                                  <span className="mini-action-button-label">
+                                    {file.enabled ? "사용 중" : "제외"}
+                                  </span>
+                                </button>
+                                <button
+                                  className="mini-action-button"
+                                  onClick={() => onRemoveKnowledgeFile(file.id)}
+                                  type="button"
+                                >
+                                  <span className="mini-action-button-label">삭제</span>
+                                </button>
+                              </div>
+                              {file.statusMessage && <div className="knowledge-file-message">{file.statusMessage}</div>}
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <label>
+                        참고할 자료 개수
+                        <FancySelect
+                          ariaLabel="참고할 자료 개수"
+                          className="modern-select"
+                          onChange={(next) => {
+                            const parsed = Number(next) || KNOWLEDGE_DEFAULT_TOP_K;
+                            applyGraphChange((prev) => ({
+                              ...prev,
+                              knowledge: {
+                                ...(prev.knowledge ?? defaultKnowledgeConfig()),
+                                topK: Math.max(1, Math.min(20, parsed)),
+                              },
+                            }));
+                          }}
+                          options={KNOWLEDGE_TOP_K_OPTIONS}
+                          value={String(graphKnowledge.topK)}
+                        />
+                      </label>
+                      <div className="inspector-empty">
+                        질문과 가장 관련 있는 참고 자료를 몇 개까지 붙일지 정합니다.
+                      </div>
+                      <label>
+                        참고 내용 길이
+                        <FancySelect
+                          ariaLabel="참고 내용 길이"
+                          className="modern-select"
+                          onChange={(next) => {
+                            const parsed = Number(next) || KNOWLEDGE_DEFAULT_MAX_CHARS;
+                            applyGraphChange((prev) => ({
+                              ...prev,
+                              knowledge: {
+                                ...(prev.knowledge ?? defaultKnowledgeConfig()),
+                                maxChars: Math.max(300, Math.min(20_000, parsed)),
+                              },
+                            }));
+                          }}
+                          options={KNOWLEDGE_MAX_CHARS_OPTIONS}
+                          value={selectedKnowledgeMaxCharsOption}
+                        />
+                      </label>
+                      <div className="inspector-empty">
+                        길이를 길게 할수록 근거는 늘고, 응답 속도와 사용량은 증가할 수 있습니다.
+                      </div>
                     </div>
                   </section>
 
-                  {!selectedNode && <div className="inspector-empty">노드를 선택하세요.</div>}
+                  {/* {!selectedNode && <div className="inspector-empty">노드를 선택하세요.</div>} */}
                   {selectedNode && (
                     <>
-                      <section className="inspector-block inspector-summary">
-                        <div>
-                          <strong>{selectedNode.id}</strong>
-                        </div>
-                        <div>유형: {nodeTypeLabel(selectedNode.type)}</div>
-                        <div className={`status-pill status-${selectedNodeState?.status ?? "idle"}`}>
-                          상태: {nodeStatusLabel(selectedNodeState?.status ?? "idle")}
-                        </div>
-                        <div>완료 여부: {(selectedNodeState?.status ?? "idle") === "done" ? "완료" : "미완료"}</div>
-                        <div>생성 시간: {formatDuration(selectedNodeState?.durationMs)}</div>
-                        <div>완료 시각: {formatFinishedAt(selectedNodeState?.finishedAt)}</div>
-                        <div>사용량: {formatUsage(selectedNodeState?.usage)}</div>
-                      </section>
-
                       {selectedNode.type === "turn" && (
                         <section className="inspector-block form-grid">
-                          <h3>모델 설정</h3>
+                          <InspectorSectionTitle
+                            help="실행기, 모델, 역할, 프롬프트를 설정해 해당 에이전트의 동작을 정의합니다."
+                            title="에이전트 설정"
+                          />
                           <label>
-                            모델
-                            <select
+                            에이전트
+                            <FancySelect
+                              ariaLabel="Turn 에이전트"
                               className="modern-select"
-                              onChange={(e) => updateSelectedNodeConfig("model", e.currentTarget.value)}
-                              value={String((selectedNode.config as TurnConfig).model ?? model)}
-                            >
-                              {TURN_MODEL_OPTIONS.map((option) => (
-                                <option key={option} value={option}>
-                                  {option}
-                                </option>
-                              ))}
-                            </select>
+                              onChange={(next) => updateSelectedNodeConfig("executor", next)}
+                              options={TURN_EXECUTOR_OPTIONS.map((option) => ({
+                                value: option,
+                                label: turnExecutorLabel(option),
+                              }))}
+                              value={selectedTurnExecutor}
+                            />
+                          </label>
+                          {selectedTurnExecutor === "codex" && (
+                            <label>
+                              모델
+                              <FancySelect
+                                ariaLabel="노드 모델"
+                                className="modern-select"
+                                onChange={(next) => updateSelectedNodeConfig("model", next)}
+                                options={TURN_MODEL_OPTIONS.map((option) => ({ value: option, label: option }))}
+                                value={toTurnModelDisplayName(
+                                  String((selectedNode.config as TurnConfig).model ?? model),
+                                )}
+                              />
+                            </label>
+                          )}
+                          {selectedTurnExecutor === "ollama" && (
+                            <label>
+                              Ollama 모델
+                              <input
+                                onChange={(e) => updateSelectedNodeConfig("ollamaModel", e.currentTarget.value)}
+                                placeholder="예: llama3.1:8b"
+                                value={String((selectedNode.config as TurnConfig).ollamaModel ?? "llama3.1:8b")}
+                              />
+                            </label>
+                          )}
+                          {selectedTurnExecutor === "codex" && (
+                            <label>
+                              작업 경로
+                              <input
+                                onChange={(e) => updateSelectedNodeConfig("cwd", e.currentTarget.value)}
+                                value={String((selectedNode.config as TurnConfig).cwd ?? cwd)}
+                              />
+                            </label>
+                          )}
+                          {getWebProviderFromExecutor(selectedTurnExecutor) && (
+                            <>
+                              <label>
+                                웹 결과 모드
+                                <FancySelect
+                                  ariaLabel="웹 결과 모드"
+                                  className="modern-select"
+                                  onChange={(next) => updateSelectedNodeConfig("webResultMode", next)}
+                                  options={[
+                                    { value: "auto", label: "자동 (GEMINI 우선)" },
+                                    { value: "manualPasteText", label: "텍스트 붙여넣기" },
+                                    { value: "manualPasteJson", label: "JSON 붙여넣기" },
+                                  ]}
+                                  value={String(
+                                    (selectedNode.config as TurnConfig).webResultMode ??
+                                      (selectedTurnExecutor === "web_gemini" ? "auto" : "manualPasteText"),
+                                  )}
+                                />
+                              </label>
+                              <label>
+                                자동화 타임아웃(ms)
+                                <input
+                                  onChange={(e) =>
+                                    updateSelectedNodeConfig(
+                                      "webTimeoutMs",
+                                      Number(e.currentTarget.value) || 90_000,
+                                    )
+                                  }
+                                  type="number"
+                                  value={String((selectedNode.config as TurnConfig).webTimeoutMs ?? 90_000)}
+                                />
+                              </label>
+                              <div className="inspector-empty">
+                                GEMINI는 자동 입력/추출을 시도하고, 실패하면 수동 붙여넣기로 폴백합니다.
+                              </div>
+                            </>
+                          )}
+                          <label>
+                            역할
+                            <input
+                              onChange={(e) => updateSelectedNodeConfig("role", e.currentTarget.value)}
+                              placeholder={turnRoleLabel(selectedNode)}
+                              value={String((selectedNode.config as TurnConfig).role ?? "")}
+                            />
                           </label>
                           <label>
-                            작업 경로
+                            첨부 참고 사용
+                            <FancySelect
+                              ariaLabel="첨부 참고 사용"
+                              className="modern-select"
+                              onChange={(next) =>
+                                updateSelectedNodeConfig("knowledgeEnabled", next === "true")
+                              }
+                              options={[
+                                { value: "true", label: "사용" },
+                                { value: "false", label: "미사용" },
+                              ]}
+                              value={String(
+                                (selectedNode.config as TurnConfig).knowledgeEnabled !== false,
+                              )}
+                            />
+                          </label>
+                          <label>
+                            품질 프로필
+                            <FancySelect
+                              ariaLabel="품질 프로필"
+                              className="modern-select"
+                              onChange={(next) => updateSelectedNodeConfig("qualityProfile", next)}
+                              options={QUALITY_PROFILE_OPTIONS}
+                              value={selectedQualityProfile}
+                            />
+                          </label>
+                          <label>
+                            품질 통과 기준 점수
                             <input
-                              onChange={(e) => updateSelectedNodeConfig("cwd", e.currentTarget.value)}
-                              value={String((selectedNode.config as TurnConfig).cwd ?? cwd)}
+                              min={0}
+                              max={100}
+                              onChange={(e) =>
+                                updateSelectedNodeConfig(
+                                  "qualityThreshold",
+                                  Math.max(
+                                    0,
+                                    Math.min(100, Number(e.currentTarget.value) || QUALITY_DEFAULT_THRESHOLD),
+                                  ),
+                                )
+                              }
+                              type="number"
+                              value={String((selectedTurnConfig?.qualityThreshold ?? QUALITY_DEFAULT_THRESHOLD))}
+                            />
+                          </label>
+                          {selectedQualityProfile === "code_implementation" && (
+                            <>
+                              <label>
+                                로컬 품질 명령 실행
+                                <FancySelect
+                                  ariaLabel="로컬 품질 명령 실행"
+                                  className="modern-select"
+                                  onChange={(next) =>
+                                    updateSelectedNodeConfig("qualityCommandEnabled", next === "true")
+                                  }
+                                  options={[
+                                    { value: "false", label: "미사용" },
+                                    { value: "true", label: "사용" },
+                                  ]}
+                                  value={String(selectedTurnConfig?.qualityCommandEnabled === true)}
+                                />
+                              </label>
+                              <label>
+                                품질 명령 목록(줄바꿈 구분)
+                                <textarea
+                                  className="prompt-template-textarea"
+                                  onChange={(e) =>
+                                    updateSelectedNodeConfig("qualityCommands", e.currentTarget.value)
+                                  }
+                                  rows={3}
+                                  value={String(selectedTurnConfig?.qualityCommands ?? "npm run build")}
+                                />
+                              </label>
+                            </>
+                          )}
+                          <label>
+                            출력 형식(아티팩트)
+                            <FancySelect
+                              ariaLabel="출력 형식(아티팩트)"
+                              className="modern-select"
+                              onChange={(next) => updateSelectedNodeConfig("artifactType", next)}
+                              options={ARTIFACT_TYPE_OPTIONS}
+                              value={selectedArtifactType}
                             />
                           </label>
                           <label>
                             프롬프트 템플릿
                             <textarea
+                              className="prompt-template-textarea"
                               onChange={(e) =>
                                 updateSelectedNodeConfig("promptTemplate", e.currentTarget.value)
                               }
-                              rows={3}
+                              rows={6}
                               value={String((selectedNode.config as TurnConfig).promptTemplate ?? "{{input}}")}
                             />
                           </label>
@@ -2846,123 +7120,142 @@ function App() {
 
                       {selectedNode.type === "transform" && (
                         <section className="inspector-block form-grid">
-                          <h3>변환 규칙</h3>
+                          <InspectorSectionTitle
+                            help="앞 노드 결과를 읽기 쉬운 형태로 다시 정리하는 설정입니다. 쉽게 말해, 필요한 것만 꺼내거나, 고정 정보를 붙이거나, 문장 틀에 맞춰 다시 쓰는 역할입니다."
+                            title="결과 정리 설정"
+                          />
                           <label>
-                            변환 모드
-                            <select
+                            정리 방식
+                            <FancySelect
+                              ariaLabel="정리 방식"
                               className="modern-select"
-                              onChange={(e) => updateSelectedNodeConfig("mode", e.currentTarget.value)}
+                              onChange={(next) => updateSelectedNodeConfig("mode", next)}
+                              options={[
+                                { value: "pick", label: "필요한 값만 꺼내기" },
+                                { value: "merge", label: "고정 정보 덧붙이기" },
+                                { value: "template", label: "문장 틀로 다시 쓰기" },
+                              ]}
                               value={String((selectedNode.config as TransformConfig).mode ?? "pick")}
-                            >
-                              <option value="pick">필드 선택</option>
-                              <option value="merge">병합</option>
-                              <option value="template">문자열 템플릿</option>
-                            </select>
-                          </label>
-                          <label>
-                            pick 경로
-                            <input
-                              onChange={(e) => updateSelectedNodeConfig("pickPath", e.currentTarget.value)}
-                              value={String((selectedNode.config as TransformConfig).pickPath ?? "")}
                             />
                           </label>
                           <label>
-                            merge JSON
+                            꺼낼 값 위치
+                            <input
+                              onChange={(e) => updateSelectedNodeConfig("pickPath", e.currentTarget.value)}
+                              placeholder="예: text 또는 result.finalDraft"
+                              value={String((selectedNode.config as TransformConfig).pickPath ?? "")}
+                            />
+                          </label>
+                          <div className="inspector-empty">
+                            예를 들어 `text`를 쓰면 결과에서 text 부분만 가져옵니다.
+                          </div>
+                          <label>
+                            덧붙일 고정 정보(JSON)
                             <textarea
                               onChange={(e) => updateSelectedNodeConfig("mergeJson", e.currentTarget.value)}
+                              placeholder='예: {"source":"web","priority":"high"}'
                               rows={3}
                               value={String((selectedNode.config as TransformConfig).mergeJson ?? "{}")}
                             />
                           </label>
+                          <div className="inspector-empty">
+                            예: {"`{\"출처\":\"웹조사\"}`"}를 넣으면 모든 결과에 같은 정보를 붙입니다.
+                          </div>
                           <label>
-                            템플릿
+                            문장 틀
                             <textarea
+                              className="transform-template-textarea"
                               onChange={(e) => updateSelectedNodeConfig("template", e.currentTarget.value)}
-                              rows={3}
+                              rows={5}
                               value={String((selectedNode.config as TransformConfig).template ?? "{{input}}")}
                             />
                           </label>
+                          <div className="inspector-empty">
+                            {"`{{input}}`"} 자리에 이전 결과가 들어갑니다. 원하는 문장 형태로 바꿀 때 사용합니다.
+                          </div>
                         </section>
                       )}
 
                       {selectedNode.type === "gate" && (
                         <section className="inspector-block form-grid">
-                          <h3>분기 설정</h3>
+                          <InspectorSectionTitle
+                            help="이 노드는 결과를 보고 길을 나눕니다. DECISION 값이 PASS면 통과 경로로, REJECT면 재검토 경로로 보냅니다."
+                            title="결정 나누기 설정"
+                          />
                           <label>
-                            분기 경로(decisionPath)
+                            판단값 위치(DECISION)
                             <input
                               onChange={(e) => updateSelectedNodeConfig("decisionPath", e.currentTarget.value)}
-                              value={String((selectedNode.config as GateConfig).decisionPath ?? "decision")}
+                              value={String((selectedNode.config as GateConfig).decisionPath ?? "DECISION")}
                             />
                           </label>
+                          <div className="inspector-empty">
+                            보통 `DECISION`을 사용합니다. 값은 PASS 또는 REJECT(대문자)여야 합니다.
+                          </div>
                           <label>
-                            PASS 대상 노드
-                            <select
+                            통과(PASS) 다음 노드
+                            <FancySelect
+                              ariaLabel="통과 다음 노드"
                               className="modern-select"
-                              onChange={(e) => updateSelectedNodeConfig("passNodeId", e.currentTarget.value)}
+                              onChange={(next) => updateSelectedNodeConfig("passNodeId", next)}
+                              options={[
+                                { value: "", label: "(없음)" },
+                                ...outgoingNodeOptions,
+                              ]}
                               value={String((selectedNode.config as GateConfig).passNodeId ?? "")}
-                            >
-                              <option value="">(없음)</option>
-                              {outgoingFromSelected.map((nodeId) => (
-                                <option key={nodeId} value={nodeId}>
-                                  {nodeId}
-                                </option>
-                              ))}
-                            </select>
+                            />
                           </label>
+                          <div className="inspector-empty">
+                            결과가 좋으면(통과) 어디로 보낼지 선택합니다.
+                          </div>
                           <label>
-                            REJECT 대상 노드
-                            <select
+                            재검토(REJECT) 다음 노드
+                            <FancySelect
+                              ariaLabel="재검토 다음 노드"
                               className="modern-select"
-                              onChange={(e) => updateSelectedNodeConfig("rejectNodeId", e.currentTarget.value)}
+                              onChange={(next) => updateSelectedNodeConfig("rejectNodeId", next)}
+                              options={[
+                                { value: "", label: "(없음)" },
+                                ...outgoingNodeOptions,
+                              ]}
                               value={String((selectedNode.config as GateConfig).rejectNodeId ?? "")}
-                            >
-                              <option value="">(없음)</option>
-                              {outgoingFromSelected.map((nodeId) => (
-                                <option key={nodeId} value={nodeId}>
-                                  {nodeId}
-                                </option>
-                              ))}
-                            </select>
+                            />
                           </label>
+                          <div className="inspector-empty">
+                            결과가 부족하면(재검토) 어디로 보낼지 선택합니다.
+                          </div>
                           <label>
-                            스키마 JSON (선택)
+                            결과 형식 검사(선택)
                             <textarea
                               onChange={(e) => updateSelectedNodeConfig("schemaJson", e.currentTarget.value)}
                               rows={4}
                               value={String((selectedNode.config as GateConfig).schemaJson ?? "")}
                             />
                           </label>
+                          <div className="inspector-empty">
+                            고급 옵션입니다. 결과가 원하는 형식인지 자동 검사할 때만 사용하세요.
+                          </div>
                         </section>
                       )}
 
                       <section className="inspector-block">
-                        <h3>노드 로그</h3>
-                        <pre>{(selectedNodeState?.logs ?? []).join("\n") || "(로그 없음)"}</pre>
+                        <InspectorSectionTitle
+                          help="선택한 노드의 실행 중간 로그와 상태 메시지를 확인합니다."
+                          title="노드 로그"
+                        />
+                        <pre>{(selectedNodeState?.logs ?? []).join("\n") || "[로그 없음]"}</pre>
                       </section>
 
                       <section className="inspector-block">
-                        <h3>노드 출력</h3>
-                        <pre>{formatUnknown(selectedNodeState?.output) || "(출력 없음)"}</pre>
+                        <InspectorSectionTitle
+                          help="선택한 노드의 최종 출력 데이터를 확인합니다."
+                          title="노드 출력"
+                        />
+                        <pre>{formatUnknown(selectedNodeState?.output) || "[출력 없음]"}</pre>
                       </section>
                     </>
                   )}
 
-                  <section className="inspector-block">{renderSettingsPanel(true)}</section>
-                  <section className="inspector-block workflow-runtime-status">
-                    <h3>워크플로우 상태</h3>
-                    <div className="settings-badges">
-                      <span className="status-tag neutral">
-                        로그인: {loginStateLabel(engineStarted, loginCompleted, authMode)}
-                      </span>
-                      <span className="status-tag neutral">인증: {authModeLabel(authMode)}</span>
-                      <span className={`status-tag ${isGraphRunning ? "on" : "off"}`}>
-                        실행: {isGraphRunning ? "진행 중" : "대기"}
-                      </span>
-                      <span className="status-tag neutral">상태: {status}</span>
-                      <span className="status-tag neutral">기록: {runFiles.length}</span>
-                    </div>
-                  </section>
                 </div>
               </div>
             </aside>}
@@ -2981,7 +7274,7 @@ function App() {
                   Finder에서 열기
                 </button>
               </div>
-              {runFiles.length === 0 && <div>(실행 기록 파일 없음)</div>}
+              {runFiles.length === 0 && <div className={"log-empty"}>실행 기록 파일 없음</div>}
               {runFiles.map((file) => (
                 <button
                   className={selectedRunFile === file ? "is-active" : ""}
@@ -2998,20 +7291,62 @@ function App() {
               {!selectedRunDetail && <div>실행 기록을 선택하세요.</div>}
               {selectedRunDetail && (
                 <>
-                  <h2>실행 상세</h2>
+                  <div className="history-detail-head">
+                    <h2>실행 상세</h2>
+                    <button
+                      aria-label="실행 기록 삭제"
+                      className="history-delete-button"
+                      onClick={onDeleteSelectedRun}
+                      type="button"
+                    >
+                      x
+                    </button>
+                  </div>
                   <div>실행 ID: {selectedRunDetail.runId}</div>
                   <div>시작 시간: {selectedRunDetail.startedAt}</div>
                   <div>종료 시간: {selectedRunDetail.finishedAt ?? "-"}</div>
-                  <h3>질문</h3>
-                  <pre>{selectedRunDetail.question || "(비어 있음)"}</pre>
-                  <h3>최종 답변</h3>
-                  <pre>{selectedRunDetail.finalAnswer || "(없음)"}</pre>
-                  <h3>요약 로그</h3>
-                  <pre>{selectedRunDetail.summaryLogs.join("\n") || "(없음)"}</pre>
-                  <h3>상태 전이</h3>
-                  <pre>{formatUnknown(selectedRunDetail.transitions)}</pre>
-                  <h3>노드 로그</h3>
-                  <pre>{formatUnknown(selectedRunDetail.nodeLogs ?? {})}</pre>
+                  <div className="history-detail-content">
+                    <div className="history-detail-group">
+                      <h3>질문</h3>
+                      <pre>{selectedRunDetail.question || "(비어 있음)"}</pre>
+                    </div>
+                    <div className="history-detail-group">
+                      <h3>최종 답변</h3>
+                      <pre>{selectedRunDetail.finalAnswer || "(없음)"}</pre>
+                    </div>
+                    <div className="history-detail-group">
+                      <h3>요약 로그</h3>
+                      <pre>{selectedRunDetail.summaryLogs.join("\n") || "(없음)"}</pre>
+                    </div>
+                    <div className="history-detail-group">
+                      <h3>품질 요약</h3>
+                      <pre>{formatUnknown(selectedRunDetail.qualitySummary ?? {})}</pre>
+                    </div>
+                    <div className="history-detail-group">
+                      <h3>회귀 비교</h3>
+                      <pre>{formatUnknown(selectedRunDetail.regression ?? {})}</pre>
+                    </div>
+                    <div className="history-detail-group">
+                      <h3>상태 전이</h3>
+                      <pre>{formatUnknown(selectedRunDetail.transitions)}</pre>
+                    </div>
+                    <div className="history-detail-group">
+                      <h3>Provider Trace</h3>
+                      <pre>{formatUnknown(selectedRunDetail.providerTrace ?? [])}</pre>
+                    </div>
+                    <div className="history-detail-group">
+                      <h3>첨부 참조 Trace</h3>
+                      <pre>{formatUnknown(selectedRunDetail.knowledgeTrace ?? [])}</pre>
+                    </div>
+                    <div className="history-detail-group">
+                      <h3>노드 로그</h3>
+                      <pre>{formatUnknown(selectedRunDetail.nodeLogs ?? {})}</pre>
+                    </div>
+                    <div className="history-detail-group">
+                      <h3>노드 품질 지표</h3>
+                      <pre>{formatUnknown(selectedRunDetail.nodeMetrics ?? {})}</pre>
+                    </div>
+                  </div>
                 </>
               )}
             </article>
@@ -3020,50 +7355,84 @@ function App() {
 
         {workspaceTab === "settings" && (
           <section className="panel-card settings-view">
-            {renderSettingsPanel()}
+            {renderSettingsPanel(false)}
+            {renderWebAutomationPanel()}
+            <section className="settings-usage-guide">
+              <h3>사용 방법</h3>
+              <ol>
+                <li>작업 경로(CWD)에서 폴더 선택 버튼을 눌러 실제 프로젝트 루트를 선택합니다.</li>
+                <li>엔진 시작 버튼으로 Codex 엔진을 켠 뒤 기본 모델을 선택합니다.</li>
+                <li>사용량 확인으로 계정 사용량 조회가 가능한지 먼저 점검합니다.</li>
+                <li>웹 계정 연동에서 필요한 서비스(GEMINI/GPT 등)만 로그인합니다.</li>
+                <li>상태 동기화(새로고침 아이콘)를 눌러 로그인 상태를 최신으로 갱신합니다.</li>
+                <li>워크플로우 탭에서 노드 추가, 연결, 프롬프트/역할 설정을 완료합니다.</li>
+                <li>실행 후 노드 로그/출력에서 중간 결과를 확인하고 필요 시 수정합니다.</li>
+                <li>기록 탭에서 실행 상세와 최종 결과를 비교하며 재사용 가능한 그래프로 다듬습니다.</li>
+              </ol>
+            </section>
             {lastSavedRunFile && <div>최근 실행 파일: {lastSavedRunFile}</div>}
           </section>
         )}
 
-        {workspaceTab === "dev" && (
-          <section className="workflow-layout dev-layout">
-            <article className="panel-card">
-              <h2>개발용 단일 턴 테스트</h2>
-              <label>
-                스레드 ID
-                <input
-                  onChange={(e) => setThreadId(e.currentTarget.value)}
-                  placeholder="thread_start 결과가 자동 입력됩니다"
-                  value={threadId}
-                />
-              </label>
-
-              <form className="prompt" onSubmit={onRunTurnDev}>
-                <label>
-                  입력
-                  <textarea onChange={(e) => setText(e.currentTarget.value)} rows={4} value={text} />
-                </label>
-                <div className="button-row">
-                  <button disabled={running || !text.trim()} type="submit">
-                    {running ? "실행 중..." : "실행"}
-                  </button>
-                  <button disabled={!threadId} onClick={onInterruptDev} type="button">
-                    중단
-                  </button>
-                </div>
-              </form>
-
-              <h3>스트리밍 출력</h3>
-              <pre>{streamText || "(item/agentMessage/delta를 기다리는 중...)"}</pre>
-            </article>
-
-            <article className="panel-card">
-              <h2>알림 이벤트</h2>
-              <pre>{events.join("\n") || "(아직 이벤트 없음)"}</pre>
-            </article>
-          </section>
-        )}
       </section>
+
+      {pendingWebLogin && (
+        <div className="modal-backdrop">
+          <section className="approval-modal web-turn-modal">
+            <h2>로그인이 필요합니다</h2>
+            <div>노드: {pendingWebLogin.nodeId}</div>
+            <div>서비스: {webProviderLabel(pendingWebLogin.provider)}</div>
+            <div>{pendingWebLogin.reason}</div>
+            <div className="button-row">
+              <button onClick={() => onOpenProviderChildView(pendingWebLogin.provider)} type="button">
+                Child View 열기
+              </button>
+              <button onClick={() => resolvePendingWebLogin(true)} type="button">
+                로그인 완료 후 계속
+              </button>
+              <button onClick={() => resolvePendingWebLogin(false)} type="button">
+                수동 입력으로 전환
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {pendingWebTurn && (
+        <div className="modal-backdrop">
+          <section className="approval-modal web-turn-modal">
+            <h2>웹 응답 입력 필요</h2>
+            <div>노드: {pendingWebTurn.nodeId}</div>
+            <div>서비스: {webProviderLabel(pendingWebTurn.provider)}</div>
+            <div>수집 모드: {pendingWebTurn.mode === "manualPasteJson" ? "JSON" : "텍스트"}</div>
+            <div className="button-row">
+              <button onClick={onOpenPendingProviderWindow} type="button">
+                서비스 창 열기
+              </button>
+              <button onClick={onCopyPendingWebPrompt} type="button">
+                프롬프트 복사
+              </button>
+            </div>
+            <div className="web-turn-prompt">{pendingWebTurn.prompt}</div>
+            <label>
+              응답 붙여넣기
+              <textarea
+                onChange={(e) => setWebResponseDraft(e.currentTarget.value)}
+                rows={8}
+                value={webResponseDraft}
+              />
+            </label>
+            <div className="button-row">
+              <button onClick={onSubmitPendingWebTurn} type="button">
+                입력 완료
+              </button>
+              <button onClick={onCancelPendingWebTurn} type="button">
+                취소
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
 
       {activeApproval && (
         <div className="modal-backdrop">

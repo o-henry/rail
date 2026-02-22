@@ -1,5 +1,6 @@
 use serde_json::Value;
 use std::{fs, path::PathBuf};
+use tauri_plugin_dialog::DialogExt;
 
 fn current_workspace_dir() -> Result<PathBuf, String> {
     std::env::current_dir().map_err(|e| format!("failed to resolve current dir: {e}"))
@@ -71,6 +72,16 @@ fn read_json_file(dir_name: &str, name: &str) -> Result<Value, String> {
     serde_json::from_str(&raw).map_err(|e| format!("invalid JSON in {dir_name} file: {e}"))
 }
 
+fn delete_json_file(dir_name: &str, name: &str) -> Result<(), String> {
+    let normalized_name = normalize_file_name(name)?;
+    let dir = ensure_subdir(dir_name)?;
+    let path = dir.join(normalized_name);
+    if !path.exists() {
+        return Err(format!("{dir_name} file not found"));
+    }
+    fs::remove_file(path).map_err(|e| format!("failed to delete {dir_name} file: {e}"))
+}
+
 #[tauri::command]
 pub fn graph_list() -> Result<Vec<String>, String> {
     list_json_files("graphs")
@@ -102,7 +113,49 @@ pub fn run_load(name: String) -> Result<Value, String> {
 }
 
 #[tauri::command]
+pub fn run_delete(name: String) -> Result<(), String> {
+    delete_json_file("runs", &name)
+}
+
+#[tauri::command]
 pub fn run_directory() -> Result<String, String> {
     let dir = ensure_subdir("runs")?;
     Ok(dir.to_string_lossy().to_string())
+}
+
+#[tauri::command]
+pub fn dialog_pick_directory(app: tauri::AppHandle) -> Result<Option<String>, String> {
+    let picked = app
+        .dialog()
+        .file()
+        .set_title("작업 경로 선택")
+        .blocking_pick_folder();
+    Ok(picked.map(|path| path.to_string()))
+}
+
+#[tauri::command]
+pub fn dialog_pick_knowledge_files(app: tauri::AppHandle) -> Result<Vec<String>, String> {
+    let picked = app
+        .dialog()
+        .file()
+        .set_title("첨부 자료 선택")
+        .add_filter(
+            "지원 파일",
+            &[
+                "txt", "md", "json", "csv", "ts", "tsx", "js", "jsx", "py", "rs", "go", "java",
+                "cs", "html", "css", "sql", "yaml", "yml", "pdf", "docx",
+            ],
+        )
+        .blocking_pick_files()
+        .unwrap_or_default();
+
+    let unique_paths = picked
+        .into_iter()
+        .map(|path| path.to_string())
+        .filter(|path| !path.trim().is_empty())
+        .collect::<std::collections::BTreeSet<_>>()
+        .into_iter()
+        .collect::<Vec<_>>();
+
+    Ok(unique_paths)
 }
