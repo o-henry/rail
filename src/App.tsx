@@ -338,10 +338,10 @@ const KNOWLEDGE_TOP_K_OPTIONS: FancySelectOption[] = [
   { value: "8", label: "8개" },
 ];
 const KNOWLEDGE_MAX_CHARS_OPTIONS: FancySelectOption[] = [
-  { value: "1600", label: "1600자" },
-  { value: "2800", label: "2800자" },
-  { value: "4000", label: "4000자" },
-  { value: "5600", label: "5600자" },
+  { value: "1600", label: "짧게 (빠름)" },
+  { value: "2800", label: "보통 (균형)" },
+  { value: "4000", label: "길게 (정밀)" },
+  { value: "5600", label: "아주 길게 (최대)" },
 ];
 const TURN_EXECUTOR_OPTIONS = [
   "codex",
@@ -676,6 +676,33 @@ function readNumber(value: unknown): number | undefined {
   return undefined;
 }
 
+function closestNumericOptionValue(
+  options: FancySelectOption[],
+  current: number,
+  fallback: number,
+): string {
+  const parsed = options
+    .map((option) => Number(option.value))
+    .filter((value) => Number.isFinite(value));
+  if (parsed.length === 0) {
+    return String(fallback);
+  }
+  if (parsed.includes(current)) {
+    return String(current);
+  }
+  let nearest = parsed[0] ?? fallback;
+  let nearestDistance = Math.abs(current - nearest);
+  for (let index = 1; index < parsed.length; index += 1) {
+    const candidate = parsed[index];
+    const distance = Math.abs(current - candidate);
+    if (distance < nearestDistance) {
+      nearest = candidate;
+      nearestDistance = distance;
+    }
+  }
+  return String(nearest);
+}
+
 function findUsageObject(input: unknown, depth = 0): Record<string, unknown> | null {
   if (depth > 5 || input == null || typeof input !== "object") {
     return null;
@@ -888,47 +915,132 @@ function buildRoundedEdgePath(
   x2: number,
   y2: number,
   withArrow: boolean,
+  fromSide: NodeAnchorSide,
+  toSide: NodeAnchorSide,
 ): string {
-  const dx = x2 - x1;
-  const dy = y2 - y1;
-  const absDx = Math.abs(dx);
-  const absDy = Math.abs(dy);
-  const isNearlyVertical = absDx <= 20;
-  const isNearlyHorizontal = absDy <= 20;
-  const isShortHorizontalHop = absDx <= 150 && absDy <= 40;
+  const toVector = (side: NodeAnchorSide): LogicalPoint => {
+    if (side === "left") {
+      return { x: -1, y: 0 };
+    }
+    if (side === "right") {
+      return { x: 1, y: 0 };
+    }
+    if (side === "top") {
+      return { x: 0, y: -1 };
+    }
+    return { x: 0, y: 1 };
+  };
 
-  if (isNearlyVertical || isNearlyHorizontal || isShortHorizontalHop) {
+  const offsetPoint = (point: LogicalPoint, side: NodeAnchorSide, distance: number): LogicalPoint => {
+    const vector = toVector(side);
+    return { x: point.x + vector.x * distance, y: point.y + vector.y * distance };
+  };
+
+  const simplifyOrthogonalPoints = (points: LogicalPoint[]): LogicalPoint[] => {
+    const compact: LogicalPoint[] = [];
+    for (const point of points) {
+      const prev = compact[compact.length - 1];
+      if (!prev || Math.abs(prev.x - point.x) > 0.1 || Math.abs(prev.y - point.y) > 0.1) {
+        compact.push(point);
+      }
+    }
+
+    const simplified: LogicalPoint[] = [];
+    for (const point of compact) {
+      const mid = simplified[simplified.length - 1];
+      const head = simplified[simplified.length - 2];
+      if (!mid || !head) {
+        simplified.push(point);
+        continue;
+      }
+      const isCollinearX = Math.abs(head.x - mid.x) <= 0.1 && Math.abs(mid.x - point.x) <= 0.1;
+      const isCollinearY = Math.abs(head.y - mid.y) <= 0.1 && Math.abs(mid.y - point.y) <= 0.1;
+      if (isCollinearX || isCollinearY) {
+        simplified[simplified.length - 1] = point;
+      } else {
+        simplified.push(point);
+      }
+    }
+    return simplified;
+  };
+
+  const roundedPathFromPoints = (points: LogicalPoint[], radius: number): string => {
+    if (points.length < 2) {
+      return "";
+    }
+    if (points.length === 2) {
+      return `M ${points[0].x} ${points[0].y} L ${points[1].x} ${points[1].y}`;
+    }
+
+    let d = `M ${points[0].x} ${points[0].y}`;
+    for (let i = 1; i < points.length - 1; i += 1) {
+      const prev = points[i - 1];
+      const cur = points[i];
+      const next = points[i + 1];
+
+      const inVec = { x: cur.x - prev.x, y: cur.y - prev.y };
+      const outVec = { x: next.x - cur.x, y: next.y - cur.y };
+      const inLen = Math.hypot(inVec.x, inVec.y);
+      const outLen = Math.hypot(outVec.x, outVec.y);
+      if (inLen < 0.1 || outLen < 0.1) {
+        d += ` L ${cur.x} ${cur.y}`;
+        continue;
+      }
+
+      const corner = Math.min(radius, inLen / 2, outLen / 2);
+      const p1 = {
+        x: cur.x - (inVec.x / inLen) * corner,
+        y: cur.y - (inVec.y / inLen) * corner,
+      };
+      const p2 = {
+        x: cur.x + (outVec.x / outLen) * corner,
+        y: cur.y + (outVec.y / outLen) * corner,
+      };
+      d += ` L ${p1.x} ${p1.y} Q ${cur.x} ${cur.y} ${p2.x} ${p2.y}`;
+    }
+    const last = points[points.length - 1];
+    d += ` L ${last.x} ${last.y}`;
+    return d;
+  };
+
+  const start = { x: x1, y: y1 };
+  const end = { x: x2, y: y2 };
+  const baseDistance = Math.hypot(end.x - start.x, end.y - start.y);
+  if (baseDistance <= 1) {
     return `M ${x1} ${y1} L ${x2} ${y2}`;
   }
 
-  const direction = x2 >= x1 ? 1 : -1;
-  const arrowLeadX = withArrow ? x2 - 12 * direction : x2;
-  const horizontalGap = Math.max(64, Math.min(180, Math.abs(arrowLeadX - x1) * 0.5));
-  const bendX = x1 + horizontalGap * direction;
-  const verticalDelta = dy;
+  const arrowLead = withArrow ? 10 : 0;
+  const startStubDistance = 24;
+  const endStubDistance = 24 + arrowLead;
+  const startStub = offsetPoint(start, fromSide, startStubDistance);
+  const endStub = offsetPoint(end, toSide, -endStubDistance);
 
-  if (Math.abs(verticalDelta) < 1) {
-    return withArrow
-      ? `M ${x1} ${y1} L ${arrowLeadX} ${y1} L ${x2} ${y1}`
-      : `M ${x1} ${y1} L ${x2} ${y1}`;
+  const fromHorizontal = fromSide === "left" || fromSide === "right";
+  const toHorizontal = toSide === "left" || toSide === "right";
+
+  const points: LogicalPoint[] = [start, startStub];
+  if (fromHorizontal && toHorizontal) {
+    const midX = (startStub.x + endStub.x) / 2;
+    points.push({ x: midX, y: startStub.y }, { x: midX, y: endStub.y });
+  } else if (!fromHorizontal && !toHorizontal) {
+    const midY = (startStub.y + endStub.y) / 2;
+    points.push({ x: startStub.x, y: midY }, { x: endStub.x, y: midY });
+  } else if (fromHorizontal && !toHorizontal) {
+    points.push({ x: endStub.x, y: startStub.y });
+  } else {
+    points.push({ x: startStub.x, y: endStub.y });
   }
+  points.push(endStub);
 
-  const verticalSign = verticalDelta >= 0 ? 1 : -1;
-  const corner1 = Math.min(4, Math.abs(bendX - x1) / 2, Math.abs(verticalDelta) / 2);
-  const corner2 = Math.min(4, Math.abs(arrowLeadX - bendX) / 2, Math.abs(verticalDelta) / 2);
-  const pathParts = [
-    `M ${x1} ${y1}`,
-    `L ${bendX - direction * corner1} ${y1}`,
-    `Q ${bendX} ${y1} ${bendX} ${y1 + verticalSign * corner1}`,
-    `L ${bendX} ${y2 - verticalSign * corner2}`,
-    `Q ${bendX} ${y2} ${bendX + direction * corner2} ${y2}`,
-    `L ${arrowLeadX} ${y2}`,
-  ];
-
-  if (withArrow) {
-    pathParts.push(`L ${x2} ${y2}`);
+  if (withArrow && arrowLead > 0) {
+    const leadPoint = offsetPoint(end, toSide, -arrowLead);
+    points.push(leadPoint);
   }
-  return pathParts.join(" ");
+  points.push(end);
+
+  const simplified = simplifyOrthogonalPoints(points);
+  return roundedPathFromPoints(simplified, 8);
 }
 
 function buildManualEdgePath(
@@ -977,6 +1089,21 @@ function getAutoConnectionSides(fromNode: GraphNode, toNode: GraphNode): {
   fromSide: NodeAnchorSide;
   toSide: NodeAnchorSide;
 } {
+  const fromRect = {
+    left: fromNode.position.x,
+    right: fromNode.position.x + NODE_WIDTH,
+    top: fromNode.position.y,
+    bottom: fromNode.position.y + NODE_HEIGHT,
+  };
+  const toRect = {
+    left: toNode.position.x,
+    right: toNode.position.x + NODE_WIDTH,
+    top: toNode.position.y,
+    bottom: toNode.position.y + NODE_HEIGHT,
+  };
+  const overlapX = Math.min(fromRect.right, toRect.right) - Math.max(fromRect.left, toRect.left);
+  const overlapY = Math.min(fromRect.bottom, toRect.bottom) - Math.max(fromRect.top, toRect.top);
+
   const fromCenterX = fromNode.position.x + NODE_WIDTH / 2;
   const fromCenterY = fromNode.position.y + NODE_HEIGHT / 2;
   const toCenterX = toNode.position.x + NODE_WIDTH / 2;
@@ -984,17 +1111,25 @@ function getAutoConnectionSides(fromNode: GraphNode, toNode: GraphNode): {
   const dx = toCenterX - fromCenterX;
   const dy = toCenterY - fromCenterY;
 
-  if (Math.abs(dx) >= Math.abs(dy)) {
-    if (dx >= 0) {
-      return { fromSide: "right", toSide: "left" };
-    }
-    return { fromSide: "left", toSide: "right" };
+  if (overlapX > 24) {
+    return dy >= 0
+      ? { fromSide: "bottom", toSide: "top" }
+      : { fromSide: "top", toSide: "bottom" };
+  }
+  if (overlapY > 24) {
+    return dx >= 0
+      ? { fromSide: "right", toSide: "left" }
+      : { fromSide: "left", toSide: "right" };
   }
 
-  if (dy >= 0) {
-    return { fromSide: "bottom", toSide: "top" };
+  if (Math.abs(dx) >= Math.abs(dy)) {
+    return dx >= 0
+      ? { fromSide: "right", toSide: "left" }
+      : { fromSide: "left", toSide: "right" };
   }
-  return { fromSide: "top", toSide: "bottom" };
+  return dy >= 0
+    ? { fromSide: "bottom", toSide: "top" }
+    : { fromSide: "top", toSide: "bottom" };
 }
 
 function makeNodeId(type: NodeType): string {
@@ -2412,6 +2547,11 @@ function App() {
   const selectedNode = graph.nodes.find((node) => node.id === selectedNodeId) ?? null;
   const graphKnowledge = normalizeKnowledgeConfig(graph.knowledge);
   const enabledKnowledgeFiles = graphKnowledge.files.filter((row) => row.enabled);
+  const selectedKnowledgeMaxCharsOption = closestNumericOptionValue(
+    KNOWLEDGE_MAX_CHARS_OPTIONS,
+    graphKnowledge.maxChars,
+    KNOWLEDGE_DEFAULT_MAX_CHARS,
+  );
 
   function setError(next: string) {
     setErrorState(next);
@@ -5506,21 +5646,23 @@ ${prompt}`;
       }
 
       const auto = getAutoConnectionSides(fromNode, toNode);
+      const hasManualControl =
+        typeof edge.control?.x === "number" && typeof edge.control?.y === "number";
+      const resolvedFromSide = hasManualControl ? (edge.from.side ?? auto.fromSide) : auto.fromSide;
+      const resolvedToSide = hasManualControl ? (edge.to.side ?? auto.toSide) : auto.toSide;
       const fromPoint = getNodeAnchorPoint(
         fromNode,
-        edge.from.side ?? auto.fromSide,
+        resolvedFromSide,
         getNodeVisualSize(fromNode.id),
       );
       const toPoint = getNodeAnchorPoint(
         toNode,
-        edge.to.side ?? auto.toSide,
+        resolvedToSide,
         getNodeVisualSize(toNode.id),
       );
       const edgeKey = getGraphEdgeKey(edge);
       const defaultControl = edgeMidPoint(fromPoint, toPoint);
       const control = edge.control ?? defaultControl;
-      const hasManualControl =
-        typeof edge.control?.x === "number" && typeof edge.control?.y === "number";
 
       return {
         key: `${edgeKey}-${index}`,
@@ -5531,7 +5673,15 @@ ${prompt}`;
         hasManualControl,
         path: hasManualControl
           ? buildManualEdgePath(fromPoint.x, fromPoint.y, control.x, control.y, toPoint.x, toPoint.y)
-          : buildRoundedEdgePath(fromPoint.x, fromPoint.y, toPoint.x, toPoint.y, true),
+          : buildRoundedEdgePath(
+              fromPoint.x,
+              fromPoint.y,
+              toPoint.x,
+              toPoint.y,
+              true,
+              resolvedFromSide,
+              resolvedToSide,
+            ),
       };
     })
     .filter(Boolean) as Array<{
@@ -5564,7 +5714,25 @@ ${prompt}`;
     if (!startPoint) {
       return null;
     }
-    return buildRoundedEdgePath(startPoint.x, startPoint.y, connectPreviewPoint.x, connectPreviewPoint.y, false);
+    const dx = connectPreviewPoint.x - startPoint.x;
+    const dy = connectPreviewPoint.y - startPoint.y;
+    const guessedToSide: NodeAnchorSide =
+      Math.abs(dx) >= Math.abs(dy)
+        ? dx >= 0
+          ? "left"
+          : "right"
+        : dy >= 0
+          ? "top"
+          : "bottom";
+    return buildRoundedEdgePath(
+      startPoint.x,
+      startPoint.y,
+      connectPreviewPoint.x,
+      connectPreviewPoint.y,
+      false,
+      connectFromSide ?? "right",
+      guessedToSide,
+    );
   })();
 
   const selectedNodeState = selectedNodeId ? nodeStates[selectedNodeId] : undefined;
@@ -6193,11 +6361,11 @@ ${prompt}`;
                             }));
                           }}
                           options={KNOWLEDGE_MAX_CHARS_OPTIONS}
-                          value={String(graphKnowledge.maxChars)}
+                          value={selectedKnowledgeMaxCharsOption}
                         />
                       </label>
                       <div className="inspector-empty">
-                        참고 내용 총 길이입니다. 크게 할수록 정보는 늘지만 응답 속도는 느려질 수 있습니다.
+                        길이를 길게 할수록 근거는 늘고, 응답 속도와 사용량은 증가할 수 있습니다.
                       </div>
                     </div>
                   </section>
