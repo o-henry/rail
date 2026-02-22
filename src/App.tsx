@@ -1229,6 +1229,17 @@ function loginStateLabel(engineStarted: boolean, loginCompleted: boolean, authMo
   return "로그인 필요";
 }
 
+function InspectorSectionTitle({ title, help }: { title: string; help: string }) {
+  return (
+    <div className="inspector-section-title">
+      <h3>{title}</h3>
+      <span aria-label={`${title} 도움말`} className="help-tooltip" data-tooltip={help} role="note" tabIndex={0}>
+        ?
+      </span>
+    </div>
+  );
+}
+
 function extractFinalAnswer(output: unknown): string {
   const maybeText = extractStringByPaths(output, [
     "text",
@@ -4916,7 +4927,10 @@ function App() {
               <div className="inspector-content">
                 <div className="inspector-section">
                   <section className="inspector-block">
-                    <h3>그래프 도구</h3>
+                    <InspectorSectionTitle
+                      help="노드 추가, 템플릿 불러오기, 비용 프리셋 적용, 그래프 저장/불러오기를 관리합니다."
+                      title="그래프 도구"
+                    />
                     <div className="tool-dropdown-group">
                       <h4>노드 선택</h4>
                       <FancySelect
@@ -5018,7 +5032,10 @@ function App() {
                     <>
                       {selectedNode.type === "turn" && (
                         <section className="inspector-block form-grid">
-                          <h3>에이전트 설정</h3>
+                          <InspectorSectionTitle
+                            help="실행기, 모델, 역할, 프롬프트를 설정해 해당 에이전트의 동작을 정의합니다."
+                            title="에이전트 설정"
+                          />
                           <label>
                             에이전트
                             <FancySelect
@@ -5126,7 +5143,10 @@ function App() {
 
                       {selectedNode.type === "transform" && (
                         <section className="inspector-block form-grid">
-                          <h3>변환 규칙</h3>
+                          <InspectorSectionTitle
+                            help="입력 JSON에서 필요한 필드 추출, 병합, 템플릿 변환 규칙을 설정합니다."
+                            title="변환 규칙"
+                          />
                           <label>
                             변환 모드
                             <FancySelect
@@ -5177,7 +5197,10 @@ function App() {
 
                       {selectedNode.type === "gate" && (
                         <section className="inspector-block form-grid">
-                          <h3>분기 설정</h3>
+                          <InspectorSectionTitle
+                            help="decision 값(PASS/REJECT)에 따라 다음 실행 노드를 선택합니다."
+                            title="분기 설정"
+                          />
                           <label>
                             분기 경로(decisionPath)
                             <input
@@ -5229,12 +5252,18 @@ function App() {
                       )}
 
                       <section className="inspector-block">
-                        <h3>노드 로그</h3>
+                        <InspectorSectionTitle
+                          help="선택한 노드의 실행 중간 로그와 상태 메시지를 확인합니다."
+                          title="노드 로그"
+                        />
                         <pre>{(selectedNodeState?.logs ?? []).join("\n") || "[로그 없음]"}</pre>
                       </section>
 
                       <section className="inspector-block">
-                        <h3>노드 출력</h3>
+                        <InspectorSectionTitle
+                          help="선택한 노드의 최종 출력 데이터를 확인합니다."
+                          title="노드 출력"
+                        />
                         <pre>{formatUnknown(selectedNodeState?.output) || "[출력 없음]"}</pre>
                       </section>
                     </>
@@ -5339,6 +5368,16 @@ function App() {
               </div>
             </section>
             {renderWebAutomationPanel()}
+            <section className="settings-usage-guide">
+              <h3>사용 방법</h3>
+              <ol>
+                <li>작업 경로(CWD)를 현재 프로젝트 루트로 맞춥니다.</li>
+                <li>엔진 시작 후 기본 모델을 선택합니다.</li>
+                <li>웹 계정 연동에서 필요한 서비스만 로그인합니다.</li>
+                <li>워크플로우 탭에서 노드를 연결하고 실행합니다.</li>
+                <li>기록 탭에서 실행 결과와 로그를 확인합니다.</li>
+              </ol>
+            </section>
             {lastSavedRunFile && <div>최근 실행 파일: {lastSavedRunFile}</div>}
           </section>
         )}
