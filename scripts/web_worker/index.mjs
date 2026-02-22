@@ -121,7 +121,10 @@ function sanitizeUrlForUi(rawUrl) {
   }
 }
 
-function inferSessionState(provider, sanitizedUrl) {
+function inferSessionState(provider, sanitizedUrl, contextOpen = true) {
+  if (!contextOpen) {
+    return 'unknown';
+  }
   if (!sanitizedUrl) {
     return 'unknown';
   }
@@ -144,6 +147,9 @@ async function ensureProviderContext(provider) {
 
   const current = state.providers.get(provider);
   if (current && !current.contextClosed) {
+    if (!current.page || current.page.isClosed()) {
+      current.page = current.context.pages()[0] ?? (await current.context.newPage());
+    }
     return current;
   }
 
@@ -482,12 +488,13 @@ async function openProviderSession(provider) {
 async function getHealthResult() {
   const providerStatuses = {};
   for (const [provider, wrapped] of state.providers.entries()) {
-    const safeUrl = sanitizeUrlForUi(wrapped.page?.url?.() ?? null);
+    const contextOpen = !wrapped.contextClosed;
+    const safeUrl = contextOpen ? sanitizeUrlForUi(wrapped.page?.url?.() ?? null) : null;
     providerStatuses[provider] = {
-      contextOpen: !wrapped.contextClosed,
+      contextOpen,
       profileDir: wrapped.profileDir,
       url: safeUrl,
-      sessionState: inferSessionState(provider, safeUrl),
+      sessionState: inferSessionState(provider, safeUrl, contextOpen),
     };
   }
 

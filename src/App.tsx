@@ -1680,10 +1680,13 @@ function toWebProviderHealthMap(raw: unknown): Record<string, WebProviderHealthE
   return next;
 }
 
-function providerSessionStateMeta(state?: string | null): {
+function providerSessionStateMeta(state?: string | null, contextOpen?: boolean): {
   label: string;
   tone: "connected" | "required" | "unknown";
 } {
+  if (!contextOpen) {
+    return { label: "확인 필요", tone: "unknown" };
+  }
   if (state === "active") {
     return { label: "연결됨", tone: "connected" };
   }
@@ -3636,8 +3639,17 @@ function App() {
     setWebWorkerBusy(true);
     setError("");
     try {
-      await invoke("web_provider_open_session", { provider });
+      const result = await invoke<{ ok?: boolean; error?: string; errorCode?: string }>(
+        "web_provider_open_session",
+        { provider },
+      );
+      if (result && result.ok === false) {
+        throw new Error(result.error || result.errorCode || "세션 창을 열지 못했습니다.");
+      }
       await refreshWebWorkerHealth(true);
+      window.setTimeout(() => {
+        void refreshWebWorkerHealth(true);
+      }, 900);
       setStatus(`${webProviderLabel(provider)} 로그인 세션 창 열림`);
     } catch (error) {
       setError(`${webProviderLabel(provider)} 로그인 세션 열기 실패: ${String(error)}`);
@@ -3659,6 +3671,21 @@ function App() {
       setWebWorkerBusy(false);
     }
   }
+
+  useEffect(() => {
+    if (workspaceTab !== "settings") {
+      return;
+    }
+
+    void refreshWebWorkerHealth(true);
+    const intervalId = window.setInterval(() => {
+      void refreshWebWorkerHealth(true);
+    }, 1800);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [workspaceTab]);
 
   async function ensureWebWorkerReady() {
     try {
@@ -6124,7 +6151,7 @@ ${prompt}`;
             {WEB_PROVIDER_OPTIONS.map((provider) => {
               const row = providerHealthMap[provider];
               const hasContext = row?.contextOpen === true;
-              const session = providerSessionStateMeta(row?.sessionState);
+              const session = providerSessionStateMeta(row?.sessionState, hasContext);
               return (
                 <div className="provider-hub-row" key={`session-${provider}`}>
                   <div className="provider-hub-meta">
@@ -6135,17 +6162,20 @@ ${prompt}`;
                   </div>
                   <div className="button-row provider-session-actions">
                     <button
-                      aria-pressed={hasContext}
-                      className={`provider-session-toggle ${hasContext ? "is-active" : ""}`}
+                      className="provider-session-toggle"
                       disabled={webWorkerBusy}
-                      onClick={() =>
-                        hasContext ? onResetProviderSession(provider) : onOpenProviderSession(provider)
-                      }
+                      onClick={() => onOpenProviderSession(provider)}
                       type="button"
                     >
-                      <span className="settings-button-label">
-                        {hasContext ? "세션 리셋" : "로그인"}
-                      </span>
+                      <span className="settings-button-label">로그인</span>
+                    </button>
+                    <button
+                      className={`provider-session-toggle provider-session-manage ${hasContext ? "is-active" : ""}`}
+                      disabled={webWorkerBusy || !hasContext}
+                      onClick={() => onResetProviderSession(provider)}
+                      type="button"
+                    >
+                      <span className="settings-button-label">세션 관리</span>
                     </button>
                   </div>
                 </div>
