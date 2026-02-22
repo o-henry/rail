@@ -4303,20 +4303,15 @@ function App() {
                   </div>
                   <div className="button-row provider-session-actions">
                     <button
-                      className="provider-login-button"
+                      aria-pressed={hasContext}
+                      className={`provider-session-toggle ${hasContext ? "is-active" : ""}`}
                       disabled={webWorkerBusy}
-                      onClick={() => onOpenProviderSession(provider)}
+                      onClick={() =>
+                        hasContext ? onResetProviderSession(provider) : onOpenProviderSession(provider)
+                      }
                       type="button"
                     >
-                      로그인
-                    </button>
-                    <button
-                      className="provider-reset-button"
-                      disabled={webWorkerBusy || !hasContext}
-                      onClick={() => onResetProviderSession(provider)}
-                      type="button"
-                    >
-                      세션 리셋
+                      {hasContext ? "세션 리셋" : "로그인"}
                     </button>
                   </div>
                 </div>

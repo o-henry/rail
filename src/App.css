@@ -1270,7 +1270,7 @@ h3 {
 
 .status-tag {
   border-radius: 999px;
-  padding: 8px 10px;
+  padding: 6px 10px;
   font-size: 0.78rem;
   background: #d8dee7;
   color: #243041;
@@ -1320,7 +1320,7 @@ h3 {
 
 .provider-hub-list {
   display: grid;
-  gap: 8px;
+  gap: 6px;
 }
 
 .provider-hub-row {
@@ -1340,6 +1340,7 @@ h3 {
 .provider-hub-name {
   color: #253246;
   font-weight: 600;
+  font-size: 15px;
   letter-spacing: -0.2px;
 }
 
@@ -1348,7 +1349,7 @@ h3 {
   align-items: center;
   gap: 6px;
   border-radius: 999px;
-  padding: 4px 9px;
+  padding: 6.5px 9px;
   font-size: 0.74rem;
   line-height: 1;
   letter-spacing: -0.1px;
@@ -1391,8 +1392,7 @@ h3 {
   gap: 6px;
 }
 
-.provider-login-button,
-.provider-reset-button,
+.provider-session-toggle,
 .settings-refresh-button {
   min-width: 70px;
   height: 29px;
@@ -1408,27 +1408,30 @@ h3 {
   transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease, box-shadow 140ms ease;
 }
 
-.provider-login-button {
+.provider-session-toggle {
   background: #edf4ff;
   color: #1f66d5;
   border: 1px solid #c8dcff;
 }
 
-.provider-reset-button,
+.provider-session-toggle.is-active {
+  background: #f4f6f9;
+  color: #3f4b5a;
+  border: 1px solid #d6dde8;
+}
+
 .settings-refresh-button {
   background: #f4f6f9;
   color: #3f4b5a;
   border: 1px solid #d6dde8;
 }
 
-.provider-login-button:hover:not(:disabled),
-.provider-reset-button:hover:not(:disabled),
+.provider-session-toggle:hover:not(:disabled),
 .settings-refresh-button:hover:not(:disabled) {
   box-shadow: 0 2px 5px rgba(22, 31, 40, 0.12);
 }
 
-.provider-login-button:disabled,
-.provider-reset-button:disabled,
+.provider-session-toggle:disabled,
 .settings-refresh-button:disabled {
   opacity: 0.56;
 }
