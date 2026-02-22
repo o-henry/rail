@@ -1,5 +1,6 @@
 mod engine;
 mod knowledge;
+mod quality;
 mod storage;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -32,6 +33,7 @@ pub fn run() {
             engine::ollama_generate,
             knowledge::knowledge_probe,
             knowledge::knowledge_retrieve,
+            quality::quality_run_checks,
             storage::graph_list,
             storage::graph_save,
             storage::graph_load,
