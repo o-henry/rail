@@ -4274,8 +4274,13 @@ function App() {
           </span>
         </div>
         <div className="button-row">
-          <button disabled={webWorkerBusy} onClick={() => refreshWebWorkerHealth()} type="button">
-            상태 새로고침
+          <button
+            className="settings-refresh-button"
+            disabled={webWorkerBusy}
+            onClick={() => refreshWebWorkerHealth()}
+            type="button"
+          >
+            상태 동기화
           </button>
         </div>
         <div className="usage-method">
@@ -4292,10 +4297,13 @@ function App() {
                 <div className="provider-hub-row" key={`session-${provider}`}>
                   <div className="provider-hub-meta">
                     <span className="provider-hub-name">{webProviderLabel(provider)}</span>
-                    <span className={`provider-session-pill ${session.tone}`}>{session.label}</span>
+                    <span className={`provider-session-pill ${session.tone}`}>
+                      <span className="provider-session-label">{session.label}</span>
+                    </span>
                   </div>
-                  <div className="button-row">
+                  <div className="button-row provider-session-actions">
                     <button
+                      className="provider-login-button"
                       disabled={webWorkerBusy}
                       onClick={() => onOpenProviderSession(provider)}
                       type="button"
@@ -4303,6 +4311,7 @@ function App() {
                       로그인
                     </button>
                     <button
+                      className="provider-reset-button"
                       disabled={webWorkerBusy || !hasContext}
                       onClick={() => onResetProviderSession(provider)}
                       type="button"

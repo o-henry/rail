@@ -321,15 +321,15 @@ h3 {
   border-radius: 5px;
   background: #fff2f2;
   color: #9a2727;
-  padding: 8px;
+  padding: 10px 36px 10px 10px;
   font-size: 0.88rem;
   display: flex;
-  /* align-items: flex-start; */
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 8px;
   line-height: 1.35;
   grid-row: 2;
+  position: relative;
 }
 
 .error-close {
@@ -345,6 +345,9 @@ h3 {
   line-height: 1;
   display: inline-grid;
   place-items: center;
+  position: absolute;
+  top: 8px;
+  right: 8px;
 }
 
 .workspace > :not(.workspace-header):not(.error) {
@@ -356,6 +359,8 @@ h3 {
   display: block;
   flex: 1 1 auto;
   min-width: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .workflow-layout {
@@ -1189,7 +1194,7 @@ h3 {
 .workflow-runtime-status {
   margin-top: 8px;
   display: grid;
-  gap: 12px;
+  /* gap: 12px; */
 }
 
 .workflow-runtime-status .settings-badges {
@@ -1265,7 +1270,7 @@ h3 {
 
 .status-tag {
   border-radius: 999px;
-  padding: 5px 10px;
+  padding: 8px 10px;
   font-size: 0.78rem;
   background: #d8dee7;
   color: #243041;
@@ -1308,8 +1313,9 @@ h3 {
   display: grid;
   gap: 8px;
   padding: 10px;
-  border-radius: 5px;
-  background: #dbe2ed;
+  border-radius: 8px;
+  /* background: #dbe2ed; */
+  background: white;
 }
 
 .provider-hub-list {
@@ -1348,6 +1354,11 @@ h3 {
   letter-spacing: -0.1px;
 }
 
+.provider-session-label {
+  position: relative;
+  top: 1px;
+}
+
 .provider-session-pill::before {
   content: "";
   width: 6px;
@@ -1372,14 +1383,58 @@ h3 {
   color: #4f5e76;
 }
 
-.provider-hub-row button {
-  min-width: 64px;
+.provider-session-pill.unknown .provider-session-label {
+  top: 2px;
 }
 
-.provider-hub-row button.is-active {
-  background: #1d7cff;
-  color: #ffffff;
-  border-color: transparent;
+.provider-session-actions {
+  gap: 6px;
+}
+
+.provider-login-button,
+.provider-reset-button,
+.settings-refresh-button {
+  min-width: 70px;
+  height: 29px;
+  min-height: 29px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 1px 2px rgba(22, 31, 40, 0.08);
+  transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease, box-shadow 140ms ease;
+}
+
+.provider-login-button {
+  background: #edf4ff;
+  color: #1f66d5;
+  border: 1px solid #c8dcff;
+}
+
+.provider-reset-button,
+.settings-refresh-button {
+  background: #f4f6f9;
+  color: #3f4b5a;
+  border: 1px solid #d6dde8;
+}
+
+.provider-login-button:hover:not(:disabled),
+.provider-reset-button:hover:not(:disabled),
+.settings-refresh-button:hover:not(:disabled) {
+  box-shadow: 0 2px 5px rgba(22, 31, 40, 0.12);
+}
+
+.provider-login-button:disabled,
+.provider-reset-button:disabled,
+.settings-refresh-button:disabled {
+  opacity: 0.56;
+}
+
+.settings-refresh-button {
+  min-width: 82px;
 }
 
 .panel-card {
