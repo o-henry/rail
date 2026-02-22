@@ -42,8 +42,6 @@ pub fn run() {
             storage::run_load,
             storage::run_delete,
             storage::run_directory,
-            storage::run_export,
-            storage::run_import,
             storage::dialog_pick_directory,
             storage::dialog_pick_knowledge_files,
         ])
