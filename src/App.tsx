@@ -8849,14 +8849,47 @@ ${prompt}`;
                             <h3>{post.agentName}</h3>
                             <div className="feed-card-sub">{post.roleLabel}</div>
                           </div>
-                          <span
-                            className={`feed-score-badge ${
-                              isDraftPost ? "live" : post.status === "done" ? "good" : "warn"
-                            }`}
-                            title={isDraftPost ? "에이전트 작업 중" : `품질 점수 ${score}`}
-                          >
-                            {isDraftPost ? "LIVE" : score}
-                          </span>
+                          <div className="feed-card-head-actions">
+                            <div
+                              className="feed-share-menu-wrap feed-share-menu-wrap-head"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                              }}
+                            >
+                              <button
+                                aria-label="공유하기"
+                                className="feed-share-icon-button"
+                                onClick={() => setFeedShareMenuPostId((prev) => (prev === post.id ? null : post.id))}
+                                type="button"
+                              >
+                                <img alt="" aria-hidden="true" className="feed-share-icon" src="/share-svgrepo-com.svg" />
+                              </button>
+                              {feedShareMenuPostId === post.id && (
+                                <div className="feed-share-menu">
+                                  <button onClick={() => void onShareFeedPost(post, "clipboard")} type="button">
+                                    <span>텍스트 복사</span>
+                                  </button>
+                                  <button onClick={() => void onShareFeedPost(post, "email")} type="button">
+                                    <span>이메일</span>
+                                  </button>
+                                  <button onClick={() => void onShareFeedPost(post, "obsidian")} type="button">
+                                    <span>옵시디언</span>
+                                  </button>
+                                  <button onClick={() => void onShareFeedPost(post, "json")} type="button">
+                                    <span>JSON 복사</span>
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                            <span
+                              className={`feed-score-badge ${
+                                isDraftPost ? "live" : post.status === "done" ? "good" : "warn"
+                              }`}
+                              title={isDraftPost ? "에이전트 작업 중" : `품질 점수 ${score}`}
+                            >
+                              {isDraftPost ? "LIVE" : score}
+                            </span>
+                          </div>
                         </div>
                         <div className="feed-card-summary">{post.summary || "(요약 없음)"}</div>
                         <button
@@ -8921,38 +8954,6 @@ ${prompt}`;
                               >
                                 <span>삭제</span>
                               </button>
-                              <div
-                                className="feed-share-menu-wrap"
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                }}
-                              >
-                                <button
-                                  className="feed-primary-action"
-                                  onClick={() =>
-                                    setFeedShareMenuPostId((prev) => (prev === post.id ? null : post.id))
-                                  }
-                                  type="button"
-                                >
-                                  <span>공유</span>
-                                </button>
-                                {feedShareMenuPostId === post.id && (
-                                  <div className="feed-share-menu">
-                                    <button onClick={() => void onShareFeedPost(post, "clipboard")} type="button">
-                                      <span>텍스트 복사</span>
-                                    </button>
-                                    <button onClick={() => void onShareFeedPost(post, "email")} type="button">
-                                      <span>이메일</span>
-                                    </button>
-                                    <button onClick={() => void onShareFeedPost(post, "obsidian")} type="button">
-                                      <span>옵시디언</span>
-                                    </button>
-                                    <button onClick={() => void onShareFeedPost(post, "json")} type="button">
-                                      <span>JSON 복사</span>
-                                    </button>
-                                  </div>
-                                )}
-                              </div>
                             </div>
                           </div>
                         )}

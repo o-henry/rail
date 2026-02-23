@@ -1999,6 +1999,13 @@ h3 {
   gap: 10px;
 }
 
+.feed-card-head-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
 .feed-card-title-wrap {
   min-width: 0;
   display: grid;
@@ -2033,7 +2040,7 @@ h3 {
   font-weight: 700;
   background: #ffffff;
   border: 2px solid transparent;
-  margin-left: auto;
+  margin-left: 0;
 }
 
 .feed-score-badge.good {
@@ -2188,6 +2195,36 @@ h3 {
 .feed-share-menu-wrap {
   position: relative;
   display: inline-grid;
+}
+
+.feed-share-icon-button {
+  width: 34px;
+  min-width: 34px;
+  height: 34px;
+  min-height: 34px;
+  padding: 0;
+  border-radius: 999px;
+  border: 2px solid #1d7cff;
+  background: #ffffff;
+  display: inline-grid;
+  place-items: center;
+  box-shadow: none;
+}
+
+.feed-share-icon-button:hover {
+  background: #eff5ff;
+}
+
+.feed-share-icon {
+  width: 16px;
+  height: 16px;
+  display: block;
+  object-fit: contain;
+}
+
+.feed-share-menu-wrap-head .feed-share-menu {
+  top: calc(100% + 6px);
+  bottom: auto;
 }
 
 .feed-share-menu {
