@@ -2173,6 +2173,10 @@ h3 {
 
 .feed-card-actions button.feed-primary-action {
   background: #1d7cff;
+  min-height: 28px;
+  height: 28px;
+  padding: 0 9px;
+  font-size: 11px;
 }
 
 .feed-card-actions button.feed-primary-action:hover:not(:disabled) {
