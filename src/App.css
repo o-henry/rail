@@ -2068,7 +2068,7 @@ h3 {
   font-size: 14px;
   border-radius: 4px;
   background: #ffffff;
-  padding: 8px 12px 8px 12px;
+  padding: 8px 0;
 }
 
 .feed-card-summary {
@@ -2106,7 +2106,7 @@ h3 {
   overflow: auto;
   border-radius: 4px;
   background: #ffffff;
-  padding: 10px 11px;
+  padding: 10px 0;
   font-size: 14px;
   line-height: 1.5;
   border: 0;
