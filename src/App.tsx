@@ -7909,10 +7909,11 @@ ${prompt}`;
       : `${promptTemplate}${inputText ? `\n${inputText}` : ""}`;
     const promptWithRequests = `${basePrompt}${queuedRequestBlock}`.trim();
     const agentRuleDocs = await loadAgentRuleDocs(nodeCwd);
-    if (agentRuleDocs.length > 0) {
+    const shouldForceAgentRules = inferQualityProfile(node, config) === "code_implementation";
+    if (agentRuleDocs.length > 0 && shouldForceAgentRules) {
       addNodeLog(node.id, `[규칙] agent/skill 문서 ${agentRuleDocs.length}개 강제 적용`);
     }
-    const forcedRuleBlock = buildForcedAgentRuleBlock(agentRuleDocs);
+    const forcedRuleBlock = shouldForceAgentRules ? buildForcedAgentRuleBlock(agentRuleDocs) : "";
     const withKnowledge = await injectKnowledgeContext(node, promptWithRequests, config);
     const textToSend = forcedRuleBlock
       ? `${forcedRuleBlock}\n\n${withKnowledge.prompt}`.trim()

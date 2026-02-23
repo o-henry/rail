@@ -924,6 +924,10 @@ h3 {
   font-family: "BasicallyAMono", "DialogNanumBody1984", "Noto Sans KR", sans-serif;
 }
 
+.node-gate .node-head strong {
+  font-family: "BasicallyAMono", "DialogNanumBody1984", "Noto Sans KR", sans-serif;
+}
+
 .node-turn .node-head {
   background: #eef6ff;
 }
@@ -1202,7 +1206,8 @@ h3 {
 .canvas-runbar .play {
   background: #ffffff;
   color: #8a98a8;
-  border-color: #c9d2dd;
+  /* border-color: #c9d2dd; */
+  border-color: gray;
 }
 
 .canvas-runbar .play.is-ready {
@@ -1920,9 +1925,9 @@ h3 {
 .feed-agent-list {
   display: grid;
   gap: 6px;
-  max-height: 180px;
+  /* max-height: 180px; */
   overflow: auto;
-  padding-left: 2px;
+  /* padding-left: 2px; */
   padding-right: 2px;
   scrollbar-width: none;
 }
@@ -2022,7 +2027,7 @@ h3 {
 .feed-agent-rules {
   display: grid;
   gap: 8px;
-  margin-top: 2rem;
+  /* margin-top: 2rem; */
 }
 
 .feed-agent-rules-head {
@@ -2329,7 +2334,7 @@ h3 {
   margin: 0;
   font-size: 16px;
   line-height: 1.2;
-  font-family: "BasicallyAMono", "Noto Sans KR", sans-serif;
+  font-family: "BasicallyAMono", "DialogNanumBody1984", "Noto Sans KR", sans-serif;
   color: #0f1419;
 }
 
