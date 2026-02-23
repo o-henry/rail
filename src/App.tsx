@@ -8752,11 +8752,6 @@ ${prompt}`;
                       value={feedKeyword}
                     />
                   </label>
-                  <div className="button-row">
-                    <button onClick={refreshFeedTimeline} type="button">
-                      새로고침
-                    </button>
-                  </div>
                 </div>
               )}
               <div className="feed-topic-tabs">
