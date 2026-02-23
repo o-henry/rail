@@ -1961,8 +1961,9 @@ h3 {
 
 .feed-topic-count {
   margin-left: 8px;
-  display: inline-grid;
-  place-items: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   min-width: 16px;
   height: 16px;
   padding: 0 4px;
@@ -1971,9 +1972,11 @@ h3 {
   color: #ffffff;
   font-size: 9px;
   font-family: "BasicallyAMono", "Noto Sans KR", sans-serif;
-  line-height: 1;
+  line-height: 16px;
+  letter-spacing: 0;
+  text-align: center;
   font-weight: 700;
-  transform: translateY(-1px);
+  transform: none;
 }
 
 .feed-stream {
