@@ -1098,6 +1098,19 @@ function sanitizeShareTitle(input: string): string {
   return compact || "rail-share";
 }
 
+function hashStringToHue(input: string): number {
+  let hash = 0;
+  for (let index = 0; index < input.length; index += 1) {
+    hash = (hash * 31 + input.charCodeAt(index)) | 0;
+  }
+  return Math.abs(hash) % 360;
+}
+
+function buildFeedAvatarLabel(post: FeedViewPost): string {
+  const source = post.agentName?.trim() || post.roleLabel?.trim() || post.nodeId;
+  return source.slice(0, 1).toUpperCase() || "A";
+}
+
 function formatUsedPercent(input: unknown): string {
   const value = readNumber(input);
   if (value == null || !Number.isFinite(value)) {
@@ -8821,9 +8834,6 @@ ${prompt}`;
                   }
                 }}
               >
-                <h3 className="feed-section-title">
-                  {feedCategoryMeta.find((row) => row.key === feedCategory)?.label ?? "에이전트 피드"}
-                </h3>
                 {feedLoading && <div className="log-empty">피드 로딩 중...</div>}
                 {!feedLoading && currentFeedPosts.length === 0 && (
                   <div className="log-empty">표시할 포스트가 없습니다.</div>
@@ -8832,7 +8842,13 @@ ${prompt}`;
                   currentFeedPosts.map((post) => {
                     const markdownAttachment = post.attachments.find((attachment) => attachment.kind === "markdown");
                     const visibleContent = markdownAttachment?.content ?? post.summary ?? "(첨부 없음)";
-                    const visibleSteps = normalizeFeedSteps(post.steps);
+                    const avatarHue = hashStringToHue(`${post.nodeId}:${post.agentName}:${post.roleLabel}`);
+                    const avatarStyle = {
+                      backgroundColor: `hsl(${avatarHue} 78% 92%)`,
+                      color: `hsl(${avatarHue} 54% 28%)`,
+                      borderColor: `hsl(${avatarHue} 36% 76%)`,
+                    };
+                    const avatarLabel = buildFeedAvatarLabel(post);
                     const score = Math.max(
                       1,
                       Math.min(99, Number(post.evidence.qualityScore ?? (post.status === "done" ? 95 : 55))),
@@ -8845,6 +8861,9 @@ ${prompt}`;
                     return (
                       <section className="feed-card feed-card-sns" key={post.id}>
                         <div className="feed-card-head">
+                          <div className="feed-card-avatar" style={avatarStyle}>
+                            <span>{avatarLabel}</span>
+                          </div>
                           <div className="feed-card-title-wrap">
                             <h3>{post.agentName}</h3>
                             <div className="feed-card-sub">{post.roleLabel}</div>
@@ -8917,15 +8936,6 @@ ${prompt}`;
                           <div className="feed-card-details">
                             {post.question && <div className="feed-card-question">Q: {post.question}</div>}
                             <pre className="feed-sns-content">{visibleContent}</pre>
-                            {visibleSteps.length > 0 && (
-                              <div className="feed-step-list">
-                                {visibleSteps.map((step) => (
-                                  <span className="feed-step-chip" key={`${post.id}-${step}`}>
-                                    <span className="feed-step-chip-label">{step}</span>
-                                  </span>
-                                ))}
-                              </div>
-                            )}
                             <div className="feed-evidence-row">
                               <span>{formatRelativeFeedTime(post.createdAt)}</span>
                               <span>생성 시간 {formatDuration(post.evidence.durationMs)}</span>

@@ -1965,16 +1965,6 @@ h3 {
   padding: 14px 0;
 }
 
-.feed-section-title {
-  margin: 0;
-  padding: 14px 0 10px;
-  font-size: 20px;
-  font-family: "DialogNanumBody1984", "Noto Sans KR", sans-serif;
-  letter-spacing: -0.01em;
-  color: #161a20;
-  border-bottom: 1px solid #e8edf2;
-}
-
 .feed-card {
   border: 0;
   border-radius: 0;
@@ -1997,6 +1987,23 @@ h3 {
   display: flex;
   align-items: center;
   gap: 10px;
+}
+
+.feed-card-avatar {
+  width: 34px;
+  min-width: 34px;
+  height: 34px;
+  min-height: 34px;
+  border-radius: 999px;
+  border: 1px solid #d4dce6;
+  display: inline-grid;
+  place-items: center;
+  font-family: "BasicallyAMono", "Noto Sans KR", sans-serif;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  flex: 0 0 auto;
+  user-select: none;
 }
 
 .feed-card-head-actions {
