@@ -494,6 +494,7 @@ const AUTO_LAYOUT_START_Y = 40;
 const AUTO_LAYOUT_COLUMN_GAP = 320;
 const AUTO_LAYOUT_ROW_GAP = 184;
 const AUTO_LAYOUT_SNAP_THRESHOLD = 20;
+const AUTO_EDGE_STRAIGHTEN_THRESHOLD = 72;
 const KNOWLEDGE_TOP_K_OPTIONS: FancySelectOption[] = [
   { value: "0", label: "0개" },
   { value: "1", label: "1개" },
@@ -2117,29 +2118,38 @@ function getGraphEdgeKey(edge: GraphEdge): string {
   return `${edge.from.nodeId}:${edge.from.port}->${edge.to.nodeId}:${edge.to.port}`;
 }
 
-function getAutoConnectionSides(fromNode: GraphNode, toNode: GraphNode): {
+function getAutoConnectionSides(
+  fromNode: GraphNode,
+  toNode: GraphNode,
+  fromSize?: NodeVisualSize,
+  toSize?: NodeVisualSize,
+): {
   fromSide: NodeAnchorSide;
   toSide: NodeAnchorSide;
 } {
+  const fromWidth = fromSize?.width ?? NODE_WIDTH;
+  const fromHeight = fromSize?.height ?? NODE_HEIGHT;
+  const toWidth = toSize?.width ?? NODE_WIDTH;
+  const toHeight = toSize?.height ?? NODE_HEIGHT;
   const fromRect = {
     left: fromNode.position.x,
-    right: fromNode.position.x + NODE_WIDTH,
+    right: fromNode.position.x + fromWidth,
     top: fromNode.position.y,
-    bottom: fromNode.position.y + NODE_HEIGHT,
+    bottom: fromNode.position.y + fromHeight,
   };
   const toRect = {
     left: toNode.position.x,
-    right: toNode.position.x + NODE_WIDTH,
+    right: toNode.position.x + toWidth,
     top: toNode.position.y,
-    bottom: toNode.position.y + NODE_HEIGHT,
+    bottom: toNode.position.y + toHeight,
   };
   const overlapX = Math.min(fromRect.right, toRect.right) - Math.max(fromRect.left, toRect.left);
   const overlapY = Math.min(fromRect.bottom, toRect.bottom) - Math.max(fromRect.top, toRect.top);
 
-  const fromCenterX = fromNode.position.x + NODE_WIDTH / 2;
-  const fromCenterY = fromNode.position.y + NODE_HEIGHT / 2;
-  const toCenterX = toNode.position.x + NODE_WIDTH / 2;
-  const toCenterY = toNode.position.y + NODE_HEIGHT / 2;
+  const fromCenterX = fromNode.position.x + fromWidth / 2;
+  const fromCenterY = fromNode.position.y + fromHeight / 2;
+  const toCenterX = toNode.position.x + toWidth / 2;
+  const toCenterY = toNode.position.y + toHeight / 2;
   const dx = toCenterX - fromCenterX;
   const dy = toCenterY - fromCenterY;
 
@@ -2162,6 +2172,50 @@ function getAutoConnectionSides(fromNode: GraphNode, toNode: GraphNode): {
   return dy >= 0
     ? { fromSide: "bottom", toSide: "top" }
     : { fromSide: "top", toSide: "bottom" };
+}
+
+function alignAutoEdgePoints(
+  fromNode: GraphNode,
+  toNode: GraphNode,
+  fromPoint: LogicalPoint,
+  toPoint: LogicalPoint,
+  fromSide: NodeAnchorSide,
+  toSide: NodeAnchorSide,
+  fromSize: NodeVisualSize,
+  toSize: NodeVisualSize,
+): { fromPoint: LogicalPoint; toPoint: LogicalPoint } {
+  const fromHorizontal = fromSide === "left" || fromSide === "right";
+  const toHorizontal = toSide === "left" || toSide === "right";
+  const fromVertical = !fromHorizontal;
+  const toVertical = !toHorizontal;
+
+  if (fromHorizontal && toHorizontal) {
+    const deltaY = Math.abs(fromPoint.y - toPoint.y);
+    if (deltaY <= AUTO_EDGE_STRAIGHTEN_THRESHOLD) {
+      const fromCenterY = fromNode.position.y + fromSize.height / 2;
+      const toCenterY = toNode.position.y + toSize.height / 2;
+      const laneY = Math.round((fromCenterY + toCenterY) / 2);
+      return {
+        fromPoint: { ...fromPoint, y: laneY },
+        toPoint: { ...toPoint, y: laneY },
+      };
+    }
+  }
+
+  if (fromVertical && toVertical) {
+    const deltaX = Math.abs(fromPoint.x - toPoint.x);
+    if (deltaX <= AUTO_EDGE_STRAIGHTEN_THRESHOLD) {
+      const fromCenterX = fromNode.position.x + fromSize.width / 2;
+      const toCenterX = toNode.position.x + toSize.width / 2;
+      const laneX = Math.round((fromCenterX + toCenterX) / 2);
+      return {
+        fromPoint: { ...fromPoint, x: laneX },
+        toPoint: { ...toPoint, x: laneX },
+      };
+    }
+  }
+
+  return { fromPoint, toPoint };
 }
 
 function snapToLayoutGrid(value: number, axis: "x" | "y", thresholdPx?: number): number {
@@ -7753,21 +7807,29 @@ ${prompt}`;
         (toStatus === "queued" || toStatus === "running" || toStatus === "waiting_user") &&
         (fromStatus === "running" || fromStatus === "done" || fromStatus === "waiting_user");
 
-      const auto = getAutoConnectionSides(fromNode, toNode);
+      const fromSize = getNodeVisualSize(fromNode.id);
+      const toSize = getNodeVisualSize(toNode.id);
+      const auto = getAutoConnectionSides(fromNode, toNode, fromSize, toSize);
       const hasManualControl =
         typeof edge.control?.x === "number" && typeof edge.control?.y === "number";
       const resolvedFromSide = hasManualControl ? (edge.from.side ?? auto.fromSide) : auto.fromSide;
       const resolvedToSide = hasManualControl ? (edge.to.side ?? auto.toSide) : auto.toSide;
-      const fromPoint = getNodeAnchorPoint(
-        fromNode,
-        resolvedFromSide,
-        getNodeVisualSize(fromNode.id),
-      );
-      const toPoint = getNodeAnchorPoint(
-        toNode,
-        resolvedToSide,
-        getNodeVisualSize(toNode.id),
-      );
+      let fromPoint = getNodeAnchorPoint(fromNode, resolvedFromSide, fromSize);
+      let toPoint = getNodeAnchorPoint(toNode, resolvedToSide, toSize);
+      if (!hasManualControl) {
+        const aligned = alignAutoEdgePoints(
+          fromNode,
+          toNode,
+          fromPoint,
+          toPoint,
+          resolvedFromSide,
+          resolvedToSide,
+          fromSize,
+          toSize,
+        );
+        fromPoint = aligned.fromPoint;
+        toPoint = aligned.toPoint;
+      }
       const edgeKey = getGraphEdgeKey(edge);
       const defaultControl = edgeMidPoint(fromPoint, toPoint);
       const control = edge.control ?? defaultControl;
