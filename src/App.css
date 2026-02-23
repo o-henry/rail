@@ -2131,10 +2131,10 @@ h3 {
 
 .feed-step-chip {
   border-radius: 12px;
-  padding: 5px 10px;
+  padding: 4px 8px;
   background: #2f5fb1;
   color: #ffffff;
-  font-size: 12px;
+  font-size: 10px;
   line-height: 1.1;
   display: inline-flex;
   align-items: center;
