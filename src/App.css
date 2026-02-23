@@ -1945,13 +1945,13 @@ h3 {
   margin-left: 8px;
   display: inline-grid;
   place-items: center;
-  min-width: 20px;
-  height: 20px;
-  padding: 0 5px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
   border-radius: 12px;
   background: #ea3c3c;
   color: #ffffff;
-  font-size: 11px;
+  font-size: 9px;
   line-height: 1;
   font-weight: 700;
   transform: translateY(-1px);
