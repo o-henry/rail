@@ -11,6 +11,13 @@ const PROFILE_ROOT =
 const LOG_PATH =
   process.env.RAIL_WEB_LOG_PATH ||
   path.join(os.homedir(), '.rail', 'web-worker.log');
+const SYSTEM_CHROME_PROFILE_OVERRIDE = process.env.RAIL_WEB_SYSTEM_CHROME_PROFILE || '';
+const SYSTEM_CHROME_PROFILE_DEFAULT = resolveSystemChromeUserDataDir();
+const SYSTEM_CHROME_PROFILE_DIR =
+  SYSTEM_CHROME_PROFILE_OVERRIDE.trim() || SYSTEM_CHROME_PROFILE_DEFAULT || '';
+const USE_SYSTEM_CHROME_PROFILE =
+  (process.env.RAIL_WEB_USE_SYSTEM_CHROME_PROFILE ?? '1') !== '0' &&
+  Boolean(SYSTEM_CHROME_PROFILE_DIR);
 const DEFAULT_TIMEOUT_MS = 90_000;
 const WORKER_LOCK_PATH = path.join(PROFILE_ROOT, 'worker.lock.json');
 const SESSION_PROVIDER_CONFIG = {
@@ -345,7 +352,34 @@ function resolveChromeExecutable() {
   return chromeExecutableCandidates().find((candidate) => existsSync(candidate)) || null;
 }
 
+function resolveSystemChromeUserDataDir() {
+  if (process.platform === 'darwin') {
+    const candidate = path.join(os.homedir(), 'Library', 'Application Support', 'Google', 'Chrome');
+    return existsSync(candidate) ? candidate : '';
+  }
+  if (process.platform === 'win32') {
+    const localAppData = process.env.LOCALAPPDATA || '';
+    if (!localAppData) {
+      return '';
+    }
+    const candidate = path.join(localAppData, 'Google', 'Chrome', 'User Data');
+    return existsSync(candidate) ? candidate : '';
+  }
+  const linuxCandidates = [
+    path.join(os.homedir(), '.config', 'google-chrome'),
+    path.join(os.homedir(), '.config', 'chromium'),
+  ];
+  return linuxCandidates.find((candidate) => existsSync(candidate)) || '';
+}
+
+function isSystemProfileEnabled() {
+  return USE_SYSTEM_CHROME_PROFILE && Boolean(SYSTEM_CHROME_PROFILE_DIR);
+}
+
 function providerProfileDir(provider) {
+  if (isSystemProfileEnabled()) {
+    return SYSTEM_CHROME_PROFILE_DIR;
+  }
   return path.join(PROFILE_ROOT, `${provider}-profile`);
 }
 
@@ -413,23 +447,19 @@ async function inferSessionStateWithPage(provider, page, contextOpen = true) {
     return { safeUrl, sessionState: urlBased };
   }
 
-  if (provider === 'gemini') {
-    try {
-      const loginRequired = await isLikelyNotLoggedIn(provider, page);
-      if (loginRequired) {
-        return { safeUrl, sessionState: 'login_required' };
-      }
-      const promptReady = await isGeminiPromptReady(page);
-      if (promptReady) {
-        return { safeUrl, sessionState: 'active' };
-      }
-      return { safeUrl, sessionState: 'unknown' };
-    } catch {
-      return { safeUrl, sessionState: urlBased };
+  try {
+    const loginRequired = await isLikelyNotLoggedIn(provider, page);
+    if (loginRequired) {
+      return { safeUrl, sessionState: 'login_required' };
     }
+    const promptReady = await hasVisibleSelector(page, providerAutomationConfig(provider).inputSelectors);
+    if (promptReady) {
+      return { safeUrl, sessionState: 'active' };
+    }
+    return { safeUrl, sessionState: urlBased };
+  } catch {
+    return { safeUrl, sessionState: urlBased };
   }
-
-  return { safeUrl, sessionState: urlBased };
 }
 
 async function ensureProviderContext(provider) {
@@ -452,12 +482,32 @@ async function ensureProviderContext(provider) {
   }
 
   const profileDir = providerProfileDir(provider);
-  await hardenDir(profileDir);
+  if (!isSystemProfileEnabled()) {
+    await hardenDir(profileDir);
+  } else {
+    for (const [otherProvider, wrapped] of state.providers.entries()) {
+      if (otherProvider === provider) {
+        continue;
+      }
+      try {
+        await wrapped.context.close();
+      } catch {
+        // ignore
+      }
+      wrapped.contextClosed = true;
+      state.providers.delete(otherProvider);
+    }
+  }
 
   const launchOptions = {
     headless: false,
     viewport: { width: 1380, height: 900 },
+    ignoreDefaultArgs: ['--enable-automation'],
+    args: ['--disable-dev-shm-usage', '--no-first-run'],
   };
+  if (isSystemProfileEnabled()) {
+    launchOptions.args.push('--profile-directory=Default');
+  }
 
   const executablePath = resolveChromeExecutable();
   if (executablePath) {
@@ -817,8 +867,10 @@ async function resetProviderSession(provider) {
   }
 
   const profileDir = providerProfileDir(provider);
-  await rm(profileDir, { recursive: true, force: true });
-  await hardenDir(profileDir);
+  if (!isSystemProfileEnabled()) {
+    await rm(profileDir, { recursive: true, force: true });
+    await hardenDir(profileDir);
+  }
 
   return { ok: true, provider, profileDir };
 }
