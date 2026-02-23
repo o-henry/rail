@@ -4144,18 +4144,6 @@ function App() {
     }
   }
 
-  async function onImportRunFile() {
-    setError("");
-    try {
-      const importedName = await invoke<string>("run_import", { path: null });
-      setStatus(`실행 기록 가져오기 완료: ${importedName}`);
-      await refreshRunFiles();
-      await refreshFeedTimeline();
-    } catch (e) {
-      setError(`실행 기록 가져오기 실패: ${String(e)}`);
-    }
-  }
-
   async function ensureFeedRunRecord(sourceFile: string): Promise<RunRecord | null> {
     const target = sourceFile.trim();
     if (!target) {
@@ -8981,9 +8969,6 @@ ${prompt}`;
               <div className="button-row history-list-actions">
                 <button aria-label="새로고침" onClick={refreshRunFiles} title="새로고침" type="button">
                   <img alt="" aria-hidden="true" className="history-list-action-icon" src="/reload.svg" />
-                </button>
-                <button aria-label="가져오기" onClick={onImportRunFile} title="가져오기" type="button">
-                  <img alt="" aria-hidden="true" className="history-list-action-icon" src="/import2.svg" />
                 </button>
                 <button aria-label="Finder에서 열기" onClick={onOpenRunsFolder} title="Finder에서 열기" type="button">
                   <img alt="" aria-hidden="true" className="history-list-action-icon" src="/open2.svg" />
