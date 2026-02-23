@@ -1136,6 +1136,25 @@ function formatDuration(durationMs?: number): string {
   return `${(durationMs / 1000).toFixed(1)}초`;
 }
 
+function formatNodeElapsedTime(runState: NodeRunState | undefined, nowMs: number): string {
+  if (!runState) {
+    return "-";
+  }
+  if (runState.durationMs != null && runState.durationMs >= 0) {
+    return formatDuration(runState.durationMs);
+  }
+  if (!runState.startedAt) {
+    return "-";
+  }
+  const startedAtMs = new Date(runState.startedAt).getTime();
+  if (Number.isNaN(startedAtMs)) {
+    return "-";
+  }
+  const finishedAtMs = runState.finishedAt ? new Date(runState.finishedAt).getTime() : Number.NaN;
+  const endMs = Number.isFinite(finishedAtMs) ? finishedAtMs : nowMs;
+  return formatDuration(Math.max(0, endMs - startedAtMs));
+}
+
 function formatUsage(usage?: UsageStats): string {
   if (!usage) {
     return "-";
@@ -4397,6 +4416,7 @@ function App() {
   const [nodeStates, setNodeStates] = useState<Record<string, NodeRunState>>({});
   const [isGraphRunning, setIsGraphRunning] = useState(false);
   const [isRunStarting, setIsRunStarting] = useState(false);
+  const [runtimeNowMs, setRuntimeNowMs] = useState(() => Date.now());
   const [canvasZoom, setCanvasZoom] = useState(1);
   const [panMode, setPanMode] = useState(false);
   const [canvasFullscreen, setCanvasFullscreen] = useState(false);
@@ -5889,6 +5909,28 @@ function App() {
     }
     void refreshFeedTimeline();
   }, [workspaceTab]);
+
+  const hasActiveNodeRuntime = useMemo(
+    () =>
+      Object.values(nodeStates).some(
+        (row) =>
+          Boolean(row.startedAt) &&
+          !row.finishedAt &&
+          (row.status === "queued" || row.status === "running" || row.status === "waiting_user"),
+      ),
+    [nodeStates],
+  );
+
+  useEffect(() => {
+    if (!hasActiveNodeRuntime) {
+      return;
+    }
+    setRuntimeNowMs(Date.now());
+    const timer = window.setInterval(() => {
+      setRuntimeNowMs(Date.now());
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [hasActiveNodeRuntime]);
 
   async function ensureWebWorkerReady() {
     try {
@@ -7542,6 +7584,8 @@ function App() {
     skipSet: Set<string>,
   ): { ok: boolean; output?: unknown; error?: string; message?: string } {
     const config = node.config as GateConfig;
+    let schemaFallbackNote = "";
+    let decisionFallbackNote = "";
     const schemaRaw = String(config.schemaJson ?? "").trim();
     if (schemaRaw) {
       let parsedSchema: unknown;
@@ -7552,10 +7596,15 @@ function App() {
       }
       const schemaErrors = validateSimpleSchema(parsedSchema, input);
       if (schemaErrors.length > 0) {
-        return {
-          ok: false,
-          error: `스키마 검증 실패: ${schemaErrors.join("; ")}`,
-        };
+        if (SIMPLE_WORKFLOW_UI) {
+          schemaFallbackNote = `스키마 완화 적용 (${schemaErrors.join("; ")})`;
+          addNodeLog(node.id, `[분기] ${schemaFallbackNote}`);
+        } else {
+          return {
+            ok: false,
+            error: `스키마 검증 실패: ${schemaErrors.join("; ")}`,
+          };
+        }
       }
     }
 
@@ -7564,7 +7613,27 @@ function App() {
       getByPath(input, decisionPath) ??
       (decisionPath === "DECISION" ? getByPath(input, "decision") : undefined) ??
       (decisionPath === "decision" ? getByPath(input, "DECISION") : undefined);
-    const decision = String(decisionRaw ?? "").toUpperCase();
+    let decision = String(decisionRaw ?? "").toUpperCase();
+    if (decision !== "PASS" && decision !== "REJECT") {
+      const text = stringifyInput(input).toUpperCase();
+      const jsonMatch = text.match(/"DECISION"\s*:\s*"(PASS|REJECT)"/);
+      if (jsonMatch?.[1]) {
+        decision = jsonMatch[1];
+        decisionFallbackNote = `JSON에서 DECISION=${decision} 추론`;
+      } else if (/\bREJECT\b/.test(text)) {
+        decision = "REJECT";
+        decisionFallbackNote = "본문 키워드에서 REJECT 추론";
+      } else if (/\bPASS\b/.test(text)) {
+        decision = "PASS";
+        decisionFallbackNote = "본문 키워드에서 PASS 추론";
+      } else if (SIMPLE_WORKFLOW_UI) {
+        decision = "PASS";
+        decisionFallbackNote = "DECISION 누락으로 PASS 기본값 적용";
+      }
+      if (decisionFallbackNote) {
+        addNodeLog(node.id, `[분기] ${decisionFallbackNote}`);
+      }
+    }
 
     if (decision !== "PASS" && decision !== "REJECT") {
       return {
@@ -7599,8 +7668,16 @@ function App() {
 
     return {
       ok: true,
-      output: { decision },
-      message: `분기 결과=${decision}, 실행 대상=${Array.from(allowed).join(",") || "없음"}`,
+      output: {
+        decision,
+        fallback: {
+          schema: schemaFallbackNote || undefined,
+          decision: decisionFallbackNote || undefined,
+        },
+      },
+      message: `분기 결과=${decision}, 실행 대상=${Array.from(allowed).join(",") || "없음"}${
+        schemaFallbackNote || decisionFallbackNote ? " (내부 폴백 적용)" : ""
+      }`,
     };
   }
 
@@ -8869,11 +8946,6 @@ ${prompt}`;
       if (!fromNode || !toNode) {
         return null;
       }
-      const fromStatus = nodeStates[fromNode.id]?.status ?? "idle";
-      const toStatus = nodeStates[toNode.id]?.status ?? "idle";
-      const flowActive =
-        (toStatus === "queued" || toStatus === "running" || toStatus === "waiting_user") &&
-        (fromStatus === "running" || fromStatus === "done" || fromStatus === "waiting_user");
 
       const fromSize = getNodeVisualSize(fromNode.id);
       const toSize = getNodeVisualSize(toNode.id);
@@ -8909,7 +8981,6 @@ ${prompt}`;
         endPoint: toPoint,
         controlPoint: control,
         hasManualControl,
-        flowActive,
         readOnly: entry.readOnly,
         path: hasManualControl
           ? buildManualEdgePath(fromPoint.x, fromPoint.y, control.x, control.y, toPoint.x, toPoint.y)
@@ -8932,7 +9003,6 @@ ${prompt}`;
       endPoint: LogicalPoint;
       controlPoint: LogicalPoint;
       hasManualControl: boolean;
-      flowActive: boolean;
       readOnly: boolean;
     }>;
   const connectPreviewLine = (() => {
@@ -9003,6 +9073,8 @@ ${prompt}`;
     };
   });
   const isActiveTab = (tab: WorkspaceTab): boolean => workspaceTab === tab;
+  const isWorkflowBusy = isGraphRunning || isRunStarting;
+  const canRunGraphNow = !isWorkflowBusy && graph.nodes.length > 0 && workflowQuestion.trim().length > 0;
   const liveFeedPosts: FeedViewPost[] = (() => {
     if (!activeFeedRunMeta) {
       return [];
@@ -9439,35 +9511,6 @@ ${prompt}`;
                             strokeLinecap="round"
                             strokeWidth={selectedEdgeKey === line.edgeKey ? 3 : 2}
                           />
-                          {line.flowActive && (
-                            <>
-                              <circle
-                                cx={line.startPoint.x}
-                                cy={line.startPoint.y}
-                                fill={line.readOnly ? "#c07a2f" : "#4f83ff"}
-                                pointerEvents="none"
-                                r={3.1}
-                              >
-                                <animateMotion dur="1.15s" path={line.path} repeatCount="indefinite" rotate="auto" />
-                              </circle>
-                              <circle
-                                cx={line.startPoint.x}
-                                cy={line.startPoint.y}
-                                fill={line.readOnly ? "#d39b5e" : "#78a7ff"}
-                                opacity="0.9"
-                                pointerEvents="none"
-                                r={2.2}
-                              >
-                                <animateMotion
-                                  begin="-0.55s"
-                                  dur="1.15s"
-                                  path={line.path}
-                                  repeatCount="indefinite"
-                                  rotate="auto"
-                                />
-                              </circle>
-                            </>
-                          )}
                           {!line.readOnly && selectedEdgeKey === line.edgeKey && (
                             <circle
                               className="edge-control-point"
@@ -9581,7 +9624,7 @@ ${prompt}`;
                                       ? "정지"
                                       : "대기"}
                               </div>
-                              <div>생성 시간: {formatDuration(runState?.durationMs)}</div>
+                              <div>생성 시간: {formatNodeElapsedTime(runState, runtimeNowMs)}</div>
                               <div>사용량: {formatUsage(runState?.usage)}</div>
                             </div>
                             <button
@@ -9669,8 +9712,8 @@ ${prompt}`;
                   <div className="canvas-runbar">
                     <button
                       aria-label="실행"
-                      className="canvas-icon-btn play"
-                      disabled={isGraphRunning || isRunStarting || graph.nodes.length === 0}
+                      className={`canvas-icon-btn play ${canRunGraphNow ? "is-ready" : "is-disabled"}`}
+                      disabled={!canRunGraphNow}
                       onClick={onRunGraph}
                       title="실행"
                       type="button"
@@ -9714,13 +9757,14 @@ ${prompt}`;
               <div className="canvas-topbar">
                 <div className="question-input">
                   <textarea
+                    disabled={isWorkflowBusy}
                     onChange={(e) => {
                       setWorkflowQuestion(e.currentTarget.value);
                     }}
                     onKeyDown={(e) => {
                       if (e.key === "Enter" && !e.shiftKey) {
                         e.preventDefault();
-                        if (isGraphRunning || isRunStarting || graph.nodes.length === 0) {
+                        if (!canRunGraphNow) {
                           return;
                         }
                         void onRunGraph();
@@ -9734,7 +9778,7 @@ ${prompt}`;
                   <div className="question-input-footer">
                     <button
                       className="primary-action question-create-button"
-                      disabled={isGraphRunning || isRunStarting || graph.nodes.length === 0}
+                      disabled={!canRunGraphNow}
                       onClick={onRunGraph}
                       type="button"
                     >
