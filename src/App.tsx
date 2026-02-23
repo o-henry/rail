@@ -3503,6 +3503,7 @@ function App() {
   const [feedKeyword, setFeedKeyword] = useState("");
   const [feedCategory, setFeedCategory] = useState<FeedCategory>("all_posts");
   const [feedFilterOpen, setFeedFilterOpen] = useState(false);
+  const [feedExpandedByPost, setFeedExpandedByPost] = useState<Record<string, boolean>>({});
   const [feedReplyDraftByPost, setFeedReplyDraftByPost] = useState<Record<string, string>>({});
   const [pendingNodeRequests, setPendingNodeRequests] = useState<Record<string, string[]>>({});
   const [activeFeedRunMeta, setActiveFeedRunMeta] = useState<{
@@ -8697,6 +8698,7 @@ ${prompt}`;
                     );
                     const pendingRequestCount = (pendingNodeRequests[post.nodeId] ?? []).length;
                     const requestDraft = feedReplyDraftByPost[post.id] ?? "";
+                    const isExpanded = feedExpandedByPost[post.id] === true;
                     const isDraftPost = post.status === "draft";
                     const canRequest = post.nodeType === "turn";
                     return (
@@ -8715,72 +8717,88 @@ ${prompt}`;
                             {isDraftPost ? "LIVE" : score}
                           </span>
                         </div>
-                        {post.question && <div className="feed-card-question">Q: {post.question}</div>}
                         <div className="feed-card-summary">{post.summary || "(요약 없음)"}</div>
-                        <pre className="feed-sns-content">{visibleContent}</pre>
-                        <div className="feed-step-list">
-                          {post.steps.map((step) => (
-                            <span className="feed-step-chip" key={`${post.id}-${step}`}>
-                              <span className="feed-step-chip-label">{step}</span>
-                            </span>
-                          ))}
-                        </div>
-                        <div className="feed-evidence-row">
-                          <span>{formatRelativeFeedTime(post.createdAt)}</span>
-                          <span>생성 시간 {formatDuration(post.evidence.durationMs)}</span>
-                          <span>사용량 {formatUsage(post.evidence.usage)}</span>
-                          {pendingRequestCount > 0 && <span>추가 요청 대기 {pendingRequestCount}건</span>}
-                        </div>
-                        {canRequest && (
-                          <div className="feed-reply-row">
-                            <input
-                              onChange={(event) =>
-                                setFeedReplyDraftByPost((prev) => ({
-                                  ...prev,
-                                  [post.id]: event.currentTarget.value,
-                                }))
-                              }
-                              placeholder="에이전트에게 추가 요청을 남기세요"
-                              value={requestDraft}
-                            />
-                            <button
-                              aria-label="요청 보내기"
-                              className="primary-action question-create-button feed-reply-send-button"
-                              onClick={() => onSubmitFeedAgentRequest(post)}
-                              type="button"
-                            >
-                              <img alt="" aria-hidden="true" className="question-create-icon" src="/up.svg" />
-                            </button>
+                        <button
+                          className="feed-more-button"
+                          onClick={() =>
+                            setFeedExpandedByPost((prev) => ({
+                              ...prev,
+                              [post.id]: !prev[post.id],
+                            }))
+                          }
+                          type="button"
+                        >
+                          {isExpanded ? "접기" : "더보기"}
+                        </button>
+                        {isExpanded && (
+                          <div className="feed-card-details">
+                            {post.question && <div className="feed-card-question">Q: {post.question}</div>}
+                            <pre className="feed-sns-content">{visibleContent}</pre>
+                            <div className="feed-step-list">
+                              {post.steps.map((step) => (
+                                <span className="feed-step-chip" key={`${post.id}-${step}`}>
+                                  <span className="feed-step-chip-label">{step}</span>
+                                </span>
+                              ))}
+                            </div>
+                            <div className="feed-evidence-row">
+                              <span>{formatRelativeFeedTime(post.createdAt)}</span>
+                              <span>생성 시간 {formatDuration(post.evidence.durationMs)}</span>
+                              <span>사용량 {formatUsage(post.evidence.usage)}</span>
+                              {pendingRequestCount > 0 && <span>추가 요청 대기 {pendingRequestCount}건</span>}
+                            </div>
+                            {canRequest && (
+                              <div className="feed-reply-row">
+                                <input
+                                  onChange={(event) =>
+                                    setFeedReplyDraftByPost((prev) => ({
+                                      ...prev,
+                                      [post.id]: event.currentTarget.value,
+                                    }))
+                                  }
+                                  placeholder="에이전트에게 추가 요청을 남기세요"
+                                  value={requestDraft}
+                                />
+                                <button
+                                  aria-label="요청 보내기"
+                                  className="primary-action question-create-button feed-reply-send-button"
+                                  onClick={() => onSubmitFeedAgentRequest(post)}
+                                  type="button"
+                                >
+                                  <img alt="" aria-hidden="true" className="question-create-icon" src="/up.svg" />
+                                </button>
+                              </div>
+                            )}
+                            <div className="button-row feed-card-actions">
+                              <button
+                                disabled={!rawContent}
+                                onClick={() =>
+                                  setFeedRawViewByPost((prev) => ({
+                                    ...prev,
+                                    [post.id]: !prev[post.id],
+                                  }))
+                                }
+                                type="button"
+                              >
+                                {rawEnabled ? "마스킹 보기" : "원문 보기"}
+                              </button>
+                              <button
+                                disabled={!post.sourceFile}
+                                onClick={() => onOpenFeedPostHistory(post)}
+                                type="button"
+                              >
+                                기록 열기
+                              </button>
+                              <button
+                                disabled={!post.sourceFile}
+                                onClick={() => onExportRunFile(post.sourceFile)}
+                                type="button"
+                              >
+                                공유
+                              </button>
+                            </div>
                           </div>
                         )}
-                        <div className="button-row feed-card-actions">
-                          <button
-                            disabled={!rawContent}
-                            onClick={() =>
-                              setFeedRawViewByPost((prev) => ({
-                                ...prev,
-                                [post.id]: !prev[post.id],
-                              }))
-                            }
-                            type="button"
-                          >
-                            {rawEnabled ? "마스킹 보기" : "원문 보기"}
-                          </button>
-                          <button
-                            disabled={!post.sourceFile}
-                            onClick={() => onOpenFeedPostHistory(post)}
-                            type="button"
-                          >
-                            기록 열기
-                          </button>
-                          <button
-                            disabled={!post.sourceFile}
-                            onClick={() => onExportRunFile(post.sourceFile)}
-                            type="button"
-                          >
-                            공유
-                          </button>
-                        </div>
                       </section>
                     );
                   })}
