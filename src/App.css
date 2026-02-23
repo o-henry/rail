@@ -1674,7 +1674,7 @@ h3 {
 .provider-session-manage {
   background: #f4f6f9;
   color: #3f4b5a;
-  border: 1px solid #d6dde8;
+  /* border: 1px solid #d6dde8; */
 }
 
 .provider-session-toggle.is-active {
