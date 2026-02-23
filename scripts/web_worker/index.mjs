@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { createInterface } from 'node:readline';
-import { appendFile, chmod, mkdir, rm } from 'node:fs/promises';
+import { appendFile, chmod, mkdir, readFile, rm, unlink, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -12,12 +12,105 @@ const LOG_PATH =
   process.env.RAIL_WEB_LOG_PATH ||
   path.join(os.homedir(), '.rail', 'web-worker.log');
 const DEFAULT_TIMEOUT_MS = 90_000;
+const WORKER_LOCK_PATH = path.join(PROFILE_ROOT, 'worker.lock.json');
 
 const state = {
   providers: new Map(),
   activeRun: null,
   lastError: null,
 };
+
+let lockHeld = false;
+let shutdownRequested = false;
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isPidAlive(pid) {
+  if (!Number.isInteger(pid) || pid <= 0) {
+    return false;
+  }
+  if (pid === process.pid) {
+    return true;
+  }
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function terminatePid(pid) {
+  if (!isPidAlive(pid) || pid === process.pid) {
+    return;
+  }
+  try {
+    process.kill(pid, 'SIGTERM');
+  } catch {
+    return;
+  }
+
+  const deadline = Date.now() + 1_200;
+  while (Date.now() < deadline) {
+    if (!isPidAlive(pid)) {
+      return;
+    }
+    await sleep(120);
+  }
+
+  try {
+    process.kill(pid, 'SIGKILL');
+  } catch {
+    // ignore
+  }
+}
+
+async function acquireWorkerLock() {
+  await hardenDir(PROFILE_ROOT);
+  try {
+    const raw = await readFile(WORKER_LOCK_PATH, 'utf8');
+    const parsed = JSON.parse(raw);
+    const existingPid = Number(parsed?.pid ?? 0);
+    if (existingPid > 0 && existingPid !== process.pid && isPidAlive(existingPid)) {
+      await logLine(`stale worker lock found; terminating pid=${existingPid}`);
+      await terminatePid(existingPid);
+    }
+  } catch {
+    // lock file missing/corrupt -> overwrite
+  }
+
+  const payload = JSON.stringify(
+    {
+      pid: process.pid,
+      startedAt: nowIso(),
+      profileRoot: PROFILE_ROOT,
+    },
+    null,
+    2,
+  );
+  await writeFile(WORKER_LOCK_PATH, payload, { encoding: 'utf8', mode: 0o600 });
+  await hardenFile(WORKER_LOCK_PATH);
+  lockHeld = true;
+}
+
+async function releaseWorkerLock() {
+  if (!lockHeld) {
+    return;
+  }
+  try {
+    const raw = await readFile(WORKER_LOCK_PATH, 'utf8');
+    const parsed = JSON.parse(raw);
+    if (Number(parsed?.pid ?? 0) === process.pid) {
+      await unlink(WORKER_LOCK_PATH);
+    }
+  } catch {
+    // ignore
+  } finally {
+    lockHeld = false;
+  }
+}
 
 async function hardenDir(dirPath) {
   await mkdir(dirPath, { recursive: true, mode: 0o700 });
@@ -554,6 +647,30 @@ async function cancelProviderRun(provider) {
   return { ok: true, cancelled: true };
 }
 
+async function closeAllProviderContexts() {
+  const providers = Array.from(state.providers.values());
+  state.providers.clear();
+  for (const wrapped of providers) {
+    try {
+      await wrapped.context.close();
+    } catch {
+      // ignore
+    }
+  }
+}
+
+async function gracefulShutdown(reason, exitCode = 0) {
+  if (shutdownRequested) {
+    return;
+  }
+  shutdownRequested = true;
+  notify('web/worker/stopped', { reason, stoppedAt: nowIso() });
+  await logLine(`web worker shutdown: ${reason}`);
+  await closeAllProviderContexts();
+  await releaseWorkerLock();
+  process.exit(exitCode);
+}
+
 async function handleRpcRequest(message) {
   const { id, method, params = {} } = message;
 
@@ -706,6 +823,7 @@ async function handleLine(rawLine) {
 
 async function bootstrap() {
   await hardenDir(PROFILE_ROOT);
+  await acquireWorkerLock();
   await logLine('web worker boot');
   notify('web/worker/started', {
     profileRoot: PROFILE_ROOT,
@@ -723,24 +841,32 @@ async function bootstrap() {
   });
 
   rl.on('close', async () => {
-    notify('web/worker/stopped', { stoppedAt: nowIso() });
-    await logLine('web worker stdin closed');
-    process.exit(0);
+    await gracefulShutdown('stdin closed', 0);
   });
 }
 
 process.on('uncaughtException', (error) => {
   state.lastError = `uncaughtException: ${String(error)}`;
   notify('web/worker/error', { message: state.lastError });
+  void gracefulShutdown('uncaughtException', 1);
 });
 
 process.on('unhandledRejection', (error) => {
   state.lastError = `unhandledRejection: ${String(error)}`;
   notify('web/worker/error', { message: state.lastError });
+  void gracefulShutdown('unhandledRejection', 1);
+});
+
+process.on('SIGINT', () => {
+  void gracefulShutdown('SIGINT', 0);
+});
+
+process.on('SIGTERM', () => {
+  void gracefulShutdown('SIGTERM', 0);
 });
 
 bootstrap().catch((error) => {
   const message = `bootstrap failed: ${String(error)}`;
   notify('web/worker/error', { message });
-  process.exit(1);
+  void gracefulShutdown('bootstrap failed', 1);
 });
