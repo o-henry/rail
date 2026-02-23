@@ -33,6 +33,8 @@ pub fn run() {
             engine::web_provider_open_session,
             engine::web_provider_reset_session,
             engine::web_provider_cancel,
+            engine::web_bridge_status,
+            engine::web_bridge_rotate_token,
             engine::ollama_generate,
             knowledge::knowledge_probe,
             knowledge::knowledge_retrieve,

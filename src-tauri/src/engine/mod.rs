@@ -187,6 +187,7 @@ pub struct WebWorkerHealth {
     pub log_path: Option<String>,
     pub profile_root: Option<String>,
     pub active_provider: Option<String>,
+    pub bridge: Option<Value>,
 }
 
 impl EngineRuntime {
@@ -1221,6 +1222,7 @@ pub async fn web_provider_health(
             log_path: Some(runtime.log_path.to_string_lossy().to_string()),
             profile_root: Some(runtime.profile_root.to_string_lossy().to_string()),
             active_provider: None,
+            bridge: None,
         });
         parsed.running = true;
         if parsed.log_path.is_none() {
@@ -1240,6 +1242,7 @@ pub async fn web_provider_health(
         log_path: Some(log_path.to_string_lossy().to_string()),
         profile_root: Some(profile_root.to_string_lossy().to_string()),
         active_provider: None,
+        bridge: None,
     })
 }
 
@@ -1306,6 +1309,24 @@ pub async fn web_provider_cancel(
         .request("provider/cancel", json!({ "provider": provider }))
         .await?;
     Ok(())
+}
+
+#[tauri::command]
+pub async fn web_bridge_status(
+    app: AppHandle,
+    state: State<'_, EngineManager>,
+) -> Result<Value, String> {
+    let runtime = ensure_web_worker_started(&app, &state).await?;
+    runtime.request("bridge/status", json!({})).await
+}
+
+#[tauri::command]
+pub async fn web_bridge_rotate_token(
+    app: AppHandle,
+    state: State<'_, EngineManager>,
+) -> Result<Value, String> {
+    let runtime = ensure_web_worker_started(&app, &state).await?;
+    runtime.request("bridge/tokenRotate", json!({})).await
 }
 
 #[tauri::command]

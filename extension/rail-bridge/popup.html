@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Rail Bridge</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <main class="popup-root">
+      <h1>Rail Bridge</h1>
+      <label class="field">
+        <span>Bridge URL</span>
+        <input id="bridge-url" type="text" placeholder="http://127.0.0.1:38961" />
+      </label>
+      <label class="field">
+        <span>Bearer Token</span>
+        <input id="bridge-token" type="password" placeholder="토큰 입력" />
+      </label>
+      <div class="actions">
+        <button id="save" type="button">저장</button>
+        <button id="test" type="button">연결 테스트</button>
+      </div>
+      <div id="status" class="status">대기 중</div>
+    </main>
+    <script src="popup.js" type="module"></script>
+  </body>
+</html>

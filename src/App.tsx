@@ -72,7 +72,7 @@ type PendingApproval = {
   params: unknown;
 };
 
-type WorkspaceTab = "workflow" | "feed" | "history" | "settings";
+type WorkspaceTab = "workflow" | "feed" | "history" | "settings" | "bridge";
 type NodeType = "turn" | "transform" | "gate";
 type PortType = "in" | "out";
 
@@ -319,6 +319,7 @@ type FancySelectOption = {
 type TurnExecutor =
   | "codex"
   | "web_gemini"
+  | "web_gpt"
   | "web_grok"
   | "web_perplexity"
   | "web_claude"
@@ -333,7 +334,7 @@ type PresetKind =
   | "creative"
   | "newsTrend";
 type CostPreset = "conservative" | "balanced" | "aggressive";
-type WebAutomationMode = "auto" | "manualPasteJson" | "manualPasteText";
+type WebAutomationMode = "bridgeAssisted" | "auto" | "manualPasteJson" | "manualPasteText";
 type WebResultMode = WebAutomationMode;
 type WebProvider = "gemini" | "gpt" | "grok" | "perplexity" | "claude";
 
@@ -445,6 +446,24 @@ type WebWorkerHealth = {
   logPath?: string | null;
   profileRoot?: string | null;
   activeProvider?: string | null;
+  bridge?: unknown;
+};
+
+type WebBridgeProviderSeen = {
+  provider: WebProvider;
+  pageUrl?: string | null;
+  lastSeenAt?: string | null;
+};
+
+type WebBridgeStatus = {
+  running: boolean;
+  port: number;
+  tokenMasked: string;
+  token?: string;
+  lastSeenAt?: string | null;
+  connectedProviders: WebBridgeProviderSeen[];
+  queuedTasks: number;
+  activeTasks: number;
 };
 
 type WebProviderHealthEntry = {
@@ -534,6 +553,7 @@ const KNOWLEDGE_MAX_CHARS_OPTIONS: FancySelectOption[] = [
 const TURN_EXECUTOR_OPTIONS = [
   "codex",
   "web_gemini",
+  "web_gpt",
   "web_grok",
   "web_perplexity",
   "web_claude",
@@ -542,6 +562,7 @@ const TURN_EXECUTOR_OPTIONS = [
 const TURN_EXECUTOR_LABELS: Record<TurnExecutor, string> = {
   codex: "Codex",
   web_gemini: "WEB / GEMINI",
+  web_gpt: "WEB / GPT",
   web_grok: "WEB / GROK",
   web_perplexity: "WEB / PERPLEXITY",
   web_claude: "WEB / CLAUDE",
@@ -1605,7 +1626,13 @@ function inferQualityProfile(node: GraphNode, config: TurnConfig): QualityProfil
 
   const executor = getTurnExecutor(config);
   const signal = `${String(config.role ?? "")} ${String(config.promptTemplate ?? "")} ${node.id}`.toLowerCase();
-  if (executor === "web_gemini" || executor === "web_grok" || executor === "web_perplexity" || executor === "web_claude") {
+  if (
+    executor === "web_gemini" ||
+    executor === "web_gpt" ||
+    executor === "web_grok" ||
+    executor === "web_perplexity" ||
+    executor === "web_claude"
+  ) {
     return "research_evidence";
   }
   if (/impl|code|test|lint|build|refactor|fix|bug|개발|구현|코드/.test(signal)) {
@@ -2520,6 +2547,9 @@ function getWebProviderFromExecutor(executor: TurnExecutor): WebProvider | null 
   if (executor === "web_gemini") {
     return "gemini";
   }
+  if (executor === "web_gpt") {
+    return "gpt";
+  }
   if (executor === "web_grok") {
     return "grok";
   }
@@ -2562,6 +2592,65 @@ function webProviderHomeUrl(provider: WebProvider): string {
     return "https://www.perplexity.ai/";
   }
   return "https://claude.ai/";
+}
+
+function normalizeWebResultMode(mode: unknown): WebResultMode {
+  if (mode === "manualPasteJson" || mode === "manualPasteText") {
+    return mode;
+  }
+  if (mode === "bridgeAssisted" || mode === "auto") {
+    return "bridgeAssisted";
+  }
+  return "bridgeAssisted";
+}
+
+function toWebBridgeStatus(raw: unknown): WebBridgeStatus {
+  const fallback: WebBridgeStatus = {
+    running: false,
+    port: 38961,
+    tokenMasked: "",
+    connectedProviders: [],
+    queuedTasks: 0,
+    activeTasks: 0,
+  };
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return fallback;
+  }
+  const row = raw as Record<string, unknown>;
+  const connectedProviders = Array.isArray(row.connectedProviders)
+    ? row.connectedProviders
+        .map((item) => {
+          if (!item || typeof item !== "object" || Array.isArray(item)) {
+            return null;
+          }
+          const entry = item as Record<string, unknown>;
+          const providerRaw = String(entry.provider ?? "").trim().toLowerCase();
+          if (!WEB_PROVIDER_OPTIONS.includes(providerRaw as WebProvider)) {
+            return null;
+          }
+          return {
+            provider: providerRaw as WebProvider,
+            pageUrl: typeof entry.pageUrl === "string" ? entry.pageUrl : entry.pageUrl == null ? null : undefined,
+            lastSeenAt:
+              typeof entry.lastSeenAt === "string"
+                ? entry.lastSeenAt
+                : entry.lastSeenAt == null
+                  ? null
+                  : undefined,
+          } as WebBridgeProviderSeen;
+        })
+        .filter(Boolean) as WebBridgeProviderSeen[]
+    : [];
+  return {
+    running: row.running === true,
+    port: Number(row.port ?? 38961) || 38961,
+    tokenMasked: typeof row.tokenMasked === "string" ? row.tokenMasked : "",
+    token: typeof row.token === "string" ? row.token : undefined,
+    lastSeenAt: typeof row.lastSeenAt === "string" ? row.lastSeenAt : row.lastSeenAt == null ? null : undefined,
+    connectedProviders,
+    queuedTasks: Math.max(0, Number(row.queuedTasks ?? 0) || 0),
+    activeTasks: Math.max(0, Number(row.activeTasks ?? 0) || 0),
+  };
 }
 
 function toWebProviderHealthMap(raw: unknown): Record<string, WebProviderHealthEntry> {
@@ -2769,6 +2858,9 @@ function NavIcon({ tab, active = false }: { tab: WorkspaceTab; active?: boolean 
   }
   if (tab === "settings") {
     return <img alt="" aria-hidden="true" className="nav-workflow-image" src="/setting.svg" />;
+  }
+  if (tab === "bridge") {
+    return <img alt="" aria-hidden="true" className="nav-workflow-image" src="/scroll.svg" />;
   }
   return (
     <svg aria-hidden="true" fill="none" height="20" viewBox="0 0 24 24" width="20">
@@ -3864,7 +3956,7 @@ function buildNewsTrendPreset(): GraphData {
     }),
     makePresetNode("turn-news-scan-a", "turn", 420, 40, {
       executor: "web_gemini",
-      webResultMode: "auto",
+      webResultMode: "bridgeAssisted",
       webTimeoutMs: 120000,
       model: "GPT-5.2",
       role: "WEB NEWS SCAN AGENT A",
@@ -3874,7 +3966,7 @@ function buildNewsTrendPreset(): GraphData {
     }),
     makePresetNode("turn-news-scan-b", "turn", 420, 220, {
       executor: "web_gemini",
-      webResultMode: "auto",
+      webResultMode: "bridgeAssisted",
       webTimeoutMs: 120000,
       model: "GPT-5.2-Codex",
       role: "WEB TREND SCAN AGENT B",
@@ -3975,6 +4067,7 @@ function normalizeGraph(input: unknown): GraphData {
       const normalizedConfig = {
         ...config,
         executor,
+        webResultMode: normalizeWebResultMode(config.webResultMode),
         model: toTurnModelDisplayName(String(config.model ?? DEFAULT_TURN_MODEL)),
         knowledgeEnabled:
           typeof config.knowledgeEnabled === "boolean" ? config.knowledgeEnabled : true,
@@ -4170,6 +4263,15 @@ function App() {
     running: false,
   });
   const [webWorkerBusy, setWebWorkerBusy] = useState(false);
+  const [webBridgeStatus, setWebBridgeStatus] = useState<WebBridgeStatus>({
+    running: false,
+    port: 38961,
+    tokenMasked: "",
+    connectedProviders: [],
+    queuedTasks: 0,
+    activeTasks: 0,
+  });
+  const [webBridgeLogs, setWebBridgeLogs] = useState<string[]>([]);
   const [providerChildViewOpen, setProviderChildViewOpen] = useState<Record<WebProvider, boolean>>({
     gemini: false,
     gpt: false,
@@ -4536,9 +4638,15 @@ function App() {
         const health = await invoke<WebWorkerHealth>("web_provider_health");
         if (!cancelled) {
           setWebWorkerHealth(health);
+          if (health.bridge) {
+            setWebBridgeStatus(toWebBridgeStatus(health.bridge));
+          }
         }
       } catch {
         // silent: settings panel refresh button shows latest state on demand
+      }
+      if (!cancelled) {
+        void refreshWebBridgeStatus(true);
       }
     };
     void bootstrapWorker();
@@ -4591,6 +4699,16 @@ function App() {
               const activeWebNodeId = activeWebNodeIdRef.current;
               if (activeWebNodeId && message) {
                 addNodeLog(activeWebNodeId, `[WEB] ${message}`);
+              }
+              const stage = extractStringByPaths(payload.params, ["stage"]);
+              const provider = extractStringByPaths(payload.params, ["provider"])?.toLowerCase() ?? "";
+              if (stage?.startsWith("bridge_")) {
+                const prefix = provider && WEB_PROVIDER_OPTIONS.includes(provider as WebProvider)
+                  ? `[${provider.toUpperCase()}] `
+                  : "";
+                const line = `${prefix}${message ?? stage}`;
+                setWebBridgeLogs((prev) => [`${new Date().toLocaleTimeString()} ${line}`, ...prev].slice(0, 120));
+                void refreshWebBridgeStatus(true);
               }
             }
 
@@ -5373,12 +5491,64 @@ function App() {
     try {
       const health = await invoke<WebWorkerHealth>("web_provider_health");
       setWebWorkerHealth(health);
+      if (health.bridge) {
+        setWebBridgeStatus(toWebBridgeStatus(health.bridge));
+      }
       return health;
     } catch (error) {
       if (!silent) {
         setError(`웹 워커 상태 조회 실패: ${String(error)}`);
       }
       return null;
+    }
+  }
+
+  async function refreshWebBridgeStatus(silent = false) {
+    try {
+      const raw = await invoke<unknown>("web_bridge_status");
+      const next = toWebBridgeStatus(raw);
+      setWebBridgeStatus(next);
+      return next;
+    } catch (error) {
+      if (!silent) {
+        setError(`브리지 상태 조회 실패: ${String(error)}`);
+      }
+      return null;
+    }
+  }
+
+  async function onRotateWebBridgeToken() {
+    setWebWorkerBusy(true);
+    setError("");
+    try {
+      const raw = await invoke<unknown>("web_bridge_rotate_token");
+      setWebBridgeStatus(toWebBridgeStatus(raw));
+      setStatus("브리지 토큰을 재발급했습니다.");
+    } catch (error) {
+      setError(`브리지 토큰 재발급 실패: ${String(error)}`);
+    } finally {
+      setWebWorkerBusy(false);
+    }
+  }
+
+  async function onCopyWebBridgeConnectCode() {
+    try {
+      const status = await refreshWebBridgeStatus(true);
+      if (!status?.token) {
+        throw new Error("연결 토큰을 읽을 수 없습니다.");
+      }
+      const code = JSON.stringify(
+        {
+          bridgeUrl: `http://127.0.0.1:${status.port}`,
+          token: status.token,
+        },
+        null,
+        2,
+      );
+      await navigator.clipboard.writeText(code);
+      setStatus("브리지 연결 코드 복사 완료");
+    } catch (error) {
+      setError(`브리지 연결 코드 복사 실패: ${String(error)}`);
     }
   }
 
@@ -5463,10 +5633,25 @@ function App() {
     }
 
     void refreshWebWorkerHealth(true);
+    void refreshWebBridgeStatus(true);
     const intervalId = window.setInterval(() => {
       void refreshWebWorkerHealth(true);
+      void refreshWebBridgeStatus(true);
     }, 1800);
 
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [workspaceTab]);
+
+  useEffect(() => {
+    if (workspaceTab !== "bridge") {
+      return;
+    }
+    void refreshWebBridgeStatus(true);
+    const intervalId = window.setInterval(() => {
+      void refreshWebBridgeStatus(true);
+    }, 1400);
     return () => {
       window.clearInterval(intervalId);
     };
@@ -5500,17 +5685,6 @@ function App() {
     if (resolver) {
       resolver(retry);
     }
-  }
-
-  function requestWebLogin(nodeId: string, provider: WebProvider, reason: string): Promise<boolean> {
-    setPendingWebLogin({
-      nodeId,
-      provider,
-      reason,
-    });
-    return new Promise((resolve) => {
-      webLoginResolverRef.current = resolve;
-    });
   }
 
   async function onCopyPendingWebPrompt() {
@@ -6596,6 +6770,8 @@ function App() {
         nextTab = "history";
       } else if (key === "4") {
         nextTab = "settings";
+      } else if (key === "5") {
+        nextTab = "bridge";
       }
 
       if (!nextTab) {
@@ -6611,7 +6787,9 @@ function App() {
             ? "피드 탭으로 이동"
             : nextTab === "history"
               ? "기록 탭으로 이동"
-              : "설정 탭으로 이동",
+              : nextTab === "settings"
+                ? "설정 탭으로 이동"
+                : "브리지 탭으로 이동",
       );
     };
 
@@ -7420,61 +7598,48 @@ ${prompt}`;
 
     const webProvider = getWebProviderFromExecutor(executor);
     if (webProvider) {
-      const webResultMode = config.webResultMode ?? "auto";
+      const webResultMode = normalizeWebResultMode(config.webResultMode);
       const webTimeoutMs = Math.max(5_000, Number(config.webTimeoutMs ?? 90_000) || 90_000);
 
-      if (webResultMode === "auto") {
+      if (webResultMode === "bridgeAssisted") {
         activeWebNodeIdRef.current = node.id;
         activeWebProviderRef.current = webProvider;
-        addNodeLog(node.id, `[WEB] ${webProviderLabel(webProvider)} 자동화 시작`);
+        addNodeLog(node.id, `[WEB] ${webProviderLabel(webProvider)} 브리지 반자동 시작`);
         const workerReady = await ensureWebWorkerReady();
         if (!workerReady) {
+          addNodeLog(node.id, `[WEB] 브리지 워커 준비 실패, 수동 입력으로 전환`);
           activeWebNodeIdRef.current = "";
           activeWebProviderRef.current = null;
-          return {
-            ok: false,
-            error: `[WEB] 자동화 워커 준비 실패 (${webProviderLabel(webProvider)})`,
+          setNodeStatus(node.id, "waiting_user", `${webProvider} 응답 입력 대기`);
+          setNodeRuntimeFields(node.id, {
+            status: "waiting_user",
+          });
+          return requestWebTurnResponse(
+            node.id,
+            webProvider,
+            textToSend,
+            "manualPasteText",
+          ).then((result) => ({
+            ...result,
             executor,
             provider: webProvider,
             knowledgeTrace,
-          };
+          }));
         } else {
-          const runAutomation = async () =>
+          const runBridgeAssisted = async () =>
             invoke<WebProviderRunResult>("web_provider_run", {
               provider: webProvider,
               prompt: textToSend,
               timeoutMs: webTimeoutMs,
-              mode: "auto",
+              mode: "bridgeAssisted",
             });
 
           let result: WebProviderRunResult | null = null;
           try {
-            result = await runAutomation();
-            if (!result.ok && result.errorCode === "NOT_LOGGED_IN") {
-              addNodeLog(node.id, "[WEB] 로그인 필요 감지");
-              await onOpenProviderSession(webProvider);
-              const shouldRetry = await requestWebLogin(
-                node.id,
-                webProvider,
-                result.error ?? `${webProviderLabel(webProvider)} 로그인 후 계속을 눌러주세요.`,
-              );
-              if (cancelRequestedRef.current) {
-                return {
-                  ok: false,
-                  error: "사용자 취소",
-                  executor,
-                  provider: webProvider,
-                  knowledgeTrace,
-                };
-              }
-              if (shouldRetry) {
-                addNodeLog(node.id, "[WEB] 로그인 완료 확인, 자동화를 재시도합니다.");
-                result = await runAutomation();
-              }
-            }
+            result = await runBridgeAssisted();
 
             if (result.ok && result.text) {
-              addNodeLog(node.id, `[WEB] ${webProviderLabel(webProvider)} 응답 추출 완료`);
+              addNodeLog(node.id, `[WEB] ${webProviderLabel(webProvider)} 브리지 응답 수집 완료`);
               return {
                 ok: true,
                 output: {
@@ -7490,32 +7655,63 @@ ${prompt}`;
               };
             }
 
-            const fallbackReason = `[WEB] 자동화 실패 (${result?.errorCode ?? "UNKNOWN"}): ${
+            if (cancelRequestedRef.current || result?.errorCode === "CANCELLED") {
+              return {
+                ok: false,
+                error: "사용자 취소",
+                executor,
+                provider: webProvider,
+                knowledgeTrace,
+              };
+            }
+
+            const fallbackReason = `[WEB] 브리지 수집 실패 (${result?.errorCode ?? "UNKNOWN"}): ${
               result?.error ?? "unknown error"
             }`;
             addNodeLog(node.id, fallbackReason);
-            if (result?.errorCode === "BROWSER_MISSING") {
-              addNodeLog(
-                node.id,
-                "[WEB] playwright/playwright-core 설치가 필요할 수 있습니다.",
-              );
-            }
-            return {
-              ok: false,
-              error: fallbackReason,
+            addNodeLog(node.id, "[WEB] 수동 입력 모달로 전환합니다.");
+            setNodeStatus(node.id, "waiting_user", `${webProvider} 응답 입력 대기`);
+            setNodeRuntimeFields(node.id, {
+              status: "waiting_user",
+            });
+            return requestWebTurnResponse(
+              node.id,
+              webProvider,
+              textToSend,
+              "manualPasteText",
+            ).then((fallback) => ({
+              ...fallback,
               executor,
               provider: webProvider,
               knowledgeTrace,
-            };
+            }));
           } catch (error) {
-            addNodeLog(node.id, `[WEB] 자동화 예외: ${String(error)}`);
-            return {
-              ok: false,
-              error: `[WEB] 자동화 예외 (${webProviderLabel(webProvider)}): ${String(error)}`,
+            if (cancelRequestedRef.current) {
+              return {
+                ok: false,
+                error: "사용자 취소",
+                executor,
+                provider: webProvider,
+                knowledgeTrace,
+              };
+            }
+            addNodeLog(node.id, `[WEB] 브리지 예외: ${String(error)}`);
+            addNodeLog(node.id, "[WEB] 수동 입력 모달로 전환합니다.");
+            setNodeStatus(node.id, "waiting_user", `${webProvider} 응답 입력 대기`);
+            setNodeRuntimeFields(node.id, {
+              status: "waiting_user",
+            });
+            return requestWebTurnResponse(
+              node.id,
+              webProvider,
+              textToSend,
+              "manualPasteText",
+            ).then((fallback) => ({
+              ...fallback,
               executor,
               provider: webProvider,
               knowledgeTrace,
-            };
+            }));
           } finally {
             activeWebNodeIdRef.current = "";
             activeWebProviderRef.current = null;
@@ -8325,6 +8521,9 @@ ${prompt}`;
         <div className="usage-method">
           각 서비스의 로그인 상태를 확인하고, 필요한 서비스만 로그인하세요.
         </div>
+        <div className="usage-method">
+          브리지 기반 자동 수집 설정은 왼쪽 탭의 `브리지`에서 관리합니다.
+        </div>
         <section className="provider-hub">
           <h3>서비스 로그인 상태</h3>
           <div className="provider-hub-list">
@@ -8356,6 +8555,98 @@ ${prompt}`;
           </div>
           <div className="usage-method">
             세션 데이터는 로컬 프로필에만 저장되며, 토큰/쿠키 값은 UI와 로그에 출력하지 않습니다.
+          </div>
+        </section>
+      </section>
+    );
+  }
+
+  function renderBridgePanel() {
+    const providerSeenMap = new Map(
+      webBridgeStatus.connectedProviders.map((row) => [row.provider, row] as const),
+    );
+    const bridgeUrl = `http://127.0.0.1:${webBridgeStatus.port}`;
+    return (
+      <section className="panel-card settings-view bridge-view workspace-tab-panel">
+        <section className="controls bridge-head-panel">
+          <div className="web-automation-head">
+            <h2>브리지</h2>
+            <button
+              aria-label="브리지 상태 동기화"
+              className="settings-refresh-button settings-refresh-icon-button"
+              disabled={webWorkerBusy}
+              onClick={() => void refreshWebBridgeStatus()}
+              title="브리지 상태 동기화"
+              type="button"
+            >
+              <img alt="" aria-hidden="true" className="settings-refresh-icon" src="/reload.svg" />
+            </button>
+          </div>
+          <div className="settings-badges">
+            <span className={`status-tag ${webBridgeStatus.running ? "on" : "off"}`}>
+              {webBridgeStatus.running ? "브리지 준비됨" : "브리지 중지됨"}
+            </span>
+            <span className="status-tag neutral">엔드포인트: {bridgeUrl}</span>
+            <span className="status-tag neutral">토큰: {webBridgeStatus.tokenMasked || "미발급"}</span>
+          </div>
+          <div className="button-row bridge-action-row">
+            <button
+              className="settings-account-button"
+              disabled={webWorkerBusy}
+              onClick={() => void onCopyWebBridgeConnectCode()}
+              type="button"
+            >
+              <span className="settings-button-label">연결 코드 복사</span>
+            </button>
+            <button
+              className="settings-account-button"
+              disabled={webWorkerBusy}
+              onClick={() => void onRotateWebBridgeToken()}
+              type="button"
+            >
+              <span className="settings-button-label">토큰 재발급</span>
+            </button>
+          </div>
+          <div className="usage-method">
+            확장과의 통신은 127.0.0.1 로컬 루프백 + Bearer 토큰으로만 허용됩니다.
+          </div>
+        </section>
+
+        <section className="controls bridge-provider-panel">
+          <h2>서비스 감지 상태</h2>
+          <div className="provider-hub-list">
+            {WEB_PROVIDER_OPTIONS.map((provider) => {
+              const row = providerSeenMap.get(provider);
+              const seenLabel = row?.lastSeenAt ? formatRunDateTime(row.lastSeenAt) : "미감지";
+              return (
+                <div className="provider-hub-row" key={`bridge-provider-${provider}`}>
+                  <div className="provider-hub-meta">
+                    <span className={`provider-session-pill ${row ? "connected" : "unknown"}`}>
+                      <span className="provider-session-label">{row ? "연결됨" : "대기"}</span>
+                    </span>
+                    <span className="provider-hub-name">{webProviderLabel(provider)}</span>
+                  </div>
+                  <div className="bridge-provider-meta">
+                    <span>{seenLabel}</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <div className="usage-method">
+            큐: {webBridgeStatus.queuedTasks} · 진행 중: {webBridgeStatus.activeTasks}
+          </div>
+        </section>
+
+        <section className="controls bridge-log-panel">
+          <h2>최근 수집 이벤트</h2>
+          <div className="bridge-log-list">
+            {webBridgeLogs.length === 0 && <div className="log-empty">최근 이벤트 없음</div>}
+            {webBridgeLogs.map((line, index) => (
+              <div className="bridge-log-line" key={`bridge-log-${index}`}>
+                {line}
+              </div>
+            ))}
           </div>
         </section>
       </section>
@@ -8834,6 +9125,16 @@ ${prompt}`;
           >
             <span className="nav-icon"><NavIcon tab="settings" active={isActiveTab("settings")} /></span>
             <span className="nav-label">설정</span>
+          </button>
+          <button
+            className={isActiveTab("bridge") ? "is-active" : ""}
+            onClick={() => setWorkspaceTab("bridge")}
+            aria-label="브리지"
+            title="브리지"
+            type="button"
+          >
+            <span className="nav-icon"><NavIcon tab="bridge" active={isActiveTab("bridge")} /></span>
+            <span className="nav-label">브리지</span>
           </button>
         </nav>
       </aside>
@@ -9529,13 +9830,12 @@ ${prompt}`;
                                   className="modern-select"
                                   onChange={(next) => updateSelectedNodeConfig("webResultMode", next)}
                                   options={[
-                                    { value: "auto", label: "자동" },
+                                    { value: "bridgeAssisted", label: "브리지 반자동 (권장)" },
                                     { value: "manualPasteText", label: "텍스트 붙여넣기" },
                                     { value: "manualPasteJson", label: "JSON 붙여넣기" },
                                   ]}
                                   value={String(
-                                    (selectedNode.config as TurnConfig).webResultMode ??
-                                      "auto",
+                                    normalizeWebResultMode((selectedNode.config as TurnConfig).webResultMode),
                                   )}
                                 />
                               </label>
@@ -9553,7 +9853,7 @@ ${prompt}`;
                                 />
                               </label>
                               <div className="inspector-empty">
-                                GEMINI는 자동 입력/추출을 시도하고, 실패하면 수동 붙여넣기로 폴백합니다.
+                                브리지 반자동은 질문 자동 주입/답변 자동 수집을 시도하고, 실패 시 수동 입력으로 폴백합니다.
                               </div>
                             </>
                           )}
@@ -9909,13 +10209,12 @@ ${prompt}`;
                               updateNodeConfigById(feedInspectorEditableNodeId, "webResultMode", next);
                             }}
                             options={[
-                              { value: "auto", label: "자동" },
+                              { value: "bridgeAssisted", label: "브리지 반자동 (권장)" },
                               { value: "manualPasteText", label: "텍스트 붙여넣기" },
                               { value: "manualPasteJson", label: "JSON 붙여넣기" },
                             ]}
                             value={String(
-                              feedInspectorTurnConfig?.webResultMode ??
-                                "auto",
+                              normalizeWebResultMode(feedInspectorTurnConfig?.webResultMode),
                             )}
                           />
                         </label>
@@ -10452,6 +10751,8 @@ ${prompt}`;
             {lastSavedRunFile && <div>최근 실행 파일: {formatRunFileLabel(lastSavedRunFile)}</div>}
           </section>
         )}
+
+        {workspaceTab === "bridge" && renderBridgePanel()}
 
       </section>
 

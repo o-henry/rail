@@ -2762,6 +2762,53 @@ pre {
   resize: vertical;
 }
 
+.bridge-view {
+  margin: 0 10px 10px;
+  display: grid;
+  gap: 12px;
+  align-content: start;
+  overflow: auto;
+}
+
+.bridge-head-panel,
+.bridge-provider-panel,
+.bridge-log-panel {
+  display: grid;
+  gap: 10px;
+}
+
+.bridge-action-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.bridge-provider-meta {
+  color: var(--muted-text, #5a6676);
+  font-size: 12px;
+  font-family: "DialogNanumBody1984", "Noto Sans KR", sans-serif;
+}
+
+.bridge-log-list {
+  display: grid;
+  gap: 6px;
+  max-height: 280px;
+  overflow: auto;
+  background: var(--surface, #fff);
+  border-radius: 12px;
+  padding: 8px;
+}
+
+.bridge-log-line {
+  font-family: "BasicallyAMono", "Noto Sans KR", monospace;
+  font-size: 12px;
+  line-height: 1.35;
+  color: #2e3947;
+  background: #f6f6f6;
+  border-radius: 6px;
+  padding: 6px 8px;
+}
+
 @media (max-width: 1400px) {
   .header-actions {
     justify-content: flex-end;
@@ -2818,6 +2865,7 @@ pre {
   .feed-layout,
   .childview-view,
   .settings-view,
+  .bridge-view,
   .dev-layout {
     margin: 0 10px 10px;
     width: auto;

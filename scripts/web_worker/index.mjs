@@ -2,6 +2,8 @@
 import { createInterface } from 'node:readline';
 import { appendFile, chmod, mkdir, readFile, rm, unlink, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
+import { createServer } from 'node:http';
+import { randomBytes, timingSafeEqual } from 'node:crypto';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -19,7 +21,10 @@ const USE_SYSTEM_CHROME_PROFILE =
   (process.env.RAIL_WEB_USE_SYSTEM_CHROME_PROFILE ?? '0') === '1' &&
   Boolean(SYSTEM_CHROME_PROFILE_DIR);
 const DEFAULT_TIMEOUT_MS = 90_000;
+const BRIDGE_HOST = '127.0.0.1';
+const BRIDGE_PORT = Number(process.env.RAIL_WEB_BRIDGE_PORT ?? 38961) || 38961;
 const WORKER_LOCK_PATH = path.join(PROFILE_ROOT, 'worker.lock.json');
+const BRIDGE_TOKEN_PATH = path.join(PROFILE_ROOT, 'bridge.token');
 const SESSION_PROVIDER_CONFIG = {
   gemini: {
     homeUrls: ['https://gemini.google.com/app', 'https://gemini.google.com/'],
@@ -154,6 +159,15 @@ const state = {
   providers: new Map(),
   activeRun: null,
   lastError: null,
+  bridge: {
+    server: null,
+    token: '',
+    lastSeenAt: null,
+    connectedProviders: new Map(),
+    tasks: new Map(),
+    providerQueue: new Map(),
+    nextTaskSeq: 1,
+  },
 };
 
 let lockHeld = false;
@@ -309,6 +323,417 @@ function workerError(code, message, details = null) {
   error.code = code;
   error.details = details;
   return error;
+}
+
+function maskToken(token) {
+  const raw = String(token ?? '');
+  if (!raw) {
+    return '';
+  }
+  if (raw.length <= 10) {
+    return `${raw.slice(0, 2)}****${raw.slice(-2)}`;
+  }
+  return `${raw.slice(0, 6)}...${raw.slice(-4)}`;
+}
+
+function safeTokenEquals(a, b) {
+  const left = Buffer.from(String(a ?? ''), 'utf8');
+  const right = Buffer.from(String(b ?? ''), 'utf8');
+  if (left.length === 0 || left.length !== right.length) {
+    return false;
+  }
+  return timingSafeEqual(left, right);
+}
+
+function bridgeStatusPayload({ exposeToken = false } = {}) {
+  const connectedProviders = Array.from(state.bridge.connectedProviders.entries())
+    .map(([provider, row]) => ({
+      provider,
+      pageUrl: row.pageUrl ?? null,
+      lastSeenAt: row.lastSeenAt ?? null,
+    }))
+    .sort((a, b) => a.provider.localeCompare(b.provider));
+  const taskRows = Array.from(state.bridge.tasks.values());
+  const activeTasks = taskRows.filter((row) =>
+    row.status === 'claimed' ||
+    row.status === 'prompt_filled' ||
+    row.status === 'waiting_user_send' ||
+    row.status === 'responding',
+  ).length;
+  const queuedTasks = taskRows.filter((row) => row.status === 'queued').length;
+  return {
+    running: Boolean(state.bridge.server?.listening),
+    port: BRIDGE_PORT,
+    tokenMasked: maskToken(state.bridge.token),
+    token: exposeToken ? state.bridge.token : undefined,
+    lastSeenAt: state.bridge.lastSeenAt,
+    connectedProviders,
+    queuedTasks,
+    activeTasks,
+  };
+}
+
+function bridgeProgress(provider, stage, message) {
+  notify('web/progress', {
+    provider,
+    stage,
+    message,
+  });
+}
+
+function recordBridgeSeen(provider, pageUrl) {
+  if (!SESSION_PROVIDER_CONFIG[provider]) {
+    return;
+  }
+  const now = nowIso();
+  state.bridge.lastSeenAt = now;
+  const prev = state.bridge.connectedProviders.get(provider) ?? {};
+  state.bridge.connectedProviders.set(provider, {
+    ...prev,
+    pageUrl: pageUrl || prev.pageUrl || null,
+    lastSeenAt: now,
+  });
+}
+
+function normalizeBridgeTaskStage(value) {
+  const stage = String(value ?? '').trim();
+  if (
+    stage === 'queued' ||
+    stage === 'claimed' ||
+    stage === 'prompt_filled' ||
+    stage === 'waiting_user_send' ||
+    stage === 'responding' ||
+    stage === 'done' ||
+    stage === 'failed' ||
+    stage === 'timeout'
+  ) {
+    return stage;
+  }
+  return '';
+}
+
+function removeBridgeTaskFromQueue(task) {
+  const queue = state.bridge.providerQueue.get(task.provider);
+  if (!queue) {
+    return;
+  }
+  const next = queue.filter((taskId) => taskId !== task.id);
+  if (next.length === 0) {
+    state.bridge.providerQueue.delete(task.provider);
+    return;
+  }
+  state.bridge.providerQueue.set(task.provider, next);
+}
+
+function settleBridgeTask(task, payload) {
+  if (!task || task.settled) {
+    return;
+  }
+  task.settled = true;
+  clearTimeout(task.timeoutHandle);
+  removeBridgeTaskFromQueue(task);
+  state.bridge.tasks.delete(task.id);
+  task.resolve(payload);
+}
+
+function failBridgeTask(task, code, message) {
+  if (!task || task.settled) {
+    return;
+  }
+  task.settled = true;
+  clearTimeout(task.timeoutHandle);
+  removeBridgeTaskFromQueue(task);
+  state.bridge.tasks.delete(task.id);
+  task.reject(workerError(code, message));
+}
+
+function enqueueBridgeTask(provider, prompt, timeoutMs) {
+  const taskId = `bridge-${Date.now()}-${state.bridge.nextTaskSeq++}`;
+  const task = {
+    id: taskId,
+    provider,
+    prompt,
+    status: 'queued',
+    createdAt: nowIso(),
+    timeoutMs,
+    settled: false,
+    timeoutHandle: null,
+    resolve: () => {},
+    reject: () => {},
+  };
+  const completion = new Promise((resolve, reject) => {
+    task.resolve = resolve;
+    task.reject = reject;
+  });
+  task.timeoutHandle = setTimeout(() => {
+    task.status = 'timeout';
+    bridgeProgress(provider, 'bridge_timeout', '브리지 응답 대기 시간이 초과되었습니다.');
+    failBridgeTask(task, 'BRIDGE_TIMEOUT', `브리지 응답 대기 시간 초과 (${timeoutMs}ms)`);
+  }, timeoutMs);
+  state.bridge.tasks.set(task.id, task);
+  const queue = state.bridge.providerQueue.get(provider) ?? [];
+  queue.push(task.id);
+  state.bridge.providerQueue.set(provider, queue);
+  bridgeProgress(provider, 'bridge_queued', '브리지 대기열에 프롬프트를 등록했습니다.');
+  return { task, completion };
+}
+
+function claimBridgeTask(provider, pageUrl) {
+  const queue = state.bridge.providerQueue.get(provider) ?? [];
+  for (const taskId of queue) {
+    const task = state.bridge.tasks.get(taskId);
+    if (!task || task.settled || task.status !== 'queued') {
+      continue;
+    }
+    task.status = 'claimed';
+    task.claimedAt = nowIso();
+    task.pageUrl = pageUrl || null;
+    recordBridgeSeen(provider, pageUrl);
+    bridgeProgress(provider, 'bridge_claimed', '확장이 작업을 수신했습니다.');
+    return task;
+  }
+  return null;
+}
+
+async function readJsonBody(req) {
+  const chunks = [];
+  for await (const chunk of req) {
+    chunks.push(chunk);
+    if (chunks.reduce((sum, item) => sum + item.length, 0) > 2_000_000) {
+      throw workerError('PAYLOAD_TOO_LARGE', '요청 본문이 너무 큽니다.');
+    }
+  }
+  const raw = Buffer.concat(chunks).toString('utf8').trim();
+  if (!raw) {
+    return {};
+  }
+  try {
+    return JSON.parse(raw);
+  } catch (error) {
+    throw workerError('INVALID_JSON', `JSON 파싱 실패: ${String(error)}`);
+  }
+}
+
+function parseAuthToken(req) {
+  const raw = String(req.headers.authorization ?? '');
+  if (!raw.toLowerCase().startsWith('bearer ')) {
+    return '';
+  }
+  return raw.slice(7).trim();
+}
+
+function writeHttpJson(res, statusCode, payload) {
+  res.writeHead(statusCode, {
+    'Content-Type': 'application/json; charset=utf-8',
+    'Cache-Control': 'no-store',
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Headers': 'content-type, authorization',
+    'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
+  });
+  res.end(JSON.stringify(payload));
+}
+
+function extractTaskIdFromPath(pathname) {
+  const match = pathname.match(/^\/v1\/task\/([^/]+)\/(stage|result|error)$/);
+  if (!match) {
+    return null;
+  }
+  return {
+    taskId: decodeURIComponent(match[1]),
+    action: match[2],
+  };
+}
+
+async function ensureBridgeToken() {
+  try {
+    const saved = (await readFile(BRIDGE_TOKEN_PATH, 'utf8')).trim();
+    if (saved) {
+      state.bridge.token = saved;
+      return saved;
+    }
+  } catch {
+    // ignore, generate below
+  }
+  const next = randomBytes(24).toString('base64url');
+  state.bridge.token = next;
+  await writeFile(BRIDGE_TOKEN_PATH, `${next}\n`, { encoding: 'utf8', mode: 0o600 });
+  await hardenFile(BRIDGE_TOKEN_PATH);
+  return next;
+}
+
+async function rotateBridgeToken() {
+  const next = randomBytes(24).toString('base64url');
+  state.bridge.token = next;
+  await writeFile(BRIDGE_TOKEN_PATH, `${next}\n`, { encoding: 'utf8', mode: 0o600 });
+  await hardenFile(BRIDGE_TOKEN_PATH);
+  return bridgeStatusPayload({ exposeToken: true });
+}
+
+async function handleBridgeHttpRequest(req, res) {
+  if (req.method === 'OPTIONS') {
+    writeHttpJson(res, 200, { ok: true });
+    return;
+  }
+
+  const url = new URL(req.url || '/', `http://${BRIDGE_HOST}:${BRIDGE_PORT}`);
+  const pathname = url.pathname;
+
+  if (pathname === '/v1/health' && req.method === 'GET') {
+    const token = parseAuthToken(req);
+    if (!safeTokenEquals(token, state.bridge.token)) {
+      writeHttpJson(res, 401, { ok: false, error: 'unauthorized' });
+      return;
+    }
+    writeHttpJson(res, 200, { ok: true, bridge: bridgeStatusPayload({ exposeToken: false }) });
+    return;
+  }
+
+  const token = parseAuthToken(req);
+  if (!safeTokenEquals(token, state.bridge.token)) {
+    writeHttpJson(res, 401, { ok: false, error: 'unauthorized' });
+    return;
+  }
+
+  if (pathname === '/v1/task/claim' && req.method === 'POST') {
+    let body = {};
+    try {
+      body = await readJsonBody(req);
+    } catch (error) {
+      writeHttpJson(res, 400, {
+        ok: false,
+        error: error?.message || String(error),
+      });
+      return;
+    }
+    const provider = String(body.provider ?? '').trim().toLowerCase();
+    const pageUrl = sanitizeUrlForUi(String(body.pageUrl ?? '').trim()) ?? null;
+    if (!SESSION_PROVIDER_CONFIG[provider]) {
+      writeHttpJson(res, 400, { ok: false, error: `unsupported provider: ${provider}` });
+      return;
+    }
+    const task = claimBridgeTask(provider, pageUrl);
+    if (!task) {
+      writeHttpJson(res, 200, { ok: true, task: null });
+      return;
+    }
+    writeHttpJson(res, 200, {
+      ok: true,
+      task: {
+        id: task.id,
+        provider: task.provider,
+        prompt: task.prompt,
+        createdAt: task.createdAt,
+        timeoutMs: task.timeoutMs,
+      },
+    });
+    return;
+  }
+
+  const taskRoute = extractTaskIdFromPath(pathname);
+  if (taskRoute && req.method === 'POST') {
+    let body = {};
+    try {
+      body = await readJsonBody(req);
+    } catch (error) {
+      writeHttpJson(res, 400, {
+        ok: false,
+        error: error?.message || String(error),
+      });
+      return;
+    }
+    const task = state.bridge.tasks.get(taskRoute.taskId);
+    if (!task || task.settled) {
+      writeHttpJson(res, 404, { ok: false, error: 'task not found' });
+      return;
+    }
+
+    const provider = task.provider;
+    const pageUrl = sanitizeUrlForUi(String(body.pageUrl ?? '').trim()) ?? task.pageUrl ?? null;
+    recordBridgeSeen(provider, pageUrl);
+
+    if (taskRoute.action === 'stage') {
+      const stage = normalizeBridgeTaskStage(body.stage);
+      if (!stage) {
+        writeHttpJson(res, 400, { ok: false, error: 'invalid stage' });
+        return;
+      }
+      task.status = stage;
+      const detail = String(body.detail ?? '').trim();
+      bridgeProgress(provider, `bridge_${stage}`, detail || `브리지 단계: ${stage}`);
+      writeHttpJson(res, 200, { ok: true });
+      return;
+    }
+
+    if (taskRoute.action === 'error') {
+      const code = String(body.code ?? 'BRIDGE_ERROR').trim() || 'BRIDGE_ERROR';
+      const message = String(body.message ?? '브리지 오류').trim() || '브리지 오류';
+      task.status = 'failed';
+      bridgeProgress(provider, 'bridge_failed', `${code}: ${message}`);
+      failBridgeTask(task, code, message);
+      writeHttpJson(res, 200, { ok: true });
+      return;
+    }
+
+    if (taskRoute.action === 'result') {
+      const text = String(body.text ?? '').trim();
+      if (!text) {
+        writeHttpJson(res, 400, { ok: false, error: 'text is required' });
+        return;
+      }
+      task.status = 'done';
+      bridgeProgress(provider, 'bridge_done', '브리지 응답 수집 완료');
+      settleBridgeTask(task, {
+        text,
+        raw: body.raw ?? null,
+        meta: body.meta ?? null,
+      });
+      writeHttpJson(res, 200, { ok: true });
+      return;
+    }
+  }
+
+  writeHttpJson(res, 404, { ok: false, error: 'not found' });
+}
+
+async function startBridgeServer() {
+  if (state.bridge.server?.listening) {
+    return;
+  }
+  await ensureBridgeToken();
+  const server = createServer((req, res) => {
+    void handleBridgeHttpRequest(req, res).catch((error) => {
+      writeHttpJson(res, 500, {
+        ok: false,
+        error: error?.message || String(error),
+      });
+    });
+  });
+  state.bridge.server = server;
+
+  await new Promise((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(BRIDGE_PORT, BRIDGE_HOST, () => {
+      server.off('error', reject);
+      resolve(true);
+    });
+  });
+  await logLine(`bridge server started: http://${BRIDGE_HOST}:${BRIDGE_PORT}`);
+  notify('web/progress', {
+    stage: 'bridge_started',
+    message: `브리지 서버 시작 (${BRIDGE_HOST}:${BRIDGE_PORT})`,
+  });
+}
+
+async function stopBridgeServer() {
+  const server = state.bridge.server;
+  state.bridge.server = null;
+  if (!server) {
+    return;
+  }
+  await new Promise((resolve) => {
+    server.close(() => resolve(true));
+  });
+  await logLine('bridge server stopped');
 }
 
 let playwrightPromise = null;
@@ -874,6 +1299,54 @@ async function runProviderAutomation(provider, { prompt, timeoutMs }) {
   }
 }
 
+async function runProviderBridgeAssisted(provider, { prompt, timeoutMs, runToken }) {
+  if (!state.bridge.server?.listening) {
+    throw workerError('BRIDGE_NOT_RUNNING', '브리지 서버가 실행 중이 아닙니다.');
+  }
+  const startedAt = nowIso();
+  const startedMs = Date.now();
+  const { task, completion } = enqueueBridgeTask(provider, prompt, timeoutMs);
+
+  while (true) {
+    if (runToken.cancelled) {
+      task.status = 'failed';
+      bridgeProgress(provider, 'bridge_cancelled', '요청이 취소되었습니다.');
+      failBridgeTask(task, 'CANCELLED', '요청이 취소되었습니다.');
+      throw workerError('CANCELLED', '요청이 취소되었습니다.');
+    }
+
+    try {
+      const result = await Promise.race([
+        completion,
+        sleep(220).then(() => null),
+      ]);
+      if (!result) {
+        continue;
+      }
+      const finishedAt = nowIso();
+      return {
+        ok: true,
+        text: String(result.text ?? '').trim(),
+        raw: {
+          provider,
+          bridge: true,
+          payload: result.raw ?? null,
+        },
+        meta: {
+          provider,
+          url: task.pageUrl ?? null,
+          startedAt,
+          finishedAt,
+          elapsedMs: Date.now() - startedMs,
+          extractionStrategy: 'browser-extension-bridge',
+        },
+      };
+    } catch (error) {
+      throw error;
+    }
+  }
+}
+
 async function openProviderSession(provider) {
   const wrapped = await ensureProviderContext(provider);
   await ensureProviderLandingPage(provider, wrapped.page);
@@ -925,6 +1398,7 @@ async function getHealthResult() {
     logPath: LOG_PATH,
     profileRoot: PROFILE_ROOT,
     activeProvider: state.activeRun?.provider ?? null,
+    bridge: bridgeStatusPayload({ exposeToken: false }),
   };
 }
 
@@ -971,6 +1445,21 @@ async function closeAllProviderContexts() {
   }
 }
 
+function closeAllBridgeTasks(reason = '브리지 작업이 중단되었습니다.') {
+  const tasks = Array.from(state.bridge.tasks.values());
+  state.bridge.tasks.clear();
+  state.bridge.providerQueue.clear();
+  for (const task of tasks) {
+    if (task.settled) {
+      continue;
+    }
+    task.status = 'failed';
+    clearTimeout(task.timeoutHandle);
+    task.settled = true;
+    task.reject(workerError('BRIDGE_STOPPED', reason));
+  }
+}
+
 async function gracefulShutdown(reason, exitCode = 0) {
   if (shutdownRequested) {
     return;
@@ -978,6 +1467,8 @@ async function gracefulShutdown(reason, exitCode = 0) {
   shutdownRequested = true;
   notify('web/worker/stopped', { reason, stoppedAt: nowIso() });
   await logLine(`web worker shutdown: ${reason}`);
+  closeAllBridgeTasks('브리지 서버가 종료되었습니다.');
+  await stopBridgeServer();
   await closeAllProviderContexts();
   await releaseWorkerLock();
   process.exit(exitCode);
@@ -992,10 +1483,27 @@ async function handleRpcRequest(message) {
     return;
   }
 
+  if (method === 'bridge/status') {
+    respond(id, bridgeStatusPayload({ exposeToken: true }));
+    return;
+  }
+
+  if (method === 'bridge/tokenRotate') {
+    const result = await rotateBridgeToken();
+    notify('web/progress', {
+      stage: 'bridge_token_rotated',
+      message: '브리지 토큰을 재발급했습니다.',
+    });
+    respond(id, result);
+    return;
+  }
+
   if (method === 'provider/run') {
     const provider = String(params.provider ?? '').trim().toLowerCase();
     const prompt = String(params.prompt ?? '');
     const timeoutMs = Number(params.timeoutMs ?? DEFAULT_TIMEOUT_MS);
+    const modeRaw = String(params.mode ?? 'auto').trim();
+    const mode = modeRaw === 'bridgeAssisted' ? 'bridgeAssisted' : 'auto';
 
     if (!provider) {
       respond(id, {
@@ -1025,18 +1533,36 @@ async function handleRpcRequest(message) {
     }
 
     try {
-      const result = await runProviderAutomation(provider, {
-        prompt,
-        timeoutMs: Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : DEFAULT_TIMEOUT_MS,
-      });
+      const safeTimeoutMs = Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : DEFAULT_TIMEOUT_MS;
+      let result;
+      if (mode === 'bridgeAssisted') {
+        const runToken = { cancelled: false, provider };
+        state.activeRun = runToken;
+        try {
+          result = await runProviderBridgeAssisted(provider, {
+            prompt,
+            timeoutMs: safeTimeoutMs,
+            runToken,
+          });
+        } finally {
+          if (state.activeRun === runToken) {
+            state.activeRun = null;
+          }
+        }
+      } else {
+        result = await runProviderAutomation(provider, {
+          prompt,
+          timeoutMs: safeTimeoutMs,
+        });
+      }
       respond(id, result);
     } catch (error) {
-      const code = error?.code || 'EXTRACTION_FAILED';
+      const code = error?.code || (mode === 'bridgeAssisted' ? 'BRIDGE_FAILED' : 'EXTRACTION_FAILED');
       const messageText = error?.message || String(error);
       state.lastError = `${code}: ${messageText}`;
       notify('web/progress', {
         provider,
-        stage: 'error',
+        stage: mode === 'bridgeAssisted' ? 'bridge_error' : 'error',
         message: state.lastError,
       });
       respond(id, {
@@ -1136,6 +1662,17 @@ async function handleLine(rawLine) {
 async function bootstrap() {
   await hardenDir(PROFILE_ROOT);
   await acquireWorkerLock();
+  await ensureBridgeToken();
+  try {
+    await startBridgeServer();
+  } catch (error) {
+    state.lastError = `BRIDGE_START_FAILED: ${String(error)}`;
+    await logLine(`bridge server unavailable: ${String(error)}`);
+    notify('web/progress', {
+      stage: 'bridge_unavailable',
+      message: '브리지 서버를 시작하지 못했습니다. 수동 폴백을 사용하세요.',
+    });
+  }
   await logLine('web worker boot');
   notify('web/worker/started', {
     profileRoot: PROFILE_ROOT,
