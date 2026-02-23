@@ -305,7 +305,12 @@ async function ensureProviderContext(provider) {
   const launchOptions = {
     headless: false,
     viewport: { width: 1380, height: 900 },
-    args: ['--disable-dev-shm-usage', '--no-first-run'],
+    ignoreDefaultArgs: ['--enable-automation'],
+    args: [
+      '--disable-dev-shm-usage',
+      '--no-first-run',
+      '--disable-blink-features=AutomationControlled',
+    ],
   };
 
   const executablePath = resolveChromeExecutable();
@@ -331,6 +336,21 @@ async function ensureProviderContext(provider) {
   }
 
   const page = context.pages()[0] ?? (await context.newPage());
+  try {
+    await context.addInitScript(() => {
+      try {
+        Object.defineProperty(navigator, 'webdriver', {
+          configurable: true,
+          get: () => undefined,
+        });
+      } catch {
+        // noop
+      }
+    });
+  } catch {
+    // noop
+  }
+
   const wrapped = {
     provider,
     context,

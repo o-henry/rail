@@ -5338,7 +5338,21 @@ function App() {
       }, 900);
       setStatus(`${webProviderLabel(provider)} 로그인 세션 창 열림`);
     } catch (error) {
-      setError(`${webProviderLabel(provider)} 로그인 세션 열기 실패: ${String(error)}`);
+      const raw = String(error);
+      const lower = raw.toLowerCase();
+      const isGeminiUnsafeBrowser =
+        provider === "gemini" &&
+        (lower.includes("browser or app may not be secure") ||
+          lower.includes("안전하지 않을 수 있습니다") ||
+          lower.includes("unsafe_browser"));
+      if (isGeminiUnsafeBrowser) {
+        setError(
+          "Gemini가 자동화 브라우저 로그인을 차단했습니다. 현재 노드는 '웹 결과 모드'를 '텍스트 붙여넣기'로 바꿔 수동으로 사용하세요.",
+        );
+        setStatus("Gemini 자동 로그인 차단 감지");
+      } else {
+        setError(`${webProviderLabel(provider)} 로그인 세션 열기 실패: ${raw}`);
+      }
     } finally {
       setWebWorkerBusy(false);
     }
@@ -9651,7 +9665,7 @@ ${prompt}`;
             <article className="panel-card feed-agent-panel">
               <div className="feed-agent-panel-head">
                 <h3>에이전트 상세설정</h3>
-                <span>{feedInspectorAgentPosts.length}개</span>
+                {/* <span>{feedInspectorAgentPosts.length}개</span> */}
               </div>
               {feedInspectorAgentPosts.length === 0 && (
                 <div className="inspector-empty">표시할 에이전트 포스트가 없습니다.</div>
@@ -9936,7 +9950,7 @@ ${prompt}`;
               <section className="feed-agent-rules">
                 <div className="feed-agent-rules-head">
                   <h4>적용 규칙 문서</h4>
-                  <span>{feedInspectorRuleDocs.length}개</span>
+                  {/* <span>{feedInspectorRuleDocs.length}개</span> */}
                 </div>
                 {!feedInspectorRuleCwd && (
                   <div className="inspector-empty">작업 경로가 없어 agent.md / skill.md를 조회할 수 없습니다.</div>
@@ -10306,8 +10320,8 @@ ${prompt}`;
             <div>서비스: {webProviderLabel(pendingWebLogin.provider)}</div>
             <div>{pendingWebLogin.reason}</div>
             <div className="button-row">
-              <button onClick={() => onOpenProviderChildView(pendingWebLogin.provider)} type="button">
-                Child View 열기
+              <button onClick={() => void onOpenProviderSession(pendingWebLogin.provider)} type="button">
+                로그인 세션 열기
               </button>
               <button onClick={() => resolvePendingWebLogin(true)} type="button">
                 로그인 완료 후 계속
