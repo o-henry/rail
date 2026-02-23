@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { createInterface } from 'node:readline';
-import { appendFile, mkdir, rm } from 'node:fs/promises';
+import { appendFile, chmod, mkdir, rm } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -19,6 +19,23 @@ const state = {
   lastError: null,
 };
 
+async function hardenDir(dirPath) {
+  await mkdir(dirPath, { recursive: true, mode: 0o700 });
+  try {
+    await chmod(dirPath, 0o700);
+  } catch {
+    // ignore on platforms/filesystems that do not support chmod
+  }
+}
+
+async function hardenFile(filePath) {
+  try {
+    await chmod(filePath, 0o600);
+  } catch {
+    // ignore on platforms/filesystems that do not support chmod
+  }
+}
+
 function nowIso() {
   return new Date().toISOString();
 }
@@ -26,8 +43,9 @@ function nowIso() {
 async function logLine(message) {
   const line = `[${nowIso()}] ${message}\n`;
   try {
-    await mkdir(path.dirname(LOG_PATH), { recursive: true });
-    await appendFile(LOG_PATH, line, 'utf8');
+    await hardenDir(path.dirname(LOG_PATH));
+    await appendFile(LOG_PATH, line, { encoding: 'utf8', mode: 0o600 });
+    await hardenFile(LOG_PATH);
   } catch {
     // ignore logging errors
   }
@@ -160,7 +178,7 @@ async function ensureProviderContext(provider) {
   }
 
   const profileDir = providerProfileDir(provider);
-  await mkdir(profileDir, { recursive: true });
+  await hardenDir(profileDir);
 
   const launchOptions = {
     headless: false,
@@ -522,7 +540,7 @@ async function resetProviderSession(provider) {
 
   const profileDir = providerProfileDir(provider);
   await rm(profileDir, { recursive: true, force: true });
-  await mkdir(profileDir, { recursive: true });
+  await hardenDir(profileDir);
 
   return { ok: true, provider, profileDir };
 }
@@ -687,7 +705,7 @@ async function handleLine(rawLine) {
 }
 
 async function bootstrap() {
-  await mkdir(PROFILE_ROOT, { recursive: true });
+  await hardenDir(PROFILE_ROOT);
   await logLine('web worker boot');
   notify('web/worker/started', {
     profileRoot: PROFILE_ROOT,
