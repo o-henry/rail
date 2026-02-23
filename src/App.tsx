@@ -10660,9 +10660,6 @@ ${prompt}`;
                   </div>
                 </section>
               )}
-              {!feedInspectorTurnNode && (
-                <div className="inspector-empty">선택된 포스트의 에이전트 설정을 찾을 수 없습니다.</div>
-              )}
               <section className="feed-agent-rules">
                 <div className="feed-agent-rules-head">
                   <h4>적용 규칙 문서</h4>
