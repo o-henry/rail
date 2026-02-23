@@ -488,6 +488,7 @@ const KNOWLEDGE_DEFAULT_MAX_CHARS = 2800;
 const QUALITY_DEFAULT_THRESHOLD = 70;
 const FEED_REDACTION_RULE_VERSION = "feed-v1";
 const FEED_ATTACHMENT_CHAR_CAP = 12_000;
+const FEED_STEP_PLACEHOLDER = "실행 로그 요약 없음";
 const KNOWLEDGE_TOP_K_OPTIONS: FancySelectOption[] = [
   { value: "0", label: "0개" },
   { value: "1", label: "1개" },
@@ -1273,7 +1274,13 @@ function summarizeFeedSteps(logs: string[]): string[] {
       break;
     }
   }
-  return steps.slice(0, 5);
+  return normalizeFeedSteps(steps).slice(0, 5);
+}
+
+function normalizeFeedSteps(steps: string[]): string[] {
+  return steps
+    .map((step) => step.trim())
+    .filter((step) => step && step !== FEED_STEP_PLACEHOLDER);
 }
 
 function buildFeedSummary(status: FeedPostStatus, output: unknown, error?: string, summary?: string): string {
@@ -4142,6 +4149,7 @@ function App() {
   function buildFeedShareText(post: FeedViewPost, run: RunRecord | null): string {
     const markdownAttachment = post.attachments.find((attachment) => attachment.kind === "markdown");
     const rawContent = markdownAttachment?.content?.trim() ?? "";
+    const visibleSteps = normalizeFeedSteps(post.steps);
     const lines: string[] = [
       `# ${post.agentName}`,
       `- 상태: ${feedPostStatusLabel(post.status)}`,
@@ -4158,8 +4166,8 @@ function App() {
       lines.push("", "## 질문", post.question.trim());
     }
     lines.push("", "## 요약", post.summary?.trim() || "(요약 없음)");
-    if (post.steps.length > 0) {
-      lines.push("", "## 단계", ...post.steps.map((step) => `- ${step}`));
+    if (visibleSteps.length > 0) {
+      lines.push("", "## 단계", ...visibleSteps.map((step) => `- ${step}`));
     }
     if (rawContent) {
       lines.push("", "## 상세", rawContent);
@@ -8791,6 +8799,7 @@ ${prompt}`;
                   currentFeedPosts.map((post) => {
                     const markdownAttachment = post.attachments.find((attachment) => attachment.kind === "markdown");
                     const visibleContent = markdownAttachment?.content ?? post.summary ?? "(첨부 없음)";
+                    const visibleSteps = normalizeFeedSteps(post.steps);
                     const score = Math.max(
                       1,
                       Math.min(99, Number(post.evidence.qualityScore ?? (post.status === "done" ? 95 : 55))),
@@ -8833,9 +8842,9 @@ ${prompt}`;
                           <div className="feed-card-details">
                             {post.question && <div className="feed-card-question">Q: {post.question}</div>}
                             <pre className="feed-sns-content">{visibleContent}</pre>
-                            {post.steps.length > 0 && (
+                            {visibleSteps.length > 0 && (
                               <div className="feed-step-list">
-                                {post.steps.map((step) => (
+                                {visibleSteps.map((step) => (
                                   <span className="feed-step-chip" key={`${post.id}-${step}`}>
                                     <span className="feed-step-chip-label">{step}</span>
                                   </span>
