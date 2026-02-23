@@ -1964,7 +1964,7 @@ h3 {
   min-height: auto;
   overflow: visible;
   padding: 0;
-  border: 1px solid #e3e8ee;
+  border: 0;
   border-radius: 12px;
   background: #ffffff;
   scrollbar-width: none;
