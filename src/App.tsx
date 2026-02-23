@@ -616,10 +616,30 @@ const QUALITY_PROFILE_OPTIONS: FancySelectOption[] = [
   { value: "synthesis_final", label: "최종 종합" },
   { value: "generic", label: "일반" },
 ];
-const QUALITY_THRESHOLD_OPTIONS: FancySelectOption[] = Array.from({ length: 20 }, (_, index) => {
-  const score = (index + 1) * 5;
-  return { value: String(score), label: `${score}점` };
-});
+const QUALITY_THRESHOLD_MIN = 10;
+const QUALITY_THRESHOLD_MAX = 100;
+const QUALITY_THRESHOLD_STEP = 10;
+const QUALITY_THRESHOLD_OPTIONS: FancySelectOption[] = Array.from(
+  { length: (QUALITY_THRESHOLD_MAX - QUALITY_THRESHOLD_MIN) / QUALITY_THRESHOLD_STEP + 1 },
+  (_, index) => {
+    const score = QUALITY_THRESHOLD_MIN + index * QUALITY_THRESHOLD_STEP;
+    return { value: String(score), label: `${score}점` };
+  },
+);
+
+function normalizeQualityThreshold(value: unknown): number {
+  const parsed = Number(value);
+  const fallback = QUALITY_DEFAULT_THRESHOLD;
+  const safe = Number.isFinite(parsed) ? parsed : fallback;
+  const clamped = Math.max(QUALITY_THRESHOLD_MIN, Math.min(QUALITY_THRESHOLD_MAX, safe));
+  return Math.round(clamped / QUALITY_THRESHOLD_STEP) * QUALITY_THRESHOLD_STEP;
+}
+
+function normalizeQualityScore(value: number): number {
+  const clamped = Math.max(0, Math.min(100, value));
+  return Math.round(clamped / QUALITY_THRESHOLD_STEP) * QUALITY_THRESHOLD_STEP;
+}
+
 const ARTIFACT_TYPE_OPTIONS: FancySelectOption[] = [
   { value: "none", label: "사용 안 함" },
   { value: "RequirementArtifact", label: "요구사항 아티팩트" },
@@ -1732,7 +1752,7 @@ async function buildQualityReport(params: {
 }): Promise<QualityReport> {
   const { node, config, output, cwd } = params;
   const profile = inferQualityProfile(node, config);
-  const threshold = Math.max(5, Math.min(100, Number(config.qualityThreshold ?? QUALITY_DEFAULT_THRESHOLD) || QUALITY_DEFAULT_THRESHOLD));
+  const threshold = normalizeQualityThreshold(config.qualityThreshold ?? QUALITY_DEFAULT_THRESHOLD);
   const checks: QualityCheck[] = [];
   const failures: string[] = [];
   const warnings: string[] = [];
@@ -1782,7 +1802,7 @@ async function buildQualityReport(params: {
     kind: "structure",
     required: false,
     passed: fullText.trim().length >= 120,
-    penalty: 12,
+    penalty: 10,
     detail: "120자 미만이면 요약 부족으로 감점",
   });
 
@@ -1793,7 +1813,7 @@ async function buildQualityReport(params: {
       kind: "evidence",
       required: true,
       passed: /(source|출처|근거|http|https|reference)/i.test(fullText),
-      penalty: 25,
+      penalty: 20,
     });
     addCheck({
       id: "uncertainty_signal",
@@ -1813,7 +1833,7 @@ async function buildQualityReport(params: {
       kind: "structure",
       required: true,
       passed: hits >= 3,
-      penalty: 24,
+      penalty: 20,
       detail: "목표/제약/리스크/우선순위 등 3개 이상 필요",
     });
   } else if (profile === "synthesis_final") {
@@ -1826,7 +1846,7 @@ async function buildQualityReport(params: {
       kind: "structure",
       required: true,
       passed: hits >= 3,
-      penalty: 24,
+      penalty: 20,
       detail: "결론/근거/한계/다음 단계 중 3개 이상",
     });
   } else if (profile === "code_implementation") {
@@ -1836,7 +1856,7 @@ async function buildQualityReport(params: {
       kind: "structure",
       required: true,
       passed: /(file|파일|test|테스트|lint|build|patch|module|class|function)/i.test(fullText),
-      penalty: 24,
+      penalty: 20,
     });
 
     if (config.qualityCommandEnabled) {
@@ -1856,7 +1876,7 @@ async function buildQualityReport(params: {
             kind: "local_command",
             required: true,
             passed: !failed,
-            penalty: 35,
+            penalty: 30,
             detail: failed ? `${failed.name} 실패(exit=${failed.exitCode})` : "모든 명령 성공",
           });
           for (const row of commandResults) {
@@ -1871,7 +1891,7 @@ async function buildQualityReport(params: {
             kind: "local_command",
             required: true,
             passed: false,
-            penalty: 35,
+            penalty: 30,
             detail: String(error),
           });
         }
@@ -1879,12 +1899,13 @@ async function buildQualityReport(params: {
     }
   }
 
-  const decision: "PASS" | "REJECT" = score >= threshold ? "PASS" : "REJECT";
+  const normalizedScore = normalizeQualityScore(score);
+  const decision: "PASS" | "REJECT" = normalizedScore >= threshold ? "PASS" : "REJECT";
 
   return {
     profile,
     threshold,
-    score,
+    score: normalizedScore,
     decision,
     checks,
     failures,
@@ -3422,7 +3443,7 @@ function applyPresetTurnPolicies(kind: PresetKind, nodes: GraphNode[]): GraphNod
       config: {
         ...current,
         qualityProfile: policy.profile,
-        qualityThreshold: policy.threshold,
+        qualityThreshold: normalizeQualityThreshold(policy.threshold),
         qualityCommandEnabled: policy.qualityCommandEnabled,
         qualityCommands: policy.qualityCommands,
         artifactType: policy.artifactType,
@@ -4122,14 +4143,8 @@ function normalizeGraph(input: unknown): GraphData {
         knowledgeEnabled:
           typeof config.knowledgeEnabled === "boolean" ? config.knowledgeEnabled : true,
         qualityProfile: toQualityProfileId(config.qualityProfile) ?? undefined,
-        qualityThreshold: Math.max(
-          5,
-          Math.min(
-            100,
-            Number(
-              readNumber(config.qualityThreshold) ?? QUALITY_DEFAULT_THRESHOLD,
-            ) || QUALITY_DEFAULT_THRESHOLD,
-          ),
+        qualityThreshold: normalizeQualityThreshold(
+          readNumber(config.qualityThreshold) ?? QUALITY_DEFAULT_THRESHOLD,
         ),
         qualityCommandEnabled:
           typeof config.qualityCommandEnabled === "boolean" ? config.qualityCommandEnabled : false,
@@ -8918,14 +8933,7 @@ ${prompt}`;
       ? inferQualityProfile(selectedNode, selectedTurnConfig)
       : "generic";
   const selectedQualityThresholdOption = String(
-    Math.max(
-      5,
-      Math.min(
-        100,
-        Math.round((Number(selectedTurnConfig?.qualityThreshold ?? QUALITY_DEFAULT_THRESHOLD) || QUALITY_DEFAULT_THRESHOLD) / 5) *
-          5,
-      ),
-    ),
+    normalizeQualityThreshold(selectedTurnConfig?.qualityThreshold ?? QUALITY_DEFAULT_THRESHOLD),
   );
   const selectedArtifactType: ArtifactType = toArtifactType(selectedTurnConfig?.artifactType);
   const outgoingFromSelected = selectedNode
@@ -9101,16 +9109,7 @@ ${prompt}`;
       ? inferQualityProfile(feedInspectorTurnNode, feedInspectorTurnConfig)
       : "generic";
   const feedInspectorQualityThresholdOption = String(
-    Math.max(
-      5,
-      Math.min(
-        100,
-        Math.round(
-          (Number(feedInspectorTurnConfig?.qualityThreshold ?? QUALITY_DEFAULT_THRESHOLD) ||
-            QUALITY_DEFAULT_THRESHOLD) / 5,
-        ) * 5,
-      ),
-    ),
+    normalizeQualityThreshold(feedInspectorTurnConfig?.qualityThreshold ?? QUALITY_DEFAULT_THRESHOLD),
   );
   const feedInspectorPromptTemplate = String(feedInspectorTurnConfig?.promptTemplate ?? "{{input}}");
   const feedInspectorRuleCwd = String(feedInspectorTurnConfig?.cwd ?? "").trim();
@@ -10069,12 +10068,12 @@ ${prompt}`;
                             <FancySelect
                               ariaLabel="품질 통과 기준 점수"
                               className="modern-select"
-                              onChange={(next) =>
-                                updateSelectedNodeConfig(
-                                  "qualityThreshold",
-                                  Math.max(5, Math.min(100, Number(next) || QUALITY_DEFAULT_THRESHOLD)),
-                                )
-                              }
+                                onChange={(next) =>
+                                  updateSelectedNodeConfig(
+                                    "qualityThreshold",
+                                    normalizeQualityThreshold(next),
+                                  )
+                                }
                               options={QUALITY_THRESHOLD_OPTIONS}
                               value={selectedQualityThresholdOption}
                             />
@@ -10467,7 +10466,7 @@ ${prompt}`;
                           updateNodeConfigById(
                             feedInspectorEditableNodeId,
                             "qualityThreshold",
-                            Math.max(5, Math.min(100, Number(next) || QUALITY_DEFAULT_THRESHOLD)),
+                            normalizeQualityThreshold(next),
                           );
                         }}
                         options={QUALITY_THRESHOLD_OPTIONS}
