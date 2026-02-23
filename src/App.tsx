@@ -8721,7 +8721,7 @@ ${prompt}`;
                         <div className="feed-step-list">
                           {post.steps.map((step) => (
                             <span className="feed-step-chip" key={`${post.id}-${step}`}>
-                              {step}
+                              <span className="feed-step-chip-label">{step}</span>
                             </span>
                           ))}
                         </div>

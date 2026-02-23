@@ -1939,7 +1939,7 @@ h3 {
 .feed-stream {
   display: grid;
   align-content: start;
-  gap: 12px;
+  gap: 36px;
   min-height: 0;
   overflow: auto;
   padding: 2px 4px 0 0;
@@ -1964,7 +1964,7 @@ h3 {
   border: 0;
   border-radius: 12px;
   background: #f1f3f6;
-  padding: 14px 14px;
+  /* padding: 14px 14px; */
   display: grid;
   gap: 9px;
 }
@@ -2035,9 +2035,9 @@ h3 {
 .feed-card-question {
   color: #4b5768;
   font-size: 14px;
-  border-radius: 12px;
+  border-radius: 4px;
   background: #ffffff;
-  padding: 8px 0;
+  padding: 8px 12px 8px 12px;
 }
 
 .feed-card-summary {
@@ -2051,7 +2051,7 @@ h3 {
 .feed-sns-content {
   max-height: 220px;
   overflow: auto;
-  border-radius: 12px;
+  border-radius: 4px;
   background: #ffffff;
   padding: 10px 11px;
   font-size: 14px;
@@ -2075,10 +2075,18 @@ h3 {
 .feed-step-chip {
   border-radius: 12px;
   padding: 5px 10px;
-  background: #e6ecf5;
-  color: #355071;
+  background: #2f5fb1;
+  color: #ffffff;
   font-size: 12px;
   line-height: 1.1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.feed-step-chip-label {
+  position: relative;
+  top: 2px;
 }
 
 .feed-evidence-row {
@@ -2097,9 +2105,18 @@ h3 {
   font-size: 12px;
   line-height: 1;
   border-radius: 6px;
-  background: #eceff3;
-  color: #445266;
+  background: #2f6fdd;
+  color: #ffffff;
   box-shadow: none;
+}
+
+.feed-card-actions button:hover:not(:disabled) {
+  background: #245fc4;
+}
+
+.feed-card-actions button:disabled {
+  background: #cfd6e2;
+  color: #6b7788;
 }
 
 .feed-reply-row {
