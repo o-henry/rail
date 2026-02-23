@@ -5149,6 +5149,12 @@ function App() {
     setError("");
     try {
       await ensureEngineStarted();
+      const beforeProbe = await refreshAuthStateFromEngine(true);
+      if (beforeProbe?.state === "login_required") {
+        setLoginCompleted(false);
+        setUsageInfoText("");
+        throw new Error("로그인이 완료되지 않아 사용량을 조회할 수 없습니다. 설정에서 로그인 후 다시 시도해주세요.");
+      }
       const result = await invoke<UsageCheckResult>("usage_check");
       const mode = extractAuthMode(result.raw);
       if (mode) {
