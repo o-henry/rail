@@ -4271,6 +4271,8 @@ function App() {
   const pendingNodeRequestsRef = useRef<Record<string, string[]>>({});
   const agentRulesCacheRef = useRef<Record<string, { loadedAt: number; docs: AgentRuleDoc[] }>>({});
   const runStartGuardRef = useRef(false);
+  const pendingWebTurnAutoOpenKeyRef = useRef("");
+  const pendingWebLoginAutoOpenKeyRef = useRef("");
 
   const activeApproval = pendingApprovals[0];
   const canvasNodes = useMemo(() => {
@@ -5418,6 +5420,44 @@ function App() {
       setWebWorkerBusy(false);
     }
   }
+
+  useEffect(() => {
+    if (!pendingWebTurn) {
+      pendingWebTurnAutoOpenKeyRef.current = "";
+      return;
+    }
+    const key = `${pendingWebTurn.nodeId}:${pendingWebTurn.provider}:${pendingWebTurn.mode}:${pendingWebTurn.prompt.length}`;
+    if (pendingWebTurnAutoOpenKeyRef.current === key) {
+      return;
+    }
+    pendingWebTurnAutoOpenKeyRef.current = key;
+    void openUrl(webProviderHomeUrl(pendingWebTurn.provider))
+      .then(() => {
+        setStatus(`${webProviderLabel(pendingWebTurn.provider)} 기본 브라우저 자동 열림`);
+      })
+      .catch((error) => {
+        setError(`${webProviderLabel(pendingWebTurn.provider)} 브라우저 자동 열기 실패: ${String(error)}`);
+      });
+  }, [pendingWebTurn]);
+
+  useEffect(() => {
+    if (!pendingWebLogin) {
+      pendingWebLoginAutoOpenKeyRef.current = "";
+      return;
+    }
+    const key = `${pendingWebLogin.nodeId}:${pendingWebLogin.provider}:${pendingWebLogin.reason.length}`;
+    if (pendingWebLoginAutoOpenKeyRef.current === key) {
+      return;
+    }
+    pendingWebLoginAutoOpenKeyRef.current = key;
+    void openUrl(webProviderHomeUrl(pendingWebLogin.provider))
+      .then(() => {
+        setStatus(`${webProviderLabel(pendingWebLogin.provider)} 로그인 브라우저 자동 열림`);
+      })
+      .catch((error) => {
+        setError(`${webProviderLabel(pendingWebLogin.provider)} 로그인 브라우저 열기 실패: ${String(error)}`);
+      });
+  }, [pendingWebLogin]);
 
   useEffect(() => {
     if (workspaceTab !== "settings") {
