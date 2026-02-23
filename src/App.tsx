@@ -517,7 +517,6 @@ const AGENT_RULE_CACHE_TTL_MS = 12_000;
 const AGENT_RULE_MAX_DOCS = 16;
 const AGENT_RULE_MAX_DOC_CHARS = 6_000;
 const SIMPLE_WORKFLOW_UI = true;
-const GEMINI_AUTOMATION_ENABLED = false;
 const KNOWLEDGE_TOP_K_OPTIONS: FancySelectOption[] = [
   { value: "0", label: "0개" },
   { value: "1", label: "1개" },
@@ -5335,27 +5334,6 @@ function App() {
     }
   }
 
-  async function onOpenProviderChildView(provider: WebProvider) {
-    try {
-      await invoke("provider_window_open", { provider });
-      setProviderChildViewOpen((prev) => ({ ...prev, [provider]: true }));
-      setStatus(`${webProviderLabel(provider)} 세션 창 열림`);
-      void refreshWebWorkerHealth(true);
-    } catch (error) {
-      const windowOpenError = String(error);
-      try {
-        await invoke("provider_child_view_open", { provider });
-        setProviderChildViewOpen((prev) => ({ ...prev, [provider]: true }));
-        setStatus(`${webProviderLabel(provider)} 세션 창 열림`);
-        void refreshWebWorkerHealth(true);
-      } catch (childError) {
-        setError(
-          `${webProviderLabel(provider)} 세션 관리 창 열기 실패: ${String(childError)} (window: ${windowOpenError})`,
-        );
-      }
-    }
-  }
-
   async function onCloseProviderChildView(provider: WebProvider) {
     try {
       await invoke("provider_child_view_hide", { provider });
@@ -5408,12 +5386,18 @@ function App() {
     setWebWorkerBusy(true);
     setError("");
     try {
-      await openUrl(webProviderHomeUrl(provider));
-      setStatus(`${webProviderLabel(provider)} 기본 브라우저 열림 (수동 로그인)`);
+      const result = await invoke<{ ok?: boolean; error?: string; errorCode?: string }>(
+        "web_provider_open_session",
+        { provider },
+      );
+      if (result && result.ok === false) {
+        throw new Error(result.error || result.errorCode || "세션 창을 열지 못했습니다.");
+      }
       await refreshWebWorkerHealth(true);
       window.setTimeout(() => {
         void refreshWebWorkerHealth(true);
       }, 900);
+      setStatus(`${webProviderLabel(provider)} 로그인 세션 창 열림`);
     } catch (error) {
       setError(`${webProviderLabel(provider)} 로그인 세션 열기 실패: ${String(error)}`);
     } finally {
@@ -5450,9 +5434,12 @@ function App() {
       return;
     }
     pendingWebLoginAutoOpenKeyRef.current = key;
-    void openUrl(webProviderHomeUrl(pendingWebLogin.provider))
+    void invoke<{ ok?: boolean; error?: string; errorCode?: string }>("web_provider_open_session", {
+      provider: pendingWebLogin.provider,
+    })
       .then(() => {
-        setStatus(`${webProviderLabel(pendingWebLogin.provider)} 로그인 브라우저 자동 열림`);
+        setStatus(`${webProviderLabel(pendingWebLogin.provider)} 로그인 세션 자동 열림`);
+        void refreshWebWorkerHealth(true);
       })
       .catch((error) => {
         setError(`${webProviderLabel(pendingWebLogin.provider)} 로그인 브라우저 열기 실패: ${String(error)}`);
@@ -7422,25 +7409,24 @@ ${prompt}`;
 
     const webProvider = getWebProviderFromExecutor(executor);
     if (webProvider) {
-      const webResultMode =
-        config.webResultMode ?? (webProvider === "gemini" ? "auto" : "manualPasteText");
-      const effectiveWebResultMode =
-        webProvider === "gemini" && !GEMINI_AUTOMATION_ENABLED && webResultMode === "auto"
-          ? "manualPasteText"
-          : webResultMode;
+      const webResultMode = config.webResultMode ?? "auto";
       const webTimeoutMs = Math.max(5_000, Number(config.webTimeoutMs ?? 90_000) || 90_000);
 
-      if (
-        webProvider === "gemini" &&
-        webResultMode === "auto" &&
-        GEMINI_AUTOMATION_ENABLED
-      ) {
+      if (webResultMode === "auto") {
         activeWebNodeIdRef.current = node.id;
         activeWebProviderRef.current = webProvider;
-        addNodeLog(node.id, "[WEB] GEMINI 자동화 시작");
+        addNodeLog(node.id, `[WEB] ${webProviderLabel(webProvider)} 자동화 시작`);
         const workerReady = await ensureWebWorkerReady();
         if (!workerReady) {
-          addNodeLog(node.id, "[WEB] 자동화 워커 준비 실패. 수동 입력으로 전환");
+          activeWebNodeIdRef.current = "";
+          activeWebProviderRef.current = null;
+          return {
+            ok: false,
+            error: `[WEB] 자동화 워커 준비 실패 (${webProviderLabel(webProvider)})`,
+            executor,
+            provider: webProvider,
+            knowledgeTrace,
+          };
         } else {
           const runAutomation = async () =>
             invoke<WebProviderRunResult>("web_provider_run", {
@@ -7455,11 +7441,11 @@ ${prompt}`;
             result = await runAutomation();
             if (!result.ok && result.errorCode === "NOT_LOGGED_IN") {
               addNodeLog(node.id, "[WEB] 로그인 필요 감지");
-              await onOpenProviderChildView(webProvider);
+              await onOpenProviderSession(webProvider);
               const shouldRetry = await requestWebLogin(
                 node.id,
                 webProvider,
-                result.error ?? "GEMINI 로그인 후 계속을 눌러주세요.",
+                result.error ?? `${webProviderLabel(webProvider)} 로그인 후 계속을 눌러주세요.`,
               );
               if (cancelRequestedRef.current) {
                 return {
@@ -7477,7 +7463,7 @@ ${prompt}`;
             }
 
             if (result.ok && result.text) {
-              addNodeLog(node.id, "[WEB] GEMINI 응답 추출 완료");
+              addNodeLog(node.id, `[WEB] ${webProviderLabel(webProvider)} 응답 추출 완료`);
               return {
                 ok: true,
                 output: {
@@ -7500,22 +7486,30 @@ ${prompt}`;
             if (result?.errorCode === "BROWSER_MISSING") {
               addNodeLog(
                 node.id,
-                "[WEB] playwright/playwright-core 설치가 필요할 수 있습니다. 자동으로 수동 입력으로 전환합니다.",
+                "[WEB] playwright/playwright-core 설치가 필요할 수 있습니다.",
               );
             }
-            setNodeStatus(node.id, "waiting_user", "자동화 실패, 수동 입력으로 전환");
+            return {
+              ok: false,
+              error: fallbackReason,
+              executor,
+              provider: webProvider,
+              knowledgeTrace,
+            };
           } catch (error) {
             addNodeLog(node.id, `[WEB] 자동화 예외: ${String(error)}`);
-            setNodeStatus(node.id, "waiting_user", "자동화 예외, 수동 입력으로 전환");
+            return {
+              ok: false,
+              error: `[WEB] 자동화 예외 (${webProviderLabel(webProvider)}): ${String(error)}`,
+              executor,
+              provider: webProvider,
+              knowledgeTrace,
+            };
           } finally {
             activeWebNodeIdRef.current = "";
             activeWebProviderRef.current = null;
           }
         }
-      }
-
-      if (webProvider === "gemini" && webResultMode === "auto" && !GEMINI_AUTOMATION_ENABLED) {
-        addNodeLog(node.id, "[WEB] Gemini 자동화는 보안 정책상 비활성화되어 수동 입력 모드로 전환됩니다.");
       }
 
       try {
@@ -7537,7 +7531,7 @@ ${prompt}`;
         node.id,
         webProvider,
         textToSend,
-        effectiveWebResultMode,
+        webResultMode,
       ).then((result) => ({
         ...result,
         executor,
@@ -9524,13 +9518,13 @@ ${prompt}`;
                                   className="modern-select"
                                   onChange={(next) => updateSelectedNodeConfig("webResultMode", next)}
                                   options={[
-                                    { value: "auto", label: "자동 (GEMINI 우선)" },
+                                    { value: "auto", label: "자동" },
                                     { value: "manualPasteText", label: "텍스트 붙여넣기" },
                                     { value: "manualPasteJson", label: "JSON 붙여넣기" },
                                   ]}
                                   value={String(
                                     (selectedNode.config as TurnConfig).webResultMode ??
-                                      (selectedTurnExecutor === "web_gemini" ? "auto" : "manualPasteText"),
+                                      "auto",
                                   )}
                                 />
                               </label>
@@ -9904,13 +9898,13 @@ ${prompt}`;
                               updateNodeConfigById(feedInspectorEditableNodeId, "webResultMode", next);
                             }}
                             options={[
-                              { value: "auto", label: "자동 (GEMINI 우선)" },
+                              { value: "auto", label: "자동" },
                               { value: "manualPasteText", label: "텍스트 붙여넣기" },
                               { value: "manualPasteJson", label: "JSON 붙여넣기" },
                             ]}
                             value={String(
                               feedInspectorTurnConfig?.webResultMode ??
-                                (feedInspectorTurnExecutor === "web_gemini" ? "auto" : "manualPasteText"),
+                                "auto",
                             )}
                           />
                         </label>
@@ -10465,7 +10459,7 @@ ${prompt}`;
                 로그인 완료 후 계속
               </button>
               <button onClick={() => resolvePendingWebLogin(false)} type="button">
-                수동 입력으로 전환
+                취소
               </button>
             </div>
           </section>

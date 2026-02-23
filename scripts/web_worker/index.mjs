@@ -41,6 +41,108 @@ const SESSION_PROVIDER_CONFIG = {
   },
 };
 
+const PROVIDER_AUTOMATION_CONFIG = {
+  gemini: {
+    inputSelectors: [
+      'textarea[aria-label*="prompt" i]',
+      'textarea[aria-label*="질문" i]',
+      'div[contenteditable="true"][role="textbox"]',
+      'div[contenteditable="true"][aria-label*="prompt" i]',
+      'rich-textarea div[contenteditable="true"]',
+      'textarea',
+    ],
+    submitSelectors: [
+      'button[aria-label*="Send" i]',
+      'button[aria-label*="전송" i]',
+      'button:has-text("Send")',
+    ],
+    responseSelectors: [
+      '[data-message-author-role="model"]',
+      'model-response',
+      'main article',
+      'main .markdown',
+    ],
+  },
+  gpt: {
+    inputSelectors: [
+      '#prompt-textarea',
+      'textarea[placeholder*="Message" i]',
+      'textarea[placeholder*="메시지" i]',
+      'div[contenteditable="true"][id*="prompt" i]',
+      'textarea',
+    ],
+    submitSelectors: [
+      'button[data-testid*="send" i]',
+      'button[aria-label*="Send" i]',
+      'button:has-text("Send")',
+    ],
+    responseSelectors: [
+      '[data-message-author-role="assistant"]',
+      'article[data-testid*="conversation-turn"]',
+      'main article',
+      'main .markdown',
+    ],
+  },
+  grok: {
+    inputSelectors: [
+      'textarea[placeholder*="Ask" i]',
+      'textarea[placeholder*="질문" i]',
+      'div[contenteditable="true"]',
+      'textarea',
+    ],
+    submitSelectors: [
+      'button[aria-label*="Send" i]',
+      'button[data-testid*="send" i]',
+      'button:has-text("Send")',
+    ],
+    responseSelectors: [
+      'main article',
+      '[data-testid*="message"]',
+      '.markdown',
+      '.prose',
+    ],
+  },
+  perplexity: {
+    inputSelectors: [
+      'textarea[placeholder*="Ask" i]',
+      'textarea[placeholder*="질문" i]',
+      'div[contenteditable="true"]',
+      'textarea',
+    ],
+    submitSelectors: [
+      'button[aria-label*="Submit" i]',
+      'button[aria-label*="Send" i]',
+      'button[data-testid*="submit" i]',
+      'button:has-text("Submit")',
+    ],
+    responseSelectors: [
+      'main article',
+      '[data-testid*="answer" i]',
+      '.markdown',
+      '.prose',
+    ],
+  },
+  claude: {
+    inputSelectors: [
+      'div[contenteditable="true"][role="textbox"]',
+      'textarea[placeholder*="Message" i]',
+      'textarea[placeholder*="메시지" i]',
+      'textarea',
+    ],
+    submitSelectors: [
+      'button[aria-label*="Send" i]',
+      'button[data-testid*="send" i]',
+      'button:has-text("Send")',
+    ],
+    responseSelectors: [
+      'main article',
+      '[data-testid*="message" i]',
+      '.markdown',
+      '.prose',
+    ],
+  },
+};
+
 const state = {
   providers: new Map(),
   activeRun: null,
@@ -283,14 +385,7 @@ function inferSessionState(provider, sanitizedUrl, contextOpen = true) {
   return 'unknown';
 }
 
-const GEMINI_PROMPT_INPUT_SELECTORS = [
-  'textarea[aria-label*="prompt" i]',
-  'textarea[aria-label*="질문" i]',
-  'div[contenteditable="true"][role="textbox"]',
-  'div[contenteditable="true"][aria-label*="prompt" i]',
-  'rich-textarea div[contenteditable="true"]',
-  'textarea',
-];
+const GEMINI_PROMPT_INPUT_SELECTORS = PROVIDER_AUTOMATION_CONFIG.gemini.inputSelectors;
 
 async function hasVisibleSelector(page, selectors) {
   for (const selector of selectors) {
@@ -320,7 +415,7 @@ async function inferSessionStateWithPage(provider, page, contextOpen = true) {
 
   if (provider === 'gemini') {
     try {
-      const loginRequired = await isLikelyNotLoggedIn(page);
+      const loginRequired = await isLikelyNotLoggedIn(provider, page);
       if (loginRequired) {
         return { safeUrl, sessionState: 'login_required' };
       }
@@ -439,37 +534,51 @@ async function waitForFirstVisible(page, selectors, timeoutMs) {
   return null;
 }
 
-async function isLikelyNotLoggedIn(page) {
+function providerAutomationConfig(provider) {
+  return PROVIDER_AUTOMATION_CONFIG[provider] ?? PROVIDER_AUTOMATION_CONFIG.gemini;
+}
+
+async function isLikelyNotLoggedIn(provider, page) {
+  const config = SESSION_PROVIDER_CONFIG[provider];
   const loginSignals = [
     'input[type="email"]',
+    'input[type="password"]',
     'button:has-text("Sign in")',
     'a:has-text("Sign in")',
-    'text=/로그인|Sign in|계정 선택/i',
+    'button:has-text("Log in")',
+    'a:has-text("Log in")',
+    'button:has-text("로그인")',
+    'a:has-text("로그인")',
+    'text=/로그인|Sign in|Log in|계정 선택/i',
     'text=/지원되지 않는 명령줄 플래그|브라우저 또는 앱이 안전하지 않을 수 있습니다/i',
   ];
   if (await hasVisibleSelector(page, loginSignals)) {
     return true;
   }
 
-  return /accounts\.google\.com/.test(page.url());
+  const urlLower = String(page.url() || '').toLowerCase();
+  if (provider === 'gemini' && /accounts\.google\.com/.test(urlLower)) {
+    return true;
+  }
+  if (config?.loginSignals?.some((signal) => urlLower.includes(String(signal).toLowerCase()))) {
+    return true;
+  }
+  return false;
 }
 
-async function ensureGeminiPage(page) {
-  await ensureProviderLandingPage('gemini', page);
-}
-
-async function fillPromptAndSubmit(page, prompt) {
-  const input = await waitForFirstVisible(page, GEMINI_PROMPT_INPUT_SELECTORS, 15_000);
+async function fillPromptAndSubmit(provider, page, prompt) {
+  const automation = providerAutomationConfig(provider);
+  const input = await waitForFirstVisible(page, automation.inputSelectors, 15_000);
   if (!input) {
-    const notLoggedIn = await isLikelyNotLoggedIn(page);
+    const notLoggedIn = await isLikelyNotLoggedIn(provider, page);
     if (notLoggedIn) {
-      throw workerError('NOT_LOGGED_IN', 'Gemini 로그인 상태를 확인할 수 없습니다. 먼저 로그인하세요.');
+      throw workerError('NOT_LOGGED_IN', `${provider.toUpperCase()} 로그인 상태를 확인할 수 없습니다. 먼저 로그인하세요.`);
     }
-    throw workerError('INPUT_NOT_FOUND', 'Gemini 입력창을 찾지 못했습니다.');
+    throw workerError('INPUT_NOT_FOUND', `${provider.toUpperCase()} 입력창을 찾지 못했습니다.`);
   }
 
   notify('web/progress', {
-    provider: 'gemini',
+    provider,
     stage: 'input_found',
     message: '입력창을 찾았습니다.',
   });
@@ -487,18 +596,12 @@ async function fillPromptAndSubmit(page, prompt) {
   }
 
   notify('web/progress', {
-    provider: 'gemini',
+    provider,
     stage: 'prompt_filled',
     message: '프롬프트를 입력했습니다.',
   });
 
-  const submitSelectors = [
-    'button[aria-label*="Send" i]',
-    'button[aria-label*="전송" i]',
-    'button:has-text("Send")',
-  ];
-
-  for (const selector of submitSelectors) {
+  for (const selector of automation.submitSelectors) {
     const button = page.locator(selector).first();
     try {
       if ((await button.count()) > 0 && (await button.isVisible())) {
@@ -506,7 +609,7 @@ async function fillPromptAndSubmit(page, prompt) {
         return;
       }
     } catch {
-      // continue to next selector
+      // continue
     }
   }
 
@@ -517,15 +620,9 @@ async function fillPromptAndSubmit(page, prompt) {
   }
 }
 
-async function extractGeminiResponseText(page, prompt) {
-  const candidates = await page.evaluate(() => {
-    const selectors = [
-      '[data-message-author-role="model"]',
-      'model-response',
-      'main article',
-      'main .markdown',
-    ];
-
+async function extractProviderResponseText(provider, page, prompt) {
+  const automation = providerAutomationConfig(provider);
+  const candidates = await page.evaluate((selectors) => {
     const rows = [];
     for (const selector of selectors) {
       const nodes = Array.from(document.querySelectorAll(selector));
@@ -544,8 +641,15 @@ async function extractGeminiResponseText(page, prompt) {
       }
     }
     rows.sort((a, b) => a.bottom - b.bottom);
-    return rows.slice(-12);
-  });
+    return rows.slice(-16);
+  }, [
+    ...automation.responseSelectors,
+    '[data-message-author-role="assistant"]',
+    '[data-message-author-role="model"]',
+    'main article',
+    'main .markdown',
+    'main .prose',
+  ]);
 
   const promptTrimmed = prompt.trim();
   const filtered = candidates
@@ -561,7 +665,7 @@ async function extractGeminiResponseText(page, prompt) {
   return filtered[filtered.length - 1];
 }
 
-async function waitForGeminiResponse(page, prompt, timeoutMs, runToken) {
+async function waitForProviderResponse(provider, page, prompt, timeoutMs, runToken) {
   const deadline = Date.now() + timeoutMs;
   let lastText = '';
   let lastChangeAt = Date.now();
@@ -571,13 +675,13 @@ async function waitForGeminiResponse(page, prompt, timeoutMs, runToken) {
       throw workerError('CANCELLED', '요청이 취소되었습니다.');
     }
 
-    const text = await extractGeminiResponseText(page, prompt);
+    const text = await extractProviderResponseText(provider, page, prompt);
     if (text) {
       if (text !== lastText) {
         lastText = text;
         lastChangeAt = Date.now();
         notify('web/progress', {
-          provider: 'gemini',
+          provider,
           stage: 'response_streaming',
           message: `응답 수집 중 (${text.length} chars)`,
         });
@@ -592,10 +696,9 @@ async function waitForGeminiResponse(page, prompt, timeoutMs, runToken) {
   throw workerError('TIMEOUT', `응답 대기 시간이 초과되었습니다 (${timeoutMs}ms).`);
 }
 
-async function runGemini({ prompt, timeoutMs }) {
+async function runProviderAutomation(provider, { prompt, timeoutMs }) {
   const startedAt = nowIso();
   const startedMs = Date.now();
-  const provider = 'gemini';
   const runToken = { cancelled: false, provider };
   state.activeRun = runToken;
 
@@ -606,23 +709,23 @@ async function runGemini({ prompt, timeoutMs }) {
     notify('web/progress', {
       provider,
       stage: 'navigation',
-      message: 'Gemini 페이지를 준비합니다.',
+      message: `${provider.toUpperCase()} 페이지를 준비합니다.`,
     });
-    await ensureGeminiPage(page);
+    await ensureProviderLandingPage(provider, page);
 
     notify('web/progress', {
       provider,
       stage: 'input',
       message: '프롬프트 입력을 시작합니다.',
     });
-    await fillPromptAndSubmit(page, prompt);
+    await fillPromptAndSubmit(provider, page, prompt);
 
     notify('web/progress', {
       provider,
       stage: 'await_response',
       message: '응답을 기다리는 중입니다.',
     });
-    const text = await waitForGeminiResponse(page, prompt, timeoutMs, runToken);
+    const text = await waitForProviderResponse(provider, page, prompt, timeoutMs, runToken);
 
     const finishedAt = nowIso();
     return {
@@ -776,11 +879,11 @@ async function handleRpcRequest(message) {
       return;
     }
 
-    if (provider !== 'gemini') {
+    if (!SESSION_PROVIDER_CONFIG[provider]) {
       respond(id, {
         ok: false,
         errorCode: 'UNSUPPORTED_PROVIDER',
-        error: `현재 자동화는 Gemini만 지원합니다. provider=${provider}`,
+        error: `지원하지 않는 provider입니다. provider=${provider}`,
       });
       return;
     }
@@ -795,7 +898,7 @@ async function handleRpcRequest(message) {
     }
 
     try {
-      const result = await runGemini({
+      const result = await runProviderAutomation(provider, {
         prompt,
         timeoutMs: Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : DEFAULT_TIMEOUT_MS,
       });
