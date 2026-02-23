@@ -2809,6 +2809,37 @@ pre {
   padding: 6px 8px;
 }
 
+.bridge-code-card {
+  display: grid;
+  gap: 8px;
+  background: #f6f6f6;
+  border-radius: 12px;
+  padding: 8px;
+}
+
+.bridge-code-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+  color: #445062;
+}
+
+.bridge-code-textarea {
+  width: 100%;
+  resize: vertical;
+  min-height: 120px;
+  border: 0;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #1f2730;
+  padding: 10px;
+  font-family: "BasicallyAMono", "Noto Sans KR", monospace;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
 @media (max-width: 1400px) {
   .header-actions {
     justify-content: flex-end;

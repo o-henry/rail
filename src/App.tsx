@@ -4272,6 +4272,7 @@ function App() {
     activeTasks: 0,
   });
   const [webBridgeLogs, setWebBridgeLogs] = useState<string[]>([]);
+  const [webBridgeConnectCode, setWebBridgeConnectCode] = useState("");
   const [providerChildViewOpen, setProviderChildViewOpen] = useState<Record<WebProvider, boolean>>({
     gemini: false,
     gpt: false,
@@ -5588,10 +5589,41 @@ function App() {
         null,
         2,
       );
-      await navigator.clipboard.writeText(code);
-      setStatus("브리지 연결 코드 복사 완료");
+      setWebBridgeConnectCode(code);
+      let copied = false;
+      try {
+        if (navigator.clipboard?.writeText) {
+          await navigator.clipboard.writeText(code);
+          copied = true;
+        }
+      } catch {
+        // fallback below
+      }
+
+      if (!copied) {
+        const textarea = document.createElement("textarea");
+        textarea.value = code;
+        textarea.setAttribute("readonly", "true");
+        textarea.style.position = "fixed";
+        textarea.style.opacity = "0";
+        textarea.style.pointerEvents = "none";
+        textarea.style.left = "-9999px";
+        document.body.appendChild(textarea);
+        textarea.select();
+        textarea.setSelectionRange(0, textarea.value.length);
+        copied = document.execCommand("copy");
+        document.body.removeChild(textarea);
+      }
+
+      if (copied) {
+        setStatus("브리지 연결 코드 복사 완료");
+        setError("");
+      } else {
+        setStatus("자동 복사 권한이 없어 코드 박스를 표시했습니다. 아래에서 수동 복사하세요.");
+        setError("");
+      }
     } catch (error) {
-      setError(`브리지 연결 코드 복사 실패: ${String(error)}`);
+      setError(`브리지 연결 코드 준비 실패: ${String(error)}`);
     }
   }
 
@@ -8653,6 +8685,28 @@ ${prompt}`;
           <div className="usage-method">
             확장과의 통신은 127.0.0.1 로컬 루프백 + Bearer 토큰으로만 허용됩니다.
           </div>
+          {webBridgeConnectCode && (
+            <div className="bridge-code-card">
+              <div className="bridge-code-head">
+                <span>연결 코드</span>
+                <button
+                  className="settings-account-button"
+                  disabled={webWorkerBusy}
+                  onClick={() => void onCopyWebBridgeConnectCode()}
+                  type="button"
+                >
+                  <span className="settings-button-label">다시 복사</span>
+                </button>
+              </div>
+              <textarea
+                className="bridge-code-textarea"
+                onFocus={(event) => event.currentTarget.select()}
+                readOnly
+                rows={6}
+                value={webBridgeConnectCode}
+              />
+            </div>
+          )}
         </section>
 
         <section className="controls bridge-provider-panel">
