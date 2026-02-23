@@ -5503,9 +5503,30 @@ function App() {
     }
   }
 
+  function isBridgeMethodMissing(error: unknown): boolean {
+    const message = String(error ?? "").toLowerCase();
+    return message.includes("method not found") || message.includes("rpc error -32601");
+  }
+
+  async function invokeBridgeRpcWithRecovery(command: "web_bridge_status" | "web_bridge_rotate_token") {
+    try {
+      return await invoke<unknown>(command);
+    } catch (error) {
+      if (!isBridgeMethodMissing(error)) {
+        throw error;
+      }
+      // Old worker may still be alive after hot-reload; restart and retry once.
+      await invoke("web_worker_stop").catch(() => {
+        // ignore
+      });
+      await invoke("web_worker_start");
+      return await invoke<unknown>(command);
+    }
+  }
+
   async function refreshWebBridgeStatus(silent = false) {
     try {
-      const raw = await invoke<unknown>("web_bridge_status");
+      const raw = await invokeBridgeRpcWithRecovery("web_bridge_status");
       const next = toWebBridgeStatus(raw);
       setWebBridgeStatus(next);
       return next;
@@ -5521,7 +5542,7 @@ function App() {
     setWebWorkerBusy(true);
     setError("");
     try {
-      const raw = await invoke<unknown>("web_bridge_rotate_token");
+      const raw = await invokeBridgeRpcWithRecovery("web_bridge_rotate_token");
       setWebBridgeStatus(toWebBridgeStatus(raw));
       setStatus("브리지 토큰을 재발급했습니다.");
     } catch (error) {
