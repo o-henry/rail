@@ -2549,6 +2549,22 @@ function webProviderLabel(provider: WebProvider): string {
   return "CLAUDE";
 }
 
+function webProviderHomeUrl(provider: WebProvider): string {
+  if (provider === "gemini") {
+    return "https://gemini.google.com/app";
+  }
+  if (provider === "gpt") {
+    return "https://chatgpt.com/";
+  }
+  if (provider === "grok") {
+    return "https://grok.com/";
+  }
+  if (provider === "perplexity") {
+    return "https://www.perplexity.ai/";
+  }
+  return "https://claude.ai/";
+}
+
 function toWebProviderHealthMap(raw: unknown): Record<string, WebProviderHealthEntry> {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
     return {};
@@ -5310,7 +5326,8 @@ function App() {
       return;
     }
     try {
-      await invoke("provider_window_open", { provider: pendingWebTurn.provider });
+      await openUrl(webProviderHomeUrl(pendingWebTurn.provider));
+      setStatus(`${webProviderLabel(pendingWebTurn.provider)} 기본 브라우저 열림`);
     } catch (error) {
       setError(String(error));
     }
@@ -5389,40 +5406,14 @@ function App() {
     setWebWorkerBusy(true);
     setError("");
     try {
-      if (provider === "gemini") {
-        await openUrl("https://gemini.google.com/app");
-        setStatus("Gemini 기본 브라우저 열림 (수동 로그인)");
-        await refreshWebWorkerHealth(true);
-        return;
-      }
-      const result = await invoke<{ ok?: boolean; error?: string; errorCode?: string }>(
-        "web_provider_open_session",
-        { provider },
-      );
-      if (result && result.ok === false) {
-        throw new Error(result.error || result.errorCode || "세션 창을 열지 못했습니다.");
-      }
+      await openUrl(webProviderHomeUrl(provider));
+      setStatus(`${webProviderLabel(provider)} 기본 브라우저 열림 (수동 로그인)`);
       await refreshWebWorkerHealth(true);
       window.setTimeout(() => {
         void refreshWebWorkerHealth(true);
       }, 900);
-      setStatus(`${webProviderLabel(provider)} 로그인 세션 창 열림`);
     } catch (error) {
-      const raw = String(error);
-      const lower = raw.toLowerCase();
-      const isGeminiUnsafeBrowser =
-        provider === "gemini" &&
-        (lower.includes("browser or app may not be secure") ||
-          lower.includes("안전하지 않을 수 있습니다") ||
-          lower.includes("unsafe_browser"));
-      if (isGeminiUnsafeBrowser) {
-        setError(
-          "Gemini가 자동화 브라우저 로그인을 차단했습니다. 현재 노드는 '웹 결과 모드'를 '텍스트 붙여넣기'로 바꿔 수동으로 사용하세요.",
-        );
-        setStatus("Gemini 자동 로그인 차단 감지");
-      } else {
-        setError(`${webProviderLabel(provider)} 로그인 세션 열기 실패: ${raw}`);
-      }
+      setError(`${webProviderLabel(provider)} 로그인 세션 열기 실패: ${String(error)}`);
     } finally {
       setWebWorkerBusy(false);
     }
@@ -7488,11 +7479,11 @@ ${prompt}`;
       }
 
       try {
-        await invoke("provider_window_open", { provider: webProvider });
+        await openUrl(webProviderHomeUrl(webProvider));
       } catch (error) {
         return {
           ok: false,
-          error: `웹 서비스 창 열기 실패(${webProvider}): ${String(error)}`,
+          error: `웹 서비스 브라우저 열기 실패(${webProvider}): ${String(error)}`,
           executor,
           provider: webProvider,
           knowledgeTrace,

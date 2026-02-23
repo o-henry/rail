@@ -274,6 +274,9 @@ function inferSessionState(provider, sanitizedUrl, contextOpen = true) {
   if (config.loginSignals.some((signal) => lower.includes(signal))) {
     return 'login_required';
   }
+  if (provider !== 'gemini') {
+    return 'unknown';
+  }
   if (config.activeSignals.some((signal) => lower.includes(signal))) {
     return 'active';
   }
