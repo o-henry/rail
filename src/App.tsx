@@ -3563,6 +3563,8 @@ function App() {
   const [isConnectingDrag, setIsConnectingDrag] = useState(false);
   const [graphFileName, setGraphFileName] = useState("");
   const [selectedGraphFileName, setSelectedGraphFileName] = useState("");
+  const [graphRenameOpen, setGraphRenameOpen] = useState(false);
+  const [graphRenameDraft, setGraphRenameDraft] = useState("");
   const [graphFiles, setGraphFiles] = useState<string[]>([]);
   const [runFiles, setRunFiles] = useState<string[]>([]);
   const [feedPosts, setFeedPosts] = useState<FeedViewPost[]>([]);
@@ -5712,7 +5714,7 @@ function App() {
       setError("이름을 변경할 그래프 파일을 먼저 선택하세요.");
       return;
     }
-    const nextName = graphFileName.trim();
+    const nextName = graphRenameDraft.trim();
     if (!nextName) {
       setError("새 그래프 파일 이름을 입력하세요.");
       return;
@@ -5721,18 +5723,34 @@ function App() {
     setError("");
     try {
       const renamed = await invoke<string>("graph_rename", {
-        from_name: current,
-        to_name: nextName,
         fromName: current,
         toName: nextName,
       });
       await refreshGraphFiles();
       setGraphFileName(renamed);
       setSelectedGraphFileName(renamed);
+      setGraphRenameDraft("");
+      setGraphRenameOpen(false);
       setStatus(`그래프 이름 변경 완료 (${current} → ${renamed})`);
     } catch (e) {
       setError(`그래프 이름 변경 실패: ${String(e)}`);
     }
+  }
+
+  function onOpenRenameGraph() {
+    const current = selectedGraphFileName.trim();
+    if (!current) {
+      setError("이름을 변경할 그래프 파일을 먼저 선택하세요.");
+      return;
+    }
+    setError("");
+    setGraphRenameDraft(current);
+    setGraphRenameOpen(true);
+  }
+
+  function onCloseRenameGraph() {
+    setGraphRenameOpen(false);
+    setGraphRenameDraft("");
   }
 
   async function deleteGraph() {
@@ -5748,6 +5766,7 @@ function App() {
       await refreshGraphFiles();
       setGraphFileName("");
       setSelectedGraphFileName("");
+      onCloseRenameGraph();
       setStatus(`그래프 삭제 완료 (${target})`);
     } catch (e) {
       setError(`그래프 삭제 실패: ${String(e)}`);
@@ -5778,6 +5797,7 @@ function App() {
       setStatus(`그래프 불러오기 완료 (${target})`);
       setGraphFileName(target);
       setSelectedGraphFileName(target);
+      onCloseRenameGraph();
     } catch (e) {
       setError(String(e));
     }
@@ -8338,17 +8358,11 @@ ${prompt}`;
                         placeholder="그래프 파일 선택"
                         value={graphFiles.includes(selectedGraphFileName) ? selectedGraphFileName : ""}
                       />
-                      <input
-                        onChange={(event) => setGraphFileName(event.currentTarget.value)}
-                        placeholder="저장/이름 변경 파일명"
-                        style={{ height: "36px", minHeight: "36px", maxHeight: "36px", borderRadius: "6px", padding: "0 12px" }}
-                        value={graphFileName}
-                      />
                       <div className="graph-file-actions">
                         <button className="mini-action-button" onClick={saveGraph} type="button">
                           <span className="mini-action-button-label">저장</span>
                         </button>
-                        <button className="mini-action-button" onClick={renameGraph} type="button">
+                        <button className="mini-action-button" onClick={onOpenRenameGraph} type="button">
                           <span className="mini-action-button-label">이름 변경</span>
                         </button>
                         <button className="mini-action-button" onClick={deleteGraph} type="button">
@@ -8357,6 +8371,51 @@ ${prompt}`;
                         <button className="mini-action-button" onClick={refreshGraphFiles} type="button">
                           <span className="mini-action-button-label">새로고침</span>
                         </button>
+                      </div>
+                      <div
+                        style={{
+                          display: "grid",
+                          gridTemplateRows: graphRenameOpen ? "1fr" : "0fr",
+                          opacity: graphRenameOpen ? 1 : 0,
+                          transform: graphRenameOpen ? "translateY(0)" : "translateY(-4px)",
+                          transition:
+                            "grid-template-rows 180ms ease, opacity 180ms ease, transform 180ms ease, margin-top 180ms ease",
+                          marginTop: graphRenameOpen ? "6px" : "0",
+                          pointerEvents: graphRenameOpen ? "auto" : "none",
+                        }}
+                      >
+                        <div style={{ minHeight: 0, overflow: "hidden", display: "grid", gap: "6px" }}>
+                          <input
+                            onChange={(event) => setGraphRenameDraft(event.currentTarget.value)}
+                            onKeyDown={(event) => {
+                              if (event.key === "Enter") {
+                                event.preventDefault();
+                                void renameGraph();
+                              }
+                              if (event.key === "Escape") {
+                                event.preventDefault();
+                                onCloseRenameGraph();
+                              }
+                            }}
+                            placeholder="이름 변경 파일명"
+                            style={{
+                              height: "36px",
+                              minHeight: "36px",
+                              maxHeight: "36px",
+                              borderRadius: "6px",
+                              padding: "0 12px",
+                            }}
+                            value={graphRenameDraft}
+                          />
+                          <div className="graph-file-actions">
+                            <button className="mini-action-button" onClick={() => void renameGraph()} type="button">
+                              <span className="mini-action-button-label">변경 적용</span>
+                            </button>
+                            <button className="mini-action-button" onClick={onCloseRenameGraph} type="button">
+                              <span className="mini-action-button-label">취소</span>
+                            </button>
+                          </div>
+                        </div>
                       </div>
                     </div>
 

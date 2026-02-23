@@ -98,7 +98,7 @@ fn rename_json_file(dir_name: &str, from_name: &str, to_name: &str) -> Result<St
 
     let to_path = dir.join(&to_normalized);
     if to_path.exists() {
-        return Err(format!("{dir_name} file already exists"));
+        fs::remove_file(&to_path).map_err(|e| format!("failed to overwrite {dir_name} file: {e}"))?;
     }
 
     fs::rename(from_path, to_path).map_err(|e| format!("failed to rename {dir_name} file: {e}"))?;
