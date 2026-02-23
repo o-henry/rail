@@ -1,0 +1,8 @@
+# Require review by repository owner for all changes.
+* @henry
+
+# Security-sensitive surfaces.
+scripts/web_worker/** @henry
+extension/rail-bridge/** @henry
+src-tauri/** @henry
+.github/workflows/** @henry
