@@ -3545,7 +3545,6 @@ function App() {
     question: string;
     startedAt: string;
   } | null>(null);
-  const [feedRawViewByPost, setFeedRawViewByPost] = useState<Record<string, boolean>>({});
   const [selectedRunFile, setSelectedRunFile] = useState("");
   const [selectedRunDetail, setSelectedRunDetail] = useState<RunRecord | null>(null);
   const [lastSavedRunFile, setLastSavedRunFile] = useState("");
@@ -8795,13 +8794,8 @@ ${prompt}`;
                 )}
                 {!feedLoading &&
                   currentFeedPosts.map((post) => {
-                    const rawEnabled = feedRawViewByPost[post.id] === true;
                     const markdownAttachment = post.attachments.find((attachment) => attachment.kind === "markdown");
-                    const rawContent = markdownAttachment
-                      ? feedRawAttachmentRef.current[feedAttachmentRawKey(post.id, "markdown")]
-                      : "";
-                    const visibleContent =
-                      rawEnabled && rawContent ? rawContent : markdownAttachment?.content ?? post.summary ?? "(첨부 없음)";
+                    const visibleContent = markdownAttachment?.content ?? post.summary ?? "(첨부 없음)";
                     const score = Math.max(
                       1,
                       Math.min(99, Number(post.evidence.qualityScore ?? (post.status === "done" ? 95 : 55))),
@@ -8882,18 +8876,6 @@ ${prompt}`;
                               </div>
                             )}
                             <div className="button-row feed-card-actions">
-                              <button
-                                disabled={!rawContent}
-                                onClick={() =>
-                                  setFeedRawViewByPost((prev) => ({
-                                    ...prev,
-                                    [post.id]: !prev[post.id],
-                                  }))
-                                }
-                                type="button"
-                              >
-                                <span className="feed-action-label">{rawEnabled ? "마스킹 보기" : "원문 보기"}</span>
-                              </button>
                               <button
                                 className="feed-primary-action"
                                 disabled={!post.sourceFile}
