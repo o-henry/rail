@@ -3562,6 +3562,7 @@ function App() {
   const [connectPreviewPoint, setConnectPreviewPoint] = useState<LogicalPoint | null>(null);
   const [isConnectingDrag, setIsConnectingDrag] = useState(false);
   const [graphFileName, setGraphFileName] = useState("");
+  const [selectedGraphFileName, setSelectedGraphFileName] = useState("");
   const [graphFiles, setGraphFiles] = useState<string[]>([]);
   const [runFiles, setRunFiles] = useState<string[]>([]);
   const [feedPosts, setFeedPosts] = useState<FeedViewPost[]>([]);
@@ -5698,6 +5699,7 @@ function App() {
       });
       await refreshGraphFiles();
       setGraphFileName(saveTarget);
+      setSelectedGraphFileName(saveTarget);
       setStatus(`그래프 저장 완료 (${saveTarget})`);
     } catch (e) {
       setError(String(e));
@@ -5705,17 +5707,12 @@ function App() {
   }
 
   async function renameGraph() {
-    const current = graphFileName.trim();
+    const current = selectedGraphFileName.trim();
     if (!current) {
       setError("이름을 변경할 그래프 파일을 먼저 선택하세요.");
       return;
     }
-
-    const nextInput = window.prompt("새 그래프 파일 이름", current);
-    if (nextInput == null) {
-      return;
-    }
-    const nextName = nextInput.trim();
+    const nextName = graphFileName.trim();
     if (!nextName) {
       setError("새 그래프 파일 이름을 입력하세요.");
       return;
@@ -5724,11 +5721,14 @@ function App() {
     setError("");
     try {
       const renamed = await invoke<string>("graph_rename", {
+        from_name: current,
+        to_name: nextName,
         fromName: current,
         toName: nextName,
       });
       await refreshGraphFiles();
       setGraphFileName(renamed);
+      setSelectedGraphFileName(renamed);
       setStatus(`그래프 이름 변경 완료 (${current} → ${renamed})`);
     } catch (e) {
       setError(`그래프 이름 변경 실패: ${String(e)}`);
@@ -5736,13 +5736,9 @@ function App() {
   }
 
   async function deleteGraph() {
-    const target = graphFileName.trim();
+    const target = selectedGraphFileName.trim();
     if (!target) {
       setError("삭제할 그래프 파일을 먼저 선택하세요.");
-      return;
-    }
-    const confirmed = window.confirm(`그래프 파일을 삭제할까요?\n${target}`);
-    if (!confirmed) {
       return;
     }
 
@@ -5751,6 +5747,7 @@ function App() {
       await invoke("graph_delete", { name: target });
       await refreshGraphFiles();
       setGraphFileName("");
+      setSelectedGraphFileName("");
       setStatus(`그래프 삭제 완료 (${target})`);
     } catch (e) {
       setError(`그래프 삭제 실패: ${String(e)}`);
@@ -5780,6 +5777,7 @@ function App() {
       setIsConnectingDrag(false);
       setStatus(`그래프 불러오기 완료 (${target})`);
       setGraphFileName(target);
+      setSelectedGraphFileName(target);
     } catch (e) {
       setError(String(e));
     }
@@ -8331,13 +8329,19 @@ ${prompt}`;
                         emptyMessage="저장된 그래프가 없습니다."
                         onChange={(value) => {
                           if (value) {
+                            setSelectedGraphFileName(value);
                             setGraphFileName(value);
                             loadGraph(value);
                           }
                         }}
                         options={graphFiles.map((file) => ({ value: file, label: file }))}
                         placeholder="그래프 파일 선택"
-                        value={graphFiles.includes(graphFileName) ? graphFileName : ""}
+                        value={graphFiles.includes(selectedGraphFileName) ? selectedGraphFileName : ""}
+                      />
+                      <input
+                        onChange={(event) => setGraphFileName(event.currentTarget.value)}
+                        placeholder="저장/이름 변경 파일명"
+                        value={graphFileName}
                       />
                       <div className="graph-file-actions">
                         <button className="mini-action-button" onClick={saveGraph} type="button">
