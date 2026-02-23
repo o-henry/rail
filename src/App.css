@@ -2147,51 +2147,6 @@ h3 {
   padding-top: 2px;
 }
 
-.feed-card-actions button {
-  min-height: 32px;
-  height: 32px;
-  padding: 0 12px;
-  font-size: 12px;
-  line-height: 1;
-  border-radius: 6px;
-  background: #2f6fdd;
-  color: #ffffff;
-  box-shadow: none;
-}
-
-.feed-card-actions button:hover:not(:disabled) {
-  background: #245fc4;
-}
-
-.feed-card-actions button.feed-primary-action {
-  background: #1d7cff;
-  min-height: 28px;
-  height: 28px;
-  padding: 0 9px;
-  font-size: 11px;
-}
-
-.feed-card-actions button.feed-primary-action:hover:not(:disabled) {
-  background: #1d7cff;
-}
-
-.feed-card-actions button.feed-danger-action {
-  background: #e45a5a;
-  min-height: 28px;
-  height: 28px;
-  padding: 0 9px;
-  font-size: 11px;
-}
-
-.feed-card-actions button.feed-danger-action:hover:not(:disabled) {
-  background: #d34d4d;
-}
-
-.feed-card-actions button:disabled {
-  background: #cfd6e2;
-  color: #6b7788;
-}
-
 .feed-share-menu-wrap {
   position: relative;
   display: inline-grid;
@@ -2216,6 +2171,36 @@ h3 {
 }
 
 .feed-share-icon {
+  width: 16px;
+  height: 16px;
+  display: block;
+  object-fit: contain;
+}
+
+.feed-delete-icon-button {
+  width: 34px;
+  min-width: 34px;
+  height: 34px;
+  min-height: 34px;
+  padding: 0;
+  border-radius: 999px;
+  border: 2px solid #e45a5a;
+  background: #ffffff;
+  display: inline-grid;
+  place-items: center;
+  box-shadow: none;
+}
+
+.feed-delete-icon-button:hover:not(:disabled) {
+  background: #fff1f1;
+}
+
+.feed-delete-icon-button:disabled {
+  border-color: #cfd6e2;
+  background: #f1f4f9;
+}
+
+.feed-delete-icon {
   width: 16px;
   height: 16px;
   display: block;

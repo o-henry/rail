@@ -8889,6 +8889,15 @@ ${prompt}`;
                             >
                               {isDraftPost ? "LIVE" : score}
                             </span>
+                            <button
+                              aria-label="포스트 삭제"
+                              className="feed-delete-icon-button"
+                              disabled={!post.sourceFile}
+                              onClick={() => void onDeleteFeedPost(post)}
+                              type="button"
+                            >
+                              <img alt="" aria-hidden="true" className="feed-delete-icon" src="/xmark.svg" />
+                            </button>
                           </div>
                         </div>
                         <div className="feed-card-summary">{post.summary || "(요약 없음)"}</div>
@@ -8945,16 +8954,6 @@ ${prompt}`;
                                 </button>
                               </div>
                             )}
-                            <div className="button-row feed-card-actions">
-                              <button
-                                className="feed-danger-action"
-                                disabled={!post.sourceFile}
-                                onClick={() => void onDeleteFeedPost(post)}
-                                type="button"
-                              >
-                                <span>삭제</span>
-                              </button>
-                            </div>
                           </div>
                         )}
                       </section>
