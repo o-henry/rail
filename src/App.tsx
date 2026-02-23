@@ -483,16 +483,18 @@ const NODE_DRAG_MARGIN = 60;
 const NODE_ANCHOR_OFFSET = 15;
 const FALLBACK_TURN_ROLE = "GENERAL AGENT";
 const GRAPH_SCHEMA_VERSION = 3;
-const KNOWLEDGE_DEFAULT_TOP_K = 4;
+const KNOWLEDGE_DEFAULT_TOP_K = 0;
 const KNOWLEDGE_DEFAULT_MAX_CHARS = 2800;
 const QUALITY_DEFAULT_THRESHOLD = 70;
 const FEED_REDACTION_RULE_VERSION = "feed-v1";
 const FEED_ATTACHMENT_CHAR_CAP = 12_000;
 const KNOWLEDGE_TOP_K_OPTIONS: FancySelectOption[] = [
+  { value: "0", label: "0개" },
+  { value: "1", label: "1개" },
   { value: "2", label: "2개" },
+  { value: "3", label: "3개" },
   { value: "4", label: "4개" },
-  { value: "6", label: "6개" },
-  { value: "8", label: "8개" },
+  { value: "5", label: "5개" },
 ];
 const KNOWLEDGE_MAX_CHARS_OPTIONS: FancySelectOption[] = [
   { value: "1600", label: "짧게 (빠름)" },
@@ -559,6 +561,10 @@ const QUALITY_PROFILE_OPTIONS: FancySelectOption[] = [
   { value: "synthesis_final", label: "최종 종합" },
   { value: "generic", label: "일반" },
 ];
+const QUALITY_THRESHOLD_OPTIONS: FancySelectOption[] = Array.from({ length: 20 }, (_, index) => {
+  const score = (index + 1) * 5;
+  return { value: String(score), label: `${score}점` };
+});
 const ARTIFACT_TYPE_OPTIONS: FancySelectOption[] = [
   { value: "none", label: "사용 안 함" },
   { value: "RequirementArtifact", label: "요구사항 아티팩트" },
@@ -749,7 +755,7 @@ function isNodeDragAllowedTarget(target: EventTarget | null): boolean {
   }
   if (
     target.closest(
-      "button, input, textarea, select, a, .node-anchor, .node-ports, .node-port-btn, .fancy-select, .fancy-select-menu",
+      "button, input, textarea, select, a, .node-anchor, .fancy-select, .fancy-select-menu",
     )
   ) {
     return false;
@@ -1257,6 +1263,7 @@ function buildFeedPost(input: FeedBuildInput): {
   const steps = summarizeFeedSteps(logs);
   const summary = buildFeedSummary(input.status, input.output, input.error, input.summary);
   const outputText = extractFinalAnswer(input.output).trim() || stringifyInput(input.output).trim();
+  const logsText = logs.length > 0 ? logs.join("\n") : "(로그 없음)";
   const markdownRaw = [
     `# ${agentName}`,
     `- 상태: ${nodeStatusLabel(input.status as NodeExecutionStatus)}`,
@@ -1271,6 +1278,9 @@ function buildFeedPost(input: FeedBuildInput): {
     "## 핵심 결과",
     outputText || "(출력 없음)",
     "",
+    "## 노드 로그",
+    logsText,
+    "",
     "## 참고",
     "- 이 문서는 실행 결과를 자동 요약해 생성되었습니다.",
   ].join("\n");
@@ -1283,6 +1293,7 @@ function buildFeedPost(input: FeedBuildInput): {
       summary,
       steps,
       output: input.output ?? null,
+      logs,
       error: input.error ?? null,
       evidence: {
         durationMs: input.durationMs,
@@ -1537,7 +1548,7 @@ async function buildQualityReport(params: {
 }): Promise<QualityReport> {
   const { node, config, output, cwd } = params;
   const profile = inferQualityProfile(node, config);
-  const threshold = Math.max(0, Math.min(100, Number(config.qualityThreshold ?? QUALITY_DEFAULT_THRESHOLD) || QUALITY_DEFAULT_THRESHOLD));
+  const threshold = Math.max(5, Math.min(100, Number(config.qualityThreshold ?? QUALITY_DEFAULT_THRESHOLD) || QUALITY_DEFAULT_THRESHOLD));
   const checks: QualityCheck[] = [];
   const failures: string[] = [];
   const warnings: string[] = [];
@@ -1798,7 +1809,7 @@ function normalizeKnowledgeConfig(input: unknown): KnowledgeConfig {
   }
   const row = input as Record<string, unknown>;
   const files = Array.isArray(row.files) ? row.files.map(normalizeKnowledgeFile).filter(Boolean) : [];
-  const topK = Math.max(1, Math.min(20, readNumber(row.topK) ?? KNOWLEDGE_DEFAULT_TOP_K));
+  const topK = Math.max(0, Math.min(5, readNumber(row.topK) ?? KNOWLEDGE_DEFAULT_TOP_K));
   const maxChars = Math.max(300, Math.min(20_000, readNumber(row.maxChars) ?? KNOWLEDGE_DEFAULT_MAX_CHARS));
   return {
     files: files as KnowledgeFileRef[],
@@ -2106,12 +2117,7 @@ function defaultNodeConfig(type: NodeType): Record<string, unknown> {
 
 function nodeCardSummary(node: GraphNode): string {
   if (node.type === "turn") {
-    const config = node.config as TurnConfig;
-    const executor = getTurnExecutor(config);
-    if (executor !== "codex") {
-      return `에이전트: ${turnExecutorLabel(executor)}`;
-    }
-    return `모델: ${toTurnModelDisplayName(String(config.model ?? DEFAULT_TURN_MODEL))}`;
+    return "";
   }
   if (node.type === "transform") {
     const config = node.config as TransformConfig;
@@ -3263,7 +3269,7 @@ function normalizeGraph(input: unknown): GraphData {
           typeof config.knowledgeEnabled === "boolean" ? config.knowledgeEnabled : true,
         qualityProfile: toQualityProfileId(config.qualityProfile) ?? undefined,
         qualityThreshold: Math.max(
-          0,
+          5,
           Math.min(
             100,
             Number(
@@ -3542,6 +3548,10 @@ function App() {
 
   const activeApproval = pendingApprovals[0];
   const selectedNode = graph.nodes.find((node) => node.id === selectedNodeId) ?? null;
+  const questionDirectInputNodeIds = useMemo(() => {
+    const incomingNodeIds = new Set(graph.edges.map((edge) => edge.to.nodeId));
+    return new Set(graph.nodes.filter((node) => !incomingNodeIds.has(node.id)).map((node) => node.id));
+  }, [graph.edges, graph.nodes]);
   const graphKnowledge = normalizeKnowledgeConfig(graph.knowledge);
   const enabledKnowledgeFiles = graphKnowledge.files.filter((row) => row.enabled);
   const selectedKnowledgeMaxCharsOption = closestNumericOptionValue(
@@ -3787,6 +3797,9 @@ function App() {
     void bootstrapWorker();
     return () => {
       cancelled = true;
+      void invoke("web_worker_stop").catch(() => {
+        // noop: app shutdown/unmount path
+      });
     };
   }, []);
 
@@ -3806,7 +3819,6 @@ function App() {
               if (activeNodeId && delta) {
                 activeRunDeltaRef.current[activeNodeId] =
                   (activeRunDeltaRef.current[activeNodeId] ?? "") + delta;
-                addNodeLog(activeNodeId, delta);
               }
             }
 
@@ -5383,7 +5395,7 @@ function App() {
 
   function onCanvasMouseDown(e: ReactMouseEvent<HTMLDivElement>) {
     const target = e.target as HTMLElement;
-    const clickedNodeOrPorts = target.closest(".graph-node, .node-anchors, .node-ports");
+    const clickedNodeOrPorts = target.closest(".graph-node, .node-anchors");
     const clickedEdge = target.closest(".edge-path, .edge-path-hit");
     const clickedOverlay = target.closest(".canvas-overlay");
     const clickedControl = target.closest(".canvas-zoom-controls, .canvas-runbar");
@@ -6234,6 +6246,10 @@ function App() {
     }
 
     if (enabledKnowledgeFiles.length === 0) {
+      return { prompt, trace: [] };
+    }
+
+    if (graphKnowledge.topK <= 0) {
       return { prompt, trace: [] };
     }
 
@@ -7104,6 +7120,14 @@ ${prompt}`;
     }
   }
 
+  function onOpenFeedFromNode(nodeId: string) {
+    setWorkspaceTab("feed");
+    setFeedCategory("all_posts");
+    setFeedStatusFilter("all");
+    setFeedKeyword("");
+    setStatus(`피드에서 ${nodeId} 노드 결과를 확인하세요.`);
+  }
+
   function renderSettingsPanel(compact = false) {
     return (
       <section className={`controls ${compact ? "settings-compact" : ""}`}>
@@ -7353,7 +7377,6 @@ ${prompt}`;
     );
   })();
 
-  const selectedNodeState = selectedNodeId ? nodeStates[selectedNodeId] : undefined;
   const selectedTurnConfig: TurnConfig | null =
     selectedNode?.type === "turn" ? (selectedNode.config as TurnConfig) : null;
   const selectedTurnExecutor: TurnExecutor =
@@ -7362,6 +7385,16 @@ ${prompt}`;
     selectedNode?.type === "turn" && selectedTurnConfig
       ? inferQualityProfile(selectedNode, selectedTurnConfig)
       : "generic";
+  const selectedQualityThresholdOption = String(
+    Math.max(
+      5,
+      Math.min(
+        100,
+        Math.round((Number(selectedTurnConfig?.qualityThreshold ?? QUALITY_DEFAULT_THRESHOLD) || QUALITY_DEFAULT_THRESHOLD) / 5) *
+          5,
+      ),
+    ),
+  );
   const selectedArtifactType: ArtifactType = toArtifactType(selectedTurnConfig?.artifactType);
   const outgoingFromSelected = selectedNode
     ? graph.edges
@@ -7703,8 +7736,10 @@ ${prompt}`;
                     {graph.nodes.map((node) => {
                       const runState = nodeStates[node.id];
                       const nodeStatus = runState?.status ?? "idle";
+                      const nodeSummary = nodeCardSummary(node);
                       const isNodeSelected = selectedNodeIds.includes(node.id);
                       const showNodeAnchors = selectedNodeId === node.id || isConnectingDrag;
+                      const receivesQuestionDirectly = questionDirectInputNodeIds.has(node.id);
                       return (
                         <div
                           className={`graph-node node-${node.type} ${isNodeSelected ? "selected" : ""}`}
@@ -7743,11 +7778,15 @@ ${prompt}`;
                             <div className="node-head-main">
                               {node.type === "turn" ? (
                                 <>
-                                  <strong>{turnModelLabel(node)}</strong>
+                                  <div className="node-head-title-row">
+                                    <strong>{turnModelLabel(node)}</strong>
+                                  </div>
                                   <span className="node-head-subtitle">{turnRoleLabel(node)}</span>
                                 </>
                               ) : (
-                                <strong>{nodeTypeLabel(node.type)}</strong>
+                                <div className="node-head-title-row">
+                                  <strong>{nodeTypeLabel(node.type)}</strong>
+                                </div>
                               )}
                             </div>
                             <button onClick={() => deleteNode(node.id)} type="button">
@@ -7755,12 +7794,11 @@ ${prompt}`;
                             </button>
                           </div>
                           <div className="node-body">
-                            <div className="node-summary-row">
-                              <div>{nodeCardSummary(node)}</div>
-                              <div className={`status-pill status-${nodeStatus}`}>
-                                <span className="node-status-text">{nodeStatusLabel(nodeStatus)}</span>
+                            {nodeSummary ? (
+                              <div className="node-summary-row">
+                                <div>{nodeSummary}</div>
                               </div>
-                            </div>
+                            ) : null}
                             <div className="node-runtime-meta">
                               <div>
                                 완료 여부:{" "}
@@ -7775,13 +7813,21 @@ ${prompt}`;
                               <div>생성 시간: {formatDuration(runState?.durationMs)}</div>
                               <div>사용량: {formatUsage(runState?.usage)}</div>
                             </div>
-                            <div className="node-snippet">
-                              {String(
-                                extractFinalAnswer(runState?.output) ||
-                                  (runState?.logs ?? []).slice(-1)[0] ||
-                                  "아직 실행 로그가 없습니다.",
-                              ).slice(0, 180)}
-                            </div>
+                            <button
+                              className="node-feed-link"
+                              onClick={() => onOpenFeedFromNode(node.id)}
+                              type="button"
+                            >
+                              출력/로그는 피드에서 보기
+                            </button>
+                          </div>
+                          <div className="node-wait-slot">
+                            <span className={`status-pill status-${nodeStatus}`}>{nodeStatusLabel(nodeStatus)}</span>
+                            {receivesQuestionDirectly && (
+                              <span className="node-input-chip">
+                                <span className="node-input-chip-text">질문 직접 입력</span>
+                              </span>
+                            )}
                           </div>
                           {showNodeAnchors && (
                             <div className="node-anchors">
@@ -7797,14 +7843,6 @@ ${prompt}`;
                               ))}
                             </div>
                           )}
-                          <div className="node-ports">
-                            <button className="node-port-btn is-passive" disabled type="button">
-                              입력
-                            </button>
-                            <button className="node-port-btn is-passive" disabled type="button">
-                              출력
-                            </button>
-                          </div>
                         </div>
                       );
                     })}
@@ -7908,13 +7946,24 @@ ${prompt}`;
                     onChange={(e) => {
                       setWorkflowQuestion(e.currentTarget.value);
                     }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault();
+                        void onRunGraph();
+                      }
+                    }}
                     placeholder="질문 입력"
                     ref={questionInputRef}
                     rows={1}
                     value={workflowQuestion}
                   />
                   <div className="question-input-footer">
-                    <button className="primary-action question-create-button" type="button">
+                    <button
+                      className="primary-action question-create-button"
+                      disabled={isGraphRunning || graph.nodes.length === 0}
+                      onClick={onRunGraph}
+                      type="button"
+                    >
                       <img alt="" aria-hidden="true" className="question-create-icon" src="/up.svg" />
                     </button>
                   </div>
@@ -8088,16 +8137,16 @@ ${prompt}`;
                         <FancySelect
                           ariaLabel="참고할 자료 개수"
                           className="modern-select"
-                          onChange={(next) => {
-                            const parsed = Number(next) || KNOWLEDGE_DEFAULT_TOP_K;
-                            applyGraphChange((prev) => ({
-                              ...prev,
-                              knowledge: {
-                                ...(prev.knowledge ?? defaultKnowledgeConfig()),
-                                topK: Math.max(1, Math.min(20, parsed)),
-                              },
-                            }));
-                          }}
+                              onChange={(next) => {
+                                const parsed = Number(next) || KNOWLEDGE_DEFAULT_TOP_K;
+                                applyGraphChange((prev) => ({
+                                  ...prev,
+                                  knowledge: {
+                                    ...(prev.knowledge ?? defaultKnowledgeConfig()),
+                                    topK: Math.max(0, Math.min(5, parsed)),
+                                  },
+                                }));
+                              }}
                           options={KNOWLEDGE_TOP_K_OPTIONS}
                           value={String(graphKnowledge.topK)}
                         />
@@ -8259,20 +8308,17 @@ ${prompt}`;
                           </label>
                           <label>
                             품질 통과 기준 점수
-                            <input
-                              min={0}
-                              max={100}
-                              onChange={(e) =>
+                            <FancySelect
+                              ariaLabel="품질 통과 기준 점수"
+                              className="modern-select"
+                              onChange={(next) =>
                                 updateSelectedNodeConfig(
                                   "qualityThreshold",
-                                  Math.max(
-                                    0,
-                                    Math.min(100, Number(e.currentTarget.value) || QUALITY_DEFAULT_THRESHOLD),
-                                  ),
+                                  Math.max(5, Math.min(100, Number(next) || QUALITY_DEFAULT_THRESHOLD)),
                                 )
                               }
-                              type="number"
-                              value={String((selectedTurnConfig?.qualityThreshold ?? QUALITY_DEFAULT_THRESHOLD))}
+                              options={QUALITY_THRESHOLD_OPTIONS}
+                              value={selectedQualityThresholdOption}
                             />
                           </label>
                           {selectedQualityProfile === "code_implementation" && (
@@ -8449,21 +8495,6 @@ ${prompt}`;
                         </section>
                       )}
 
-                      <section className="inspector-block">
-                        <InspectorSectionTitle
-                          help="선택한 노드의 실행 중간 로그와 상태 메시지를 확인합니다."
-                          title="노드 로그"
-                        />
-                        <pre>{(selectedNodeState?.logs ?? []).join("\n") || "[로그 없음]"}</pre>
-                      </section>
-
-                      <section className="inspector-block">
-                        <InspectorSectionTitle
-                          help="선택한 노드의 최종 출력 데이터를 확인합니다."
-                          title="노드 출력"
-                        />
-                        <pre>{formatUnknown(selectedNodeState?.output) || "[출력 없음]"}</pre>
-                      </section>
                     </>
                   )}
 
@@ -8477,13 +8508,13 @@ ${prompt}`;
           <section className="feed-layout">
             <article className="panel-card feed-main">
               <div className="feed-topbar">
-                <h2>에이전트 피드</h2>
+                <h2>Feed</h2>
                 <button
                   className={`feed-filter-toggle ${feedFilterOpen ? "is-open" : ""}`}
                   onClick={() => setFeedFilterOpen((prev) => !prev)}
                   type="button"
                 >
-                  필터
+                  Filter by
                 </button>
               </div>
               {feedFilterOpen && (
@@ -8784,7 +8815,7 @@ ${prompt}`;
                 <li>웹 계정 연동에서 필요한 서비스(GEMINI/GPT 등)만 로그인합니다.</li>
                 <li>상태 동기화(새로고침 아이콘)를 눌러 로그인 상태를 최신으로 갱신합니다.</li>
                 <li>워크플로우 탭에서 노드 추가, 연결, 프롬프트/역할 설정을 완료합니다.</li>
-                <li>실행 후 노드 로그/출력에서 중간 결과를 확인하고 필요 시 수정합니다.</li>
+                <li>실행 후 피드 탭에서 노드 로그/출력을 확인하고 필요 시 수정합니다.</li>
                 <li>기록 탭에서 실행 상세와 최종 결과를 비교하며 재사용 가능한 그래프로 다듬습니다.</li>
               </ol>
             </section>
