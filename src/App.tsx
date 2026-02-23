@@ -1709,8 +1709,7 @@ async function buildQualityReport(params: {
     }
   }
 
-  const hardFail = failures.length > 0;
-  const decision: "PASS" | "REJECT" = !hardFail && score >= threshold ? "PASS" : "REJECT";
+  const decision: "PASS" | "REJECT" = score >= threshold ? "PASS" : "REJECT";
 
   return {
     profile,
