@@ -2057,6 +2057,7 @@ h3 {
 
 .feed-score-badge.warn {
   color: #d96d1f;
+  border: 2px solid #d96d1f;
 }
 
 .feed-score-badge.live {
