@@ -645,21 +645,7 @@ function providerAutomationConfig(provider) {
 
 async function isLikelyNotLoggedIn(provider, page) {
   const config = SESSION_PROVIDER_CONFIG[provider];
-  const loginSignals = [
-    'input[type="email"]',
-    'input[type="password"]',
-    'button:has-text("Sign in")',
-    'a:has-text("Sign in")',
-    'button:has-text("Log in")',
-    'a:has-text("Log in")',
-    'button:has-text("로그인")',
-    'a:has-text("로그인")',
-    'text=/로그인|Sign in|Log in|계정 선택/i',
-    'text=/지원되지 않는 명령줄 플래그|브라우저 또는 앱이 안전하지 않을 수 있습니다/i',
-  ];
-  if (await hasVisibleSelector(page, loginSignals)) {
-    return true;
-  }
+  const automation = providerAutomationConfig(provider);
 
   const urlLower = String(page.url() || '').toLowerCase();
   if (provider === 'gemini' && /accounts\.google\.com/.test(urlLower)) {
@@ -668,7 +654,40 @@ async function isLikelyNotLoggedIn(provider, page) {
   if (config?.loginSignals?.some((signal) => urlLower.includes(String(signal).toLowerCase()))) {
     return true;
   }
-  return false;
+
+  if (
+    provider === 'gemini' &&
+    (await hasVisibleSelector(page, [
+      'text=/지원되지 않는 명령줄 플래그|브라우저 또는 앱이 안전하지 않을 수 있습니다/i',
+    ]))
+  ) {
+    return true;
+  }
+
+  const promptReady = await hasVisibleSelector(page, automation.inputSelectors);
+  if (promptReady) {
+    return false;
+  }
+
+  if (
+    await hasVisibleSelector(page, [
+      'input[type="email"]',
+      'input[type="password"]',
+      'form[action*="login" i]',
+      'form[action*="signin" i]',
+    ])
+  ) {
+    return true;
+  }
+
+  const explicitLoginByProvider = {
+    gemini: ['button:has-text("Sign in")', 'a:has-text("Sign in")', 'text=/계정 선택/i'],
+    gpt: ['button:has-text("Log in")', 'a:has-text("Log in")'],
+    grok: ['button:has-text("Log in")', 'a:has-text("Log in")'],
+    perplexity: ['button:has-text("Log in")', 'a:has-text("Log in")', 'button:has-text("Sign in")'],
+    claude: ['button:has-text("Log in")', 'a:has-text("Log in")', 'button:has-text("Sign in")'],
+  };
+  return hasVisibleSelector(page, explicitLoginByProvider[provider] ?? []);
 }
 
 async function fillPromptAndSubmit(provider, page, prompt) {

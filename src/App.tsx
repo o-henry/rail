@@ -5386,7 +5386,12 @@ function App() {
     setWebWorkerBusy(true);
     setError("");
     try {
-      const result = await invoke<{ ok?: boolean; error?: string; errorCode?: string }>(
+      const result = await invoke<{
+        ok?: boolean;
+        error?: string;
+        errorCode?: string;
+        sessionState?: string;
+      }>(
         "web_provider_open_session",
         { provider },
       );
@@ -5397,7 +5402,13 @@ function App() {
       window.setTimeout(() => {
         void refreshWebWorkerHealth(true);
       }, 900);
-      setStatus(`${webProviderLabel(provider)} 로그인 세션 창 열림`);
+      if (result?.sessionState === "active") {
+        setStatus(`${webProviderLabel(provider)} 로그인 상태 확인됨`);
+      } else if (result?.sessionState === "login_required") {
+        setStatus(`${webProviderLabel(provider)} 로그인 필요`);
+      } else {
+        setStatus(`${webProviderLabel(provider)} 로그인 세션 창 열림`);
+      }
     } catch (error) {
       setError(`${webProviderLabel(provider)} 로그인 세션 열기 실패: ${String(error)}`);
     } finally {
