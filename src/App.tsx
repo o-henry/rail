@@ -3704,6 +3704,7 @@ function App() {
   const [connectPreviewStartPoint, setConnectPreviewStartPoint] = useState<LogicalPoint | null>(null);
   const [connectPreviewPoint, setConnectPreviewPoint] = useState<LogicalPoint | null>(null);
   const [isConnectingDrag, setIsConnectingDrag] = useState(false);
+  const [draggingNodeIds, setDraggingNodeIds] = useState<string[]>([]);
   const [graphFileName, setGraphFileName] = useState("");
   const [selectedGraphFileName, setSelectedGraphFileName] = useState("");
   const [graphRenameOpen, setGraphRenameOpen] = useState(false);
@@ -5460,13 +5461,13 @@ function App() {
         const size = getNodeVisualSize(node.id);
         const maxX = Math.max(minPos, boundedStageWidth - size.width + NODE_DRAG_MARGIN);
         const maxY = Math.max(minPos, boundedStageHeight - size.height + NODE_DRAG_MARGIN);
-        const snappedX = snapToLayoutGrid(start.x + dx, "x");
-        const snappedY = snapToLayoutGrid(start.y + dy, "y");
+        const nextX = start.x + dx;
+        const nextY = start.y + dy;
         return {
           ...node,
           position: {
-            x: Math.min(maxX, Math.max(minPos, snappedX)),
-            y: Math.min(maxY, Math.max(minPos, snappedY)),
+            x: Math.min(maxX, Math.max(minPos, nextX)),
+            y: Math.min(maxY, Math.max(minPos, nextY)),
           },
         };
       }),
@@ -5550,6 +5551,7 @@ function App() {
     }
 
     dragStartSnapshotRef.current = cloneGraph(graph);
+    setDraggingNodeIds(activeNodeIds);
     setMarqueeSelection(null);
     dragPointerRef.current = { clientX: e.clientX, clientY: e.clientY };
     ensureDragAutoPanLoop();
@@ -5687,8 +5689,32 @@ function App() {
       setUndoStack((stack) => [...stack.slice(-79), cloneGraph(dragSnapshot)]);
       setRedoStack([]);
     }
+    const dragNodeIds = dragRef.current?.nodeIds ?? [];
     dragStartSnapshotRef.current = null;
     dragRef.current = null;
+    setDraggingNodeIds([]);
+    if (dragNodeIds.length > 0) {
+      const draggedNodeIdSet = new Set(dragNodeIds);
+      setGraph((prev) => ({
+        ...prev,
+        nodes: prev.nodes.map((node) => {
+          if (!draggedNodeIdSet.has(node.id)) {
+            return node;
+          }
+          const size = getNodeVisualSize(node.id);
+          const minPos = -NODE_DRAG_MARGIN;
+          const maxX = Math.max(minPos, boundedStageWidth - size.width + NODE_DRAG_MARGIN);
+          const maxY = Math.max(minPos, boundedStageHeight - size.height + NODE_DRAG_MARGIN);
+          return {
+            ...node,
+            position: {
+              x: Math.min(maxX, Math.max(minPos, snapToLayoutGrid(node.position.x, "x"))),
+              y: Math.min(maxY, Math.max(minPos, snapToLayoutGrid(node.position.y, "y"))),
+            },
+          };
+        }),
+      }));
+    }
   }
 
   function onCanvasMouseDown(e: ReactMouseEvent<HTMLDivElement>) {
@@ -8188,11 +8214,14 @@ ${prompt}`;
                       const nodeStatus = runState?.status ?? "idle";
                       const nodeSummary = nodeCardSummary(node);
                       const isNodeSelected = selectedNodeIds.includes(node.id);
+                      const isNodeDragging = draggingNodeIds.includes(node.id);
                       const showNodeAnchors = selectedNodeId === node.id || isConnectingDrag;
                       const receivesQuestionDirectly = questionDirectInputNodeIds.has(node.id);
                       return (
                         <div
-                          className={`graph-node node-${node.type} ${isNodeSelected ? "selected" : ""}`}
+                          className={`graph-node node-${node.type} ${isNodeSelected ? "selected" : ""} ${
+                            isNodeDragging ? "is-dragging" : ""
+                          }`.trim()}
                           data-node-id={node.id}
                           key={node.id}
                           onClick={(event) => {
@@ -8222,7 +8251,13 @@ ${prompt}`;
                             }
                             onNodeDragStart(event, node.id);
                           }}
-                          style={{ left: node.position.x, top: node.position.y }}
+                          style={{
+                            left: node.position.x,
+                            top: node.position.y,
+                            transition: isNodeDragging
+                              ? "none"
+                              : "left 220ms cubic-bezier(0.22, 1, 0.36, 1), top 220ms cubic-bezier(0.22, 1, 0.36, 1)",
+                          }}
                         >
                           <div className="node-head">
                             <div className="node-head-main">
