@@ -8819,7 +8819,7 @@ ${prompt}`;
                       const nodeSummary = nodeCardSummary(node);
                       const isNodeSelected = selectedNodeIds.includes(node.id);
                       const isNodeDragging = draggingNodeIds.includes(node.id);
-                      const showNodeAnchors = selectedNodeId === node.id || isConnectingDrag;
+                      const showNodeAnchors = isNodeSelected || isConnectingDrag;
                       const receivesQuestionDirectly = questionDirectInputNodeIds.has(node.id);
                       return (
                         <div
