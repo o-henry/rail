@@ -4339,6 +4339,10 @@ function App() {
   const [redoStack, setRedoStack] = useState<GraphData[]>([]);
   const [, setNodeSizeVersion] = useState(0);
   const [marqueeSelection, setMarqueeSelection] = useState<MarqueeSelection | null>(null);
+  const hasTauriRuntime = useMemo(
+    () => Boolean((window as Window & { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__),
+    [],
+  );
 
   const dragRef = useRef<DragState | null>(null);
   const edgeDragRef = useRef<EdgeDragState | null>(null);
@@ -4660,6 +4664,11 @@ function App() {
 
   useEffect(() => {
     let cancelled = false;
+    if (!hasTauriRuntime) {
+      return () => {
+        cancelled = true;
+      };
+    }
 
     const attach = async () => {
       const unlistenNotification = await listen<EngineNotificationEvent>(
@@ -4814,9 +4823,13 @@ function App() {
         detach();
       }
     };
-  }, []);
+  }, [hasTauriRuntime]);
 
   async function refreshGraphFiles() {
+    if (!hasTauriRuntime) {
+      setGraphFiles([]);
+      return;
+    }
     try {
       const files = await invoke<string[]>("graph_list");
       setGraphFiles(files);
@@ -4826,6 +4839,10 @@ function App() {
   }
 
   async function refreshRunFiles() {
+    if (!hasTauriRuntime) {
+      setRunFiles([]);
+      return;
+    }
     try {
       const files = await invoke<string[]>("run_list");
       setRunFiles(files);
@@ -4835,6 +4852,11 @@ function App() {
   }
 
   async function refreshFeedTimeline() {
+    if (!hasTauriRuntime) {
+      setFeedPosts([]);
+      setFeedLoading(false);
+      return;
+    }
     setFeedLoading(true);
     try {
       const files = await invoke<string[]>("run_list");
