@@ -5640,6 +5640,48 @@ function App() {
   }, [workspaceTab, canvasFullscreen]);
 
   useEffect(() => {
+    const onTabHotkey = (event: KeyboardEvent) => {
+      if (!(event.metaKey || event.ctrlKey) || event.altKey || event.shiftKey) {
+        return;
+      }
+      if (isEditableTarget(event.target)) {
+        return;
+      }
+
+      const key = event.key;
+      let nextTab: WorkspaceTab | null = null;
+      if (key === "1") {
+        nextTab = "workflow";
+      } else if (key === "2") {
+        nextTab = "feed";
+      } else if (key === "3") {
+        nextTab = "history";
+      } else if (key === "4") {
+        nextTab = "settings";
+      }
+
+      if (!nextTab) {
+        return;
+      }
+
+      event.preventDefault();
+      setWorkspaceTab(nextTab);
+      setStatus(
+        nextTab === "workflow"
+          ? "워크플로우 탭으로 이동"
+          : nextTab === "feed"
+            ? "피드 탭으로 이동"
+            : nextTab === "history"
+              ? "기록 탭으로 이동"
+              : "설정 탭으로 이동",
+      );
+    };
+
+    window.addEventListener("keydown", onTabHotkey);
+    return () => window.removeEventListener("keydown", onTabHotkey);
+  }, []);
+
+  useEffect(() => {
     if (!canvasFullscreen) {
       return;
     }
@@ -5660,7 +5702,9 @@ function App() {
       if (event.repeat || event.metaKey || event.ctrlKey || event.altKey) {
         return;
       }
-      if (event.key.toLowerCase() !== "h") {
+      const keyLower = event.key.toLowerCase();
+      const isPanToggleKey = keyLower === "h" || event.key === "ㅗ" || event.code === "KeyH";
+      if (!isPanToggleKey) {
         return;
       }
       if (isEditableTarget(event.target)) {
@@ -5669,7 +5713,7 @@ function App() {
       event.preventDefault();
       setPanMode((prev) => {
         const next = !prev;
-        setStatus(next ? "캔버스 이동 모드 켜짐 (H)" : "캔버스 이동 모드 꺼짐 (H)");
+        setStatus(next ? "캔버스 이동 모드 켜짐 (H/ㅗ)" : "캔버스 이동 모드 꺼짐 (H/ㅗ)");
         return next;
       });
     };
