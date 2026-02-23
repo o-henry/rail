@@ -534,7 +534,6 @@ const AUTO_LAYOUT_SNAP_THRESHOLD = 44;
 const AUTO_LAYOUT_DRAG_SNAP_THRESHOLD = 36;
 const AUTO_LAYOUT_NODE_AXIS_SNAP_THRESHOLD = 38;
 const AUTO_EDGE_STRAIGHTEN_THRESHOLD = 72;
-const AUTO_EDGE_BEND_FROM_WEIGHT = 0.24;
 const AGENT_RULE_CACHE_TTL_MS = 12_000;
 const AGENT_RULE_MAX_DOCS = 16;
 const AGENT_RULE_MAX_DOC_CHARS = 6_000;
@@ -2190,10 +2189,10 @@ function buildRoundedEdgePath(
 
   const points: LogicalPoint[] = [start, startStub];
   if (fromHorizontal && toHorizontal) {
-    const midX = startStub.x + (endStub.x - startStub.x) * AUTO_EDGE_BEND_FROM_WEIGHT;
+    const midX = (start.x + end.x) / 2;
     points.push({ x: midX, y: startStub.y }, { x: midX, y: endStub.y });
   } else if (!fromHorizontal && !toHorizontal) {
-    const midY = startStub.y + (endStub.y - startStub.y) * AUTO_EDGE_BEND_FROM_WEIGHT;
+    const midY = (start.y + end.y) / 2;
     points.push({ x: startStub.x, y: midY }, { x: endStub.x, y: midY });
   } else if (fromHorizontal && !toHorizontal) {
     points.push({ x: endStub.x, y: startStub.y });
