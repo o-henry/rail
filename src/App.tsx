@@ -489,6 +489,10 @@ const QUALITY_DEFAULT_THRESHOLD = 70;
 const FEED_REDACTION_RULE_VERSION = "feed-v1";
 const FEED_ATTACHMENT_CHAR_CAP = 12_000;
 const FEED_STEP_PLACEHOLDER = "실행 로그 요약 없음";
+const AUTO_LAYOUT_START_X = 40;
+const AUTO_LAYOUT_START_Y = 40;
+const AUTO_LAYOUT_COLUMN_GAP = 320;
+const AUTO_LAYOUT_ROW_GAP = 184;
 const KNOWLEDGE_TOP_K_OPTIONS: FancySelectOption[] = [
   { value: "0", label: "0개" },
   { value: "1", label: "1개" },
@@ -2159,6 +2163,133 @@ function getAutoConnectionSides(fromNode: GraphNode, toNode: GraphNode): {
     : { fromSide: "top", toSide: "bottom" };
 }
 
+function snapToLayoutGrid(value: number, axis: "x" | "y"): number {
+  const start = axis === "x" ? AUTO_LAYOUT_START_X : AUTO_LAYOUT_START_Y;
+  const gap = axis === "x" ? AUTO_LAYOUT_COLUMN_GAP : AUTO_LAYOUT_ROW_GAP;
+  const normalized = (value - start) / gap;
+  return Math.round(normalized) * gap + start;
+}
+
+function autoArrangeGraphLayout(input: GraphData): GraphData {
+  if (input.nodes.length <= 1) {
+    return input;
+  }
+
+  const nodeIds = input.nodes.map((node) => node.id);
+  const nodeIdSet = new Set(nodeIds);
+  const incomingCount = new Map<string, number>();
+  const outgoing = new Map<string, string[]>();
+  const depth = new Map<string, number>();
+
+  for (const id of nodeIds) {
+    incomingCount.set(id, 0);
+    outgoing.set(id, []);
+    depth.set(id, 0);
+  }
+
+  for (const edge of input.edges) {
+    const fromId = edge.from.nodeId;
+    const toId = edge.to.nodeId;
+    if (!nodeIdSet.has(fromId) || !nodeIdSet.has(toId)) {
+      continue;
+    }
+    outgoing.get(fromId)?.push(toId);
+    incomingCount.set(toId, (incomingCount.get(toId) ?? 0) + 1);
+  }
+
+  const nodeById = new Map(input.nodes.map((node) => [node.id, node] as const));
+  const roots = nodeIds
+    .filter((id) => (incomingCount.get(id) ?? 0) === 0)
+    .sort((a, b) => {
+      const nodeA = nodeById.get(a);
+      const nodeB = nodeById.get(b);
+      const dy = (nodeA?.position.y ?? 0) - (nodeB?.position.y ?? 0);
+      if (dy !== 0) {
+        return dy;
+      }
+      const dx = (nodeA?.position.x ?? 0) - (nodeB?.position.x ?? 0);
+      if (dx !== 0) {
+        return dx;
+      }
+      return a.localeCompare(b);
+    });
+
+  const queue = [...roots];
+  let cursor = 0;
+  while (cursor < queue.length) {
+    const currentId = queue[cursor];
+    cursor += 1;
+    const currentDepth = depth.get(currentId) ?? 0;
+    const children = outgoing.get(currentId) ?? [];
+    for (const childId of children) {
+      const nextDepth = Math.max(depth.get(childId) ?? 0, currentDepth + 1);
+      depth.set(childId, nextDepth);
+      const nextIncoming = (incomingCount.get(childId) ?? 0) - 1;
+      incomingCount.set(childId, nextIncoming);
+      if (nextIncoming === 0) {
+        queue.push(childId);
+      }
+    }
+  }
+
+  for (const id of nodeIds) {
+    if ((incomingCount.get(id) ?? 0) > 0) {
+      const parentDepths = input.edges
+        .filter((edge) => edge.to.nodeId === id && nodeIdSet.has(edge.from.nodeId))
+        .map((edge) => depth.get(edge.from.nodeId) ?? 0);
+      const inferredDepth = parentDepths.length > 0 ? Math.max(...parentDepths) + 1 : 0;
+      depth.set(id, Math.max(depth.get(id) ?? 0, inferredDepth));
+    }
+  }
+
+  const columns = new Map<number, GraphNode[]>();
+  for (const node of input.nodes) {
+    const col = depth.get(node.id) ?? 0;
+    const bucket = columns.get(col) ?? [];
+    bucket.push(node);
+    columns.set(col, bucket);
+  }
+
+  for (const [, nodes] of columns) {
+    nodes.sort((a, b) => {
+      const dy = a.position.y - b.position.y;
+      if (dy !== 0) {
+        return dy;
+      }
+      const dx = a.position.x - b.position.x;
+      if (dx !== 0) {
+        return dx;
+      }
+      return a.id.localeCompare(b.id);
+    });
+  }
+
+  const nextNodes = input.nodes.map((node) => {
+    const col = depth.get(node.id) ?? 0;
+    const rows = columns.get(col) ?? [];
+    const row = Math.max(0, rows.findIndex((item) => item.id === node.id));
+    return {
+      ...node,
+      position: {
+        x: AUTO_LAYOUT_START_X + col * AUTO_LAYOUT_COLUMN_GAP,
+        y: AUTO_LAYOUT_START_Y + row * AUTO_LAYOUT_ROW_GAP,
+      },
+    };
+  });
+
+  const hasChanged = nextNodes.some((node, index) => {
+    const before = input.nodes[index];
+    return before.position.x !== node.position.x || before.position.y !== node.position.y;
+  });
+  if (!hasChanged) {
+    return input;
+  }
+  return {
+    ...input,
+    nodes: nextNodes,
+  };
+}
+
 function makeNodeId(type: NodeType): string {
   const suffix = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
   return `${type}-${suffix}`;
@@ -2510,6 +2641,7 @@ function FancySelect({
   const rootRef = useRef<HTMLDivElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const selected = options.find((option) => option.value === value) ?? null;
+  const isGraphFileSelect = (className ?? "").includes("graph-file-select");
 
   useEffect(() => {
     const onWindowMouseDown = (event: MouseEvent) => {
@@ -2604,7 +2736,18 @@ function FancySelect({
       </button>
       {isOpen && (
         <div className="fancy-select-menu" ref={menuRef} role="listbox">
-          {options.length === 0 && <div className="fancy-select-empty">{emptyMessage}</div>}
+          {options.length === 0 && (
+            <div
+              className="fancy-select-empty"
+              style={
+                isGraphFileSelect
+                  ? { minHeight: "36px", height: "36px", display: "flex", alignItems: "center", padding: "0 11px" }
+                  : undefined
+              }
+            >
+              {emptyMessage}
+            </div>
+          )}
           {options.map((option) => (
             <button
               aria-selected={option.value === value}
@@ -3803,9 +3946,13 @@ function App() {
     });
   }
 
-  function applyGraphChange(updater: (prev: GraphData) => GraphData) {
+  function applyGraphChange(
+    updater: (prev: GraphData) => GraphData,
+    options?: { autoLayout?: boolean },
+  ) {
     setGraph((prev) => {
-      const next = updater(prev);
+      const rawNext = updater(prev);
+      const next = options?.autoLayout ? autoArrangeGraphLayout(rawNext) : rawNext;
       if (graphEquals(prev, next)) {
         return prev;
       }
@@ -4874,7 +5021,7 @@ function App() {
         ...prev,
         nodes: [...prev.nodes, node],
       };
-    });
+    }, { autoLayout: true });
 
     setNodeSelection([node.id], node.id);
     setSelectedEdgeKey("");
@@ -4909,10 +5056,10 @@ function App() {
     } else {
       preset = buildExpertPreset();
     }
-    const nextPreset = {
+    const nextPreset = autoArrangeGraphLayout({
       ...preset,
       knowledge: normalizeKnowledgeConfig(graph.knowledge),
-    };
+    });
     setGraph(cloneGraph(nextPreset));
     setUndoStack([]);
     setRedoStack([]);
@@ -5004,7 +5151,7 @@ function App() {
       ...prev,
       nodes: prev.nodes.filter((n) => !targetSet.has(n.id)),
       edges: prev.edges.filter((e) => !targetSet.has(e.from.nodeId) && !targetSet.has(e.to.nodeId)),
-    }));
+    }), { autoLayout: true });
     setNodeSelection(selectedNodeIds.filter((id) => !targetSet.has(id)));
     setSelectedEdgeKey("");
     setNodeStates((prev) => {
@@ -5074,7 +5221,7 @@ function App() {
         to: { nodeId: toNodeId, port: "in", side: resolvedToSide },
       };
       return { ...prev, edges: [...prev.edges, edge] };
-    });
+    }, { autoLayout: true });
   }
 
   function onNodeAnchorDragStart(
@@ -5313,11 +5460,13 @@ function App() {
         const size = getNodeVisualSize(node.id);
         const maxX = Math.max(minPos, boundedStageWidth - size.width + NODE_DRAG_MARGIN);
         const maxY = Math.max(minPos, boundedStageHeight - size.height + NODE_DRAG_MARGIN);
+        const snappedX = snapToLayoutGrid(start.x + dx, "x");
+        const snappedY = snapToLayoutGrid(start.y + dy, "y");
         return {
           ...node,
           position: {
-            x: Math.min(maxX, Math.max(minPos, start.x + dx)),
-            y: Math.min(maxY, Math.max(minPos, start.y + dy)),
+            x: Math.min(maxX, Math.max(minPos, snappedX)),
+            y: Math.min(maxY, Math.max(minPos, snappedY)),
           },
         };
       }),
@@ -5782,7 +5931,7 @@ function App() {
     setError("");
     try {
       const loaded = await invoke<unknown>("graph_load", { name: target });
-      const normalized = normalizeGraph(loaded);
+      const normalized = autoArrangeGraphLayout(normalizeGraph(loaded));
       setGraph(cloneGraph(normalized));
       setUndoStack([]);
       setRedoStack([]);
@@ -7564,6 +7713,11 @@ ${prompt}`;
       if (!fromNode || !toNode) {
         return null;
       }
+      const fromStatus = nodeStates[fromNode.id]?.status ?? "idle";
+      const toStatus = nodeStates[toNode.id]?.status ?? "idle";
+      const flowActive =
+        (toStatus === "queued" || toStatus === "running" || toStatus === "waiting_user") &&
+        (fromStatus === "running" || fromStatus === "done" || fromStatus === "waiting_user");
 
       const auto = getAutoConnectionSides(fromNode, toNode);
       const hasManualControl =
@@ -7591,6 +7745,7 @@ ${prompt}`;
         endPoint: toPoint,
         controlPoint: control,
         hasManualControl,
+        flowActive,
         path: hasManualControl
           ? buildManualEdgePath(fromPoint.x, fromPoint.y, control.x, control.y, toPoint.x, toPoint.y)
           : buildRoundedEdgePath(
@@ -7612,6 +7767,7 @@ ${prompt}`;
       endPoint: LogicalPoint;
       controlPoint: LogicalPoint;
       hasManualControl: boolean;
+      flowActive: boolean;
     }>;
   const connectPreviewLine = (() => {
     if (!connectFromNodeId || !connectPreviewPoint) {
@@ -7984,6 +8140,22 @@ ${prompt}`;
                             strokeLinecap="round"
                             strokeWidth={selectedEdgeKey === line.edgeKey ? 3 : 2}
                           />
+                          {line.flowActive && (
+                            <>
+                              <circle cx={line.startPoint.x} cy={line.startPoint.y} fill="#4f83ff" pointerEvents="none" r={3.1}>
+                                <animateMotion dur="1.15s" path={line.path} repeatCount="indefinite" rotate="auto" />
+                              </circle>
+                              <circle cx={line.startPoint.x} cy={line.startPoint.y} fill="#78a7ff" opacity="0.9" pointerEvents="none" r={2.2}>
+                                <animateMotion
+                                  begin="-0.55s"
+                                  dur="1.15s"
+                                  path={line.path}
+                                  repeatCount="indefinite"
+                                  rotate="auto"
+                                />
+                              </circle>
+                            </>
+                          )}
                           {selectedEdgeKey === line.edgeKey && (
                             <circle
                               className="edge-control-point"
