@@ -376,11 +376,27 @@ function isSystemProfileEnabled() {
   return USE_SYSTEM_CHROME_PROFILE && Boolean(SYSTEM_CHROME_PROFILE_DIR);
 }
 
+function providerLocalProfileDir(provider) {
+  return path.join(PROFILE_ROOT, `${provider}-profile`);
+}
+
 function providerProfileDir(provider) {
   if (isSystemProfileEnabled()) {
     return SYSTEM_CHROME_PROFILE_DIR;
   }
-  return path.join(PROFILE_ROOT, `${provider}-profile`);
+  return providerLocalProfileDir(provider);
+}
+
+function isLikelyProfileLockError(error) {
+  const raw = String(error ?? '');
+  const lower = raw.toLowerCase();
+  return (
+    lower.includes('기존 브라우저 세션에서 여는 중입니다') ||
+    lower.includes('opening in existing browser session') ||
+    lower.includes('profile appears to be in use') ||
+    lower.includes('profile in use') ||
+    lower.includes('target page, context or browser has been closed')
+  );
 }
 
 function sanitizeUrlForUi(rawUrl) {
@@ -481,53 +497,92 @@ async function ensureProviderContext(provider) {
     throw workerError('BROWSER_MISSING', 'chromium 런처를 찾지 못했습니다.');
   }
 
-  const profileDir = providerProfileDir(provider);
-  if (!isSystemProfileEnabled()) {
-    await hardenDir(profileDir);
-  } else {
-    for (const [otherProvider, wrapped] of state.providers.entries()) {
-      if (otherProvider === provider) {
-        continue;
-      }
-      try {
-        await wrapped.context.close();
-      } catch {
-        // ignore
-      }
-      wrapped.contextClosed = true;
-      state.providers.delete(otherProvider);
-    }
-  }
-
-  const launchOptions = {
-    headless: false,
-    viewport: { width: 1380, height: 900 },
-    ignoreDefaultArgs: ['--enable-automation'],
-    args: ['--disable-dev-shm-usage', '--no-first-run'],
-  };
+  const launchTargets = [];
   if (isSystemProfileEnabled()) {
-    launchOptions.args.push('--profile-directory=Default');
+    launchTargets.push({
+      kind: 'system',
+      profileDir: SYSTEM_CHROME_PROFILE_DIR,
+      profileName: 'Default',
+    });
+  }
+  const localProfile = providerLocalProfileDir(provider);
+  if (!launchTargets.some((row) => row.profileDir === localProfile)) {
+    launchTargets.push({
+      kind: 'local',
+      profileDir: localProfile,
+      profileName: null,
+    });
   }
 
   const executablePath = resolveChromeExecutable();
-  if (executablePath) {
-    launchOptions.executablePath = executablePath;
+  let context = null;
+  let profileDir = '';
+  let launchError = null;
+
+  for (const target of launchTargets) {
+    profileDir = target.profileDir;
+    if (target.kind === 'local') {
+      await hardenDir(profileDir);
+    } else {
+      for (const [otherProvider, wrapped] of state.providers.entries()) {
+        if (otherProvider === provider) {
+          continue;
+        }
+        try {
+          await wrapped.context.close();
+        } catch {
+          // ignore
+        }
+        wrapped.contextClosed = true;
+        state.providers.delete(otherProvider);
+      }
+    }
+
+    const launchOptions = {
+      headless: false,
+      viewport: { width: 1380, height: 900 },
+      ignoreDefaultArgs: ['--enable-automation', '--no-sandbox', '--disable-setuid-sandbox'],
+      args: ['--disable-dev-shm-usage', '--no-first-run'],
+    };
+    if (target.profileName) {
+      launchOptions.args.push(`--profile-directory=${target.profileName}`);
+    }
+    if (executablePath) {
+      launchOptions.executablePath = executablePath;
+    }
+
+    notify('web/progress', {
+      provider,
+      stage: 'launch_context',
+      message:
+        target.kind === 'system'
+          ? '시스템 Chrome 프로필로 세션 연결을 시도합니다.'
+          : '앱 전용 프로필로 세션 연결을 시도합니다.',
+    });
+
+    try {
+      context = await chromium.launchPersistentContext(profileDir, launchOptions);
+      launchError = null;
+      break;
+    } catch (error) {
+      launchError = error;
+      if (target.kind === 'system' && isLikelyProfileLockError(error)) {
+        notify('web/progress', {
+          provider,
+          stage: 'launch_context_fallback',
+          message: '시스템 Chrome 프로필이 사용 중이라 앱 전용 프로필로 전환합니다.',
+        });
+        continue;
+      }
+      break;
+    }
   }
 
-  notify('web/progress', {
-    provider,
-    stage: 'launch_context',
-    message: '브라우저 컨텍스트를 준비합니다.',
-  });
-
-  let context;
-  try {
-    context = await chromium.launchPersistentContext(profileDir, launchOptions);
-  } catch (error) {
+  if (!context) {
     throw workerError(
       'BROWSER_MISSING',
-      `브라우저 컨텍스트 시작 실패: ${String(error)}`,
-      { executablePath },
+      `브라우저 컨텍스트 시작 실패: ${String(launchError ?? 'unknown error')}`,
+      { executablePath, profileDir },
     );
   }
 
@@ -856,6 +911,7 @@ async function getHealthResult() {
 
 async function resetProviderSession(provider) {
   const wrapped = state.providers.get(provider);
+  const wrappedProfileDir = wrapped?.profileDir || null;
   if (wrapped) {
     try {
       await wrapped.context.close();
@@ -866,8 +922,8 @@ async function resetProviderSession(provider) {
     state.providers.delete(provider);
   }
 
-  const profileDir = providerProfileDir(provider);
-  if (!isSystemProfileEnabled()) {
+  const profileDir = wrappedProfileDir || providerProfileDir(provider);
+  if (!isSystemProfileEnabled() || profileDir !== SYSTEM_CHROME_PROFILE_DIR) {
     await rm(profileDir, { recursive: true, force: true });
     await hardenDir(profileDir);
   }
