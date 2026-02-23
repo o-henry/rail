@@ -1857,7 +1857,8 @@ h3 {
   width: min(340px, 100%);
   border-radius: 12px;
   background: #ffffff;
-  padding: 16px;
+  /* padding: 16px; */
+  padding: 26px 16px 18px 16px;
   scrollbar-width: none;
 }
 
@@ -2099,6 +2100,7 @@ h3 {
   opacity: 0;
   transform: translateY(-5px);
   pointer-events: none;
+  overflow: hidden;
   transition:
     grid-template-rows 220ms cubic-bezier(0.22, 1, 0.36, 1),
     opacity 180ms ease,
@@ -2110,11 +2112,12 @@ h3 {
   opacity: 1;
   transform: translateY(0);
   pointer-events: auto;
+  overflow: visible;
 }
 
 .feed-filter-inline {
   min-height: 0;
-  overflow: hidden;
+  overflow: visible;
   border-radius: 4px;
   background: #eff2f6;
   padding: 12px;
