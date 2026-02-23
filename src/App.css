@@ -2233,7 +2233,7 @@ h3 {
   border-radius: 6px;
   padding: 0 12px;
   font-size: 13px;
-  background: #ffffff;
+  background: var(--surface);
   border: 0;
 }
 
