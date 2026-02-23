@@ -1278,9 +1278,25 @@ function summarizeFeedSteps(logs: string[]): string[] {
 }
 
 function normalizeFeedSteps(steps: string[]): string[] {
+  const placeholderCompact = FEED_STEP_PLACEHOLDER.replace(/\s+/g, "");
+  const seen = new Set<string>();
   return steps
     .map((step) => step.trim())
-    .filter((step) => step && step !== FEED_STEP_PLACEHOLDER);
+    .map((step) => step.replace(/^[-•·\s]+/, "").replace(/[.。!！:：]+$/, "").trim())
+    .filter((step) => {
+      if (!step) {
+        return false;
+      }
+      const compact = step.replace(/\s+/g, "");
+      if (compact.includes(placeholderCompact)) {
+        return false;
+      }
+      if (seen.has(step)) {
+        return false;
+      }
+      seen.add(step);
+      return true;
+    });
 }
 
 function buildFeedSummary(status: FeedPostStatus, output: unknown, error?: string, summary?: string): string {
