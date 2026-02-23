@@ -2157,6 +2157,7 @@ h3 {
 }
 
 .feed-step-chip {
+  display: none;
   border-radius: 12px;
   padding: 4px 8px;
   background: #2f5fb1;
