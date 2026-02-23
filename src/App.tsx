@@ -2363,14 +2363,21 @@ function formatRelativeFeedTime(iso: string): string {
   return `${days}일 전`;
 }
 
-function NavIcon({ tab }: { tab: WorkspaceTab }) {
+function NavIcon({ tab, active = false }: { tab: WorkspaceTab; active?: boolean }) {
   if (tab === "workflow") {
     return (
       <img alt="" aria-hidden="true" className="nav-workflow-image" src="/workflow.svg" />
     );
   }
   if (tab === "feed") {
-    return <img alt="" aria-hidden="true" className="nav-workflow-image nav-feed-image" src="/feed3.svg" />;
+    return (
+      <img
+        alt=""
+        aria-hidden="true"
+        className="nav-workflow-image nav-feed-image"
+        src={active ? "/feeds-active.svg" : "/feeds.svg"}
+      />
+    );
   }
   if (tab === "history") {
     return <img alt="" aria-hidden="true" className="nav-workflow-image" src="/time.svg" />;
@@ -7541,7 +7548,7 @@ ${prompt}`;
             title="워크플로우"
             type="button"
           >
-            <span className="nav-icon"><NavIcon tab="workflow" /></span>
+            <span className="nav-icon"><NavIcon tab="workflow" active={isActiveTab("workflow")} /></span>
             <span className="nav-label">워크</span>
           </button>
           <button
@@ -7551,7 +7558,7 @@ ${prompt}`;
             title="피드"
             type="button"
           >
-            <span className="nav-icon"><NavIcon tab="feed" /></span>
+            <span className="nav-icon"><NavIcon tab="feed" active={isActiveTab("feed")} /></span>
             <span className="nav-label">피드</span>
           </button>
           <button
@@ -7561,7 +7568,7 @@ ${prompt}`;
             title="기록"
             type="button"
           >
-            <span className="nav-icon"><NavIcon tab="history" /></span>
+            <span className="nav-icon"><NavIcon tab="history" active={isActiveTab("history")} /></span>
             <span className="nav-label">기록</span>
           </button>
           <button
@@ -7571,7 +7578,7 @@ ${prompt}`;
             title="설정"
             type="button"
           >
-            <span className="nav-icon"><NavIcon tab="settings" /></span>
+            <span className="nav-icon"><NavIcon tab="settings" active={isActiveTab("settings")} /></span>
             <span className="nav-label">설정</span>
           </button>
         </nav>
