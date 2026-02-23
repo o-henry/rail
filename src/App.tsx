@@ -4733,22 +4733,6 @@ function App() {
     }
   }
 
-  async function waitForAuthProbe(
-    attempts = 5,
-    delayMs = 280,
-  ): Promise<AuthProbeResult | null> {
-    for (let idx = 0; idx < attempts; idx += 1) {
-      const probe = await refreshAuthStateFromEngine(true);
-      if (probe && (probe.state === "authenticated" || probe.state === "login_required")) {
-        return probe;
-      }
-      if (idx < attempts - 1) {
-        await new Promise((resolve) => window.setTimeout(resolve, delayMs));
-      }
-    }
-    return null;
-  }
-
   async function onLoginCodex() {
     setError("");
     const shouldLogout = loginCompleted;
@@ -4756,17 +4740,10 @@ function App() {
       await ensureEngineStarted();
       if (shouldLogout) {
         await invoke("logout_codex");
-        let probe = await waitForAuthProbe(6, 260);
-        if (probe?.state === "authenticated") {
-          await invoke("engine_stop");
-          setEngineStarted(false);
-          await invoke("engine_start", { cwd });
-          setEngineStarted(true);
-          probe = await waitForAuthProbe(6, 260);
-        }
-        if (probe?.state === "authenticated") {
-          throw new Error("세션이 유지되고 있습니다. 앱을 완전히 종료 후 다시 시도해주세요.");
-        }
+        await invoke("engine_stop");
+        setEngineStarted(false);
+        await invoke("engine_start", { cwd });
+        setEngineStarted(true);
         setLoginCompleted(false);
         setAuthMode("unknown");
         setUsageInfoText("");
