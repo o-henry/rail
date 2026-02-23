@@ -3502,6 +3502,73 @@ function applyPresetTurnPolicies(kind: PresetKind, nodes: GraphNode[]): GraphNod
   });
 }
 
+function simplifyPresetForSimpleWorkflow(graphData: GraphData): GraphData {
+  if (!SIMPLE_WORKFLOW_UI) {
+    return graphData;
+  }
+
+  const turnNodes = graphData.nodes.filter((node) => node.type === "turn");
+  const nodeMap = new Map(graphData.nodes.map((node) => [node.id, node] as const));
+  const outgoingMap = new Map<string, string[]>();
+
+  for (const edge of graphData.edges) {
+    const fromId = edge.from.nodeId;
+    const toId = edge.to.nodeId;
+    const rows = outgoingMap.get(fromId) ?? [];
+    rows.push(toId);
+    outgoingMap.set(fromId, rows);
+  }
+
+  const edgeSet = new Set<string>();
+  const nextEdges: GraphEdge[] = [];
+  const pushEdge = (fromId: string, toId: string) => {
+    if (fromId === toId) {
+      return;
+    }
+    const key = `${fromId}->${toId}`;
+    if (edgeSet.has(key)) {
+      return;
+    }
+    edgeSet.add(key);
+    nextEdges.push({
+      from: { nodeId: fromId, port: "out" },
+      to: { nodeId: toId, port: "in" },
+    });
+  };
+
+  for (const source of turnNodes) {
+    const queue = [...(outgoingMap.get(source.id) ?? [])];
+    const visitedInternal = new Set<string>();
+    while (queue.length > 0) {
+      const currentId = queue.shift();
+      if (!currentId || currentId === source.id) {
+        continue;
+      }
+      const currentNode = nodeMap.get(currentId);
+      if (!currentNode) {
+        continue;
+      }
+      if (currentNode.type === "turn") {
+        pushEdge(source.id, currentId);
+        continue;
+      }
+      if (visitedInternal.has(currentId)) {
+        continue;
+      }
+      visitedInternal.add(currentId);
+      for (const nextId of outgoingMap.get(currentId) ?? []) {
+        queue.push(nextId);
+      }
+    }
+  }
+
+  return {
+    ...graphData,
+    nodes: turnNodes,
+    edges: nextEdges,
+  };
+}
+
 function buildValidationPreset(): GraphData {
   const nodes: GraphNode[] = [
     makePresetNode("turn-intake", "turn", 120, 120, {
@@ -6078,10 +6145,11 @@ function App() {
 
   function applyPreset(kind: PresetKind) {
     const builtPreset = buildPresetGraphByKind(kind);
-    const preset: GraphData = {
+    const presetWithPolicies: GraphData = {
       ...builtPreset,
       nodes: applyPresetTurnPolicies(kind, builtPreset.nodes),
     };
+    const preset = simplifyPresetForSimpleWorkflow(presetWithPolicies);
     const nextPreset = autoArrangeGraphLayout({
       ...preset,
       knowledge: normalizeKnowledgeConfig(graph.knowledge),
