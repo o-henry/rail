@@ -4012,15 +4012,10 @@ function buildCreativePreset(): GraphData {
       role: "IDEA CRITIC AGENT",
       cwd: ".",
       promptTemplate:
-        "아이디어를 냉정하게 평가해 JSON으로 출력하라.\n" +
-        '{ "DECISION":"PASS|REJECT", "topIdeas":[{"idea":"...","reason":"...","risk":"..."}], "rejectedReasons":["..."] }\n' +
+        "아이디어를 냉정하게 평가해 최상위 후보 3개를 선정하라.\n" +
+        "형식:\n" +
+        "1) 후보명\n2) 왜 강력한지\n3) 실제 구현 리스크\n4) 차별화 포인트\n" +
         "입력: {{input}}",
-    }),
-    makePresetNode("gate-creative", "gate", 720, 120, {
-      decisionPath: "DECISION",
-      passNodeId: "turn-creative-final",
-      rejectNodeId: "transform-creative-rework",
-      schemaJson: "{\"type\":\"object\",\"required\":[\"DECISION\"]}",
     }),
     makePresetNode("turn-creative-final", "turn", 1020, 40, {
       model: "GPT-5.3-Codex",
@@ -4028,13 +4023,9 @@ function buildCreativePreset(): GraphData {
       cwd: ".",
       promptTemplate:
         "선정된 아이디어를 실전용 제안서로 작성하라.\n" +
+        "주의: 내부 파서/분기/스키마 같은 시스템 구현 설명은 금지하고, 사용자 제품/기능 전략에만 집중하라.\n" +
         "구성: 컨셉, 차별점, 실행 단계, 리스크 대응, 성공 지표.\n" +
         "입력: {{input}}",
-    }),
-    makePresetNode("transform-creative-rework", "transform", 1020, 220, {
-      mode: "template",
-      template:
-        "REJECT. 아이디어를 더 과감하고 차별적으로 재작성하세요.\n평가에서 낮았던 이유를 반드시 반영.\n원문: {{input}}",
     }),
   ];
 
@@ -4049,15 +4040,7 @@ function buildCreativePreset(): GraphData {
     },
     {
       from: { nodeId: "turn-creative-critic", port: "out" },
-      to: { nodeId: "gate-creative", port: "in" },
-    },
-    {
-      from: { nodeId: "gate-creative", port: "out" },
       to: { nodeId: "turn-creative-final", port: "in" },
-    },
-    {
-      from: { nodeId: "gate-creative", port: "out" },
-      to: { nodeId: "transform-creative-rework", port: "in" },
     },
   ];
 
@@ -10846,7 +10829,9 @@ ${prompt}`;
                             <span>{avatarLabel}</span>
                           </div>
                           <div className="feed-card-title-wrap">
-                            <h3>{post.agentName}</h3>
+                            <h3 className={post.nodeType === "gate" ? "gate-node-title" : undefined}>
+                              {post.agentName}
+                            </h3>
                             <div className="feed-card-sub">{post.roleLabel}</div>
                           </div>
                           <div className="feed-card-head-actions">
