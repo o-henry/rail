@@ -8668,7 +8668,7 @@ ${prompt}`;
                       onClick={() => setFeedCategory(row.key)}
                       type="button"
                     >
-                      {row.label}
+                      <span className="feed-topic-label">{row.label}</span>
                       {count > 0 && <span className="feed-topic-count">{count}</span>}
                     </button>
                   );

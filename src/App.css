@@ -1830,7 +1830,7 @@ h3 {
 
 .feed-topbar h2 {
   margin: 0;
-  font-size: 34px;
+  font-size: 20px;
   font-family: "Galmuri14", "Noto Sans KR", sans-serif;
   letter-spacing: -0.015em;
   color: #14181f;
@@ -1906,6 +1906,11 @@ h3 {
   font-size: 13px;
 }
 
+.feed-topic-label {
+  position: relative;
+  top: 2px;
+}
+
 .feed-topic-tabs button:hover {
   background: #eceff4;
 }
@@ -1949,7 +1954,7 @@ h3 {
 
 .feed-section-title {
   margin: 2px 0 2px;
-  font-size: 24px;
+  font-size: 20px;
   font-family: "Galmuri14", "Noto Sans KR", sans-serif;
   letter-spacing: -0.01em;
   color: #161a20;
