@@ -4722,20 +4722,6 @@ function App() {
     }
   }
 
-  async function onResetProviderSession(provider: WebProvider) {
-    setWebWorkerBusy(true);
-    setError("");
-    try {
-      await invoke("web_provider_reset_session", { provider });
-      await refreshWebWorkerHealth(true);
-      setStatus(`${webProviderLabel(provider)} 세션 리셋 완료`);
-    } catch (error) {
-      setError(`${webProviderLabel(provider)} 세션 리셋 실패: ${String(error)}`);
-    } finally {
-      setWebWorkerBusy(false);
-    }
-  }
-
   useEffect(() => {
     if (workspaceTab !== "settings") {
       return;
@@ -7459,6 +7445,7 @@ ${prompt}`;
               const row = providerHealthMap[provider];
               const hasContext = row?.contextOpen === true;
               const session = providerSessionStateMeta(row?.sessionState, hasContext);
+              const isChildViewOpen = providerChildViewOpen[provider] === true;
               return (
                 <div className="provider-hub-row" key={`session-${provider}`}>
                   <div className="provider-hub-meta">
@@ -7477,9 +7464,11 @@ ${prompt}`;
                       <span className="settings-button-label">로그인</span>
                     </button>
                     <button
-                      className={`provider-session-toggle provider-session-manage ${hasContext ? "is-active" : ""}`}
-                      disabled={webWorkerBusy || !hasContext}
-                      onClick={() => onResetProviderSession(provider)}
+                      className={`provider-session-toggle provider-session-manage ${isChildViewOpen ? "is-active" : ""}`}
+                      disabled={webWorkerBusy}
+                      onClick={() =>
+                        isChildViewOpen ? onCloseProviderChildView(provider) : onOpenProviderChildView(provider)
+                      }
                       type="button"
                     >
                       <span className="settings-button-label">세션 관리</span>

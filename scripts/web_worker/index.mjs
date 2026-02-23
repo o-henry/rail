@@ -13,6 +13,33 @@ const LOG_PATH =
   path.join(os.homedir(), '.rail', 'web-worker.log');
 const DEFAULT_TIMEOUT_MS = 90_000;
 const WORKER_LOCK_PATH = path.join(PROFILE_ROOT, 'worker.lock.json');
+const SESSION_PROVIDER_CONFIG = {
+  gemini: {
+    homeUrls: ['https://gemini.google.com/app', 'https://gemini.google.com/'],
+    activeSignals: ['gemini.google.com'],
+    loginSignals: ['accounts.google.com'],
+  },
+  gpt: {
+    homeUrls: ['https://chatgpt.com/'],
+    activeSignals: ['chatgpt.com'],
+    loginSignals: ['auth.openai.com', 'chatgpt.com/auth'],
+  },
+  grok: {
+    homeUrls: ['https://grok.com/'],
+    activeSignals: ['grok.com'],
+    loginSignals: ['accounts.x.com', 'x.com/i/flow/login', 'grok.com/login'],
+  },
+  perplexity: {
+    homeUrls: ['https://www.perplexity.ai/'],
+    activeSignals: ['perplexity.ai'],
+    loginSignals: ['perplexity.ai/sign-in', 'perplexity.ai/login'],
+  },
+  claude: {
+    homeUrls: ['https://claude.ai/'],
+    activeSignals: ['claude.ai'],
+    loginSignals: ['claude.ai/login'],
+  },
+};
 
 const state = {
   providers: new Map(),
@@ -239,20 +266,22 @@ function inferSessionState(provider, sanitizedUrl, contextOpen = true) {
   if (!sanitizedUrl) {
     return 'unknown';
   }
+  const config = SESSION_PROVIDER_CONFIG[provider];
+  if (!config) {
+    return 'unknown';
+  }
   const lower = sanitizedUrl.toLowerCase();
-  if (provider === 'gemini') {
-    if (lower.includes('accounts.google.com')) {
-      return 'login_required';
-    }
-    if (lower.includes('gemini.google.com')) {
-      return 'active';
-    }
+  if (config.loginSignals.some((signal) => lower.includes(signal))) {
+    return 'login_required';
+  }
+  if (config.activeSignals.some((signal) => lower.includes(signal))) {
+    return 'active';
   }
   return 'unknown';
 }
 
 async function ensureProviderContext(provider) {
-  if (provider !== 'gemini') {
+  if (!SESSION_PROVIDER_CONFIG[provider]) {
     throw workerError('UNSUPPORTED_PROVIDER', `지원하지 않는 provider입니다: ${provider}`);
   }
 
@@ -318,6 +347,22 @@ async function ensureProviderContext(provider) {
   return wrapped;
 }
 
+async function ensureProviderLandingPage(provider, page) {
+  const config = SESSION_PROVIDER_CONFIG[provider];
+  if (!config) {
+    throw workerError('UNSUPPORTED_PROVIDER', `지원하지 않는 provider입니다: ${provider}`);
+  }
+  for (const url of config.homeUrls) {
+    try {
+      await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 45_000 });
+      return;
+    } catch {
+      // try next
+    }
+  }
+  throw workerError('NAVIGATION_FAILED', `${provider} 페이지로 이동하지 못했습니다.`);
+}
+
 async function waitForFirstVisible(page, selectors, timeoutMs) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
@@ -360,16 +405,7 @@ async function isLikelyNotLoggedIn(page) {
 }
 
 async function ensureGeminiPage(page) {
-  const candidates = ['https://gemini.google.com/app', 'https://gemini.google.com/'];
-  for (const url of candidates) {
-    try {
-      await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 45_000 });
-      return;
-    } catch {
-      // try next
-    }
-  }
-  throw workerError('NAVIGATION_FAILED', 'Gemini 페이지로 이동하지 못했습니다.');
+  await ensureProviderLandingPage('gemini', page);
 }
 
 async function fillPromptAndSubmit(page, prompt) {
@@ -571,11 +607,8 @@ async function runGemini({ prompt, timeoutMs }) {
 }
 
 async function openProviderSession(provider) {
-  if (provider !== 'gemini') {
-    throw workerError('UNSUPPORTED_PROVIDER', `지원하지 않는 provider입니다: ${provider}`);
-  }
   const wrapped = await ensureProviderContext(provider);
-  await ensureGeminiPage(wrapped.page);
+  await ensureProviderLandingPage(provider, wrapped.page);
   try {
     await wrapped.page.bringToFront();
   } catch {
