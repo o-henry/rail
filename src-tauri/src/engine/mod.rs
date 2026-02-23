@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::{
     collections::HashMap,
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::{
         atomic::{AtomicBool, AtomicU64, Ordering},
         Arc,
@@ -131,6 +131,16 @@ pub struct UsageCheckResult {
     raw: Value,
 }
 
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AuthProbeResult {
+    state: String,
+    source_method: Option<String>,
+    auth_mode: Option<String>,
+    raw: Option<Value>,
+    detail: Option<String>,
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct WebProviderRunMeta {
@@ -166,11 +176,14 @@ pub struct WebWorkerHealth {
 
 impl EngineRuntime {
     async fn start(app: AppHandle, cwd: String) -> Result<Arc<Self>, String> {
+        let codex_home = resolve_codex_home_dir(&app).await?;
+
         let mut child = Command::new("codex")
             .arg("app-server")
             .arg("--listen")
             .arg("stdio://")
             .current_dir(cwd)
+            .env("CODEX_HOME", &codex_home)
             .stdin(std::process::Stdio::piped())
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::piped())
@@ -653,23 +666,46 @@ async fn resolve_web_worker_dirs(app: &AppHandle) -> Result<(PathBuf, PathBuf), 
         .path()
         .app_data_dir()
         .map_err(|e| format!("failed to resolve app data dir: {e}"))?;
-    tokio::fs::create_dir_all(&app_data_dir)
-        .await
-        .map_err(|e| format!("failed to create app data dir: {e}"))?;
+    ensure_private_dir(&app_data_dir, "app data dir").await?;
 
     let profile_root = app_data_dir.join("providers");
-    tokio::fs::create_dir_all(&profile_root)
-        .await
-        .map_err(|e| format!("failed to create provider profile root: {e}"))?;
+    ensure_private_dir(&profile_root, "provider profile root").await?;
 
     let log_path = app_data_dir.join("web-worker.log");
     if let Some(parent) = log_path.parent() {
-        tokio::fs::create_dir_all(parent)
-            .await
-            .map_err(|e| format!("failed to create worker log dir: {e}"))?;
+        ensure_private_dir(parent, "worker log dir").await?;
     }
 
     Ok((profile_root, log_path))
+}
+
+async fn resolve_codex_home_dir(app: &AppHandle) -> Result<PathBuf, String> {
+    let app_data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("failed to resolve app data dir: {e}"))?;
+    ensure_private_dir(&app_data_dir, "app data dir").await?;
+
+    let codex_home = app_data_dir.join("codex-home");
+    ensure_private_dir(&codex_home, "codex home dir").await?;
+    Ok(codex_home)
+}
+
+async fn ensure_private_dir(path: &Path, label: &str) -> Result<(), String> {
+    tokio::fs::create_dir_all(path)
+        .await
+        .map_err(|e| format!("failed to create {label}: {e}"))?;
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+
+        tokio::fs::set_permissions(path, std::fs::Permissions::from_mode(0o700))
+            .await
+            .map_err(|e| format!("failed to tighten permissions for {label}: {e}"))?;
+    }
+
+    Ok(())
 }
 
 async fn handle_incoming_line(
@@ -903,6 +939,78 @@ fn extract_string_by_paths(value: &Value, paths: &[&str]) -> Option<String> {
     None
 }
 
+fn extract_bool_by_paths(value: &Value, paths: &[&str]) -> Option<bool> {
+    for path in paths {
+        let mut current = value;
+        let mut found = true;
+
+        for part in path.split('.') {
+            match current.get(part) {
+                Some(next) => current = next,
+                None => {
+                    found = false;
+                    break;
+                }
+            }
+        }
+
+        if found {
+            if let Some(flag) = current.as_bool() {
+                return Some(flag);
+            }
+        }
+    }
+    None
+}
+
+fn extract_auth_mode(value: &Value, depth: usize) -> Option<String> {
+    if depth > 4 {
+        return None;
+    }
+
+    match value {
+        Value::String(mode) => {
+            let normalized = mode.trim().to_lowercase();
+            if normalized == "chatgpt" {
+                Some("chatgpt".to_string())
+            } else if normalized == "apikey" || normalized == "api_key" || normalized == "api-key" {
+                Some("apikey".to_string())
+            } else {
+                None
+            }
+        }
+        Value::Array(items) => items.iter().find_map(|item| extract_auth_mode(item, depth + 1)),
+        Value::Object(map) => {
+            if let Some(mode) = map
+                .get("authMode")
+                .and_then(|candidate| extract_auth_mode(candidate, depth + 1))
+            {
+                return Some(mode);
+            }
+            if let Some(mode) = map
+                .get("auth_mode")
+                .and_then(|candidate| extract_auth_mode(candidate, depth + 1))
+            {
+                return Some(mode);
+            }
+
+            ["account", "user", "data", "payload"]
+                .iter()
+                .filter_map(|key| map.get(*key))
+                .find_map(|candidate| extract_auth_mode(candidate, depth + 1))
+        }
+        _ => None,
+    }
+}
+
+fn is_login_required_error(message: &str) -> bool {
+    let lower = message.to_lowercase();
+    (lower.contains("login") || lower.contains("auth"))
+        && (lower.contains("required")
+            || lower.contains("unauthorized")
+            || lower.contains("forbidden"))
+}
+
 #[tauri::command]
 pub async fn engine_start(
     app: AppHandle,
@@ -1073,7 +1181,9 @@ pub async fn login_chatgpt(state: State<'_, EngineManager>) -> Result<LoginChatg
 #[tauri::command]
 pub async fn usage_check(state: State<'_, EngineManager>) -> Result<UsageCheckResult, String> {
     let runtime = current_runtime(&state).await?;
-    let candidates: [(&str, Value); 4] = [
+    let candidates: [(&str, Value); 6] = [
+        ("account/rateLimits/read", Value::Null),
+        ("account/read", json!({})),
         ("account/usage/get", json!({})),
         ("account/usage", json!({})),
         ("account/get", json!({})),
@@ -1102,6 +1212,109 @@ pub async fn usage_check(state: State<'_, EngineManager>) -> Result<UsageCheckRe
 }
 
 #[tauri::command]
+pub async fn auth_probe(state: State<'_, EngineManager>) -> Result<AuthProbeResult, String> {
+    let runtime = current_runtime(&state).await?;
+    let candidates: [(&str, Value); 6] = [
+        ("account/read", json!({})),
+        ("account/rateLimits/read", Value::Null),
+        ("account/status", json!({})),
+        ("account/get", json!({})),
+        ("account/usage/get", json!({})),
+        ("account/usage", json!({})),
+    ];
+    let auth_bool_paths = [
+        "authenticated",
+        "isAuthenticated",
+        "loggedIn",
+        "isLoggedIn",
+        "account.authenticated",
+        "account.loggedIn",
+    ];
+
+    let mut errors: Vec<String> = Vec::new();
+    let mut saw_login_required = false;
+
+    for (method, params) in candidates {
+        match runtime.request(method, params).await {
+            Ok(raw) => {
+                let auth_mode = extract_auth_mode(&raw, 0);
+                let state = if auth_mode.is_some() {
+                    "authenticated"
+                } else if let Some(flag) = extract_bool_by_paths(&raw, &auth_bool_paths) {
+                    if flag {
+                        "authenticated"
+                    } else {
+                        "login_required"
+                    }
+                } else if method.starts_with("account/usage")
+                    || method == "account/rateLimits/read"
+                    || method == "account/read"
+                {
+                    // Account endpoints succeeded, so auth is effectively active.
+                    "authenticated"
+                } else {
+                    "unknown"
+                };
+
+                return Ok(AuthProbeResult {
+                    state: state.to_string(),
+                    source_method: Some(method.to_string()),
+                    auth_mode,
+                    raw: Some(raw),
+                    detail: None,
+                });
+            }
+            Err(err) => {
+                if is_login_required_error(&err) {
+                    saw_login_required = true;
+                }
+                errors.push(format!("{method}: {err}"));
+            }
+        }
+    }
+
+    let state = if saw_login_required {
+        "login_required"
+    } else {
+        "unknown"
+    };
+    let detail = if errors.is_empty() {
+        None
+    } else {
+        Some(errors.join(" | "))
+    };
+
+    Ok(AuthProbeResult {
+        state: state.to_string(),
+        source_method: None,
+        auth_mode: None,
+        raw: None,
+        detail,
+    })
+}
+
+#[tauri::command]
+pub async fn logout_codex(state: State<'_, EngineManager>) -> Result<(), String> {
+    let runtime = current_runtime(&state).await?;
+    let candidates: [(&str, Value); 2] = [("account/logout", Value::Null), ("account/logout", json!({}))];
+    let mut errors: Vec<String> = Vec::new();
+
+    for (method, params) in candidates {
+        match runtime.request(method, params).await {
+            Ok(_) => return Ok(()),
+            Err(err) => {
+                errors.push(format!("{method}: {err}"));
+            }
+        }
+    }
+
+    Err(format!(
+        "failed to logout from app-server; attempted methods: {}",
+        errors.join(" | ")
+    ))
+}
+
+#[tauri::command]
 pub async fn thread_start(
     state: State<'_, EngineManager>,
     model: String,
@@ -1114,7 +1327,7 @@ pub async fn thread_start(
             json!({
               "model": model,
               "cwd": cwd,
-              "sandboxPolicy": "readOnly"
+              "sandbox": "read-only"
             }),
         )
         .await?;
@@ -1155,7 +1368,9 @@ pub async fn turn_start(
                   "text": text
                 }
               ],
-              "sandboxPolicy": "readOnly"
+              "sandboxPolicy": {
+                "type": "readOnly"
+              }
             }),
         )
         .await

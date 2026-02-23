@@ -13,6 +13,8 @@ pub fn run() {
             engine::engine_start,
             engine::engine_stop,
             engine::login_chatgpt,
+            engine::logout_codex,
+            engine::auth_probe,
             engine::usage_check,
             engine::thread_start,
             engine::turn_start,
