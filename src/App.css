@@ -1413,6 +1413,25 @@ h3 {
   width: 100%;
 }
 
+.inspector-section .fancy-select-trigger {
+  height: 36px;
+  min-height: 36px;
+  max-height: 36px;
+  padding: 0 12px;
+}
+
+.inspector-section .fancy-select-value {
+  font-size: 12px;
+  line-height: 1.2;
+}
+
+.inspector-section .fancy-select-option {
+  height: 36px;
+  min-height: 36px;
+  padding: 0 10px;
+  font-size: 12px;
+}
+
 .inspector-section label {
   gap: 10px;
 }
