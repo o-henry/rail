@@ -280,6 +280,28 @@ function inferSessionState(provider, sanitizedUrl, contextOpen = true) {
   return 'unknown';
 }
 
+async function inferSessionStateWithPage(provider, page, contextOpen = true) {
+  const safeUrl = contextOpen ? sanitizeUrlForUi(page?.url?.() ?? null) : null;
+  const urlBased = inferSessionState(provider, safeUrl, contextOpen);
+  if (!contextOpen || !page || page.isClosed()) {
+    return { safeUrl, sessionState: urlBased };
+  }
+
+  if (provider === 'gemini') {
+    try {
+      const loginRequired = await isLikelyNotLoggedIn(page);
+      if (loginRequired) {
+        return { safeUrl, sessionState: 'login_required' };
+      }
+      return { safeUrl, sessionState: urlBased === 'unknown' ? 'active' : urlBased };
+    } catch {
+      return { safeUrl, sessionState: urlBased };
+    }
+  }
+
+  return { safeUrl, sessionState: urlBased };
+}
+
 async function ensureProviderContext(provider) {
   if (!SESSION_PROVIDER_CONFIG[provider]) {
     throw workerError('UNSUPPORTED_PROVIDER', `지원하지 않는 provider입니다: ${provider}`);
@@ -635,7 +657,11 @@ async function openProviderSession(provider) {
     // ignore
   }
 
-  const safeUrl = sanitizeUrlForUi(wrapped.page.url());
+  const { safeUrl, sessionState } = await inferSessionStateWithPage(
+    provider,
+    wrapped.page,
+    !wrapped.contextClosed,
+  );
   notify('web/progress', {
     provider,
     stage: 'session_open',
@@ -645,7 +671,7 @@ async function openProviderSession(provider) {
     ok: true,
     provider,
     url: safeUrl,
-    sessionState: inferSessionState(provider, safeUrl),
+    sessionState,
   };
 }
 
@@ -653,12 +679,16 @@ async function getHealthResult() {
   const providerStatuses = {};
   for (const [provider, wrapped] of state.providers.entries()) {
     const contextOpen = !wrapped.contextClosed;
-    const safeUrl = contextOpen ? sanitizeUrlForUi(wrapped.page?.url?.() ?? null) : null;
+    const { safeUrl, sessionState } = await inferSessionStateWithPage(
+      provider,
+      wrapped.page,
+      contextOpen,
+    );
     providerStatuses[provider] = {
       contextOpen,
       profileDir: wrapped.profileDir,
       url: safeUrl,
-      sessionState: inferSessionState(provider, safeUrl, contextOpen),
+      sessionState,
     };
   }
 
