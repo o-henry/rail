@@ -16,7 +16,7 @@ const WORKER_LOCK_PATH = path.join(PROFILE_ROOT, 'worker.lock.json');
 const SESSION_PROVIDER_CONFIG = {
   gemini: {
     homeUrls: ['https://gemini.google.com/app', 'https://gemini.google.com/'],
-    activeSignals: ['gemini.google.com'],
+    activeSignals: ['gemini.google.com/app'],
     loginSignals: ['accounts.google.com'],
   },
   gpt: {
@@ -280,6 +280,34 @@ function inferSessionState(provider, sanitizedUrl, contextOpen = true) {
   return 'unknown';
 }
 
+const GEMINI_PROMPT_INPUT_SELECTORS = [
+  'textarea[aria-label*="prompt" i]',
+  'textarea[aria-label*="질문" i]',
+  'div[contenteditable="true"][role="textbox"]',
+  'div[contenteditable="true"][aria-label*="prompt" i]',
+  'rich-textarea div[contenteditable="true"]',
+  'textarea',
+];
+
+async function hasVisibleSelector(page, selectors) {
+  for (const selector of selectors) {
+    const locator = page.locator(selector).first();
+    try {
+      const count = await locator.count();
+      if (count > 0 && (await locator.isVisible())) {
+        return true;
+      }
+    } catch {
+      // continue
+    }
+  }
+  return false;
+}
+
+async function isGeminiPromptReady(page) {
+  return hasVisibleSelector(page, GEMINI_PROMPT_INPUT_SELECTORS);
+}
+
 async function inferSessionStateWithPage(provider, page, contextOpen = true) {
   const safeUrl = contextOpen ? sanitizeUrlForUi(page?.url?.() ?? null) : null;
   const urlBased = inferSessionState(provider, safeUrl, contextOpen);
@@ -293,7 +321,11 @@ async function inferSessionStateWithPage(provider, page, contextOpen = true) {
       if (loginRequired) {
         return { safeUrl, sessionState: 'login_required' };
       }
-      return { safeUrl, sessionState: urlBased === 'unknown' ? 'active' : urlBased };
+      const promptReady = await isGeminiPromptReady(page);
+      if (promptReady) {
+        return { safeUrl, sessionState: 'active' };
+      }
+      return { safeUrl, sessionState: 'unknown' };
     } catch {
       return { safeUrl, sessionState: urlBased };
     }
@@ -430,17 +462,10 @@ async function isLikelyNotLoggedIn(page) {
     'button:has-text("Sign in")',
     'a:has-text("Sign in")',
     'text=/로그인|Sign in|계정 선택/i',
+    'text=/지원되지 않는 명령줄 플래그|브라우저 또는 앱이 안전하지 않을 수 있습니다/i',
   ];
-  for (const selector of loginSignals) {
-    const locator = page.locator(selector).first();
-    try {
-      const count = await locator.count();
-      if (count > 0 && (await locator.isVisible())) {
-        return true;
-      }
-    } catch {
-      // continue
-    }
+  if (await hasVisibleSelector(page, loginSignals)) {
+    return true;
   }
 
   return /accounts\.google\.com/.test(page.url());
@@ -451,16 +476,7 @@ async function ensureGeminiPage(page) {
 }
 
 async function fillPromptAndSubmit(page, prompt) {
-  const inputSelectors = [
-    'textarea[aria-label*="prompt" i]',
-    'textarea[aria-label*="질문" i]',
-    'div[contenteditable="true"][role="textbox"]',
-    'div[contenteditable="true"][aria-label*="prompt" i]',
-    'rich-textarea div[contenteditable="true"]',
-    'textarea',
-  ];
-
-  const input = await waitForFirstVisible(page, inputSelectors, 15_000);
+  const input = await waitForFirstVisible(page, GEMINI_PROMPT_INPUT_SELECTORS, 15_000);
   if (!input) {
     const notLoggedIn = await isLikelyNotLoggedIn(page);
     if (notLoggedIn) {
