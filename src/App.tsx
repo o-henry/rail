@@ -9599,7 +9599,9 @@ ${prompt}`;
                                 </>
                               ) : (
                                 <div className="node-head-title-row">
-                                  <strong>{nodeTypeLabel(node.type)}</strong>
+                                  <strong className={node.type === "gate" ? "gate-node-title" : undefined}>
+                                    {nodeTypeLabel(node.type)}
+                                  </strong>
                                 </div>
                               )}
                             </div>
