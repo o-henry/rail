@@ -1047,6 +1047,20 @@ function formatResetAt(input: unknown): string {
   return date.toLocaleString("ko-KR", { hour12: false });
 }
 
+function formatRunDateTime(input?: string | null): string {
+  if (!input) {
+    return "-";
+  }
+  const date = new Date(input);
+  if (Number.isNaN(date.getTime())) {
+    return input;
+  }
+  return date.toLocaleString("ko-KR", {
+    hour12: false,
+    timeZone: "Asia/Seoul",
+  });
+}
+
 function formatUsedPercent(input: unknown): string {
   const value = readNumber(input);
   if (value == null || !Number.isFinite(value)) {
@@ -3503,6 +3517,7 @@ function App() {
   const [lastSavedRunFile, setLastSavedRunFile] = useState("");
   const [nodeStates, setNodeStates] = useState<Record<string, NodeRunState>>({});
   const [isGraphRunning, setIsGraphRunning] = useState(false);
+  const [isRunStarting, setIsRunStarting] = useState(false);
   const [canvasZoom, setCanvasZoom] = useState(1);
   const [panMode, setPanMode] = useState(false);
   const [canvasFullscreen, setCanvasFullscreen] = useState(false);
@@ -3545,6 +3560,7 @@ function App() {
   const feedRunCacheRef = useRef<Record<string, RunRecord>>({});
   const feedRawAttachmentRef = useRef<Record<string, string>>({});
   const pendingNodeRequestsRef = useRef<Record<string, string[]>>({});
+  const runStartGuardRef = useRef(false);
 
   const activeApproval = pendingApprovals[0];
   const selectedNode = graph.nodes.find((node) => node.id === selectedNodeId) ?? null;
@@ -6583,10 +6599,22 @@ ${prompt}`;
   }
 
   async function onRunGraph() {
-    if (isGraphRunning) {
+    if (isGraphRunning || runStartGuardRef.current) {
       return;
     }
 
+    const incomingNodeIds = new Set(graph.edges.map((edge) => edge.to.nodeId));
+    const directInputNodeIds = graph.nodes.filter((node) => !incomingNodeIds.has(node.id)).map((node) => node.id);
+    if (directInputNodeIds.length !== 1) {
+      setError(
+        `질문 직접 입력 노드는 1개여야 합니다. 현재 ${directInputNodeIds.length}개입니다. 노드 연결을 정리하세요.`,
+      );
+      setStatus("그래프 실행 대기");
+      return;
+    }
+
+    runStartGuardRef.current = true;
+    setIsRunStarting(true);
     setError("");
     setStatus("그래프 실행 시작");
     setIsGraphRunning(true);
@@ -7071,6 +7099,8 @@ ${prompt}`;
       activeWebNodeIdRef.current = "";
       activeWebProviderRef.current = null;
       setIsGraphRunning(false);
+      setIsRunStarting(false);
+      runStartGuardRef.current = false;
       cancelRequestedRef.current = false;
       collectingRunRef.current = false;
       setActiveFeedRunMeta(null);
@@ -7541,7 +7571,7 @@ ${prompt}`;
   };
   const currentFeedPosts = feedCategoryPosts[feedCategory] ?? filteredFeedPosts;
   const feedCategoryMeta: Array<{ key: FeedCategory; label: string }> = [
-    { key: "all_posts", label: "전체 포스트" },
+    { key: "all_posts", label: "전체포스트" },
     { key: "completed_posts", label: "완료 답변" },
     { key: "web_posts", label: "웹 리서치" },
     { key: "error_posts", label: "오류/취소" },
@@ -7899,7 +7929,7 @@ ${prompt}`;
                     <button
                       aria-label="실행"
                       className="canvas-icon-btn play"
-                      disabled={isGraphRunning || graph.nodes.length === 0}
+                      disabled={isGraphRunning || isRunStarting || graph.nodes.length === 0}
                       onClick={onRunGraph}
                       title="실행"
                       type="button"
@@ -7949,6 +7979,9 @@ ${prompt}`;
                     onKeyDown={(e) => {
                       if (e.key === "Enter" && !e.shiftKey) {
                         e.preventDefault();
+                        if (isGraphRunning || isRunStarting || graph.nodes.length === 0) {
+                          return;
+                        }
                         void onRunGraph();
                       }
                     }}
@@ -7960,7 +7993,7 @@ ${prompt}`;
                   <div className="question-input-footer">
                     <button
                       className="primary-action question-create-button"
-                      disabled={isGraphRunning || graph.nodes.length === 0}
+                      disabled={isGraphRunning || isRunStarting || graph.nodes.length === 0}
                       onClick={onRunGraph}
                       type="button"
                     >
@@ -8508,7 +8541,7 @@ ${prompt}`;
           <section className="feed-layout">
             <article className="panel-card feed-main">
               <div className="feed-topbar">
-                <h2>Feed</h2>
+                <h2>피드</h2>
                 <button
                   className={`feed-filter-toggle ${feedFilterOpen ? "is-open" : ""}`}
                   onClick={() => setFeedFilterOpen((prev) => !prev)}
@@ -8584,7 +8617,9 @@ ${prompt}`;
                   const count = feedCategoryPosts[row.key].length;
                   return (
                     <button
-                      className={feedCategory === row.key ? "is-active" : ""}
+                      className={`${feedCategory === row.key ? "is-active" : ""} ${
+                        row.key === "all_posts" ? "is-all-posts" : ""
+                      }`.trim()}
                       key={row.key}
                       onClick={() => setFeedCategory(row.key)}
                       type="button"
@@ -8623,9 +8658,6 @@ ${prompt}`;
                     return (
                       <section className="feed-card feed-card-sns" key={post.id}>
                         <div className="feed-card-head">
-                          <div className="feed-author-avatar" aria-hidden="true">
-                            {post.agentName.slice(0, 1)}
-                          </div>
                           <div className="feed-card-title-wrap">
                             <h3>{post.agentName}</h3>
                             <div className="feed-card-sub">{post.roleLabel}</div>
@@ -8639,7 +8671,7 @@ ${prompt}`;
                             {isDraftPost ? "LIVE" : score}
                           </span>
                         </div>
-                        {post.question && <div className="feed-card-question">질문: {post.question}</div>}
+                        {post.question && <div className="feed-card-question">Q: {post.question}</div>}
                         <div className="feed-card-summary">{post.summary || "(요약 없음)"}</div>
                         <pre className="feed-sns-content">{visibleContent}</pre>
                         <div className="feed-step-list">
@@ -8752,8 +8784,8 @@ ${prompt}`;
                     </button>
                   </div>
                   <div>실행 ID: {selectedRunDetail.runId}</div>
-                  <div>시작 시간: {selectedRunDetail.startedAt}</div>
-                  <div>종료 시간: {selectedRunDetail.finishedAt ?? "-"}</div>
+                  <div>시작 시간: {formatRunDateTime(selectedRunDetail.startedAt)}</div>
+                  <div>종료 시간: {formatRunDateTime(selectedRunDetail.finishedAt)}</div>
                   <div className="history-detail-content">
                     <div className="history-detail-group">
                       <h3>질문</h3>

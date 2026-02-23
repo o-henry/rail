@@ -1813,9 +1813,8 @@ h3 {
   grid-template-rows: auto auto auto minmax(0, 1fr);
   gap: 14px;
   padding: 18px 20px 14px;
-  border-radius: 20px;
-  background: #f7f8fa;
-  box-shadow: inset 0 0 0 1px #e4e7ed;
+  border-radius: 12px;
+  background: var(--surface);
 }
 
 .feed-topbar {
@@ -1837,20 +1836,20 @@ h3 {
   min-height: 42px;
   height: 42px;
   padding: 0 16px;
-  border-radius: 12px;
+  border-radius: 6px;
   background: #ffffff;
   color: #2c3440;
   font-size: 15px;
-  box-shadow: inset 0 0 0 1px #d7dde8;
+  box-shadow: none;
 }
 
 .feed-filter-toggle.is-open {
   background: #eef2f7;
-  box-shadow: inset 0 0 0 1px #bdc9db;
+  box-shadow: none;
 }
 
 .feed-filter-inline {
-  border-radius: 14px;
+  border-radius: 12px;
   background: #eff2f6;
   padding: 12px;
   display: grid;
@@ -1868,7 +1867,7 @@ h3 {
 .feed-filter-inline input {
   min-height: 38px;
   height: 38px;
-  border-radius: 10px;
+  border-radius: 12px;
 }
 
 .feed-filter-inline .button-row {
@@ -1878,6 +1877,7 @@ h3 {
 .feed-filter-inline .button-row button {
   min-height: 36px;
   height: 36px;
+  border-radius: 6px;
 }
 
 .feed-topic-tabs {
@@ -1889,7 +1889,7 @@ h3 {
 .feed-topic-tabs button {
   min-height: 40px;
   height: 40px;
-  border-radius: 12px;
+  border-radius: 6px;
   padding: 0 15px;
   color: #4d5662;
   background: transparent;
@@ -1898,13 +1898,18 @@ h3 {
   font-size: 15px;
 }
 
+.feed-topic-tabs button.is-all-posts {
+  font-family: "Galmuri14", sans-serif;
+  font-size: 13px;
+}
+
 .feed-topic-tabs button:hover {
   background: #eceff4;
 }
 
 .feed-topic-tabs button.is-active {
   background: #ffffff;
-  box-shadow: inset 0 0 0 1px #d2d8e3;
+  box-shadow: none;
 }
 
 .feed-topic-count {
@@ -1914,7 +1919,7 @@ h3 {
   min-width: 20px;
   height: 20px;
   padding: 0 5px;
-  border-radius: 999px;
+  border-radius: 12px;
   background: #ea3c3c;
   color: #ffffff;
   font-size: 11px;
@@ -1949,7 +1954,7 @@ h3 {
 
 .feed-card {
   border: 0;
-  border-radius: 16px;
+  border-radius: 12px;
   background: #f1f3f6;
   padding: 14px 14px;
   display: grid;
@@ -1957,28 +1962,13 @@ h3 {
 }
 
 .feed-card.feed-card-sns {
-  box-shadow: inset 0 0 0 1px #e3e7ee;
+  box-shadow: none;
 }
 
 .feed-card-head {
   display: flex;
   align-items: center;
   gap: 10px;
-}
-
-.feed-author-avatar {
-  width: 34px;
-  min-width: 34px;
-  height: 34px;
-  min-height: 34px;
-  border-radius: 999px;
-  background: #dbe8fb;
-  color: #253953;
-  display: grid;
-  place-items: center;
-  font-size: 16px;
-  text-transform: uppercase;
-  box-shadow: inset 0 0 0 1px #c6d5ec;
 }
 
 .feed-card-title-wrap {
@@ -1990,8 +1980,9 @@ h3 {
 
 .feed-card-title-wrap h3 {
   margin: 0;
-  font-size: 18px;
+  font-size: 14px;
   line-height: 1.2;
+  font-family: "BasicallyAMono", "Noto Sans KR", sans-serif;
   color: #171d25;
 }
 
@@ -2006,32 +1997,29 @@ h3 {
   min-width: 34px;
   height: 34px;
   min-height: 34px;
-  border-radius: 999px;
+  border-radius: 12px;
   display: grid;
   place-items: center;
   font-size: 12px;
   line-height: 1;
   font-weight: 700;
   background: #ffffff;
-  border: 3px solid #ced8e5;
+  border: 0;
   margin-left: auto;
 }
 
 .feed-score-badge.good {
   color: #1f9960;
-  border-color: #51c48e;
 }
 
 .feed-score-badge.warn {
   color: #d96d1f;
-  border-color: #ef9e63;
 }
 
 .feed-score-badge.live {
   width: 42px;
   min-width: 42px;
   color: #1f68cc;
-  border-color: #7ba8ec;
   font-size: 10px;
   letter-spacing: 0.01em;
 }
@@ -2039,9 +2027,9 @@ h3 {
 .feed-card-question {
   color: #4b5768;
   font-size: 14px;
-  border-radius: 10px;
-  background: #eceff3;
-  padding: 8px 10px;
+  border-radius: 12px;
+  background: #ffffff;
+  padding: 8px 0;
 }
 
 .feed-card-summary {
@@ -2055,12 +2043,12 @@ h3 {
 .feed-sns-content {
   max-height: 220px;
   overflow: auto;
-  border-radius: 10px;
+  border-radius: 12px;
   background: #ffffff;
   padding: 10px 11px;
   font-size: 14px;
   line-height: 1.5;
-  border: 1px solid #dde3eb;
+  border: 0;
   scrollbar-width: none;
 }
 
@@ -2077,7 +2065,7 @@ h3 {
 }
 
 .feed-step-chip {
-  border-radius: 999px;
+  border-radius: 12px;
   padding: 5px 10px;
   background: #e6ecf5;
   color: #355071;
@@ -2100,10 +2088,10 @@ h3 {
   padding: 0 12px;
   font-size: 12px;
   line-height: 1;
-  border-radius: 10px;
+  border-radius: 6px;
   background: #eceff3;
   color: #445266;
-  box-shadow: inset 0 0 0 1px #d8dfe8;
+  box-shadow: none;
 }
 
 .feed-reply-row {
@@ -2116,17 +2104,24 @@ h3 {
 .feed-reply-row input {
   min-height: 36px;
   height: 36px;
-  border-radius: 10px;
+  border-radius: 6px;
   padding: 0 12px;
   font-size: 13px;
   background: #ffffff;
-  border: 1px solid #d8e0ea;
+  border: 0;
+}
+
+.feed-reply-row input:focus,
+.feed-reply-row input:focus-visible {
+  outline: none;
+  box-shadow: none;
+  border-color: transparent;
 }
 
 .feed-reply-row button {
   min-height: 36px;
   height: 36px;
-  border-radius: 10px;
+  border-radius: 6px;
   padding: 0 14px;
   font-size: 13px;
   line-height: 1;

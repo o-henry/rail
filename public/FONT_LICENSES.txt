@@ -1,0 +1,53 @@
+FONT LICENSE NOTICE
+Project: rail
+Last updated: 2026-02-23
+
+This file is included in deployment artifacts from the `public/` directory.
+It documents the fonts used and/or shipped by this service.
+
+---
+1) Galmuri14
+Files:
+- /fonts/galmuri14.ttf
+
+Copyright:
+- Copyright (c) 2019-2025 Lee Minseo (quiple)
+
+License:
+- SIL Open Font License 1.1
+- https://openfontlicense.org
+
+---
+2) Basically A Mono
+Files:
+- /fonts/basically-a-mono-medium.otf
+- /fonts/basically-a-mono-semibold.otf
+- /fonts/basically-a-mono-bold.otf
+
+Copyright:
+- Copyright 2020 Mental Design. All Rights Reserved.
+
+License notice available in bundled font metadata:
+- "All Rights Reserved."
+
+---
+3) 1984-body
+Files:
+- /fonts/1984-body-regular.otf
+- /fonts/1984-body-light.otf
+- /fonts/1984-body-bold.otf
+
+Copyright:
+- Copyright (c) 2024, DAE HWA PHARMACEUTICAL CO., LTD.
+
+License / Permission:
+- Used under direct permission confirmation from the project owner.
+- Internal permission evidence should be retained by the project owner.
+
+---
+Fallback fonts referenced in CSS:
+- IBM Plex Sans
+- Noto Sans KR
+- sans-serif
+
+These fallback fonts are not bundled by this project in `public/fonts`.

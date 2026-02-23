@@ -184,6 +184,7 @@ impl EngineRuntime {
             .arg("stdio://")
             .current_dir(cwd)
             .env("CODEX_HOME", &codex_home)
+            .kill_on_drop(true)
             .stdin(std::process::Stdio::piped())
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::piped())
@@ -463,6 +464,7 @@ impl WebWorkerRuntime {
             .current_dir(project_root)
             .env("RAIL_WEB_PROFILE_ROOT", &profile_root)
             .env("RAIL_WEB_LOG_PATH", &log_path)
+            .kill_on_drop(true)
             .stdin(std::process::Stdio::piped())
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::piped())
@@ -1042,6 +1044,10 @@ pub async fn engine_stop(state: State<'_, EngineManager>) -> Result<(), String> 
     let runtime = state.runtime.lock().await.take();
     if let Some(runtime) = runtime {
         runtime.stop().await?;
+    }
+    let web_worker = state.web_worker.lock().await.take();
+    if let Some(web_worker) = web_worker {
+        web_worker.stop().await?;
     }
     Ok(())
 }
