@@ -1072,6 +1072,31 @@ function formatRunFileLabel(fileName?: string | null): string {
   return trimmed.toUpperCase();
 }
 
+function feedPostStatusLabel(status: FeedPostStatus): string {
+  switch (status) {
+    case "draft":
+      return "작업중";
+    case "done":
+      return "완료";
+    case "failed":
+      return "오류";
+    case "cancelled":
+      return "취소";
+    default:
+      return status;
+  }
+}
+
+function sanitizeShareTitle(input: string): string {
+  const compact = input
+    .trim()
+    .replace(/[\\/:*?"<>|#^\[\]]+/g, " ")
+    .replace(/\s+/g, " ")
+    .slice(0, 60)
+    .trim();
+  return compact || "rail-share";
+}
+
 function formatUsedPercent(input: unknown): string {
   const value = readNumber(input);
   if (value == null || !Number.isFinite(value)) {
@@ -3512,6 +3537,7 @@ function App() {
   const [feedCategory, setFeedCategory] = useState<FeedCategory>("all_posts");
   const [feedFilterOpen, setFeedFilterOpen] = useState(false);
   const [feedExpandedByPost, setFeedExpandedByPost] = useState<Record<string, boolean>>({});
+  const [feedShareMenuPostId, setFeedShareMenuPostId] = useState<string | null>(null);
   const [feedReplyDraftByPost, setFeedReplyDraftByPost] = useState<Record<string, string>>({});
   const [pendingNodeRequests, setPendingNodeRequests] = useState<Record<string, string[]>>({});
   const [activeFeedRunMeta, setActiveFeedRunMeta] = useState<{
@@ -4083,20 +4109,6 @@ function App() {
     }
   }
 
-  async function onExportRunFile(name: string) {
-    const target = name.trim();
-    if (!target) {
-      return;
-    }
-    setError("");
-    try {
-      const exportedPath = await invoke<string>("run_export", { name: target, targetPath: null });
-      setStatus(`실행 기록 내보내기 완료: ${exportedPath}`);
-    } catch (e) {
-      setError(`실행 기록 내보내기 실패: ${String(e)}`);
-    }
-  }
-
   async function onImportRunFile() {
     setError("");
     try {
@@ -4109,6 +4121,93 @@ function App() {
     }
   }
 
+  async function ensureFeedRunRecord(sourceFile: string): Promise<RunRecord | null> {
+    const target = sourceFile.trim();
+    if (!target) {
+      return null;
+    }
+    const cached = feedRunCacheRef.current[target];
+    if (cached) {
+      return cached;
+    }
+    try {
+      const loaded = await invoke<RunRecord>("run_load", { name: target });
+      const normalized = normalizeRunRecord(loaded);
+      feedRunCacheRef.current[target] = normalized;
+      return normalized;
+    } catch {
+      return null;
+    }
+  }
+
+  function buildFeedShareText(post: FeedViewPost, run: RunRecord | null): string {
+    const markdownAttachment = post.attachments.find((attachment) => attachment.kind === "markdown");
+    const rawContent = markdownAttachment?.content?.trim() ?? "";
+    const lines: string[] = [
+      `# ${post.agentName}`,
+      `- 상태: ${feedPostStatusLabel(post.status)}`,
+      `- 역할: ${post.roleLabel}`,
+      `- 생성 시간: ${formatRunDateTime(post.createdAt)}`,
+    ];
+    if (run?.runId) {
+      lines.push(`- 실행 ID: ${run.runId}`);
+    }
+    if (post.sourceFile) {
+      lines.push(`- 기록 파일: ${formatRunFileLabel(post.sourceFile)}`);
+    }
+    if (post.question?.trim()) {
+      lines.push("", "## 질문", post.question.trim());
+    }
+    lines.push("", "## 요약", post.summary?.trim() || "(요약 없음)");
+    if (post.steps.length > 0) {
+      lines.push("", "## 단계", ...post.steps.map((step) => `- ${step}`));
+    }
+    if (rawContent) {
+      lines.push("", "## 상세", rawContent);
+    }
+    return lines.join("\n");
+  }
+
+  async function onShareFeedPost(post: FeedViewPost, mode: "clipboard" | "email" | "obsidian" | "json") {
+    setError("");
+    setFeedShareMenuPostId(null);
+    const run = await ensureFeedRunRecord(post.sourceFile);
+    const shareText = buildFeedShareText(post, run);
+    const title = sanitizeShareTitle(`${post.agentName}-${new Date(post.createdAt).toISOString().slice(0, 10)}`);
+    try {
+      if (mode === "clipboard") {
+        await navigator.clipboard.writeText(shareText);
+        setStatus("공유 텍스트 복사 완료");
+        return;
+      }
+      if (mode === "json") {
+        const payload = {
+          post,
+          runId: run?.runId ?? null,
+          sourceFile: post.sourceFile || null,
+          exportedAt: new Date().toISOString(),
+        };
+        await navigator.clipboard.writeText(JSON.stringify(payload, null, 2));
+        setStatus("공유 JSON 복사 완료");
+        return;
+      }
+      if (mode === "email") {
+        const subject = `[RAIL] ${post.agentName} 실행 결과 공유`;
+        const body = shareText.slice(0, 1800);
+        await openUrl(`mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`);
+        setStatus("이메일 공유 창 열림");
+        return;
+      }
+      const obsidianUri = `obsidian://new?name=${encodeURIComponent(title)}&content=${encodeURIComponent(
+        shareText.slice(0, 7000),
+      )}`;
+      await openUrl(obsidianUri);
+      setStatus("옵시디언 공유 창 열림");
+    } catch (e) {
+      setError(`공유 실패: ${String(e)}`);
+    }
+  }
+
   async function onOpenFeedPostHistory(post: FeedViewPost) {
     setError("");
     const sourceFile = post.sourceFile.trim();
@@ -4116,17 +4215,12 @@ function App() {
       return;
     }
     try {
-      const cached = feedRunCacheRef.current[sourceFile];
-      if (cached) {
-        setSelectedRunFile(sourceFile);
-        setSelectedRunDetail(cached);
-      } else {
-        const loaded = await invoke<RunRecord>("run_load", { name: sourceFile });
-        const normalized = normalizeRunRecord(loaded);
-        feedRunCacheRef.current[sourceFile] = normalized;
-        setSelectedRunFile(sourceFile);
-        setSelectedRunDetail(normalized);
+      const run = await ensureFeedRunRecord(sourceFile);
+      if (!run) {
+        throw new Error("실행 기록을 불러오지 못했습니다.");
       }
+      setSelectedRunFile(sourceFile);
+      setSelectedRunDetail(run);
       setWorkspaceTab("history");
     } catch (e) {
       setError(`실행 기록 열기 실패: ${String(e)}`);
@@ -4618,6 +4712,7 @@ function App() {
 
   useEffect(() => {
     if (workspaceTab !== "feed") {
+      setFeedShareMenuPostId(null);
       return;
     }
     void refreshFeedTimeline();
@@ -8683,7 +8778,14 @@ ${prompt}`;
                   );
                 })}
               </div>
-              <article className="feed-stream">
+              <article
+                className="feed-stream"
+                onClick={() => {
+                  if (feedShareMenuPostId) {
+                    setFeedShareMenuPostId(null);
+                  }
+                }}
+              >
                 <h3 className="feed-section-title">
                   {feedCategoryMeta.find((row) => row.key === feedCategory)?.label ?? "에이전트 피드"}
                 </h3>
@@ -8799,13 +8901,37 @@ ${prompt}`;
                               >
                                 <span className="feed-action-label">기록 열기</span>
                               </button>
-                              <button
-                                disabled={!post.sourceFile}
-                                onClick={() => onExportRunFile(post.sourceFile)}
-                                type="button"
+                              <div
+                                className="feed-share-menu-wrap"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                }}
                               >
-                                <span className="feed-action-label">공유</span>
-                              </button>
+                                <button
+                                  onClick={() =>
+                                    setFeedShareMenuPostId((prev) => (prev === post.id ? null : post.id))
+                                  }
+                                  type="button"
+                                >
+                                  <span className="feed-action-label">공유</span>
+                                </button>
+                                {feedShareMenuPostId === post.id && (
+                                  <div className="feed-share-menu">
+                                    <button onClick={() => void onShareFeedPost(post, "clipboard")} type="button">
+                                      <span className="feed-action-label">텍스트 복사</span>
+                                    </button>
+                                    <button onClick={() => void onShareFeedPost(post, "email")} type="button">
+                                      <span className="feed-action-label">이메일</span>
+                                    </button>
+                                    <button onClick={() => void onShareFeedPost(post, "obsidian")} type="button">
+                                      <span className="feed-action-label">옵시디언</span>
+                                    </button>
+                                    <button onClick={() => void onShareFeedPost(post, "json")} type="button">
+                                      <span className="feed-action-label">JSON 복사</span>
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
                             </div>
                           </div>
                         )}
