@@ -4718,6 +4718,13 @@ function App() {
                   : "";
                 const line = `${prefix}${message ?? stage}`;
                 setWebBridgeLogs((prev) => [`${new Date().toLocaleTimeString()} ${line}`, ...prev].slice(0, 120));
+                if (stage === "bridge_waiting_user_send" && provider) {
+                  setStatus(`${webProviderLabel(provider as WebProvider)} 탭에서 전송 1회가 필요합니다.`);
+                } else if (stage === "bridge_claimed" && provider) {
+                  setStatus(`${webProviderLabel(provider as WebProvider)} 탭 연결됨, 프롬프트 주입 중`);
+                } else if (stage === "bridge_done" && provider) {
+                  setStatus(`${webProviderLabel(provider as WebProvider)} 응답 수집 완료`);
+                }
                 void refreshWebBridgeStatus(true);
               }
             }
@@ -7680,6 +7687,14 @@ ${prompt}`;
         activeWebNodeIdRef.current = node.id;
         activeWebProviderRef.current = webProvider;
         addNodeLog(node.id, `[WEB] ${webProviderLabel(webProvider)} 브리지 반자동 시작`);
+        addNodeLog(node.id, "[WEB] 웹 서비스 탭에서 전송 버튼을 1회 눌러주세요.");
+        setStatus(`${webProviderLabel(webProvider)} 브리지 대기 중 - 웹 탭에서 전송 1회 필요`);
+        try {
+          await openUrl(webProviderHomeUrl(webProvider));
+          addNodeLog(node.id, `[WEB] ${webProviderLabel(webProvider)} 웹 탭을 자동으로 열었습니다.`);
+        } catch (error) {
+          addNodeLog(node.id, `[WEB] 웹 탭 자동 열기 실패: ${String(error)}`);
+        }
         const workerReady = await ensureWebWorkerReady();
         if (!workerReady) {
           addNodeLog(node.id, `[WEB] 브리지 워커 준비 실패, 수동 입력으로 전환`);
@@ -8684,6 +8699,9 @@ ${prompt}`;
           </div>
           <div className="usage-method">
             확장과의 통신은 127.0.0.1 로컬 루프백 + Bearer 토큰으로만 허용됩니다.
+          </div>
+          <div className="usage-method">
+            실행 후 해당 웹 탭에서 전송 버튼을 1회 눌러야 답변 수집이 시작됩니다.
           </div>
           {webBridgeConnectCode && (
             <div className="bridge-code-card">
