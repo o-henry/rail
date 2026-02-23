@@ -39,6 +39,8 @@ pub fn run() {
             storage::graph_list,
             storage::graph_save,
             storage::graph_load,
+            storage::graph_delete,
+            storage::graph_rename,
             storage::run_save,
             storage::run_list,
             storage::run_load,

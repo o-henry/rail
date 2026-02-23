@@ -83,6 +83,28 @@ fn delete_json_file(dir_name: &str, name: &str) -> Result<(), String> {
     fs::remove_file(path).map_err(|e| format!("failed to delete {dir_name} file: {e}"))
 }
 
+fn rename_json_file(dir_name: &str, from_name: &str, to_name: &str) -> Result<String, String> {
+    let from_normalized = normalize_file_name(from_name)?;
+    let to_normalized = normalize_file_name(to_name)?;
+    if from_normalized == to_normalized {
+        return Ok(to_normalized);
+    }
+
+    let dir = ensure_subdir(dir_name)?;
+    let from_path = dir.join(&from_normalized);
+    if !from_path.exists() {
+        return Err(format!("{dir_name} file not found"));
+    }
+
+    let to_path = dir.join(&to_normalized);
+    if to_path.exists() {
+        return Err(format!("{dir_name} file already exists"));
+    }
+
+    fs::rename(from_path, to_path).map_err(|e| format!("failed to rename {dir_name} file: {e}"))?;
+    Ok(to_normalized)
+}
+
 #[tauri::command]
 pub fn graph_list() -> Result<Vec<String>, String> {
     list_json_files("graphs")
@@ -96,6 +118,16 @@ pub fn graph_save(name: String, graph: Value) -> Result<(), String> {
 #[tauri::command]
 pub fn graph_load(name: String) -> Result<Value, String> {
     read_json_file("graphs", &name)
+}
+
+#[tauri::command]
+pub fn graph_delete(name: String) -> Result<(), String> {
+    delete_json_file("graphs", &name)
+}
+
+#[tauri::command]
+pub fn graph_rename(from_name: String, to_name: String) -> Result<String, String> {
+    rename_json_file("graphs", &from_name, &to_name)
 }
 
 #[tauri::command]

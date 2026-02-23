@@ -5704,6 +5704,59 @@ function App() {
     }
   }
 
+  async function renameGraph() {
+    const current = graphFileName.trim();
+    if (!current) {
+      setError("이름을 변경할 그래프 파일을 먼저 선택하세요.");
+      return;
+    }
+
+    const nextInput = window.prompt("새 그래프 파일 이름", current);
+    if (nextInput == null) {
+      return;
+    }
+    const nextName = nextInput.trim();
+    if (!nextName) {
+      setError("새 그래프 파일 이름을 입력하세요.");
+      return;
+    }
+
+    setError("");
+    try {
+      const renamed = await invoke<string>("graph_rename", {
+        fromName: current,
+        toName: nextName,
+      });
+      await refreshGraphFiles();
+      setGraphFileName(renamed);
+      setStatus(`그래프 이름 변경 완료 (${current} → ${renamed})`);
+    } catch (e) {
+      setError(`그래프 이름 변경 실패: ${String(e)}`);
+    }
+  }
+
+  async function deleteGraph() {
+    const target = graphFileName.trim();
+    if (!target) {
+      setError("삭제할 그래프 파일을 먼저 선택하세요.");
+      return;
+    }
+    const confirmed = window.confirm(`그래프 파일을 삭제할까요?\n${target}`);
+    if (!confirmed) {
+      return;
+    }
+
+    setError("");
+    try {
+      await invoke("graph_delete", { name: target });
+      await refreshGraphFiles();
+      setGraphFileName("");
+      setStatus(`그래프 삭제 완료 (${target})`);
+    } catch (e) {
+      setError(`그래프 삭제 실패: ${String(e)}`);
+    }
+  }
+
   async function loadGraph(name?: string) {
     const target = (name ?? graphFileName).trim();
     if (!target) {
@@ -8289,6 +8342,12 @@ ${prompt}`;
                       <div className="graph-file-actions">
                         <button className="mini-action-button" onClick={saveGraph} type="button">
                           <span className="mini-action-button-label">저장</span>
+                        </button>
+                        <button className="mini-action-button" onClick={renameGraph} type="button">
+                          <span className="mini-action-button-label">이름 변경</span>
+                        </button>
+                        <button className="mini-action-button" onClick={deleteGraph} type="button">
+                          <span className="mini-action-button-label">삭제</span>
                         </button>
                         <button className="mini-action-button" onClick={refreshGraphFiles} type="button">
                           <span className="mini-action-button-label">새로고침</span>
