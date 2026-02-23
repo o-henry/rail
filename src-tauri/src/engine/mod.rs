@@ -762,13 +762,27 @@ fn collect_skill_docs(dir: &Path, out: &mut Vec<PathBuf>, max_docs: usize) {
 }
 
 #[tauri::command]
-pub async fn agent_rules_read(cwd: String) -> Result<AgentRulesReadResult, String> {
+pub async fn agent_rules_read(
+    cwd: String,
+    base_cwd: Option<String>,
+) -> Result<AgentRulesReadResult, String> {
     let cwd_trimmed = cwd.trim();
     if cwd_trimmed.is_empty() {
         return Ok(AgentRulesReadResult { docs: Vec::new() });
     }
 
-    let cwd_path = PathBuf::from(cwd_trimmed);
+    let cwd_candidate = PathBuf::from(cwd_trimmed);
+    let cwd_path = if cwd_candidate.is_absolute() {
+        cwd_candidate
+    } else if let Some(base) = base_cwd
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        PathBuf::from(base).join(cwd_candidate)
+    } else {
+        cwd_candidate
+    };
     if !cwd_path.is_dir() {
         return Ok(AgentRulesReadResult { docs: Vec::new() });
     }

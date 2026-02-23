@@ -736,6 +736,35 @@ function loadPersistedAuthMode(): AuthMode {
   }
 }
 
+function isAbsoluteFsPath(path: string): boolean {
+  if (!path) {
+    return false;
+  }
+  return (
+    path.startsWith("/") ||
+    path.startsWith("\\\\") ||
+    /^[A-Za-z]:[\\/]/.test(path)
+  );
+}
+
+function resolveNodeCwd(rawCwd: unknown, fallbackCwd: string): string {
+  const raw = String(rawCwd ?? "").trim();
+  const fallback = String(fallbackCwd ?? "").trim();
+  if (!raw || raw === ".") {
+    return fallback || raw || ".";
+  }
+  if (isAbsoluteFsPath(raw)) {
+    return raw;
+  }
+  if (!fallback) {
+    return raw;
+  }
+  const separator = fallback.includes("\\") ? "\\" : "/";
+  const base = fallback.replace(/[\\/]+$/, "");
+  const rel = raw.replace(/^[\\/]+/, "");
+  return `${base}${separator}${rel}`;
+}
+
 function isEngineAlreadyStartedError(error: unknown): boolean {
   const lower = toErrorText(error).toLowerCase();
   return lower.includes("engine already started") || lower.includes("already started");
@@ -1581,7 +1610,7 @@ function buildFeedPost(input: FeedBuildInput): {
 }
 
 function normalizeRunFeedPosts(run: RunRecord): FeedPost[] {
-  if (Array.isArray(run.feedPosts) && run.feedPosts.length > 0) {
+  if (Array.isArray(run.feedPosts)) {
     return run.feedPosts;
   }
   const nodeMap = new Map(run.graphSnapshot.nodes.map((node) => [node.id, node]));
@@ -7752,7 +7781,7 @@ function App() {
   }
 
   async function loadAgentRuleDocs(nodeCwd: string): Promise<AgentRuleDoc[]> {
-    const cwdKey = nodeCwd.trim();
+    const cwdKey = resolveNodeCwd(nodeCwd, cwd);
     if (!cwdKey) {
       return [];
     }
@@ -7765,6 +7794,7 @@ function App() {
     try {
       const result = await invoke<AgentRulesReadResult>("agent_rules_read", {
         cwd: cwdKey,
+        baseCwd: cwd,
       });
       const docs = (result.docs ?? [])
         .filter((row) => row && typeof row.path === "string" && typeof row.content === "string")
@@ -7861,7 +7891,7 @@ ${prompt}`;
     const executor = getTurnExecutor(config);
     const nodeModel = toTurnModelDisplayName(String(config.model ?? model).trim() || model);
     const nodeModelEngine = toTurnModelEngineId(nodeModel);
-    const nodeCwd = String(config.cwd ?? cwd).trim() || cwd;
+    const nodeCwd = resolveNodeCwd(config.cwd ?? cwd, cwd);
     const promptTemplate = String(config.promptTemplate ?? "{{input}}");
     const nodeOllamaModel = String(config.ollamaModel ?? "llama3.1:8b").trim() || "llama3.1:8b";
 
@@ -9241,7 +9271,7 @@ ${prompt}`;
     normalizeQualityThreshold(feedInspectorTurnConfig?.qualityThreshold ?? QUALITY_DEFAULT_THRESHOLD),
   );
   const feedInspectorPromptTemplate = String(feedInspectorTurnConfig?.promptTemplate ?? "{{input}}");
-  const feedInspectorRuleCwd = String(feedInspectorTurnConfig?.cwd ?? "").trim();
+  const feedInspectorRuleCwd = resolveNodeCwd(feedInspectorTurnConfig?.cwd ?? cwd, cwd);
   const feedInspectorEditable =
     feedInspectorGraphNode !== null &&
     feedInspectorGraphNode.type === "turn" &&
