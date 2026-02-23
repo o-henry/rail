@@ -5153,6 +5153,13 @@ function App() {
       const mode = extractAuthMode(result.raw);
       if (mode) {
         setAuthMode(mode);
+      }
+      const probed = await refreshAuthStateFromEngine(true);
+      if (probed?.state === "authenticated") {
+        setLoginCompleted(true);
+      } else if (probed?.state === "login_required") {
+        setLoginCompleted(false);
+      } else if (mode) {
         setLoginCompleted(true);
       }
       setUsageInfoText(formatUsageInfoForDisplay(result.raw));
