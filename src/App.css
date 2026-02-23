@@ -1671,7 +1671,7 @@ h3 {
 }
 
 .provider-session-pill.unknown .provider-session-label {
-  top: 2px;
+  top: 0px;
 }
 
 .provider-session-actions {
