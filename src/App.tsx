@@ -5418,6 +5418,13 @@ function App() {
           setStatus(mode ? `로그인 상태 확인됨 (인증 모드=${mode})` : "로그인 상태 확인됨");
         }
       } else if (result.state === "login_required") {
+        if (loginCompleted) {
+          authLoginRequiredProbeCountRef.current = 0;
+          if (!silent) {
+            setStatus("로그인 상태 유지 (재확인 필요)");
+          }
+          return result;
+        }
         const now = Date.now();
         const nextProbeCount = authLoginRequiredProbeCountRef.current + 1;
         authLoginRequiredProbeCountRef.current = nextProbeCount;
@@ -5505,18 +5512,7 @@ function App() {
       }
       setCodexAuthBusy(true);
       await ensureEngineStarted();
-      const probed = await refreshAuthStateFromEngine(true);
-      const effectiveLoggedIn =
-        probed?.state === "authenticated" || (probed?.state !== "login_required" && loginCompleted);
-      const shouldLogout = loginCompleted && effectiveLoggedIn;
-
-      if (!shouldLogout && effectiveLoggedIn) {
-        setLoginCompleted(true);
-        setStatus("이미 로그인 상태입니다.");
-        return;
-      }
-
-      if (shouldLogout) {
+      if (loginCompleted) {
         await invoke("logout_codex");
         await invoke("engine_stop");
         setEngineStarted(false);
@@ -5530,6 +5526,15 @@ function App() {
         setStatus("Codex 로그아웃 완료");
         return;
       }
+
+      const probed = await refreshAuthStateFromEngine(true);
+      if (probed?.state === "authenticated") {
+        authLoginRequiredProbeCountRef.current = 0;
+        lastAuthenticatedAtRef.current = Date.now();
+        setLoginCompleted(true);
+        setStatus("이미 로그인 상태입니다.");
+        return;
+      }
       const result = await invoke<LoginChatgptResult>("login_chatgpt");
       const authUrl = typeof result?.authUrl === "string" ? result.authUrl.trim() : "";
       if (!authUrl) {
@@ -5538,8 +5543,7 @@ function App() {
       await openUrl(authUrl);
       setStatus("Codex 로그인 창 열림 (재시도 제한 45초)");
     } catch (e) {
-      const shouldLogout = loginCompleted;
-      if (shouldLogout) {
+      if (loginCompleted) {
         setError(`Codex 로그아웃 실패: ${String(e)}`);
       } else {
         setError(`Codex 로그인 시작 실패: ${String(e)}`);
