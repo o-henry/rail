@@ -305,7 +305,7 @@ async function ensureProviderContext(provider) {
   const launchOptions = {
     headless: false,
     viewport: { width: 1380, height: 900 },
-    ignoreDefaultArgs: ['--enable-automation'],
+    ignoreDefaultArgs: ['--enable-automation', '--no-sandbox', '--disable-setuid-sandbox'],
     args: [
       '--disable-dev-shm-usage',
       '--no-first-run',

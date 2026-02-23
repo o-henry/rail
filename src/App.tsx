@@ -564,6 +564,8 @@ const TURN_MODEL_OPTIONS = [
 ] as const;
 const DEFAULT_TURN_MODEL = TURN_MODEL_OPTIONS[0];
 const WORKSPACE_CWD_STORAGE_KEY = "rail.settings.cwd";
+const LOGIN_COMPLETED_STORAGE_KEY = "rail.settings.login_completed";
+const AUTH_MODE_STORAGE_KEY = "rail.settings.auth_mode";
 const COST_PRESET_OPTIONS: FancySelectOption[] = [
   { value: "conservative", label: "고사양 (품질 우선)" },
   { value: "balanced", label: "보통 (기본)" },
@@ -662,6 +664,29 @@ function loadPersistedCwd(fallback = "."): string {
     return parsed || fallback;
   } catch {
     return fallback;
+  }
+}
+
+function loadPersistedLoginCompleted(): boolean {
+  if (typeof window === "undefined") {
+    return false;
+  }
+  try {
+    return window.localStorage.getItem(LOGIN_COMPLETED_STORAGE_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function loadPersistedAuthMode(): AuthMode {
+  if (typeof window === "undefined") {
+    return "unknown";
+  }
+  try {
+    const raw = window.localStorage.getItem(AUTH_MODE_STORAGE_KEY);
+    return extractAuthMode(raw ?? null) ?? "unknown";
+  } catch {
+    return "unknown";
   }
 }
 
@@ -4099,6 +4124,8 @@ function isTurnTerminalEvent(method: string, params: unknown): TurnTerminal | nu
 
 function App() {
   const defaultCwd = useMemo(() => loadPersistedCwd("."), []);
+  const defaultLoginCompleted = useMemo(() => loadPersistedLoginCompleted(), []);
+  const defaultAuthMode = useMemo(() => loadPersistedAuthMode(), []);
 
   const [workspaceTab, setWorkspaceTab] = useState<WorkspaceTab>("workflow");
 
@@ -4116,8 +4143,8 @@ function App() {
   const [, setErrorLogs] = useState<string[]>([]);
 
   const [usageInfoText, setUsageInfoText] = useState("");
-  const [authMode, setAuthMode] = useState<AuthMode>("unknown");
-  const [loginCompleted, setLoginCompleted] = useState(false);
+  const [authMode, setAuthMode] = useState<AuthMode>(defaultAuthMode);
+  const [loginCompleted, setLoginCompleted] = useState(defaultLoginCompleted);
   const [pendingApprovals, setPendingApprovals] = useState<PendingApproval[]>([]);
   const [approvalSubmitting, setApprovalSubmitting] = useState(false);
   const [pendingWebTurn, setPendingWebTurn] = useState<PendingWebTurn | null>(null);
@@ -4594,8 +4621,6 @@ function App() {
             if (payload.state === "stopped" || payload.state === "disconnected") {
               setEngineStarted(false);
               markCodexNodesStatusOnEngineIssue("cancelled", "엔진 중지 또는 연결 끊김");
-              setAuthMode("unknown");
-              setLoginCompleted(false);
               setUsageInfoText("");
               setPendingApprovals([]);
               setApprovalSubmitting(false);
@@ -5067,8 +5092,6 @@ function App() {
       setStatus("중지됨");
       setRunning(false);
       setIsGraphRunning(false);
-      setLoginCompleted(false);
-      setAuthMode("unknown");
       setUsageInfoText("");
     } catch (e) {
       setError(String(e));
@@ -5126,9 +5149,19 @@ function App() {
 
   async function onLoginCodex() {
     setError("");
-    const shouldLogout = loginCompleted;
     try {
       await ensureEngineStarted();
+      const probed = await refreshAuthStateFromEngine(true);
+      const effectiveLoggedIn =
+        probed?.state === "authenticated" || (probed?.state !== "login_required" && loginCompleted);
+      const shouldLogout = loginCompleted && effectiveLoggedIn;
+
+      if (!shouldLogout && effectiveLoggedIn) {
+        setLoginCompleted(true);
+        setStatus("이미 로그인 상태입니다.");
+        return;
+      }
+
       if (shouldLogout) {
         await invoke("logout_codex");
         await invoke("engine_stop");
@@ -5149,6 +5182,7 @@ function App() {
       await openUrl(authUrl);
       setStatus("Codex 로그인 창 열림");
     } catch (e) {
+      const shouldLogout = loginCompleted;
       if (shouldLogout) {
         setError(`Codex 로그아웃 실패: ${String(e)}`);
       } else {
@@ -6703,6 +6737,22 @@ function App() {
       // ignore persistence failures
     }
   }, [cwd]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(LOGIN_COMPLETED_STORAGE_KEY, loginCompleted ? "1" : "0");
+    } catch {
+      // ignore persistence failures
+    }
+  }, [loginCompleted]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(AUTH_MODE_STORAGE_KEY, authMode);
+    } catch {
+      // ignore persistence failures
+    }
+  }, [authMode]);
 
   useEffect(() => {
     syncQuestionInputHeight();
@@ -8713,7 +8763,7 @@ ${prompt}`;
         )}
 
         {workspaceTab === "workflow" && (
-          <div className={`workflow-layout ${canvasFullscreen ? "canvas-only-layout" : ""}`}>
+          <div className={`workflow-layout workspace-tab-panel ${canvasFullscreen ? "canvas-only-layout" : ""}`}>
             <section className="canvas-pane">
               <div className="graph-canvas-shell">
                 <div
@@ -9661,7 +9711,7 @@ ${prompt}`;
         )}
 
         {workspaceTab === "feed" && (
-          <section className="feed-layout">
+          <section className="feed-layout workspace-tab-panel">
             <article className="panel-card feed-agent-panel">
               <div className="feed-agent-panel-head">
                 <h3>에이전트 상세설정</h3>
@@ -9982,7 +10032,7 @@ ${prompt}`;
                   <span className="feed-filter-toggle-label">필터</span>
                 </button>
               </div>
-              {feedFilterOpen && (
+              <div className={`feed-filter-inline-wrap ${feedFilterOpen ? "is-open" : ""}`}>
                 <div className="feed-filter-inline">
                   <label>
                     상태
@@ -10038,7 +10088,7 @@ ${prompt}`;
                     />
                   </label>
                 </div>
-              )}
+              </div>
               <div className="feed-topic-tabs">
                 {feedCategoryMeta.map((row) => {
                   const count = feedCategoryPosts[row.key].length;
@@ -10212,7 +10262,7 @@ ${prompt}`;
         )}
 
         {workspaceTab === "history" && (
-          <section className="history-layout">
+          <section className="history-layout workspace-tab-panel">
             <article className="panel-card history-list">
               <h2>실행 기록</h2>
               <div className="button-row history-list-actions">
@@ -10303,7 +10353,7 @@ ${prompt}`;
         )}
 
         {workspaceTab === "settings" && (
-          <section className="panel-card settings-view">
+          <section className="panel-card settings-view workspace-tab-panel">
             {renderSettingsPanel(false)}
             {renderWebAutomationPanel()}
             {lastSavedRunFile && <div>최근 실행 파일: {formatRunFileLabel(lastSavedRunFile)}</div>}
