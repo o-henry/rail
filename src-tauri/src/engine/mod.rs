@@ -2,6 +2,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::{
     collections::HashMap,
+    env,
+    fs,
     path::{Path, PathBuf},
     sync::{
         atomic::{AtomicBool, AtomicU64, Ordering},
@@ -710,6 +712,44 @@ async fn ensure_private_dir(path: &Path, label: &str) -> Result<(), String> {
     Ok(())
 }
 
+fn logout_auth_candidate_paths(codex_home: &Path) -> Vec<PathBuf> {
+    let mut paths = vec![
+        codex_home.join("auth.json"),
+        codex_home.join("credentials.json"),
+        codex_home.join(".auth.json"),
+    ];
+
+    if let Some(home) = env::var_os("HOME") {
+        let global_codex_home = PathBuf::from(home).join(".codex");
+        paths.push(global_codex_home.join("auth.json"));
+        paths.push(global_codex_home.join("credentials.json"));
+    }
+
+    paths
+}
+
+fn clear_local_auth_artifacts(codex_home: &Path) -> Result<Vec<String>, String> {
+    let candidates = logout_auth_candidate_paths(codex_home);
+    let mut removed: Vec<String> = Vec::new();
+    let mut errors: Vec<String> = Vec::new();
+
+    for path in candidates {
+        if !path.exists() {
+            continue;
+        }
+        match fs::remove_file(&path) {
+            Ok(_) => removed.push(path.to_string_lossy().to_string()),
+            Err(err) => errors.push(format!("{}: {}", path.display(), err)),
+        }
+    }
+
+    if errors.is_empty() {
+        Ok(removed)
+    } else {
+        Err(errors.join(" | "))
+    }
+}
+
 async fn handle_incoming_line(
     app: &AppHandle,
     pending: &Arc<Mutex<PendingMap>>,
@@ -1302,6 +1342,7 @@ pub async fn auth_probe(state: State<'_, EngineManager>) -> Result<AuthProbeResu
 #[tauri::command]
 pub async fn logout_codex(state: State<'_, EngineManager>) -> Result<(), String> {
     let runtime = current_runtime(&state).await?;
+    let codex_home = resolve_codex_home_dir(&runtime.app).await?;
     let candidates: [(&str, Value); 4] = [
         ("logoutChatGpt", json!({})),
         ("logoutChatGpt", Value::Null),
@@ -1319,10 +1360,14 @@ pub async fn logout_codex(state: State<'_, EngineManager>) -> Result<(), String>
         }
     }
 
-    Err(format!(
-        "failed to logout from app-server; attempted methods: {}",
-        errors.join(" | ")
-    ))
+    match clear_local_auth_artifacts(&codex_home) {
+        Ok(_) => Ok(()),
+        Err(clear_error) => Err(format!(
+            "failed to logout from app-server; attempted methods: {}; local cleanup failed: {}",
+            errors.join(" | "),
+            clear_error
+        )),
+    }
 }
 
 #[tauri::command]

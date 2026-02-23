@@ -4886,19 +4886,20 @@ function App() {
 
   async function onOpenProviderChildView(provider: WebProvider) {
     try {
-      await invoke("provider_child_view_open", { provider });
+      await invoke("provider_window_open", { provider });
       setProviderChildViewOpen((prev) => ({ ...prev, [provider]: true }));
       setStatus(`${webProviderLabel(provider)} 세션 창 열림`);
       void refreshWebWorkerHealth(true);
     } catch (error) {
-      const childError = String(error);
+      const windowOpenError = String(error);
       try {
-        await invoke("provider_window_open", { provider });
+        await invoke("provider_child_view_open", { provider });
         setProviderChildViewOpen((prev) => ({ ...prev, [provider]: true }));
         setStatus(`${webProviderLabel(provider)} 세션 창 열림`);
-      } catch (windowError) {
+        void refreshWebWorkerHealth(true);
+      } catch (childError) {
         setError(
-          `${webProviderLabel(provider)} 세션 관리 창 열기 실패: ${String(windowError)} (child view: ${childError})`,
+          `${webProviderLabel(provider)} 세션 관리 창 열기 실패: ${String(childError)} (window: ${windowOpenError})`,
         );
       }
     }
