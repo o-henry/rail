@@ -8341,6 +8341,7 @@ ${prompt}`;
                       <input
                         onChange={(event) => setGraphFileName(event.currentTarget.value)}
                         placeholder="저장/이름 변경 파일명"
+                        style={{ height: "36px", minHeight: "36px", maxHeight: "36px", borderRadius: "6px", padding: "0 12px" }}
                         value={graphFileName}
                       />
                       <div className="graph-file-actions">
