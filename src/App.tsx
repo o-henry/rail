@@ -517,6 +517,7 @@ const AGENT_RULE_CACHE_TTL_MS = 12_000;
 const AGENT_RULE_MAX_DOCS = 16;
 const AGENT_RULE_MAX_DOC_CHARS = 6_000;
 const SIMPLE_WORKFLOW_UI = true;
+const GEMINI_AUTOMATION_ENABLED = false;
 const KNOWLEDGE_TOP_K_OPTIONS: FancySelectOption[] = [
   { value: "0", label: "0개" },
   { value: "1", label: "1개" },
@@ -5388,6 +5389,12 @@ function App() {
     setWebWorkerBusy(true);
     setError("");
     try {
+      if (provider === "gemini") {
+        await openUrl("https://gemini.google.com/app");
+        setStatus("Gemini 기본 브라우저 열림 (수동 로그인)");
+        await refreshWebWorkerHealth(true);
+        return;
+      }
       const result = await invoke<{ ok?: boolean; error?: string; errorCode?: string }>(
         "web_provider_open_session",
         { provider },
@@ -7386,9 +7393,17 @@ ${prompt}`;
     if (webProvider) {
       const webResultMode =
         config.webResultMode ?? (webProvider === "gemini" ? "auto" : "manualPasteText");
+      const effectiveWebResultMode =
+        webProvider === "gemini" && !GEMINI_AUTOMATION_ENABLED && webResultMode === "auto"
+          ? "manualPasteText"
+          : webResultMode;
       const webTimeoutMs = Math.max(5_000, Number(config.webTimeoutMs ?? 90_000) || 90_000);
 
-      if (webProvider === "gemini" && webResultMode === "auto") {
+      if (
+        webProvider === "gemini" &&
+        webResultMode === "auto" &&
+        GEMINI_AUTOMATION_ENABLED
+      ) {
         activeWebNodeIdRef.current = node.id;
         activeWebProviderRef.current = webProvider;
         addNodeLog(node.id, "[WEB] GEMINI 자동화 시작");
@@ -7468,6 +7483,10 @@ ${prompt}`;
         }
       }
 
+      if (webProvider === "gemini" && webResultMode === "auto" && !GEMINI_AUTOMATION_ENABLED) {
+        addNodeLog(node.id, "[WEB] Gemini 자동화는 보안 정책상 비활성화되어 수동 입력 모드로 전환됩니다.");
+      }
+
       try {
         await invoke("provider_window_open", { provider: webProvider });
       } catch (error) {
@@ -7487,7 +7506,7 @@ ${prompt}`;
         node.id,
         webProvider,
         textToSend,
-        webResultMode === "auto" ? "manualPasteText" : webResultMode,
+        effectiveWebResultMode,
       ).then((result) => ({
         ...result,
         executor,
