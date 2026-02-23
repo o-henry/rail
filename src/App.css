@@ -1,10 +1,28 @@
 @font-face {
-  font-family: "Galmuri14";
-  src: url("/fonts/galmuri14.ttf") format("truetype");
+  font-family: "DialogNanumBody1984";
+  src: url("/fonts/1984-body-light.otf") format("opentype");
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+0000-00FF, U+0100-024F, U+1100-11FF, U+3130-318F, U+AC00-D7A3, U+A960-A97F, U+D7B0-D7FF;
+}
+
+@font-face {
+  font-family: "DialogNanumBody1984";
+  src: url("/fonts/1984-body-regular.otf") format("opentype");
   font-weight: 400;
   font-style: normal;
   font-display: swap;
-  unicode-range: U+1100-11FF, U+3130-318F, U+AC00-D7A3, U+A960-A97F, U+D7B0-D7FF;
+  unicode-range: U+0000-00FF, U+0100-024F, U+1100-11FF, U+3130-318F, U+AC00-D7A3, U+A960-A97F, U+D7B0-D7FF;
+}
+
+@font-face {
+  font-family: "DialogNanumBody1984";
+  src: url("/fonts/1984-body-bold.otf") format("opentype");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+0000-00FF, U+0100-024F, U+1100-11FF, U+3130-318F, U+AC00-D7A3, U+A960-A97F, U+D7B0-D7FF;
 }
 
 @font-face {
@@ -35,7 +53,7 @@
 }
 
 :root {
-  font-family: "BasicallyAMono", "Galmuri14", "IBM Plex Sans", "Noto Sans KR", sans-serif;
+  font-family: "BasicallyAMono", "DialogNanumBody1984", "IBM Plex Sans", "Noto Sans KR", sans-serif;
   font-size: 13px;
   letter-spacing: -0.7px;
   color: #1b2229;
@@ -145,7 +163,7 @@ h3,
 h4,
 h5,
 h6 {
-  font-family: "Galmuri14", sans-serif;
+  font-family: "DialogNanumBody1984", sans-serif;
   letter-spacing: -0.7px;
 }
 
@@ -1839,7 +1857,7 @@ h3 {
 .feed-topbar h2 {
   margin: 0;
   font-size: 20px;
-  font-family: "Galmuri14", "Noto Sans KR", sans-serif;
+  font-family: "DialogNanumBody1984", "Noto Sans KR", sans-serif;
   letter-spacing: -0.015em;
   color: #14181f;
 }
@@ -1917,7 +1935,7 @@ h3 {
   color: #4d5662;
   background: transparent;
   box-shadow: none;
-  font-family: "Galmuri14", "Noto Sans KR", sans-serif;
+  font-family: "DialogNanumBody1984", "Noto Sans KR", sans-serif;
   font-size: 15px;
   border-bottom: 2px solid transparent;
 }
@@ -1985,7 +2003,7 @@ h3 {
   margin: 0;
   padding: 14px 16px 10px;
   font-size: 20px;
-  font-family: "Galmuri14", "Noto Sans KR", sans-serif;
+  font-family: "DialogNanumBody1984", "Noto Sans KR", sans-serif;
   letter-spacing: -0.01em;
   color: #161a20;
   border-bottom: 1px solid #e8edf2;
