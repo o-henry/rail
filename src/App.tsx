@@ -9341,19 +9341,6 @@ ${prompt}`;
           <section className="panel-card settings-view">
             {renderSettingsPanel(false)}
             {renderWebAutomationPanel()}
-            <section className="settings-usage-guide">
-              <h3>사용 방법</h3>
-              <ol>
-                <li>작업 경로(CWD)에서 폴더 선택 버튼을 눌러 실제 프로젝트 루트를 선택합니다.</li>
-                <li>엔진 시작 버튼으로 Codex 엔진을 켠 뒤 기본 모델을 선택합니다.</li>
-                <li>사용량 확인으로 계정 사용량 조회가 가능한지 먼저 점검합니다.</li>
-                <li>웹 계정 연동에서 필요한 서비스(GEMINI/GPT 등)만 로그인합니다.</li>
-                <li>상태 동기화(새로고침 아이콘)를 눌러 로그인 상태를 최신으로 갱신합니다.</li>
-                <li>워크플로우 탭에서 노드 추가, 연결, 프롬프트/역할 설정을 완료합니다.</li>
-                <li>실행 후 피드 탭에서 노드 로그/출력을 확인하고 필요 시 수정합니다.</li>
-                <li>기록 탭에서 실행 상세와 최종 결과를 비교하며 재사용 가능한 그래프로 다듬습니다.</li>
-              </ol>
-            </section>
             {lastSavedRunFile && <div>최근 실행 파일: {formatRunFileLabel(lastSavedRunFile)}</div>}
           </section>
         )}
