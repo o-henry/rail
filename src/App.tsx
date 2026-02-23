@@ -7774,7 +7774,6 @@ ${prompt}`;
               const row = providerHealthMap[provider];
               const hasContext = row?.contextOpen === true;
               const session = providerSessionStateMeta(row?.sessionState, hasContext);
-              const isChildViewOpen = providerChildViewOpen[provider] === true;
               return (
                 <div className="provider-hub-row" key={`session-${provider}`}>
                   <div className="provider-hub-meta">
@@ -7791,16 +7790,6 @@ ${prompt}`;
                       type="button"
                     >
                       <span className="settings-button-label">로그인</span>
-                    </button>
-                    <button
-                      className={`provider-session-toggle provider-session-manage ${isChildViewOpen ? "is-active" : ""}`}
-                      disabled={webWorkerBusy}
-                      onClick={() =>
-                        isChildViewOpen ? onCloseProviderChildView(provider) : onOpenProviderChildView(provider)
-                      }
-                      type="button"
-                    >
-                      <span className="settings-button-label">{isChildViewOpen ? "세션 숨기기" : "세션 열기"}</span>
                     </button>
                   </div>
                 </div>
