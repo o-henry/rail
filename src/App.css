@@ -2159,7 +2159,7 @@ h3 {
   min-height: 34px;
   padding: 0;
   border-radius: 999px;
-  border: 2px solid #1d7cff;
+  border: 2px solid #000000;
   background: #ffffff;
   display: inline-grid;
   place-items: center;
@@ -2185,6 +2185,7 @@ h3 {
   padding: 0;
   border-radius: 999px;
   border: 2px solid #e45a5a;
+  color: #e45a5a;
   background: #ffffff;
   display: inline-grid;
   place-items: center;
@@ -2197,6 +2198,7 @@ h3 {
 
 .feed-delete-icon-button:disabled {
   border-color: #cfd6e2;
+  color: #aeb7c5;
   background: #f1f4f9;
 }
 

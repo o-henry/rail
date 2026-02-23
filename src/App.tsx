@@ -8850,6 +8850,14 @@ ${prompt}`;
                             <div className="feed-card-sub">{post.roleLabel}</div>
                           </div>
                           <div className="feed-card-head-actions">
+                            <span
+                              className={`feed-score-badge ${
+                                isDraftPost ? "live" : post.status === "done" ? "good" : "warn"
+                              }`}
+                              title={isDraftPost ? "에이전트 작업 중" : `품질 점수 ${score}`}
+                            >
+                              {isDraftPost ? "LIVE" : score}
+                            </span>
                             <div
                               className="feed-share-menu-wrap feed-share-menu-wrap-head"
                               onClick={(event) => {
@@ -8878,17 +8886,9 @@ ${prompt}`;
                                   <button onClick={() => void onShareFeedPost(post, "json")} type="button">
                                     <span>JSON 복사</span>
                                   </button>
-                                </div>
-                              )}
-                            </div>
-                            <span
-                              className={`feed-score-badge ${
-                                isDraftPost ? "live" : post.status === "done" ? "good" : "warn"
-                              }`}
-                              title={isDraftPost ? "에이전트 작업 중" : `품질 점수 ${score}`}
-                            >
-                              {isDraftPost ? "LIVE" : score}
-                            </span>
+                                  </div>
+                                )}
+                              </div>
                             <button
                               aria-label="포스트 삭제"
                               className="feed-delete-icon-button"
