@@ -1248,9 +1248,6 @@ function summarizeFeedSteps(logs: string[]): string[] {
       break;
     }
   }
-  if (steps.length === 0) {
-    steps.push("실행 로그 요약 없음");
-  }
   return steps.slice(0, 5);
 }
 
@@ -8745,13 +8742,15 @@ ${prompt}`;
                           <div className="feed-card-details">
                             {post.question && <div className="feed-card-question">Q: {post.question}</div>}
                             <pre className="feed-sns-content">{visibleContent}</pre>
-                            <div className="feed-step-list">
-                              {post.steps.map((step) => (
-                                <span className="feed-step-chip" key={`${post.id}-${step}`}>
-                                  <span className="feed-step-chip-label">{step}</span>
-                                </span>
-                              ))}
-                            </div>
+                            {post.steps.length > 0 && (
+                              <div className="feed-step-list">
+                                {post.steps.map((step) => (
+                                  <span className="feed-step-chip" key={`${post.id}-${step}`}>
+                                    <span className="feed-step-chip-label">{step}</span>
+                                  </span>
+                                ))}
+                              </div>
+                            )}
                             <div className="feed-evidence-row">
                               <span>{formatRelativeFeedTime(post.createdAt)}</span>
                               <span>생성 시간 {formatDuration(post.evidence.durationMs)}</span>
