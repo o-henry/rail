@@ -1847,13 +1847,18 @@ h3 {
   box-shadow: none;
 }
 
+.feed-filter-toggle-label {
+  position: relative;
+  top: 2px;
+}
+
 .feed-filter-toggle.is-open {
   background: #eef2f7;
   box-shadow: none;
 }
 
 .feed-filter-inline {
-  border-radius: 12px;
+  border-radius: 4px;
   background: #eff2f6;
   padding: 12px;
   display: grid;
@@ -1874,20 +1879,26 @@ h3 {
   border-radius: 12px;
 }
 
+.feed-filter-inline input:focus,
+.feed-filter-inline input:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+
 .feed-filter-inline .button-row {
   align-items: end;
 }
 
 .feed-filter-inline .button-row button {
-  min-height: 36px;
-  height: 36px;
+  min-height: 32px;
+  height: 32px;
   border-radius: 6px;
 }
 
 .feed-topic-tabs {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: 26px;
 }
 
 .feed-topic-tabs button {
@@ -1941,7 +1952,7 @@ h3 {
 .feed-stream {
   display: grid;
   align-content: start;
-  gap: 36px;
+  gap: 12px;
   min-height: 0;
   overflow: auto;
   padding: 2px 4px 0 0;

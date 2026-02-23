@@ -8603,7 +8603,7 @@ ${prompt}`;
                   onClick={() => setFeedFilterOpen((prev) => !prev)}
                   type="button"
                 >
-                  Filter by
+                  <span className="feed-filter-toggle-label">필터</span>
                 </button>
               </div>
               {feedFilterOpen && (
