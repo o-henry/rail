@@ -2375,7 +2375,7 @@ function NavIcon({ tab, active = false }: { tab: WorkspaceTab; active?: boolean 
         alt=""
         aria-hidden="true"
         className="nav-workflow-image nav-feed-image"
-        src={active ? "/feeds-active.svg" : "/feeds.svg"}
+        src={active ? "/post.svg" : "/post.svg"}
       />
     );
   }
@@ -7202,7 +7202,7 @@ ${prompt}`;
           </button>
         </div>
         <div className="settings-badges">
-          <span className="status-tag neutral">활성 Provider: {activeProviderLabel}</span>
+          <span className="status-tag neutral">활성 프로바이더: {activeProviderLabel}</span>
           <span className="status-tag neutral">
             상태 동기화: {webWorkerHealth.running ? "준비됨" : "초기화 필요"}
           </span>
