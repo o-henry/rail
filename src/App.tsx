@@ -8790,21 +8790,21 @@ ${prompt}`;
                                 }
                                 type="button"
                               >
-                                {rawEnabled ? "마스킹 보기" : "원문 보기"}
+                                <span className="feed-action-label">{rawEnabled ? "마스킹 보기" : "원문 보기"}</span>
                               </button>
                               <button
                                 disabled={!post.sourceFile}
                                 onClick={() => onOpenFeedPostHistory(post)}
                                 type="button"
                               >
-                                기록 열기
+                                <span className="feed-action-label">기록 열기</span>
                               </button>
                               <button
                                 disabled={!post.sourceFile}
                                 onClick={() => onExportRunFile(post.sourceFile)}
                                 type="button"
                               >
-                                공유
+                                <span className="feed-action-label">공유</span>
                               </button>
                             </div>
                           </div>

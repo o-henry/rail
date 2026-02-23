@@ -2176,6 +2176,11 @@ h3 {
   color: #6b7788;
 }
 
+.feed-action-label {
+  position: relative;
+  top: 1px;
+}
+
 .feed-reply-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
