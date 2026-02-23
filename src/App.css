@@ -1932,7 +1932,7 @@ h3 {
 }
 
 .feed-topic-tabs button:hover {
-  background: #eceff4;
+  background: transparent;
 }
 
 .feed-topic-tabs button.is-active {
