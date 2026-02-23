@@ -674,7 +674,7 @@ h3 {
   right: 0;
   z-index: 45;
   border-radius: 8px;
-  border: 1px solid #d2dbe8;
+  border: 0;
   background: #f8fafd;
   box-shadow: 0 16px 28px rgba(15, 24, 34, 0.16);
   padding: 7px 7px 10px;
