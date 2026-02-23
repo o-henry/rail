@@ -1837,13 +1837,13 @@ h3 {
 }
 
 .feed-filter-toggle {
-  min-height: 42px;
-  height: 42px;
-  padding: 0 16px;
+  min-height: 32px;
+  height: 32px;
+  padding: 0 10px;
   border-radius: 6px;
   background: #ffffff;
   color: #2c3440;
-  font-size: 15px;
+  font-size: 13px;
   box-shadow: none;
 }
 
