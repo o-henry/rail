@@ -8743,8 +8743,13 @@ ${prompt}`;
                               placeholder="에이전트에게 추가 요청을 남기세요"
                               value={requestDraft}
                             />
-                            <button onClick={() => onSubmitFeedAgentRequest(post)} type="button">
-                              요청 보내기
+                            <button
+                              aria-label="요청 보내기"
+                              className="primary-action question-create-button feed-reply-send-button"
+                              onClick={() => onSubmitFeedAgentRequest(post)}
+                              type="button"
+                            >
+                              <img alt="" aria-hidden="true" className="question-create-icon" src="/up.svg" />
                             </button>
                           </div>
                         )}
