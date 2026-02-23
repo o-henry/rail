@@ -1893,13 +1893,14 @@ h3 {
 .feed-topic-tabs button {
   min-height: 40px;
   height: 40px;
-  border-radius: 6px;
-  padding: 0 15px;
+  border-radius: 0;
+  padding: 0;
   color: #4d5662;
   background: transparent;
   box-shadow: none;
   font-family: "Galmuri14", "Noto Sans KR", sans-serif;
   font-size: 15px;
+  border-bottom: 2px solid transparent;
 }
 
 .feed-topic-tabs button.is-all-posts {
@@ -1916,7 +1917,8 @@ h3 {
 }
 
 .feed-topic-tabs button.is-active {
-  background: #ffffff;
+  background: transparent;
+  border-bottom-color: #1d7cff;
   box-shadow: none;
 }
 
