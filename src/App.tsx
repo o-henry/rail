@@ -539,6 +539,7 @@ const AGENT_RULE_MAX_DOCS = 16;
 const AGENT_RULE_MAX_DOC_CHARS = 6_000;
 const AUTH_LOGIN_REQUIRED_CONFIRM_COUNT = 3;
 const AUTH_LOGIN_REQUIRED_GRACE_MS = 120_000;
+const CODEX_LOGIN_COOLDOWN_MS = 45_000;
 const SIMPLE_WORKFLOW_UI = true;
 const KNOWLEDGE_TOP_K_OPTIONS: FancySelectOption[] = [
   { value: "0", label: "0개" },
@@ -4320,6 +4321,7 @@ function App() {
   const [usageInfoText, setUsageInfoText] = useState("");
   const [authMode, setAuthMode] = useState<AuthMode>(defaultAuthMode);
   const [loginCompleted, setLoginCompleted] = useState(defaultLoginCompleted);
+  const [codexAuthBusy, setCodexAuthBusy] = useState(false);
   const [pendingApprovals, setPendingApprovals] = useState<PendingApproval[]>([]);
   const [approvalSubmitting, setApprovalSubmitting] = useState(false);
   const [pendingWebTurn, setPendingWebTurn] = useState<PendingWebTurn | null>(null);
@@ -4447,6 +4449,7 @@ function App() {
   const pendingWebLoginAutoOpenKeyRef = useRef("");
   const authLoginRequiredProbeCountRef = useRef(0);
   const lastAuthenticatedAtRef = useRef<number>(defaultLoginCompleted ? Date.now() : 0);
+  const codexLoginLastAttemptAtRef = useRef(0);
 
   const activeApproval = pendingApprovals[0];
   const canvasNodes = useMemo(() => {
@@ -5465,7 +5468,22 @@ function App() {
 
   async function onLoginCodex() {
     setError("");
+    if (codexAuthBusy) {
+      setStatus("Codex 인증 요청 처리 중입니다.");
+      return;
+    }
     try {
+      if (!loginCompleted) {
+        const now = Date.now();
+        const elapsed = now - codexLoginLastAttemptAtRef.current;
+        if (elapsed < CODEX_LOGIN_COOLDOWN_MS) {
+          const remainSec = Math.ceil((CODEX_LOGIN_COOLDOWN_MS - elapsed) / 1000);
+          setStatus(`Codex 로그인 재시도 대기 ${remainSec}초`);
+          return;
+        }
+        codexLoginLastAttemptAtRef.current = now;
+      }
+      setCodexAuthBusy(true);
       await ensureEngineStarted();
       const probed = await refreshAuthStateFromEngine(true);
       const effectiveLoggedIn =
@@ -5498,7 +5516,7 @@ function App() {
         throw new Error("로그인 URL을 받지 못했습니다.");
       }
       await openUrl(authUrl);
-      setStatus("Codex 로그인 창 열림");
+      setStatus("Codex 로그인 창 열림 (재시도 제한 45초)");
     } catch (e) {
       const shouldLogout = loginCompleted;
       if (shouldLogout) {
@@ -5506,6 +5524,8 @@ function App() {
       } else {
         setError(`Codex 로그인 시작 실패: ${String(e)}`);
       }
+    } finally {
+      setCodexAuthBusy(false);
     }
   }
 
@@ -8702,10 +8722,12 @@ ${prompt}`;
             <button
               className="settings-usage-button settings-account-button"
               onClick={onLoginCodex}
-              disabled={running || isGraphRunning}
+              disabled={running || isGraphRunning || codexAuthBusy}
               type="button"
             >
-              <span className="settings-button-label">{loginCompleted ? "CODEX 로그아웃" : "CODEX 로그인"}</span>
+              <span className="settings-button-label">
+                {codexAuthBusy ? "처리 중..." : loginCompleted ? "CODEX 로그아웃" : "CODEX 로그인"}
+              </span>
             </button>
           </div>
         )}
