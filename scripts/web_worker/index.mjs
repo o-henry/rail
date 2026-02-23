@@ -24,7 +24,17 @@ const DEFAULT_TIMEOUT_MS = 90_000;
 const BRIDGE_HOST = '127.0.0.1';
 const BRIDGE_PORT = Number(process.env.RAIL_WEB_BRIDGE_PORT ?? 38961) || 38961;
 const WORKER_LOCK_PATH = path.join(PROFILE_ROOT, 'worker.lock.json');
-const BRIDGE_TOKEN_PATH = path.join(PROFILE_ROOT, 'bridge.token');
+const BRIDGE_ALLOWED_WEB_ORIGINS = new Set([
+  'https://gemini.google.com',
+  'https://chatgpt.com',
+  'https://grok.com',
+  'https://claude.ai',
+  'https://www.perplexity.ai',
+  'https://perplexity.ai',
+]);
+const BRIDGE_ALLOWED_EXTENSION_ORIGINS = parseAllowedExtensionOrigins(
+  process.env.RAIL_WEB_BRIDGE_ALLOWED_EXTENSION_IDS ?? '',
+);
 const SESSION_PROVIDER_CONFIG = {
   gemini: {
     homeUrls: ['https://gemini.google.com/app', 'https://gemini.google.com/'],
@@ -336,6 +346,76 @@ function maskToken(token) {
   return `${raw.slice(0, 6)}...${raw.slice(-4)}`;
 }
 
+function parseAllowedExtensionOrigins(raw) {
+  const text = String(raw ?? '').trim();
+  if (!text) {
+    return null;
+  }
+  const set = new Set();
+  const rows = text.split(',').map((row) => row.trim()).filter(Boolean);
+  for (const row of rows) {
+    if (row.startsWith('chrome-extension://')) {
+      set.add(row.replace(/\/+$/, ''));
+      continue;
+    }
+    if (/^[a-p]{32}$/.test(row)) {
+      set.add(`chrome-extension://${row}`);
+    }
+  }
+  return set.size > 0 ? set : null;
+}
+
+function requestOrigin(req) {
+  const value = String(req?.headers?.origin ?? '').trim();
+  if (!value) {
+    return '';
+  }
+  try {
+    const parsed = new URL(value);
+    return `${parsed.protocol}//${parsed.host}`;
+  } catch {
+    return '';
+  }
+}
+
+function isAllowedBridgeOrigin(origin) {
+  if (!origin) {
+    return false;
+  }
+  if (origin.startsWith('chrome-extension://')) {
+    if (!BRIDGE_ALLOWED_EXTENSION_ORIGINS) {
+      return true;
+    }
+    return BRIDGE_ALLOWED_EXTENSION_ORIGINS.has(origin);
+  }
+  return BRIDGE_ALLOWED_WEB_ORIGINS.has(origin);
+}
+
+function isLoopbackRequest(req) {
+  const remote = String(req?.socket?.remoteAddress ?? '');
+  if (!remote) {
+    return false;
+  }
+  return (
+    remote === '127.0.0.1' ||
+    remote === '::1' ||
+    remote === '::ffff:127.0.0.1'
+  );
+}
+
+function corsHeadersForRequest(req) {
+  const origin = requestOrigin(req);
+  if (!isAllowedBridgeOrigin(origin)) {
+    return {};
+  }
+  return {
+    'Access-Control-Allow-Origin': origin,
+    'Access-Control-Allow-Headers': 'content-type, authorization',
+    'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
+    Vary: 'Origin',
+  };
+}
+
 function safeTokenEquals(a, b) {
   const left = Buffer.from(String(a ?? ''), 'utf8');
   const right = Buffer.from(String(b ?? ''), 'utf8');
@@ -366,6 +446,7 @@ function bridgeStatusPayload({ exposeToken = false } = {}) {
     port: BRIDGE_PORT,
     tokenMasked: maskToken(state.bridge.token),
     token: exposeToken ? state.bridge.token : undefined,
+    tokenStorage: 'memory',
     lastSeenAt: state.bridge.lastSeenAt,
     connectedProviders,
     queuedTasks,
@@ -522,17 +603,6 @@ function parseAuthToken(req) {
   return raw.slice(7).trim();
 }
 
-function writeHttpJson(res, statusCode, payload) {
-  res.writeHead(statusCode, {
-    'Content-Type': 'application/json; charset=utf-8',
-    'Cache-Control': 'no-store',
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'content-type, authorization',
-    'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
-  });
-  res.end(JSON.stringify(payload));
-}
-
 function extractTaskIdFromPath(pathname) {
   const match = pathname.match(/^\/v1\/task\/([^/]+)\/(stage|result|error)$/);
   if (!match) {
@@ -545,35 +615,50 @@ function extractTaskIdFromPath(pathname) {
 }
 
 async function ensureBridgeToken() {
-  try {
-    const saved = (await readFile(BRIDGE_TOKEN_PATH, 'utf8')).trim();
-    if (saved) {
-      state.bridge.token = saved;
-      return saved;
-    }
-  } catch {
-    // ignore, generate below
+  if (state.bridge.token) {
+    return state.bridge.token;
   }
-  const next = randomBytes(24).toString('base64url');
+  const next = randomBytes(32).toString('base64url');
   state.bridge.token = next;
-  await writeFile(BRIDGE_TOKEN_PATH, `${next}\n`, { encoding: 'utf8', mode: 0o600 });
-  await hardenFile(BRIDGE_TOKEN_PATH);
   return next;
 }
 
 async function rotateBridgeToken() {
-  const next = randomBytes(24).toString('base64url');
+  const next = randomBytes(32).toString('base64url');
   state.bridge.token = next;
-  await writeFile(BRIDGE_TOKEN_PATH, `${next}\n`, { encoding: 'utf8', mode: 0o600 });
-  await hardenFile(BRIDGE_TOKEN_PATH);
   return bridgeStatusPayload({ exposeToken: true });
 }
 
+function writeHttpJson(req, res, statusCode, payload) {
+  const baseHeaders = {
+    'Content-Type': 'application/json; charset=utf-8',
+    'Cache-Control': 'no-store',
+  };
+  res.writeHead(statusCode, {
+    ...baseHeaders,
+    ...corsHeadersForRequest(req),
+  });
+  res.end(JSON.stringify(payload));
+}
+
 async function handleBridgeHttpRequest(req, res) {
-  if (req.method === 'OPTIONS') {
-    writeHttpJson(res, 200, { ok: true });
+  if (!isLoopbackRequest(req)) {
+    writeHttpJson(req, res, 403, { ok: false, error: 'forbidden' });
     return;
   }
+
+  const origin = requestOrigin(req);
+  if (!isAllowedBridgeOrigin(origin)) {
+    writeHttpJson(req, res, 403, { ok: false, error: 'forbidden_origin' });
+    return;
+  }
+
+  if (req.method === 'OPTIONS') {
+    writeHttpJson(req, res, 200, { ok: true });
+    return;
+  }
+
+  await ensureBridgeToken();
 
   const url = new URL(req.url || '/', `http://${BRIDGE_HOST}:${BRIDGE_PORT}`);
   const pathname = url.pathname;
@@ -581,16 +666,16 @@ async function handleBridgeHttpRequest(req, res) {
   if (pathname === '/v1/health' && req.method === 'GET') {
     const token = parseAuthToken(req);
     if (!safeTokenEquals(token, state.bridge.token)) {
-      writeHttpJson(res, 401, { ok: false, error: 'unauthorized' });
+      writeHttpJson(req, res, 401, { ok: false, error: 'unauthorized' });
       return;
     }
-    writeHttpJson(res, 200, { ok: true, bridge: bridgeStatusPayload({ exposeToken: false }) });
+    writeHttpJson(req, res, 200, { ok: true, bridge: bridgeStatusPayload({ exposeToken: false }) });
     return;
   }
 
   const token = parseAuthToken(req);
   if (!safeTokenEquals(token, state.bridge.token)) {
-    writeHttpJson(res, 401, { ok: false, error: 'unauthorized' });
+    writeHttpJson(req, res, 401, { ok: false, error: 'unauthorized' });
     return;
   }
 
@@ -599,7 +684,7 @@ async function handleBridgeHttpRequest(req, res) {
     try {
       body = await readJsonBody(req);
     } catch (error) {
-      writeHttpJson(res, 400, {
+      writeHttpJson(req, res, 400, {
         ok: false,
         error: error?.message || String(error),
       });
@@ -608,15 +693,15 @@ async function handleBridgeHttpRequest(req, res) {
     const provider = String(body.provider ?? '').trim().toLowerCase();
     const pageUrl = sanitizeUrlForUi(String(body.pageUrl ?? '').trim()) ?? null;
     if (!SESSION_PROVIDER_CONFIG[provider]) {
-      writeHttpJson(res, 400, { ok: false, error: `unsupported provider: ${provider}` });
+      writeHttpJson(req, res, 400, { ok: false, error: `unsupported provider: ${provider}` });
       return;
     }
     const task = claimBridgeTask(provider, pageUrl);
     if (!task) {
-      writeHttpJson(res, 200, { ok: true, task: null });
+      writeHttpJson(req, res, 200, { ok: true, task: null });
       return;
     }
-    writeHttpJson(res, 200, {
+    writeHttpJson(req, res, 200, {
       ok: true,
       task: {
         id: task.id,
@@ -635,7 +720,7 @@ async function handleBridgeHttpRequest(req, res) {
     try {
       body = await readJsonBody(req);
     } catch (error) {
-      writeHttpJson(res, 400, {
+      writeHttpJson(req, res, 400, {
         ok: false,
         error: error?.message || String(error),
       });
@@ -643,7 +728,7 @@ async function handleBridgeHttpRequest(req, res) {
     }
     const task = state.bridge.tasks.get(taskRoute.taskId);
     if (!task || task.settled) {
-      writeHttpJson(res, 404, { ok: false, error: 'task not found' });
+      writeHttpJson(req, res, 404, { ok: false, error: 'task not found' });
       return;
     }
 
@@ -654,13 +739,13 @@ async function handleBridgeHttpRequest(req, res) {
     if (taskRoute.action === 'stage') {
       const stage = normalizeBridgeTaskStage(body.stage);
       if (!stage) {
-        writeHttpJson(res, 400, { ok: false, error: 'invalid stage' });
+        writeHttpJson(req, res, 400, { ok: false, error: 'invalid stage' });
         return;
       }
       task.status = stage;
       const detail = String(body.detail ?? '').trim();
       bridgeProgress(provider, `bridge_${stage}`, detail || `브리지 단계: ${stage}`);
-      writeHttpJson(res, 200, { ok: true });
+      writeHttpJson(req, res, 200, { ok: true });
       return;
     }
 
@@ -670,14 +755,14 @@ async function handleBridgeHttpRequest(req, res) {
       task.status = 'failed';
       bridgeProgress(provider, 'bridge_failed', `${code}: ${message}`);
       failBridgeTask(task, code, message);
-      writeHttpJson(res, 200, { ok: true });
+      writeHttpJson(req, res, 200, { ok: true });
       return;
     }
 
     if (taskRoute.action === 'result') {
       const text = String(body.text ?? '').trim();
       if (!text) {
-        writeHttpJson(res, 400, { ok: false, error: 'text is required' });
+        writeHttpJson(req, res, 400, { ok: false, error: 'text is required' });
         return;
       }
       task.status = 'done';
@@ -687,12 +772,12 @@ async function handleBridgeHttpRequest(req, res) {
         raw: body.raw ?? null,
         meta: body.meta ?? null,
       });
-      writeHttpJson(res, 200, { ok: true });
+      writeHttpJson(req, res, 200, { ok: true });
       return;
     }
   }
 
-  writeHttpJson(res, 404, { ok: false, error: 'not found' });
+  writeHttpJson(req, res, 404, { ok: false, error: 'not found' });
 }
 
 async function startBridgeServer() {
@@ -702,7 +787,7 @@ async function startBridgeServer() {
   await ensureBridgeToken();
   const server = createServer((req, res) => {
     void handleBridgeHttpRequest(req, res).catch((error) => {
-      writeHttpJson(res, 500, {
+      writeHttpJson(req, res, 500, {
         ok: false,
         error: error?.message || String(error),
       });
@@ -1484,6 +1569,7 @@ async function handleRpcRequest(message) {
   }
 
   if (method === 'bridge/status') {
+    await ensureBridgeToken();
     respond(id, bridgeStatusPayload({ exposeToken: true }));
     return;
   }

@@ -848,6 +848,10 @@ h3 {
   pointer-events: none;
 }
 
+.edge-path.readonly {
+  opacity: 0.95;
+}
+
 .edge-path-hit {
   pointer-events: stroke;
   cursor: grab;
@@ -1916,8 +1920,8 @@ h3 {
 }
 
 .feed-agent-list button.is-active {
-  background: #e8f1ff;
-  color: #1d5db8;
+  background: #eceff4;
+  color: #253246;
 }
 
 .feed-agent-list-name {
@@ -2246,7 +2250,7 @@ h3 {
 }
 
 .feed-card.is-selected {
-  background: #f6f9ff;
+  background: #ffffff;
 }
 
 .feed-stream > .feed-card:last-child {
@@ -2378,8 +2382,28 @@ h3 {
 .feed-card-details {
   display: grid;
   gap: 9px;
+  max-height: 0;
+  opacity: 0;
+  overflow: hidden;
+  padding-top: 0;
+  border-top: 1px solid transparent;
+  pointer-events: none;
+  transform: translateY(-2px);
+  transition:
+    max-height 280ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 210ms ease,
+    padding-top 220ms ease,
+    border-top-color 220ms ease,
+    transform 280ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.feed-card-details.is-expanded {
+  max-height: 1000px;
+  opacity: 1;
   padding-top: 10px;
-  border-top: 1px solid #e7e9ec;
+  border-top-color: #e7e9ec;
+  pointer-events: auto;
+  transform: translateY(0);
 }
 
 .feed-sns-content {
@@ -2428,7 +2452,7 @@ h3 {
 }
 
 .feed-share-icon-button:hover {
-  background: #eff5ff;
+  background: #f2f4f7;
 }
 
 .feed-share-icon {
@@ -2495,14 +2519,14 @@ h3 {
   height: 30px;
   justify-content: flex-start;
   padding: 0 10px;
-  background: #eef3ff;
-  color: #194da8;
+  background: #f1f3f6;
+  color: #2f3b4b;
   border-radius: 6px;
   box-shadow: none;
 }
 
 .feed-share-menu button:hover {
-  background: #e1ebff;
+  background: #e5e8ed;
 }
 
 .feed-reply-row {
@@ -2765,7 +2789,7 @@ pre {
 .bridge-view {
   margin: 0 10px 10px;
   display: grid;
-  gap: 12px;
+  gap: 36px;
   align-content: start;
   overflow: auto;
 }
@@ -2796,7 +2820,8 @@ pre {
   overflow: auto;
   background: var(--surface, #fff);
   border-radius: 12px;
-  padding: 8px;
+  margin-top: 6px;
+  /* padding: 8px; */
 }
 
 .bridge-log-line {
@@ -2806,7 +2831,7 @@ pre {
   color: #2e3947;
   background: #f6f6f6;
   border-radius: 6px;
-  padding: 6px 8px;
+  padding: 2px 0;
 }
 
 .bridge-code-card {
@@ -2833,6 +2858,7 @@ pre {
   border: 0;
   border-radius: 6px;
   background: #ffffff;
+  align-content: center;
   color: #1f2730;
   padding: 10px;
   font-family: "BasicallyAMono", "Noto Sans KR", monospace;

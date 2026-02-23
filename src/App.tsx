@@ -89,6 +89,12 @@ type GraphEdge = {
   control?: { x: number; y: number };
 };
 
+type CanvasDisplayEdge = {
+  edge: GraphEdge;
+  edgeKey: string;
+  readOnly: boolean;
+};
+
 type GraphData = {
   version: number;
   nodes: GraphNode[];
@@ -460,17 +466,11 @@ type WebBridgeStatus = {
   port: number;
   tokenMasked: string;
   token?: string;
+  tokenStorage?: string;
   lastSeenAt?: string | null;
   connectedProviders: WebBridgeProviderSeen[];
   queuedTasks: number;
   activeTasks: number;
-};
-
-type WebProviderHealthEntry = {
-  contextOpen?: boolean;
-  profileDir?: string;
-  url?: string | null;
-  sessionState?: string | null;
 };
 
 type PendingWebTurn = {
@@ -530,7 +530,9 @@ const AUTO_LAYOUT_START_X = 40;
 const AUTO_LAYOUT_START_Y = 40;
 const AUTO_LAYOUT_COLUMN_GAP = 320;
 const AUTO_LAYOUT_ROW_GAP = 184;
-const AUTO_LAYOUT_SNAP_THRESHOLD = 20;
+const AUTO_LAYOUT_SNAP_THRESHOLD = 44;
+const AUTO_LAYOUT_DRAG_SNAP_THRESHOLD = 36;
+const AUTO_LAYOUT_NODE_AXIS_SNAP_THRESHOLD = 38;
 const AUTO_EDGE_STRAIGHTEN_THRESHOLD = 72;
 const AGENT_RULE_CACHE_TTL_MS = 12_000;
 const AGENT_RULE_MAX_DOCS = 16;
@@ -2230,6 +2232,67 @@ function getGraphEdgeKey(edge: GraphEdge): string {
   return `${edge.from.nodeId}:${edge.from.port}->${edge.to.nodeId}:${edge.to.port}`;
 }
 
+function buildSimpleReadonlyTurnEdges(
+  graph: GraphData,
+  visibleNodeIdSet: Set<string>,
+): Array<{ fromId: string; toId: string }> {
+  if (visibleNodeIdSet.size === 0) {
+    return [];
+  }
+
+  const outgoing = new Map<string, string[]>();
+  for (const node of graph.nodes) {
+    outgoing.set(node.id, []);
+  }
+  for (const edge of graph.edges) {
+    const children = outgoing.get(edge.from.nodeId) ?? [];
+    children.push(edge.to.nodeId);
+    outgoing.set(edge.from.nodeId, children);
+  }
+
+  const results: Array<{ fromId: string; toId: string }> = [];
+  const seen = new Set<string>();
+
+  for (const fromId of visibleNodeIdSet) {
+    const queue: string[] = [];
+    const initialChildren = outgoing.get(fromId) ?? [];
+    for (const childId of initialChildren) {
+      if (!visibleNodeIdSet.has(childId)) {
+        queue.push(childId);
+      }
+    }
+
+    const visitedHidden = new Set<string>();
+    while (queue.length > 0) {
+      const currentId = queue.shift() ?? "";
+      if (!currentId || visitedHidden.has(currentId)) {
+        continue;
+      }
+      visitedHidden.add(currentId);
+
+      const children = outgoing.get(currentId) ?? [];
+      for (const childId of children) {
+        if (!childId || childId === fromId) {
+          continue;
+        }
+        if (visibleNodeIdSet.has(childId)) {
+          const key = `${fromId}->${childId}`;
+          if (!seen.has(key)) {
+            seen.add(key);
+            results.push({ fromId, toId: childId });
+          }
+          continue;
+        }
+        if (!visitedHidden.has(childId)) {
+          queue.push(childId);
+        }
+      }
+    }
+  }
+
+  return results;
+}
+
 function getAutoConnectionSides(
   fromNode: GraphNode,
   toNode: GraphNode,
@@ -2339,6 +2402,28 @@ function snapToLayoutGrid(value: number, axis: "x" | "y", thresholdPx?: number):
     return snapped;
   }
   return Math.abs(value - snapped) <= thresholdPx ? snapped : value;
+}
+
+function snapToNearbyNodeAxis(
+  value: number,
+  axis: "x" | "y",
+  candidates: GraphNode[],
+  thresholdPx: number,
+): number {
+  if (candidates.length === 0 || thresholdPx <= 0) {
+    return value;
+  }
+  let nearest = value;
+  let nearestDistance = Number.POSITIVE_INFINITY;
+  for (const node of candidates) {
+    const candidateValue = axis === "x" ? node.position.x : node.position.y;
+    const distance = Math.abs(value - candidateValue);
+    if (distance < nearestDistance) {
+      nearest = candidateValue;
+      nearestDistance = distance;
+    }
+  }
+  return nearestDistance <= thresholdPx ? nearest : value;
 }
 
 function autoArrangeGraphLayout(input: GraphData): GraphData {
@@ -2646,48 +2731,12 @@ function toWebBridgeStatus(raw: unknown): WebBridgeStatus {
     port: Number(row.port ?? 38961) || 38961,
     tokenMasked: typeof row.tokenMasked === "string" ? row.tokenMasked : "",
     token: typeof row.token === "string" ? row.token : undefined,
+    tokenStorage: typeof row.tokenStorage === "string" ? row.tokenStorage : undefined,
     lastSeenAt: typeof row.lastSeenAt === "string" ? row.lastSeenAt : row.lastSeenAt == null ? null : undefined,
     connectedProviders,
     queuedTasks: Math.max(0, Number(row.queuedTasks ?? 0) || 0),
     activeTasks: Math.max(0, Number(row.activeTasks ?? 0) || 0),
   };
-}
-
-function toWebProviderHealthMap(raw: unknown): Record<string, WebProviderHealthEntry> {
-  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
-    return {};
-  }
-  const entries = raw as Record<string, unknown>;
-  const next: Record<string, WebProviderHealthEntry> = {};
-  for (const [key, value] of Object.entries(entries)) {
-    if (!value || typeof value !== "object" || Array.isArray(value)) {
-      continue;
-    }
-    const row = value as Record<string, unknown>;
-    next[key] = {
-      contextOpen: typeof row.contextOpen === "boolean" ? row.contextOpen : undefined,
-      profileDir: typeof row.profileDir === "string" ? row.profileDir : undefined,
-      url: typeof row.url === "string" ? row.url : row.url == null ? null : undefined,
-      sessionState: typeof row.sessionState === "string" ? row.sessionState : undefined,
-    };
-  }
-  return next;
-}
-
-function providerSessionStateMeta(state?: string | null, contextOpen?: boolean): {
-  label: string;
-  tone: "connected" | "required" | "unknown";
-} {
-  if (!contextOpen) {
-    return { label: "확인 필요", tone: "unknown" };
-  }
-  if (state === "active") {
-    return { label: "연결됨", tone: "connected" };
-  }
-  if (state === "login_required") {
-    return { label: "로그인 필요", tone: "required" };
-  }
-  return { label: "확인 필요", tone: "unknown" };
 }
 
 function turnRoleLabel(node: GraphNode): string {
@@ -4259,7 +4308,7 @@ function App() {
   const [pendingWebTurn, setPendingWebTurn] = useState<PendingWebTurn | null>(null);
   const [pendingWebLogin, setPendingWebLogin] = useState<PendingWebLogin | null>(null);
   const [webResponseDraft, setWebResponseDraft] = useState("");
-  const [webWorkerHealth, setWebWorkerHealth] = useState<WebWorkerHealth>({
+  const [, setWebWorkerHealth] = useState<WebWorkerHealth>({
     running: false,
   });
   const [webWorkerBusy, setWebWorkerBusy] = useState(false);
@@ -4397,6 +4446,33 @@ function App() {
       (edge) => canvasNodeIdSet.has(edge.from.nodeId) && canvasNodeIdSet.has(edge.to.nodeId),
     );
   }, [graph.edges, canvasNodeIdSet]);
+  const canvasDisplayEdges = useMemo<CanvasDisplayEdge[]>(() => {
+    const editableEdges: CanvasDisplayEdge[] = canvasEdges.map((edge) => ({
+      edge,
+      edgeKey: getGraphEdgeKey(edge),
+      readOnly: false,
+    }));
+    if (!SIMPLE_WORKFLOW_UI) {
+      return editableEdges;
+    }
+
+    const editablePairSet = new Set(
+      editableEdges.map((row) => `${row.edge.from.nodeId}->${row.edge.to.nodeId}`),
+    );
+    const readonlyPairs = buildSimpleReadonlyTurnEdges(graph, canvasNodeIdSet).filter(
+      (pair) => !editablePairSet.has(`${pair.fromId}->${pair.toId}`),
+    );
+    const readonlyEdges: CanvasDisplayEdge[] = readonlyPairs.map((pair) => ({
+      edge: {
+        from: { nodeId: pair.fromId, port: "out" },
+        to: { nodeId: pair.toId, port: "in" },
+      },
+      edgeKey: `readonly:${pair.fromId}->${pair.toId}`,
+      readOnly: true,
+    }));
+
+    return [...editableEdges, ...readonlyEdges];
+  }, [canvasEdges, canvasNodeIdSet, graph]);
   const selectedNode = canvasNodes.find((node) => node.id === selectedNodeId) ?? null;
   const questionDirectInputNodeIds = useMemo(() => {
     const incomingNodeIds = new Set(graph.edges.map((edge) => edge.to.nodeId));
@@ -6257,10 +6333,13 @@ function App() {
     const dy = logicalPoint.y - pointerStart.y;
     const minPos = -NODE_DRAG_MARGIN;
     const nodeIdSet = new Set(nodeIds);
+    const dragSingleNode = nodeIds.length === 1;
 
     setGraph((prev) => ({
       ...prev,
-      nodes: prev.nodes.map((node) => {
+      nodes: (() => {
+        const stationaryNodes = prev.nodes.filter((node) => !nodeIdSet.has(node.id));
+        return prev.nodes.map((node) => {
         if (!nodeIdSet.has(node.id)) {
           return node;
         }
@@ -6273,14 +6352,21 @@ function App() {
         const maxY = Math.max(minPos, boundedStageHeight - size.height + NODE_DRAG_MARGIN);
         const nextX = start.x + dx;
         const nextY = start.y + dy;
+        let snappedX = snapToLayoutGrid(nextX, "x", AUTO_LAYOUT_DRAG_SNAP_THRESHOLD);
+        let snappedY = snapToLayoutGrid(nextY, "y", AUTO_LAYOUT_DRAG_SNAP_THRESHOLD);
+        if (dragSingleNode) {
+          snappedX = snapToNearbyNodeAxis(snappedX, "x", stationaryNodes, AUTO_LAYOUT_NODE_AXIS_SNAP_THRESHOLD);
+          snappedY = snapToNearbyNodeAxis(snappedY, "y", stationaryNodes, AUTO_LAYOUT_NODE_AXIS_SNAP_THRESHOLD);
+        }
         return {
           ...node,
           position: {
-            x: Math.min(maxX, Math.max(minPos, nextX)),
-            y: Math.min(maxY, Math.max(minPos, nextY)),
+            x: Math.min(maxX, Math.max(minPos, snappedX)),
+            y: Math.min(maxY, Math.max(minPos, snappedY)),
           },
         };
-      }),
+      });
+      })(),
     }));
   }
 
@@ -6505,9 +6591,12 @@ function App() {
     setDraggingNodeIds([]);
     if (dragNodeIds.length > 0) {
       const draggedNodeIdSet = new Set(dragNodeIds);
+      const dragSingleNode = dragNodeIds.length === 1;
       setGraph((prev) => ({
         ...prev,
-        nodes: prev.nodes.map((node) => {
+        nodes: (() => {
+          const stationaryNodes = prev.nodes.filter((node) => !draggedNodeIdSet.has(node.id));
+          return prev.nodes.map((node) => {
           if (!draggedNodeIdSet.has(node.id)) {
             return node;
           }
@@ -6515,17 +6604,21 @@ function App() {
           const minPos = -NODE_DRAG_MARGIN;
           const maxX = Math.max(minPos, boundedStageWidth - size.width + NODE_DRAG_MARGIN);
           const maxY = Math.max(minPos, boundedStageHeight - size.height + NODE_DRAG_MARGIN);
+          let snappedX = snapToLayoutGrid(node.position.x, "x", AUTO_LAYOUT_SNAP_THRESHOLD);
+          let snappedY = snapToLayoutGrid(node.position.y, "y", AUTO_LAYOUT_SNAP_THRESHOLD);
+          if (dragSingleNode) {
+            snappedX = snapToNearbyNodeAxis(snappedX, "x", stationaryNodes, AUTO_LAYOUT_NODE_AXIS_SNAP_THRESHOLD);
+            snappedY = snapToNearbyNodeAxis(snappedY, "y", stationaryNodes, AUTO_LAYOUT_NODE_AXIS_SNAP_THRESHOLD);
+          }
           return {
             ...node,
             position: {
-              x: Math.min(
-                maxX,
-                Math.max(minPos, snapToLayoutGrid(node.position.x, "x", AUTO_LAYOUT_SNAP_THRESHOLD)),
-              ),
-              y: Math.min(maxY, Math.max(minPos, snapToLayoutGrid(node.position.y, "y", AUTO_LAYOUT_SNAP_THRESHOLD))),
+              x: Math.min(maxX, Math.max(minPos, snappedX)),
+              y: Math.min(maxY, Math.max(minPos, snappedY)),
             },
           };
-        }),
+        });
+        })(),
       }));
     }
   }
@@ -6821,11 +6914,11 @@ function App() {
     if (!selectedEdgeKey) {
       return;
     }
-    const exists = canvasEdges.some((edge) => getGraphEdgeKey(edge) === selectedEdgeKey);
+    const exists = canvasDisplayEdges.some((row) => !row.readOnly && row.edgeKey === selectedEdgeKey);
     if (!exists) {
       setSelectedEdgeKey("");
     }
-  }, [canvasEdges, selectedEdgeKey]);
+  }, [canvasDisplayEdges, selectedEdgeKey]);
 
   useEffect(() => {
     if (workspaceTab !== "workflow" && canvasFullscreen) {
@@ -7028,7 +7121,9 @@ function App() {
       }
 
       if (selectedEdgeKey) {
-        const hasEdge = canvasEdges.some((edge) => getGraphEdgeKey(edge) === selectedEdgeKey);
+        const hasEdge = canvasDisplayEdges.some(
+          (row) => !row.readOnly && row.edgeKey === selectedEdgeKey,
+        );
         if (!hasEdge) {
           setSelectedEdgeKey("");
           return;
@@ -7057,7 +7152,7 @@ function App() {
 
     window.addEventListener("keydown", onDeleteSelection);
     return () => window.removeEventListener("keydown", onDeleteSelection);
-  }, [workspaceTab, selectedEdgeKey, selectedNodeIds, canvasEdges, canvasNodeIdSet]);
+  }, [workspaceTab, selectedEdgeKey, selectedNodeIds, canvasDisplayEdges, canvasNodeIdSet]);
 
   useEffect(() => {
     try {
@@ -8578,79 +8673,6 @@ ${prompt}`;
     );
   }
 
-  function renderWebAutomationPanel() {
-    const providerHealthMap = toWebProviderHealthMap(webWorkerHealth.providers);
-    const activeProviderRaw =
-      typeof webWorkerHealth.activeProvider === "string" ? webWorkerHealth.activeProvider.trim() : "";
-    const activeProviderLabel = activeProviderRaw
-      ? WEB_PROVIDER_OPTIONS.includes(activeProviderRaw as WebProvider)
-        ? webProviderLabel(activeProviderRaw as WebProvider)
-        : activeProviderRaw.toUpperCase()
-      : "없음";
-    return (
-      <section className="controls web-automation-panel">
-        <div className="web-automation-head">
-          <h2>웹 계정 연동</h2>
-          <button
-            aria-label="상태 동기화"
-            className="settings-refresh-button settings-refresh-icon-button"
-            disabled={webWorkerBusy}
-            onClick={() => refreshWebWorkerHealth()}
-            title="상태 동기화"
-            type="button"
-          >
-            <img alt="" aria-hidden="true" className="settings-refresh-icon" src="/reload.svg" />
-          </button>
-        </div>
-        <div className="settings-badges">
-          <span className="status-tag neutral">활성 프로바이더: {activeProviderLabel}</span>
-          <span className="status-tag neutral">
-            상태 동기화: {webWorkerHealth.running ? "준비됨" : "초기화 필요"}
-          </span>
-        </div>
-        <div className="usage-method">
-          각 서비스의 로그인 상태를 확인하고, 필요한 서비스만 로그인하세요.
-        </div>
-        <div className="usage-method">
-          브리지 기반 자동 수집 설정은 왼쪽 탭의 `브리지`에서 관리합니다.
-        </div>
-        <section className="provider-hub">
-          <h3>서비스 로그인 상태</h3>
-          <div className="provider-hub-list">
-            {WEB_PROVIDER_OPTIONS.map((provider) => {
-              const row = providerHealthMap[provider];
-              const hasContext = row?.contextOpen === true;
-              const session = providerSessionStateMeta(row?.sessionState, hasContext);
-              return (
-                <div className="provider-hub-row" key={`session-${provider}`}>
-                  <div className="provider-hub-meta">
-                    <span className={`provider-session-pill ${session.tone}`}>
-                      <span className="provider-session-label">{session.label}</span>
-                    </span>
-                    <span className="provider-hub-name">{webProviderLabel(provider)}</span>
-                  </div>
-                  <div className="button-row provider-session-actions">
-                    <button
-                      className="provider-session-toggle"
-                      disabled={webWorkerBusy}
-                      onClick={() => onOpenProviderSession(provider)}
-                      type="button"
-                    >
-                      <span className="settings-button-label">로그인</span>
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-          <div className="usage-method">
-            세션 데이터는 로컬 프로필에만 저장되며, 토큰/쿠키 값은 UI와 로그에 출력하지 않습니다.
-          </div>
-        </section>
-      </section>
-    );
-  }
-
   function renderBridgePanel() {
     const providerSeenMap = new Map(
       webBridgeStatus.connectedProviders.map((row) => [row.provider, row] as const),
@@ -8699,6 +8721,9 @@ ${prompt}`;
           </div>
           <div className="usage-method">
             확장과의 통신은 127.0.0.1 로컬 루프백 + Bearer 토큰으로만 허용됩니다.
+          </div>
+          <div className="usage-method">
+            토큰 저장 위치: {webBridgeStatus.tokenStorage === "memory" ? "메모리 세션(앱 종료 시 폐기)" : "확인 필요"}
           </div>
           <div className="usage-method">
             실행 후 해당 웹 탭에서 전송 버튼을 1회 눌러야 답변 수집이 시작됩니다.
@@ -8768,8 +8793,9 @@ ${prompt}`;
     );
   }
 
-  const edgeLines = canvasEdges
-    .map((edge, index) => {
+  const edgeLines = canvasDisplayEdges
+    .map((entry, index) => {
+      const edge = entry.edge;
       const fromNode = canvasNodeMap.get(edge.from.nodeId);
       const toNode = canvasNodeMap.get(edge.to.nodeId);
       if (!fromNode || !toNode) {
@@ -8785,7 +8811,7 @@ ${prompt}`;
       const toSize = getNodeVisualSize(toNode.id);
       const auto = getAutoConnectionSides(fromNode, toNode, fromSize, toSize);
       const hasManualControl =
-        typeof edge.control?.x === "number" && typeof edge.control?.y === "number";
+        !entry.readOnly && typeof edge.control?.x === "number" && typeof edge.control?.y === "number";
       const resolvedFromSide = hasManualControl ? (edge.from.side ?? auto.fromSide) : auto.fromSide;
       const resolvedToSide = hasManualControl ? (edge.to.side ?? auto.toSide) : auto.toSide;
       let fromPoint = getNodeAnchorPoint(fromNode, resolvedFromSide, fromSize);
@@ -8804,7 +8830,7 @@ ${prompt}`;
         fromPoint = aligned.fromPoint;
         toPoint = aligned.toPoint;
       }
-      const edgeKey = getGraphEdgeKey(edge);
+      const edgeKey = entry.edgeKey;
       const defaultControl = edgeMidPoint(fromPoint, toPoint);
       const control = edge.control ?? defaultControl;
 
@@ -8816,6 +8842,7 @@ ${prompt}`;
         controlPoint: control,
         hasManualControl,
         flowActive,
+        readOnly: entry.readOnly,
         path: hasManualControl
           ? buildManualEdgePath(fromPoint.x, fromPoint.y, control.x, control.y, toPoint.x, toPoint.y)
           : buildRoundedEdgePath(
@@ -8838,6 +8865,7 @@ ${prompt}`;
       controlPoint: LogicalPoint;
       hasManualControl: boolean;
       flowActive: boolean;
+      readOnly: boolean;
     }>;
   const connectPreviewLine = (() => {
     if (!connectFromNodeId || !connectPreviewPoint) {
@@ -9315,40 +9343,69 @@ ${prompt}`;
                         >
                           <path d="M0 0 L7 3.5 L0 7 Z" fill="#70848a" />
                         </marker>
+                        <marker
+                          id="edge-arrow-readonly"
+                          markerHeight="7"
+                          markerUnits="userSpaceOnUse"
+                          markerWidth="7"
+                          orient="auto"
+                          refX="6"
+                          refY="3.5"
+                        >
+                          <path d="M0 0 L7 3.5 L0 7 Z" fill="#c07a2f" />
+                        </marker>
                       </defs>
                       {edgeLines.map((line) => (
                         <g key={line.key}>
+                          {!line.readOnly && (
+                            <path
+                              className="edge-path-hit"
+                              d={line.path}
+                              fill="none"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setNodeSelection([]);
+                                setSelectedEdgeKey(line.edgeKey);
+                              }}
+                              onMouseDown={(e) => onEdgeDragStart(e, line.edgeKey, line.controlPoint)}
+                              pointerEvents="stroke"
+                              stroke="transparent"
+                              strokeWidth={(selectedEdgeKey === line.edgeKey ? 3 : 2) + 2}
+                            />
+                          )}
                           <path
-                            className="edge-path-hit"
+                            className={`${selectedEdgeKey === line.edgeKey ? "edge-path selected" : "edge-path"} ${
+                              line.readOnly ? "readonly" : ""
+                            }`.trim()}
                             d={line.path}
                             fill="none"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setNodeSelection([]);
-                              setSelectedEdgeKey(line.edgeKey);
-                            }}
-                            onMouseDown={(e) => onEdgeDragStart(e, line.edgeKey, line.controlPoint)}
-                            pointerEvents="stroke"
-                            stroke="transparent"
-                            strokeWidth={(selectedEdgeKey === line.edgeKey ? 3 : 2) + 2}
-                          />
-                          <path
-                            className={selectedEdgeKey === line.edgeKey ? "edge-path selected" : "edge-path"}
-                            d={line.path}
-                            fill="none"
-                            markerEnd="url(#edge-arrow)"
+                            markerEnd={line.readOnly ? "url(#edge-arrow-readonly)" : "url(#edge-arrow)"}
                             pointerEvents="none"
-                            stroke={selectedEdgeKey === line.edgeKey ? "#4f83ff" : "#70848a"}
+                            stroke={line.readOnly ? "#c07a2f" : selectedEdgeKey === line.edgeKey ? "#4f83ff" : "#4f6271"}
+                            strokeDasharray={line.readOnly ? "7 4" : undefined}
                             strokeLinejoin="round"
                             strokeLinecap="round"
                             strokeWidth={selectedEdgeKey === line.edgeKey ? 3 : 2}
                           />
                           {line.flowActive && (
                             <>
-                              <circle cx={line.startPoint.x} cy={line.startPoint.y} fill="#4f83ff" pointerEvents="none" r={3.1}>
+                              <circle
+                                cx={line.startPoint.x}
+                                cy={line.startPoint.y}
+                                fill={line.readOnly ? "#c07a2f" : "#4f83ff"}
+                                pointerEvents="none"
+                                r={3.1}
+                              >
                                 <animateMotion dur="1.15s" path={line.path} repeatCount="indefinite" rotate="auto" />
                               </circle>
-                              <circle cx={line.startPoint.x} cy={line.startPoint.y} fill="#78a7ff" opacity="0.9" pointerEvents="none" r={2.2}>
+                              <circle
+                                cx={line.startPoint.x}
+                                cy={line.startPoint.y}
+                                fill={line.readOnly ? "#d39b5e" : "#78a7ff"}
+                                opacity="0.9"
+                                pointerEvents="none"
+                                r={2.2}
+                              >
                                 <animateMotion
                                   begin="-0.55s"
                                   dur="1.15s"
@@ -9359,7 +9416,7 @@ ${prompt}`;
                               </circle>
                             </>
                           )}
-                          {selectedEdgeKey === line.edgeKey && (
+                          {!line.readOnly && selectedEdgeKey === line.edgeKey && (
                             <circle
                               className="edge-control-point"
                               cx={line.controlPoint.x}
@@ -10716,6 +10773,7 @@ ${prompt}`;
                         <div className="feed-card-summary">{post.summary || "(요약 없음)"}</div>
                         <button
                           className="feed-more-button"
+                          aria-expanded={isExpanded}
                           onClick={() =>
                             setFeedExpandedByPost((prev) => ({
                               ...prev,
@@ -10726,40 +10784,38 @@ ${prompt}`;
                         >
                           {isExpanded ? "접기" : "더보기"}
                         </button>
-                        {isExpanded && (
-                          <div className="feed-card-details">
-                            {post.question && <div className="feed-card-question">Q: {post.question}</div>}
-                            <pre className="feed-sns-content">{visibleContent}</pre>
-                            <div className="feed-evidence-row">
-                              <span>{formatRelativeFeedTime(post.createdAt)}</span>
-                              <span>생성 시간 {formatDuration(post.evidence.durationMs)}</span>
-                              <span>사용량 {formatUsage(post.evidence.usage)}</span>
-                              {pendingRequestCount > 0 && <span>추가 요청 대기 {pendingRequestCount}건</span>}
-                            </div>
-                            {canRequest && (
-                              <div className="feed-reply-row">
-                                <input
-                                  onChange={(event) =>
-                                    setFeedReplyDraftByPost((prev) => ({
-                                      ...prev,
-                                      [post.id]: event.currentTarget.value,
-                                    }))
-                                  }
-                                  placeholder="에이전트에게 추가 요청을 남기세요"
-                                  value={requestDraft}
-                                />
-                                <button
-                                  aria-label="요청 보내기"
-                                  className="primary-action question-create-button feed-reply-send-button"
-                                  onClick={() => onSubmitFeedAgentRequest(post)}
-                                  type="button"
-                                >
-                                  <img alt="" aria-hidden="true" className="question-create-icon" src="/up.svg" />
-                                </button>
-                              </div>
-                            )}
+                        <div className={`feed-card-details ${isExpanded ? "is-expanded" : ""}`} aria-hidden={!isExpanded}>
+                          {post.question && <div className="feed-card-question">Q: {post.question}</div>}
+                          <pre className="feed-sns-content">{visibleContent}</pre>
+                          <div className="feed-evidence-row">
+                            <span>{formatRelativeFeedTime(post.createdAt)}</span>
+                            <span>생성 시간 {formatDuration(post.evidence.durationMs)}</span>
+                            <span>사용량 {formatUsage(post.evidence.usage)}</span>
+                            {pendingRequestCount > 0 && <span>추가 요청 대기 {pendingRequestCount}건</span>}
                           </div>
-                        )}
+                          {canRequest && (
+                            <div className="feed-reply-row">
+                              <input
+                                onChange={(event) =>
+                                  setFeedReplyDraftByPost((prev) => ({
+                                    ...prev,
+                                    [post.id]: event.currentTarget.value,
+                                  }))
+                                }
+                                placeholder="에이전트에게 추가 요청을 남기세요"
+                                value={requestDraft}
+                              />
+                              <button
+                                aria-label="요청 보내기"
+                                className="primary-action question-create-button feed-reply-send-button"
+                                onClick={() => onSubmitFeedAgentRequest(post)}
+                                type="button"
+                              >
+                                <img alt="" aria-hidden="true" className="question-create-icon" src="/up.svg" />
+                              </button>
+                            </div>
+                          )}
+                        </div>
                       </section>
                     );
                   })}
@@ -10862,7 +10918,6 @@ ${prompt}`;
         {workspaceTab === "settings" && (
           <section className="panel-card settings-view workspace-tab-panel">
             {renderSettingsPanel(false)}
-            {renderWebAutomationPanel()}
             {lastSavedRunFile && <div>최근 실행 파일: {formatRunFileLabel(lastSavedRunFile)}</div>}
           </section>
         )}

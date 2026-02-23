@@ -2,6 +2,8 @@ const DEFAULT_BRIDGE_URL = "http://127.0.0.1:38961";
 const CLAIM_INTERVAL_MS = 1400;
 const INPUT_WAIT_TIMEOUT_MS = 15000;
 const RESPONSE_STABLE_MS = 1600;
+const URL_KEY = "railBridgeUrl";
+const TOKEN_KEY = "railBridgeToken";
 
 const PROVIDER_CONFIG = {
   gemini: {
@@ -102,17 +104,67 @@ let claimInFlight = false;
 let activeTask = null;
 
 function normalizeBridgeUrl(raw) {
+  const validated = validateBridgeUrl(raw);
+  if (!validated) {
+    return DEFAULT_BRIDGE_URL;
+  }
+  return validated;
+}
+
+function validateBridgeUrl(raw) {
   const trimmed = String(raw ?? "").trim();
   if (!trimmed) {
     return DEFAULT_BRIDGE_URL;
   }
-  return trimmed.replace(/\/+$/, "");
+  try {
+    const parsed = new URL(trimmed);
+    if (parsed.protocol !== "http:") {
+      return null;
+    }
+    if (parsed.hostname !== "127.0.0.1") {
+      return null;
+    }
+    const normalizedPath = parsed.pathname.replace(/\/+$/, "");
+    if (normalizedPath && normalizedPath !== "") {
+      return null;
+    }
+    const port = parsed.port || "38961";
+    return `http://127.0.0.1:${port}`;
+  } catch {
+    return null;
+  }
+}
+
+async function readSessionBridgeConfig() {
+  if (!chrome.storage.session) {
+    return {};
+  }
+  return chrome.storage.session.get([URL_KEY, TOKEN_KEY]);
+}
+
+async function writeSessionBridgeConfig(values) {
+  if (!chrome.storage.session) {
+    return;
+  }
+  await chrome.storage.session.set(values);
 }
 
 async function loadBridgeConfig() {
-  const stored = await chrome.storage.local.get(["railBridgeUrl", "railBridgeToken"]);
-  bridgeUrl = normalizeBridgeUrl(stored.railBridgeUrl);
-  bridgeToken = String(stored.railBridgeToken ?? "").trim();
+  const [sessionStored, localStored] = await Promise.all([
+    readSessionBridgeConfig(),
+    chrome.storage.local.get([URL_KEY, TOKEN_KEY]),
+  ]);
+  const nextUrl = validateBridgeUrl(sessionStored[URL_KEY] ?? localStored[URL_KEY]);
+  bridgeUrl = nextUrl || DEFAULT_BRIDGE_URL;
+
+  const sessionToken = String(sessionStored[TOKEN_KEY] ?? "").trim();
+  const localToken = String(localStored[TOKEN_KEY] ?? "").trim();
+  bridgeToken = sessionToken || localToken;
+
+  if (!sessionToken && localToken) {
+    await writeSessionBridgeConfig({ [TOKEN_KEY]: localToken });
+    await chrome.storage.local.remove([TOKEN_KEY]);
+  }
 }
 
 function isElementVisible(element) {
@@ -223,6 +275,9 @@ async function waitForResponse(provider, prompt, timeoutMs) {
 }
 
 async function callBridge(path, body, method = "POST") {
+  if (!validateBridgeUrl(bridgeUrl)) {
+    throw new Error("브리지 URL은 http://127.0.0.1:<port>만 허용됩니다.");
+  }
   const response = await fetch(`${bridgeUrl}${path}`, {
     method,
     headers: {
@@ -371,10 +426,10 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 });
 
 chrome.storage.onChanged.addListener((changes, areaName) => {
-  if (areaName !== "local") {
+  if (areaName !== "local" && areaName !== "session") {
     return;
   }
-  if ("railBridgeUrl" in changes || "railBridgeToken" in changes) {
+  if (URL_KEY in changes || TOKEN_KEY in changes) {
     void loadBridgeConfig();
   }
 });
