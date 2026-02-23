@@ -4256,7 +4256,23 @@ function App() {
   const runStartGuardRef = useRef(false);
 
   const activeApproval = pendingApprovals[0];
-  const selectedNode = graph.nodes.find((node) => node.id === selectedNodeId) ?? null;
+  const canvasNodes = useMemo(() => {
+    if (!SIMPLE_WORKFLOW_UI) {
+      return graph.nodes;
+    }
+    return graph.nodes.filter((node) => node.type === "turn");
+  }, [graph.nodes]);
+  const canvasNodeIdSet = useMemo(() => new Set(canvasNodes.map((node) => node.id)), [canvasNodes]);
+  const canvasNodeMap = useMemo(() => new Map(canvasNodes.map((node) => [node.id, node])), [canvasNodes]);
+  const canvasEdges = useMemo(() => {
+    if (!SIMPLE_WORKFLOW_UI) {
+      return graph.edges;
+    }
+    return graph.edges.filter(
+      (edge) => canvasNodeIdSet.has(edge.from.nodeId) && canvasNodeIdSet.has(edge.to.nodeId),
+    );
+  }, [graph.edges, canvasNodeIdSet]);
+  const selectedNode = canvasNodes.find((node) => node.id === selectedNodeId) ?? null;
   const questionDirectInputNodeIds = useMemo(() => {
     const incomingNodeIds = new Set(graph.edges.map((edge) => edge.to.nodeId));
     return new Set(graph.nodes.filter((node) => !incomingNodeIds.has(node.id)).map((node) => node.id));
@@ -5514,6 +5530,13 @@ function App() {
     };
   }
 
+  function pickDefaultCanvasNodeId(nodes: GraphNode[]): string {
+    if (!SIMPLE_WORKFLOW_UI) {
+      return nodes[0]?.id ?? "";
+    }
+    return nodes.find((node) => node.type === "turn")?.id ?? "";
+  }
+
   function addNode(type: NodeType) {
     const center = getCanvasViewportCenterLogical();
     const fallbackIndex = graph.nodes.length;
@@ -5560,7 +5583,8 @@ function App() {
     setGraph(cloneGraph(nextPreset));
     setUndoStack([]);
     setRedoStack([]);
-    setNodeSelection(nextPreset.nodes.map((node) => node.id).slice(0, 1), nextPreset.nodes[0]?.id);
+    const initialNodeId = pickDefaultCanvasNodeId(nextPreset.nodes);
+    setNodeSelection(initialNodeId ? [initialNodeId] : [], initialNodeId || undefined);
     setSelectedEdgeKey("");
     setNodeStates({});
     setConnectFromNodeId("");
@@ -6008,7 +6032,7 @@ function App() {
     e.preventDefault();
     e.stopPropagation();
 
-    const node = graph.nodes.find((item) => item.id === nodeId);
+    const node = canvasNodes.find((item) => item.id === nodeId);
     if (!node) {
       return;
     }
@@ -6023,7 +6047,7 @@ function App() {
       setNodeSelection([nodeId], nodeId);
     }
     const startPositions = Object.fromEntries(
-      graph.nodes
+      canvasNodes
         .filter((item) => activeNodeIds.includes(item.id))
         .map((item) => [item.id, { x: item.position.x, y: item.position.y }]),
     );
@@ -6134,7 +6158,7 @@ function App() {
       const maxX = Math.max(marqueeSelection.start.x, marqueeSelection.current.x);
       const minY = Math.min(marqueeSelection.start.y, marqueeSelection.current.y);
       const maxY = Math.max(marqueeSelection.start.y, marqueeSelection.current.y);
-      const selectedByBox = graph.nodes
+      const selectedByBox = canvasNodes
         .filter((node) => {
           const size = getNodeVisualSize(node.id);
           const nodeLeft = node.position.x;
@@ -6448,7 +6472,8 @@ function App() {
       setGraph(cloneGraph(normalized));
       setUndoStack([]);
       setRedoStack([]);
-      setNodeSelection(normalized.nodes.map((node) => node.id).slice(0, 1), normalized.nodes[0]?.id);
+      const initialNodeId = pickDefaultCanvasNodeId(normalized.nodes);
+      setNodeSelection(initialNodeId ? [initialNodeId] : [], initialNodeId || undefined);
       setSelectedEdgeKey("");
       setNodeStates({});
       setConnectFromNodeId("");
@@ -6466,7 +6491,7 @@ function App() {
   }
 
   useEffect(() => {
-    const nodeIdSet = new Set(graph.nodes.map((node) => node.id));
+    const nodeIdSet = new Set(canvasNodes.map((node) => node.id));
     const filteredSelected = selectedNodeIds.filter((id) => nodeIdSet.has(id));
     if (filteredSelected.length !== selectedNodeIds.length) {
       setSelectedNodeIds(filteredSelected);
@@ -6485,17 +6510,17 @@ function App() {
     if (selectedNodeId && !filteredSelected.includes(selectedNodeId)) {
       setSelectedNodeIds((prev) => [...prev, selectedNodeId]);
     }
-  }, [graph.nodes, selectedNodeIds, selectedNodeId]);
+  }, [canvasNodes, selectedNodeIds, selectedNodeId]);
 
   useEffect(() => {
     if (!selectedEdgeKey) {
       return;
     }
-    const exists = graph.edges.some((edge) => getGraphEdgeKey(edge) === selectedEdgeKey);
+    const exists = canvasEdges.some((edge) => getGraphEdgeKey(edge) === selectedEdgeKey);
     if (!exists) {
       setSelectedEdgeKey("");
     }
-  }, [graph.edges, selectedEdgeKey]);
+  }, [canvasEdges, selectedEdgeKey]);
 
   useEffect(() => {
     if (workspaceTab !== "workflow" && canvasFullscreen) {
@@ -6603,11 +6628,11 @@ function App() {
       if (!selectedNodeId) {
         return;
       }
-      const current = graph.nodes.find((node) => node.id === selectedNodeId);
+      const current = canvasNodes.find((node) => node.id === selectedNodeId);
       if (!current) {
         return;
       }
-      const others = graph.nodes.filter((node) => node.id !== selectedNodeId);
+      const others = canvasNodes.filter((node) => node.id !== selectedNodeId);
       if (others.length === 0) {
         return;
       }
@@ -6651,7 +6676,7 @@ function App() {
 
     window.addEventListener("keydown", onShiftAlign);
     return () => window.removeEventListener("keydown", onShiftAlign);
-  }, [workspaceTab, selectedNodeId, graph.nodes]);
+  }, [workspaceTab, selectedNodeId, canvasNodes]);
 
   useEffect(() => {
     if (workspaceTab !== "workflow") {
@@ -6668,14 +6693,14 @@ function App() {
         return;
       }
       event.preventDefault();
-      const allNodeIds = graph.nodes.map((node) => node.id);
+      const allNodeIds = canvasNodes.map((node) => node.id);
       setNodeSelection(allNodeIds, allNodeIds[0]);
       setSelectedEdgeKey("");
       setStatus(allNodeIds.length > 0 ? `노드 ${allNodeIds.length}개 선택됨` : "선택할 노드가 없습니다");
     };
     window.addEventListener("keydown", onSelectAll);
     return () => window.removeEventListener("keydown", onSelectAll);
-  }, [workspaceTab, graph.nodes]);
+  }, [workspaceTab, canvasNodes]);
 
   useEffect(() => {
     if (workspaceTab !== "workflow") {
@@ -6694,7 +6719,7 @@ function App() {
       }
 
       if (selectedEdgeKey) {
-        const hasEdge = graph.edges.some((edge) => getGraphEdgeKey(edge) === selectedEdgeKey);
+        const hasEdge = canvasEdges.some((edge) => getGraphEdgeKey(edge) === selectedEdgeKey);
         if (!hasEdge) {
           setSelectedEdgeKey("");
           return;
@@ -6710,7 +6735,7 @@ function App() {
       }
 
       if (selectedNodeIds.length > 0) {
-        const targets = selectedNodeIds.filter((id) => graph.nodes.some((node) => node.id === id));
+        const targets = selectedNodeIds.filter((id) => canvasNodeIdSet.has(id));
         if (targets.length === 0) {
           setNodeSelection([]);
           return;
@@ -6723,7 +6748,7 @@ function App() {
 
     window.addEventListener("keydown", onDeleteSelection);
     return () => window.removeEventListener("keydown", onDeleteSelection);
-  }, [workspaceTab, selectedEdgeKey, selectedNodeIds, graph.edges, graph.nodes]);
+  }, [workspaceTab, selectedEdgeKey, selectedNodeIds, canvasEdges, canvasNodeIdSet]);
 
   useEffect(() => {
     try {
@@ -8269,10 +8294,10 @@ ${prompt}`;
     );
   }
 
-  const edgeLines = graph.edges
+  const edgeLines = canvasEdges
     .map((edge, index) => {
-      const fromNode = graph.nodes.find((node) => node.id === edge.from.nodeId);
-      const toNode = graph.nodes.find((node) => node.id === edge.to.nodeId);
+      const fromNode = canvasNodeMap.get(edge.from.nodeId);
+      const toNode = canvasNodeMap.get(edge.to.nodeId);
       if (!fromNode || !toNode) {
         return null;
       }
@@ -8348,7 +8373,7 @@ ${prompt}`;
       if (connectPreviewStartPoint) {
         return connectPreviewStartPoint;
       }
-      const fromNode = graph.nodes.find((node) => node.id === connectFromNodeId);
+      const fromNode = canvasNodeMap.get(connectFromNodeId);
       if (!fromNode) {
         return null;
       }
@@ -8676,9 +8701,9 @@ ${prompt}`;
 
   const viewportWidth = Math.ceil(canvasLogicalViewport.width);
   const viewportHeight = Math.ceil(canvasLogicalViewport.height);
-  const stagePadding = graph.nodes.length > 0 ? STAGE_GROW_MARGIN : 0;
-  const maxNodeRight = graph.nodes.reduce((max, node) => Math.max(max, node.position.x + NODE_WIDTH), 0);
-  const maxNodeBottom = graph.nodes.reduce((max, node) => Math.max(max, node.position.y + NODE_HEIGHT), 0);
+  const stagePadding = canvasNodes.length > 0 ? STAGE_GROW_MARGIN : 0;
+  const maxNodeRight = canvasNodes.reduce((max, node) => Math.max(max, node.position.x + NODE_WIDTH), 0);
+  const maxNodeBottom = canvasNodes.reduce((max, node) => Math.max(max, node.position.y + NODE_HEIGHT), 0);
   const softMaxWidth = viewportWidth + STAGE_GROW_LIMIT;
   const softMaxHeight = viewportHeight + STAGE_GROW_LIMIT;
   const stageWidth = Math.max(
@@ -8877,7 +8902,7 @@ ${prompt}`;
                       )}
                     </svg>
 
-                    {graph.nodes.map((node) => {
+                    {canvasNodes.map((node) => {
                       const runState = nodeStates[node.id];
                       const nodeStatus = runState?.status ?? "idle";
                       const nodeSummary = nodeCardSummary(node);
