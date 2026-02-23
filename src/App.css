@@ -2059,19 +2059,20 @@ h3 {
   min-width: 34px;
   height: 34px;
   min-height: 34px;
-  border-radius: 12px;
+  border-radius: 999px;
   display: grid;
   place-items: center;
   font-size: 12px;
   line-height: 1;
   font-weight: 700;
   background: #ffffff;
-  border: 0;
+  border: 2px solid transparent;
   margin-left: auto;
 }
 
 .feed-score-badge.good {
   color: #1f9960;
+  border-color: #1f9960;
 }
 
 .feed-score-badge.warn {
@@ -2085,6 +2086,8 @@ h3 {
   color: #1f68cc;
   font-size: 10px;
   letter-spacing: 0.01em;
+  border: 0;
+  border-radius: 12px;
 }
 
 .feed-card-question {
