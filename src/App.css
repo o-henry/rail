@@ -1804,17 +1804,17 @@ h3 {
   height: 100%;
   min-height: 0;
   display: flex;
-  align-items: stretch;
+  align-items: flex-start;
   justify-content: center;
   overflow: auto;
 }
 
 .feed-main {
-  width: min(980px, 100%);
+  width: min(860px, 100%);
   min-height: 0;
-  overflow: hidden;
+  overflow: visible;
   display: grid;
-  grid-template-rows: auto auto auto minmax(0, 1fr);
+  grid-template-rows: auto auto auto auto;
   gap: 14px;
   padding: 18px 20px 14px;
   border-radius: 12px;
@@ -1953,8 +1953,8 @@ h3 {
   display: grid;
   align-content: start;
   gap: 12px;
-  min-height: 0;
-  overflow: auto;
+  min-height: auto;
+  overflow: visible;
   padding: 2px 4px 0 0;
   scrollbar-width: none;
 }
