@@ -507,6 +507,7 @@ const AUTO_EDGE_STRAIGHTEN_THRESHOLD = 72;
 const AGENT_RULE_CACHE_TTL_MS = 12_000;
 const AGENT_RULE_MAX_DOCS = 16;
 const AGENT_RULE_MAX_DOC_CHARS = 6_000;
+const SIMPLE_WORKFLOW_UI = true;
 const KNOWLEDGE_TOP_K_OPTIONS: FancySelectOption[] = [
   { value: "0", label: "0개" },
   { value: "1", label: "1개" },
@@ -2423,6 +2424,9 @@ function nodeCardSummary(node: GraphNode): string {
   if (node.type === "turn") {
     return "";
   }
+  if (SIMPLE_WORKFLOW_UI) {
+    return "";
+  }
   if (node.type === "transform") {
     const config = node.config as TransformConfig;
     const mode = String(config.mode ?? "pick");
@@ -2561,6 +2565,9 @@ function turnRoleLabel(node: GraphNode): string {
 function nodeTypeLabel(type: NodeType): string {
   if (type === "turn") {
     return "응답 에이전트";
+  }
+  if (SIMPLE_WORKFLOW_UI) {
+    return "내부 처리";
   }
   if (type === "transform") {
     return "데이터 변환";
@@ -8629,17 +8636,21 @@ ${prompt}`;
                         onChange={(value) => {
                           if (value === "turn") {
                             addNode("turn");
-                          } else if (value === "transform") {
+                          } else if (!SIMPLE_WORKFLOW_UI && value === "transform") {
                             addNode("transform");
-                          } else if (value === "gate") {
+                          } else if (!SIMPLE_WORKFLOW_UI && value === "gate") {
                             addNode("gate");
                           }
                         }}
-                        options={[
-                          { value: "turn", label: "응답 에이전트" },
-                          { value: "transform", label: "데이터 변환" },
-                          { value: "gate", label: "분기" },
-                        ]}
+                        options={
+                          SIMPLE_WORKFLOW_UI
+                            ? [{ value: "turn", label: "응답 에이전트" }]
+                            : [
+                                { value: "turn", label: "응답 에이전트" },
+                                { value: "transform", label: "데이터 변환" },
+                                { value: "gate", label: "분기" },
+                              ]
+                        }
                         placeholder="노드 선택"
                         value=""
                       />
@@ -9042,16 +9053,18 @@ ${prompt}`;
                               </label>
                             </>
                           )}
-                          <label>
-                            출력 형식(아티팩트)
-                            <FancySelect
-                              ariaLabel="출력 형식(아티팩트)"
-                              className="modern-select"
-                              onChange={(next) => updateSelectedNodeConfig("artifactType", next)}
-                              options={ARTIFACT_TYPE_OPTIONS}
-                              value={selectedArtifactType}
-                            />
-                          </label>
+                          {!SIMPLE_WORKFLOW_UI && (
+                            <label>
+                              출력 형식(아티팩트)
+                              <FancySelect
+                                ariaLabel="출력 형식(아티팩트)"
+                                className="modern-select"
+                                onChange={(next) => updateSelectedNodeConfig("artifactType", next)}
+                                options={ARTIFACT_TYPE_OPTIONS}
+                                value={selectedArtifactType}
+                              />
+                            </label>
+                          )}
                           <label>
                             프롬프트 템플릿
                             <textarea
@@ -9066,7 +9079,7 @@ ${prompt}`;
                         </section>
                       )}
 
-                      {selectedNode.type === "transform" && (
+                      {!SIMPLE_WORKFLOW_UI && selectedNode.type === "transform" && (
                         <section className="inspector-block form-grid">
                           <InspectorSectionTitle
                             help="앞 노드 결과를 읽기 쉬운 형태로 다시 정리하는 설정입니다. 쉽게 말해, 필요한 것만 꺼내거나, 고정 정보를 붙이거나, 문장 틀에 맞춰 다시 쓰는 역할입니다."
@@ -9124,7 +9137,7 @@ ${prompt}`;
                         </section>
                       )}
 
-                      {selectedNode.type === "gate" && (
+                      {!SIMPLE_WORKFLOW_UI && selectedNode.type === "gate" && (
                         <section className="inspector-block form-grid">
                           <InspectorSectionTitle
                             help="이 노드는 결과를 보고 길을 나눕니다. DECISION 값이 PASS면 통과 경로로, REJECT면 재검토 경로로 보냅니다."
@@ -9182,6 +9195,17 @@ ${prompt}`;
                           </label>
                           <div className="inspector-empty">
                             고급 옵션입니다. 결과가 원하는 형식인지 자동 검사할 때만 사용하세요.
+                          </div>
+                        </section>
+                      )}
+                      {SIMPLE_WORKFLOW_UI && selectedNode.type !== "turn" && (
+                        <section className="inspector-block form-grid">
+                          <InspectorSectionTitle
+                            help="이 노드는 시스템이 내부적으로 사용하는 자동 처리 노드입니다."
+                            title="내부 처리 노드"
+                          />
+                          <div className="inspector-empty">
+                            단순 모드에서는 이 노드 설정을 직접 편집하지 않습니다.
                           </div>
                         </section>
                       )}
