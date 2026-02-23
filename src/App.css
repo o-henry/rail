@@ -918,7 +918,7 @@ h3 {
   letter-spacing: 0.02em;
   color: #925100;
   background: #ffe6c8;
-  box-shadow: inset 0 0 0 1px #f1c992;
+  /* box-shadow: inset 0 0 0 1px #f1c992; */
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1743,7 +1743,7 @@ h3 {
 
 .web-automation-head {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 8px;
 }
@@ -1798,10 +1798,219 @@ h3 {
   margin: 0 10px 10px;
   height: 100%;
   min-height: 0;
-  display: flex;
-  align-items: flex-start;
+  display: grid;
+  grid-template-columns: minmax(300px, 340px) minmax(0, 760px);
+  align-content: start;
   justify-content: center;
+  gap: 12px;
   overflow: auto;
+}
+
+.feed-layout::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}
+
+.feed-agent-panel {
+  min-height: 0;
+  overflow: auto;
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  width: min(340px, 100%);
+  border-radius: 12px;
+  background: #ffffff;
+  padding: 16px;
+  scrollbar-width: none;
+}
+
+.feed-agent-panel::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}
+
+.feed-agent-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.feed-agent-panel-head h3 {
+  margin: 0;
+  font-size: 16px;
+  font-family: "DialogNanumBody1984", "Noto Sans KR", sans-serif;
+  color: #14181f;
+}
+
+.feed-agent-panel-head span {
+  color: #627083;
+  font-size: 12px;
+}
+
+.feed-agent-list {
+  display: grid;
+  gap: 6px;
+  max-height: 180px;
+  overflow: auto;
+  padding-right: 2px;
+  scrollbar-width: none;
+}
+
+.feed-agent-list::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}
+
+.feed-agent-list button {
+  min-height: 46px;
+  height: 46px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: #f6f6f6;
+  box-shadow: none;
+  display: grid;
+  justify-items: start;
+  align-content: center;
+  gap: 2px;
+}
+
+.feed-agent-list button.is-active {
+  background: #e8f1ff;
+  color: #1d5db8;
+}
+
+.feed-agent-list-name {
+  font-size: 13px;
+  line-height: 1.2;
+  font-family: "BasicallyAMono", "Noto Sans KR", sans-serif;
+  color: inherit;
+}
+
+.feed-agent-list-sub {
+  font-size: 11px;
+  line-height: 1.2;
+  color: #607083;
+}
+
+.feed-agent-settings {
+  display: grid;
+  gap: 10px;
+}
+
+.feed-agent-settings-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.feed-agent-settings-header strong {
+  font-size: 13px;
+  color: #0f1419;
+  font-family: "BasicallyAMono", "Noto Sans KR", sans-serif;
+  line-height: 1.2;
+}
+
+.feed-agent-readonly-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 20px;
+  min-height: 20px;
+  padding: 0 8px;
+  border-radius: 6px;
+  background: #f0f4fa;
+  color: #4f5d72;
+  font-size: 11px;
+  line-height: 1;
+}
+
+.feed-agent-settings-grid {
+  display: grid;
+  gap: 8px;
+}
+
+.feed-agent-settings-grid label {
+  display: grid;
+  gap: 6px;
+  font-size: 12px;
+  color: #556173;
+}
+
+.feed-agent-settings-grid .fancy-select.modern-select,
+.feed-agent-settings-grid input,
+.feed-agent-settings-grid textarea {
+  width: 100%;
+}
+
+.feed-agent-settings-grid textarea {
+  min-height: 84px;
+}
+
+.feed-agent-rules {
+  display: grid;
+  gap: 8px;
+}
+
+.feed-agent-rules-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.feed-agent-rules-head h4 {
+  margin: 0;
+  font-size: 13px;
+  font-family: "DialogNanumBody1984", "Noto Sans KR", sans-serif;
+  color: #1c2431;
+}
+
+.feed-agent-rules-head span {
+  font-size: 12px;
+  color: #627083;
+}
+
+.feed-agent-rule-list {
+  display: grid;
+  gap: 8px;
+}
+
+.feed-agent-rule-doc {
+  display: grid;
+  gap: 6px;
+  border-radius: 12px;
+  background: #f6f6f6;
+  padding: 10px;
+}
+
+.feed-agent-rule-doc header {
+  font-size: 12px;
+  color: #243044;
+  font-family: "BasicallyAMono", "Noto Sans KR", sans-serif;
+  word-break: break-all;
+}
+
+.feed-agent-rule-doc pre {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 12px;
+  line-height: 1.45;
+  color: #1f2a3a;
+  max-height: 180px;
+  overflow: auto;
+  scrollbar-width: none;
+}
+
+.feed-agent-rule-doc pre::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
 }
 
 .feed-main {
@@ -1973,6 +2182,10 @@ h3 {
   display: grid;
   gap: 10px;
   border-bottom: 1px solid #e8edf2;
+}
+
+.feed-card.is-selected {
+  background: #f6f9ff;
 }
 
 .feed-stream > .feed-card:last-child {
@@ -2510,10 +2723,12 @@ pre {
   }
 
   .feed-layout {
+    grid-template-columns: minmax(0, 1fr);
     justify-content: stretch;
     height: calc(100% - 24px);
   }
 
+  .feed-agent-panel,
   .feed-main {
     width: 100%;
   }

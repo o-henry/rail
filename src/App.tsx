@@ -323,6 +323,15 @@ type TurnExecutor =
   | "web_perplexity"
   | "web_claude"
   | "ollama";
+type PresetKind =
+  | "validation"
+  | "development"
+  | "research"
+  | "expert"
+  | "unityGame"
+  | "fullstack"
+  | "creative"
+  | "newsTrend";
 type CostPreset = "conservative" | "balanced" | "aggressive";
 type WebAutomationMode = "auto" | "manualPasteJson" | "manualPasteText";
 type WebResultMode = WebAutomationMode;
@@ -593,6 +602,20 @@ const ARTIFACT_TYPE_OPTIONS: FancySelectOption[] = [
   { value: "ChangePlanArtifact", label: "변경계획 아티팩트" },
   { value: "EvidenceArtifact", label: "근거 아티팩트" },
 ];
+const PRESET_TEMPLATE_META: ReadonlyArray<{ key: PresetKind; label: string; statusLabel: string }> = [
+  { key: "validation", label: "정밀 검증 템플릿", statusLabel: "정밀 검증 템플릿" },
+  { key: "development", label: "개발 실행 템플릿", statusLabel: "개발 실행 템플릿" },
+  { key: "research", label: "근거 리서치 템플릿", statusLabel: "근거 리서치 템플릿" },
+  { key: "expert", label: "전문가 분석 템플릿", statusLabel: "전문가 분석 템플릿" },
+  { key: "unityGame", label: "유니티 게임개발 템플릿", statusLabel: "유니티 게임개발 템플릿" },
+  { key: "fullstack", label: "풀스택 구현 템플릿", statusLabel: "풀스택 구현 템플릿" },
+  { key: "creative", label: "창의 제작 템플릿", statusLabel: "창의 제작 템플릿" },
+  { key: "newsTrend", label: "뉴스 트렌드 템플릿", statusLabel: "뉴스 트렌드 템플릿" },
+];
+const PRESET_TEMPLATE_OPTIONS: FancySelectOption[] = PRESET_TEMPLATE_META.map((row) => ({
+  value: row.key,
+  label: row.label,
+}));
 
 function formatUnknown(value: unknown): string {
   try {
@@ -733,6 +756,10 @@ function toTurnModelEngineId(value: string): string {
 
 function isCostPreset(value: string): value is CostPreset {
   return value === "conservative" || value === "balanced" || value === "aggressive";
+}
+
+function isPresetKind(value: string): value is PresetKind {
+  return PRESET_TEMPLATE_META.some((row) => row.key === value);
 }
 
 function costPresetLabel(preset: CostPreset): string {
@@ -2926,6 +2953,301 @@ function makePresetNode(
   };
 }
 
+type PresetTurnPolicy = {
+  profile: QualityProfileId;
+  threshold: number;
+  qualityCommandEnabled: boolean;
+  qualityCommands: string;
+  artifactType: ArtifactType;
+};
+
+const DEFAULT_PRESET_TURN_POLICY: PresetTurnPolicy = {
+  profile: "generic",
+  threshold: QUALITY_DEFAULT_THRESHOLD,
+  qualityCommandEnabled: false,
+  qualityCommands: "npm run build",
+  artifactType: "none",
+};
+
+function resolvePresetTurnPolicy(kind: PresetKind, nodeId: string): PresetTurnPolicy {
+  const key = nodeId.toLowerCase();
+
+  if (kind === "validation") {
+    if (key.includes("intake")) {
+      return { ...DEFAULT_PRESET_TURN_POLICY, profile: "design_planning", threshold: 68 };
+    }
+    if (key.includes("search")) {
+      return {
+        ...DEFAULT_PRESET_TURN_POLICY,
+        profile: "research_evidence",
+        threshold: key.includes("-a") ? 80 : 82,
+        artifactType: "EvidenceArtifact",
+      };
+    }
+    if (key.includes("judge")) {
+      return { ...DEFAULT_PRESET_TURN_POLICY, profile: "research_evidence", threshold: 87 };
+    }
+    if (key.includes("final")) {
+      return {
+        ...DEFAULT_PRESET_TURN_POLICY,
+        profile: "synthesis_final",
+        threshold: 79,
+        artifactType: "EvidenceArtifact",
+      };
+    }
+  }
+
+  if (kind === "development") {
+    if (key.includes("requirements")) {
+      return {
+        ...DEFAULT_PRESET_TURN_POLICY,
+        profile: "design_planning",
+        threshold: 72,
+        artifactType: "RequirementArtifact",
+      };
+    }
+    if (key.includes("architecture")) {
+      return {
+        ...DEFAULT_PRESET_TURN_POLICY,
+        profile: "design_planning",
+        threshold: 79,
+        artifactType: "DesignArtifact",
+      };
+    }
+    if (key.includes("implementation")) {
+      return {
+        ...DEFAULT_PRESET_TURN_POLICY,
+        profile: "code_implementation",
+        threshold: 84,
+        qualityCommandEnabled: true,
+        qualityCommands: "npm run lint\nnpm run build",
+        artifactType: "TaskPlanArtifact",
+      };
+    }
+    if (key.includes("evaluator")) {
+      return { ...DEFAULT_PRESET_TURN_POLICY, profile: "synthesis_final", threshold: 86 };
+    }
+    if (key.includes("final")) {
+      return {
+        ...DEFAULT_PRESET_TURN_POLICY,
+        profile: "synthesis_final",
+        threshold: 82,
+        artifactType: "ChangePlanArtifact",
+      };
+    }
+  }
+
+  if (kind === "research") {
+    if (key.includes("intake")) {
+      return { ...DEFAULT_PRESET_TURN_POLICY, profile: "design_planning", threshold: 70 };
+    }
+    if (key.includes("collector")) {
+      return {
+        ...DEFAULT_PRESET_TURN_POLICY,
+        profile: "research_evidence",
+        threshold: 80,
+        artifactType: "EvidenceArtifact",
+      };
+    }
+    if (key.includes("factcheck")) {
+      return {
+        ...DEFAULT_PRESET_TURN_POLICY,
+        profile: "research_evidence",
+        threshold: 90,
+        artifactType: "EvidenceArtifact",
+      };
+    }
+    if (key.includes("final")) {
+      return {
+        ...DEFAULT_PRESET_TURN_POLICY,
+        profile: "synthesis_final",
+        threshold: 84,
+        artifactType: "EvidenceArtifact",
+      };
+    }
+  }
+
+  if (kind === "expert") {
+    if (key.includes("intake")) {
+      return { ...DEFAULT_PRESET_TURN_POLICY, profile: "design_planning", threshold: 72 };
+    }
+    if (key.includes("analysis")) {
+      return {
+        ...DEFAULT_PRESET_TURN_POLICY,
+        profile: "design_planning",
+        threshold: 82,
+        artifactType: "DesignArtifact",
+      };
+    }
+    if (key.includes("review")) {
+      return { ...DEFAULT_PRESET_TURN_POLICY, profile: "synthesis_final", threshold: 86 };
+    }
+    if (key.includes("final")) {
+      return {
+        ...DEFAULT_PRESET_TURN_POLICY,
+        profile: "synthesis_final",
+        threshold: 85,
+        artifactType: "ChangePlanArtifact",
+      };
+    }
+  }
+
+  if (kind === "unityGame") {
+    if (key.includes("intake")) {
+      return {
+        ...DEFAULT_PRESET_TURN_POLICY,
+        profile: "design_planning",
+        threshold: 68,
+        artifactType: "RequirementArtifact",
+      };
+    }
+    if (key.includes("system")) {
+      return {
+        ...DEFAULT_PRESET_TURN_POLICY,
+        profile: "design_planning",
+        threshold: 81,
+        artifactType: "DesignArtifact",
+      };
+    }
+    if (key.includes("implementation")) {
+      return {
+        ...DEFAULT_PRESET_TURN_POLICY,
+        profile: "code_implementation",
+        threshold: 83,
+        qualityCommandEnabled: true,
+        qualityCommands: "npm run lint\nnpm run typecheck\nnpm run build",
+        artifactType: "TaskPlanArtifact",
+      };
+    }
+    if (key.includes("qa")) {
+      return { ...DEFAULT_PRESET_TURN_POLICY, profile: "synthesis_final", threshold: 88 };
+    }
+    if (key.includes("final")) {
+      return {
+        ...DEFAULT_PRESET_TURN_POLICY,
+        profile: "synthesis_final",
+        threshold: 84,
+        artifactType: "TaskPlanArtifact",
+      };
+    }
+  }
+
+  if (kind === "fullstack") {
+    if (key.includes("intake")) {
+      return {
+        ...DEFAULT_PRESET_TURN_POLICY,
+        profile: "design_planning",
+        threshold: 72,
+        artifactType: "RequirementArtifact",
+      };
+    }
+    if (key.includes("backend")) {
+      return {
+        ...DEFAULT_PRESET_TURN_POLICY,
+        profile: "code_implementation",
+        threshold: 85,
+        qualityCommandEnabled: true,
+        qualityCommands: "npm run lint\nnpm run test\nnpm run build",
+        artifactType: "TaskPlanArtifact",
+      };
+    }
+    if (key.includes("frontend")) {
+      return {
+        ...DEFAULT_PRESET_TURN_POLICY,
+        profile: "code_implementation",
+        threshold: 83,
+        qualityCommandEnabled: true,
+        qualityCommands: "npm run lint\nnpm run test -- --runInBand\nnpm run build",
+        artifactType: "TaskPlanArtifact",
+      };
+    }
+    if (key.includes("ops")) {
+      return { ...DEFAULT_PRESET_TURN_POLICY, profile: "synthesis_final", threshold: 89 };
+    }
+    if (key.includes("final")) {
+      return {
+        ...DEFAULT_PRESET_TURN_POLICY,
+        profile: "synthesis_final",
+        threshold: 85,
+        artifactType: "ChangePlanArtifact",
+      };
+    }
+  }
+
+  if (kind === "creative") {
+    if (key.includes("intake")) {
+      return { ...DEFAULT_PRESET_TURN_POLICY, profile: "design_planning", threshold: 66 };
+    }
+    if (key.includes("diverge")) {
+      return { ...DEFAULT_PRESET_TURN_POLICY, profile: "generic", threshold: 58 };
+    }
+    if (key.includes("critic")) {
+      return { ...DEFAULT_PRESET_TURN_POLICY, profile: "synthesis_final", threshold: 80 };
+    }
+    if (key.includes("final")) {
+      return {
+        ...DEFAULT_PRESET_TURN_POLICY,
+        profile: "synthesis_final",
+        threshold: 74,
+        artifactType: "TaskPlanArtifact",
+      };
+    }
+  }
+
+  if (kind === "newsTrend") {
+    if (key.includes("intake")) {
+      return { ...DEFAULT_PRESET_TURN_POLICY, profile: "design_planning", threshold: 70 };
+    }
+    if (key.includes("scan")) {
+      return {
+        ...DEFAULT_PRESET_TURN_POLICY,
+        profile: "research_evidence",
+        threshold: 80,
+        artifactType: "EvidenceArtifact",
+      };
+    }
+    if (key.includes("check")) {
+      return {
+        ...DEFAULT_PRESET_TURN_POLICY,
+        profile: "research_evidence",
+        threshold: 91,
+        artifactType: "EvidenceArtifact",
+      };
+    }
+    if (key.includes("final")) {
+      return {
+        ...DEFAULT_PRESET_TURN_POLICY,
+        profile: "synthesis_final",
+        threshold: 84,
+        artifactType: "EvidenceArtifact",
+      };
+    }
+  }
+
+  return DEFAULT_PRESET_TURN_POLICY;
+}
+
+function applyPresetTurnPolicies(kind: PresetKind, nodes: GraphNode[]): GraphNode[] {
+  return nodes.map((node) => {
+    if (node.type !== "turn") {
+      return node;
+    }
+    const policy = resolvePresetTurnPolicy(kind, node.id);
+    const current = node.config as TurnConfig;
+    return {
+      ...node,
+      config: {
+        ...current,
+        qualityProfile: policy.profile,
+        qualityThreshold: policy.threshold,
+        qualityCommandEnabled: policy.qualityCommandEnabled,
+        qualityCommands: policy.qualityCommands,
+        artifactType: policy.artifactType,
+      },
+    };
+  });
+}
+
 function buildValidationPreset(): GraphData {
   const nodes: GraphNode[] = [
     makePresetNode("turn-intake", "turn", 120, 120, {
@@ -3563,6 +3885,31 @@ function buildNewsTrendPreset(): GraphData {
   return { version: GRAPH_SCHEMA_VERSION, nodes, edges, knowledge: defaultKnowledgeConfig() };
 }
 
+function buildPresetGraphByKind(kind: PresetKind): GraphData {
+  if (kind === "validation") {
+    return buildValidationPreset();
+  }
+  if (kind === "development") {
+    return buildDevelopmentPreset();
+  }
+  if (kind === "research") {
+    return buildResearchPreset();
+  }
+  if (kind === "unityGame") {
+    return buildUnityGamePreset();
+  }
+  if (kind === "fullstack") {
+    return buildFullstackPreset();
+  }
+  if (kind === "creative") {
+    return buildCreativePreset();
+  }
+  if (kind === "newsTrend") {
+    return buildNewsTrendPreset();
+  }
+  return buildExpertPreset();
+}
+
 function normalizeGraph(input: unknown): GraphData {
   if (!input || typeof input !== "object") {
     return { version: GRAPH_SCHEMA_VERSION, nodes: [], edges: [], knowledge: defaultKnowledgeConfig() };
@@ -3820,6 +4167,10 @@ function App() {
   const [feedExpandedByPost, setFeedExpandedByPost] = useState<Record<string, boolean>>({});
   const [feedShareMenuPostId, setFeedShareMenuPostId] = useState<string | null>(null);
   const [feedReplyDraftByPost, setFeedReplyDraftByPost] = useState<Record<string, string>>({});
+  const [feedInspectorPostId, setFeedInspectorPostId] = useState("");
+  const [feedInspectorSnapshotNode, setFeedInspectorSnapshotNode] = useState<GraphNode | null>(null);
+  const [feedInspectorRuleDocs, setFeedInspectorRuleDocs] = useState<AgentRuleDoc[]>([]);
+  const [feedInspectorRuleLoading, setFeedInspectorRuleLoading] = useState(false);
   const [pendingNodeRequests, setPendingNodeRequests] = useState<Record<string, string[]>>({});
   const [activeFeedRunMeta, setActiveFeedRunMeta] = useState<{
     runId: string;
@@ -5148,35 +5499,12 @@ function App() {
     setSelectedEdgeKey("");
   }
 
-  function applyPreset(
-    kind:
-      | "validation"
-      | "development"
-      | "research"
-      | "expert"
-      | "unityGame"
-      | "fullstack"
-      | "creative"
-      | "newsTrend",
-  ) {
-    let preset: GraphData;
-    if (kind === "validation") {
-      preset = buildValidationPreset();
-    } else if (kind === "development") {
-      preset = buildDevelopmentPreset();
-    } else if (kind === "research") {
-      preset = buildResearchPreset();
-    } else if (kind === "unityGame") {
-      preset = buildUnityGamePreset();
-    } else if (kind === "fullstack") {
-      preset = buildFullstackPreset();
-    } else if (kind === "creative") {
-      preset = buildCreativePreset();
-    } else if (kind === "newsTrend") {
-      preset = buildNewsTrendPreset();
-    } else {
-      preset = buildExpertPreset();
-    }
+  function applyPreset(kind: PresetKind) {
+    const builtPreset = buildPresetGraphByKind(kind);
+    const preset: GraphData = {
+      ...builtPreset,
+      nodes: applyPresetTurnPolicies(kind, builtPreset.nodes),
+    };
     const nextPreset = autoArrangeGraphLayout({
       ...preset,
       knowledge: normalizeKnowledgeConfig(graph.knowledge),
@@ -5193,23 +5521,8 @@ function App() {
     setConnectPreviewPoint(null);
     setIsConnectingDrag(false);
     setMarqueeSelection(null);
-    if (kind === "validation") {
-      setStatus("검증형 에이전트 템플릿 로드됨");
-    } else if (kind === "development") {
-      setStatus("개방형 에이전트 템플릿 로드됨");
-    } else if (kind === "research") {
-      setStatus("자료조사 템플릿 로드됨");
-    } else if (kind === "unityGame") {
-      setStatus("유니티 게임개발 템플릿 로드됨");
-    } else if (kind === "fullstack") {
-      setStatus("풀스택 개발 템플릿 로드됨");
-    } else if (kind === "creative") {
-      setStatus("창의적 답변 템플릿 로드됨");
-    } else if (kind === "newsTrend") {
-      setStatus("최신 뉴스·트렌드 템플릿 로드됨");
-    } else {
-      setStatus("전문가 템플릿 로드됨");
-    }
+    const templateMeta = PRESET_TEMPLATE_META.find((row) => row.key === kind);
+    setStatus(`${templateMeta?.statusLabel ?? "템플릿"} 로드됨`);
   }
 
   function applyCostPreset(preset: CostPreset) {
@@ -5968,15 +6281,11 @@ function App() {
     }
   }
 
-  function updateSelectedNodeConfig(key: string, value: unknown) {
-    if (!selectedNode) {
-      return;
-    }
-
+  function updateNodeConfigById(nodeId: string, key: string, value: unknown) {
     setGraph((prev) => ({
       ...prev,
       nodes: prev.nodes.map((node) =>
-        node.id === selectedNode.id
+        node.id === nodeId
           ? {
               ...node,
               config: {
@@ -5987,6 +6296,13 @@ function App() {
           : node,
       ),
     }));
+  }
+
+  function updateSelectedNodeConfig(key: string, value: unknown) {
+    if (!selectedNode) {
+      return;
+    }
+    updateNodeConfigById(selectedNode.id, key, value);
   }
 
   async function saveGraph() {
@@ -7738,6 +8054,14 @@ ${prompt}`;
     setStatus(`피드에서 ${nodeId} 노드 결과를 확인하세요.`);
   }
 
+  function onSelectFeedInspectorPost(post: FeedViewPost) {
+    setFeedInspectorPostId(post.id);
+    const graphNode = graph.nodes.find((node) => node.id === post.nodeId);
+    if (graphNode) {
+      setNodeSelection([graphNode.id], graphNode.id);
+    }
+  }
+
   function renderSettingsPanel(compact = false) {
     return (
       <section className={`controls ${compact ? "settings-compact" : ""}`}>
@@ -8163,6 +8487,129 @@ ${prompt}`;
     { key: "web_posts", label: "웹 리서치" },
     { key: "error_posts", label: "오류/취소" },
   ];
+  const feedInspectorAgentPosts = currentFeedPosts
+    .filter((post) => post.nodeType === "turn")
+    .filter((post, index, rows) => rows.findIndex((row) => row.nodeId === post.nodeId) === index);
+  const feedInspectorPost =
+    currentFeedPosts.find((post) => post.id === feedInspectorPostId) ?? currentFeedPosts[0] ?? null;
+  const feedInspectorPostKey = feedInspectorPost?.id ?? "";
+  const feedInspectorPostNodeId = feedInspectorPost?.nodeId ?? "";
+  const feedInspectorPostSourceFile = feedInspectorPost?.sourceFile ?? "";
+  const feedInspectorGraphNode = feedInspectorPost
+    ? graph.nodes.find((node) => node.id === feedInspectorPost.nodeId) ?? null
+    : null;
+  const feedInspectorNode = feedInspectorGraphNode ?? feedInspectorSnapshotNode;
+  const feedInspectorTurnNode =
+    feedInspectorNode?.type === "turn" ? (feedInspectorNode as GraphNode) : null;
+  const feedInspectorTurnConfig: TurnConfig | null =
+    feedInspectorTurnNode?.type === "turn" ? (feedInspectorTurnNode.config as TurnConfig) : null;
+  const feedInspectorTurnExecutor: TurnExecutor =
+    feedInspectorTurnConfig ? getTurnExecutor(feedInspectorTurnConfig) : "codex";
+  const feedInspectorQualityProfile: QualityProfileId =
+    feedInspectorTurnNode && feedInspectorTurnConfig
+      ? inferQualityProfile(feedInspectorTurnNode, feedInspectorTurnConfig)
+      : "generic";
+  const feedInspectorQualityThresholdOption = String(
+    Math.max(
+      5,
+      Math.min(
+        100,
+        Math.round(
+          (Number(feedInspectorTurnConfig?.qualityThreshold ?? QUALITY_DEFAULT_THRESHOLD) ||
+            QUALITY_DEFAULT_THRESHOLD) / 5,
+        ) * 5,
+      ),
+    ),
+  );
+  const feedInspectorPromptTemplate = String(feedInspectorTurnConfig?.promptTemplate ?? "{{input}}");
+  const feedInspectorRuleCwd = String(feedInspectorTurnConfig?.cwd ?? "").trim();
+  const feedInspectorEditable =
+    feedInspectorGraphNode !== null &&
+    feedInspectorGraphNode.type === "turn" &&
+    feedInspectorTurnNode !== null &&
+    feedInspectorTurnNode.type === "turn";
+  const feedInspectorEditableNodeId =
+    feedInspectorEditable && feedInspectorTurnNode ? feedInspectorTurnNode.id : "";
+
+  useEffect(() => {
+    if (workspaceTab !== "feed") {
+      return;
+    }
+    setFeedInspectorPostId((prev) => {
+      if (currentFeedPosts.length === 0) {
+        return "";
+      }
+      if (prev && currentFeedPosts.some((post) => post.id === prev)) {
+        return prev;
+      }
+      return currentFeedPosts[0].id;
+    });
+  }, [currentFeedPosts, workspaceTab]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!feedInspectorPost) {
+      setFeedInspectorSnapshotNode(null);
+      return () => {
+        cancelled = true;
+      };
+    }
+    if (feedInspectorGraphNode) {
+      setFeedInspectorSnapshotNode(null);
+      return () => {
+        cancelled = true;
+      };
+    }
+    if (!feedInspectorPostSourceFile) {
+      setFeedInspectorSnapshotNode(null);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    const loadSnapshotNode = async () => {
+      const run = await ensureFeedRunRecord(feedInspectorPostSourceFile);
+      if (cancelled) {
+        return;
+      }
+      const snapshotNode = run?.graphSnapshot.nodes.find((node) => node.id === feedInspectorPostNodeId) ?? null;
+      setFeedInspectorSnapshotNode(snapshotNode);
+    };
+    void loadSnapshotNode();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [feedInspectorGraphNode, feedInspectorPostKey, feedInspectorPostNodeId, feedInspectorPostSourceFile]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (workspaceTab !== "feed" || !feedInspectorRuleCwd) {
+      setFeedInspectorRuleDocs([]);
+      setFeedInspectorRuleLoading(false);
+      return () => {
+        cancelled = true;
+      };
+    }
+    setFeedInspectorRuleLoading(true);
+    const loadDocs = async () => {
+      try {
+        const docs = await loadAgentRuleDocs(feedInspectorRuleCwd);
+        if (!cancelled) {
+          setFeedInspectorRuleDocs(docs);
+        }
+      } finally {
+        if (!cancelled) {
+          setFeedInspectorRuleLoading(false);
+        }
+      }
+    };
+    void loadDocs();
+    return () => {
+      cancelled = true;
+    };
+  }, [feedInspectorRuleCwd, workspaceTab, feedInspectorPostKey]);
+
   const viewportWidth = Math.ceil(canvasLogicalViewport.width);
   const viewportHeight = Math.ceil(canvasLogicalViewport.height);
   const stagePadding = graph.nodes.length > 0 ? STAGE_GROW_MARGIN : 0;
@@ -8663,31 +9110,11 @@ ${prompt}`;
                         className="modern-select template-select"
                         emptyMessage="선택 가능한 템플릿이 없습니다."
                         onChange={(value) => {
-                          if (value === "validation") {
-                            applyPreset("validation");
-                          } else if (value === "development") {
-                            applyPreset("development");
-                          } else if (value === "research") {
-                            applyPreset("research");
-                          } else if (value === "unityGame") {
-                            applyPreset("unityGame");
-                          } else if (value === "fullstack") {
-                            applyPreset("fullstack");
-                          } else if (value === "creative") {
-                            applyPreset("creative");
-                          } else if (value === "newsTrend") {
-                            applyPreset("newsTrend");
+                          if (isPresetKind(value)) {
+                            applyPreset(value);
                           }
                         }}
-                        options={[
-                          { value: "validation", label: "검증형 에이전트" },
-                          { value: "development", label: "개방형 에이전트" },
-                          { value: "research", label: "자료조사 템플릿" },
-                          { value: "unityGame", label: "유니티 게임개발 템플릿" },
-                          { value: "fullstack", label: "풀스택 개발 템플릿" },
-                          { value: "creative", label: "창의적 답변 템플릿" },
-                          { value: "newsTrend", label: "최신 뉴스·트렌드 템플릿" },
-                        ]}
+                        options={PRESET_TEMPLATE_OPTIONS}
                         placeholder="템플릿 선택"
                         value=""
                       />
@@ -9221,6 +9648,315 @@ ${prompt}`;
 
         {workspaceTab === "feed" && (
           <section className="feed-layout">
+            <article className="panel-card feed-agent-panel">
+              <div className="feed-agent-panel-head">
+                <h3>에이전트 상세설정</h3>
+                <span>{feedInspectorAgentPosts.length}개</span>
+              </div>
+              {feedInspectorAgentPosts.length === 0 && (
+                <div className="inspector-empty">표시할 에이전트 포스트가 없습니다.</div>
+              )}
+              {feedInspectorAgentPosts.length > 0 && (
+                <div className="feed-agent-list">
+                  {feedInspectorAgentPosts.map((post) => (
+                    <button
+                      className={feedInspectorPost?.id === post.id ? "is-active" : ""}
+                      key={`${post.nodeId}:${post.id}`}
+                      onClick={() => onSelectFeedInspectorPost(post)}
+                      type="button"
+                    >
+                      <span className="feed-agent-list-name">{post.agentName}</span>
+                      <span className="feed-agent-list-sub">{post.roleLabel}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+              {feedInspectorTurnNode && (
+                <section className="feed-agent-settings">
+                  <div className="feed-agent-settings-header">
+                    <strong>{feedInspectorPost?.agentName ?? turnModelLabel(feedInspectorTurnNode)}</strong>
+                    {!feedInspectorEditable && <span className="feed-agent-readonly-badge">기록 스냅샷</span>}
+                  </div>
+                  <div className="feed-agent-settings-grid">
+                    <label>
+                      에이전트
+                      <FancySelect
+                        ariaLabel="피드 에이전트 실행기"
+                        className="modern-select"
+                        disabled={!feedInspectorEditable}
+                        onChange={(next) => {
+                          if (!feedInspectorEditableNodeId) {
+                            return;
+                          }
+                          updateNodeConfigById(feedInspectorEditableNodeId, "executor", next);
+                        }}
+                        options={TURN_EXECUTOR_OPTIONS.map((option) => ({
+                          value: option,
+                          label: turnExecutorLabel(option),
+                        }))}
+                        value={feedInspectorTurnExecutor}
+                      />
+                    </label>
+                    {feedInspectorTurnExecutor === "codex" && (
+                      <label>
+                        모델
+                        <FancySelect
+                          ariaLabel="피드 에이전트 모델"
+                          className="modern-select"
+                          disabled={!feedInspectorEditable}
+                          onChange={(next) => {
+                            if (!feedInspectorEditableNodeId) {
+                              return;
+                            }
+                            updateNodeConfigById(feedInspectorEditableNodeId, "model", next);
+                          }}
+                          options={TURN_MODEL_OPTIONS.map((option) => ({ value: option, label: option }))}
+                          value={toTurnModelDisplayName(
+                            String(feedInspectorTurnConfig?.model ?? DEFAULT_TURN_MODEL),
+                          )}
+                        />
+                      </label>
+                    )}
+                    {feedInspectorTurnExecutor === "ollama" && (
+                      <label>
+                        Ollama 모델
+                        <input
+                          disabled={!feedInspectorEditable}
+                          onChange={(event) => {
+                            if (!feedInspectorEditableNodeId) {
+                              return;
+                            }
+                            updateNodeConfigById(
+                              feedInspectorEditableNodeId,
+                              "ollamaModel",
+                              event.currentTarget.value,
+                            );
+                          }}
+                          placeholder="예: llama3.1:8b"
+                          value={String(feedInspectorTurnConfig?.ollamaModel ?? "llama3.1:8b")}
+                        />
+                      </label>
+                    )}
+                    {getWebProviderFromExecutor(feedInspectorTurnExecutor) && (
+                      <>
+                        <label>
+                          웹 결과 모드
+                          <FancySelect
+                            ariaLabel="피드 에이전트 웹 결과 모드"
+                            className="modern-select"
+                            disabled={!feedInspectorEditable}
+                            onChange={(next) => {
+                              if (!feedInspectorEditableNodeId) {
+                                return;
+                              }
+                              updateNodeConfigById(feedInspectorEditableNodeId, "webResultMode", next);
+                            }}
+                            options={[
+                              { value: "auto", label: "자동 (GEMINI 우선)" },
+                              { value: "manualPasteText", label: "텍스트 붙여넣기" },
+                              { value: "manualPasteJson", label: "JSON 붙여넣기" },
+                            ]}
+                            value={String(
+                              feedInspectorTurnConfig?.webResultMode ??
+                                (feedInspectorTurnExecutor === "web_gemini" ? "auto" : "manualPasteText"),
+                            )}
+                          />
+                        </label>
+                        <label>
+                          자동화 타임아웃(ms)
+                          <input
+                            disabled={!feedInspectorEditable}
+                            onChange={(event) => {
+                              if (!feedInspectorEditableNodeId) {
+                                return;
+                              }
+                              updateNodeConfigById(
+                                feedInspectorEditableNodeId,
+                                "webTimeoutMs",
+                                Number(event.currentTarget.value) || 90_000,
+                              );
+                            }}
+                            type="number"
+                            value={String(feedInspectorTurnConfig?.webTimeoutMs ?? 90_000)}
+                          />
+                        </label>
+                      </>
+                    )}
+                    <label>
+                      역할
+                      <input
+                        disabled={!feedInspectorEditable}
+                        onChange={(event) => {
+                          if (!feedInspectorEditableNodeId) {
+                            return;
+                          }
+                          updateNodeConfigById(feedInspectorEditableNodeId, "role", event.currentTarget.value);
+                        }}
+                        placeholder={turnRoleLabel(feedInspectorTurnNode)}
+                        value={String(feedInspectorTurnConfig?.role ?? "")}
+                      />
+                    </label>
+                    <label>
+                      작업 경로
+                      <input
+                        className="lowercase-path-input"
+                        disabled={!feedInspectorEditable}
+                        onChange={(event) => {
+                          if (!feedInspectorEditableNodeId) {
+                            return;
+                          }
+                          updateNodeConfigById(feedInspectorEditableNodeId, "cwd", event.currentTarget.value);
+                        }}
+                        value={String(feedInspectorTurnConfig?.cwd ?? cwd)}
+                      />
+                    </label>
+                    <label>
+                      품질 프로필
+                      <FancySelect
+                        ariaLabel="피드 에이전트 품질 프로필"
+                        className="modern-select"
+                        disabled={!feedInspectorEditable}
+                        onChange={(next) => {
+                          if (!feedInspectorEditableNodeId) {
+                            return;
+                          }
+                          updateNodeConfigById(feedInspectorEditableNodeId, "qualityProfile", next);
+                        }}
+                        options={QUALITY_PROFILE_OPTIONS}
+                        value={feedInspectorQualityProfile}
+                      />
+                    </label>
+                    <label>
+                      통과 기준 점수
+                      <FancySelect
+                        ariaLabel="피드 에이전트 품질 통과 기준 점수"
+                        className="modern-select"
+                        disabled={!feedInspectorEditable}
+                        onChange={(next) => {
+                          if (!feedInspectorEditableNodeId) {
+                            return;
+                          }
+                          updateNodeConfigById(
+                            feedInspectorEditableNodeId,
+                            "qualityThreshold",
+                            Math.max(5, Math.min(100, Number(next) || QUALITY_DEFAULT_THRESHOLD)),
+                          );
+                        }}
+                        options={QUALITY_THRESHOLD_OPTIONS}
+                        value={feedInspectorQualityThresholdOption}
+                      />
+                    </label>
+                    <label>
+                      출력 아티팩트
+                      <FancySelect
+                        ariaLabel="피드 에이전트 출력 아티팩트"
+                        className="modern-select"
+                        disabled={!feedInspectorEditable}
+                        onChange={(next) => {
+                          if (!feedInspectorEditableNodeId) {
+                            return;
+                          }
+                          updateNodeConfigById(feedInspectorEditableNodeId, "artifactType", next);
+                        }}
+                        options={ARTIFACT_TYPE_OPTIONS}
+                        value={toArtifactType(feedInspectorTurnConfig?.artifactType)}
+                      />
+                    </label>
+                    {feedInspectorQualityProfile === "code_implementation" && (
+                      <>
+                        <label>
+                          로컬 품질 명령 실행
+                          <FancySelect
+                            ariaLabel="피드 에이전트 로컬 품질 명령 실행"
+                            className="modern-select"
+                            disabled={!feedInspectorEditable}
+                            onChange={(next) => {
+                              if (!feedInspectorEditableNodeId) {
+                                return;
+                              }
+                              updateNodeConfigById(
+                                feedInspectorEditableNodeId,
+                                "qualityCommandEnabled",
+                                next === "true",
+                              );
+                            }}
+                            options={[
+                              { value: "false", label: "미사용" },
+                              { value: "true", label: "사용" },
+                            ]}
+                            value={String(feedInspectorTurnConfig?.qualityCommandEnabled === true)}
+                          />
+                        </label>
+                        <label>
+                          품질 명령 목록
+                          <textarea
+                            className="prompt-template-textarea"
+                            disabled={!feedInspectorEditable}
+                            onChange={(event) => {
+                              if (!feedInspectorEditableNodeId) {
+                                return;
+                              }
+                              updateNodeConfigById(
+                                feedInspectorEditableNodeId,
+                                "qualityCommands",
+                                event.currentTarget.value,
+                              );
+                            }}
+                            rows={3}
+                            value={String(feedInspectorTurnConfig?.qualityCommands ?? "npm run build")}
+                          />
+                        </label>
+                      </>
+                    )}
+                    <label>
+                      프롬프트 템플릿
+                      <textarea
+                        className="prompt-template-textarea"
+                        disabled={!feedInspectorEditable}
+                        onChange={(event) => {
+                          if (!feedInspectorEditableNodeId) {
+                            return;
+                          }
+                          updateNodeConfigById(
+                            feedInspectorEditableNodeId,
+                            "promptTemplate",
+                            event.currentTarget.value,
+                          );
+                        }}
+                        rows={8}
+                        value={feedInspectorPromptTemplate}
+                      />
+                    </label>
+                  </div>
+                </section>
+              )}
+              {!feedInspectorTurnNode && (
+                <div className="inspector-empty">선택된 포스트의 에이전트 설정을 찾을 수 없습니다.</div>
+              )}
+              <section className="feed-agent-rules">
+                <div className="feed-agent-rules-head">
+                  <h4>적용 규칙 문서</h4>
+                  <span>{feedInspectorRuleDocs.length}개</span>
+                </div>
+                {!feedInspectorRuleCwd && (
+                  <div className="inspector-empty">작업 경로가 없어 agent.md / skill.md를 조회할 수 없습니다.</div>
+                )}
+                {feedInspectorRuleLoading && <div className="inspector-empty">규칙 문서 로딩 중...</div>}
+                {!feedInspectorRuleLoading && feedInspectorRuleCwd && feedInspectorRuleDocs.length === 0 && (
+                  <div className="inspector-empty">적용된 agent.md / skill.md 없음</div>
+                )}
+                {!feedInspectorRuleLoading && feedInspectorRuleDocs.length > 0 && (
+                  <div className="feed-agent-rule-list">
+                    {feedInspectorRuleDocs.map((doc) => (
+                      <article className="feed-agent-rule-doc" key={`${doc.path}:${doc.content.length}`}>
+                        <header>{doc.path}</header>
+                        <pre>{doc.content}</pre>
+                      </article>
+                    ))}
+                  </div>
+                )}
+              </section>
+            </article>
             <article className="panel-card feed-main">
               <div className="feed-topbar">
                 <h2>피드</h2>
@@ -9340,7 +10076,13 @@ ${prompt}`;
                     const isDraftPost = post.status === "draft";
                     const canRequest = post.nodeType === "turn";
                     return (
-                      <section className="feed-card feed-card-sns" key={post.id}>
+                      <section
+                        className={`feed-card feed-card-sns ${
+                          feedInspectorPost?.id === post.id ? "is-selected" : ""
+                        }`.trim()}
+                        key={post.id}
+                        onClick={() => onSelectFeedInspectorPost(post)}
+                      >
                         <div className="feed-card-head">
                           <div className="feed-card-avatar" style={avatarStyle}>
                             <span>{avatarLabel}</span>
