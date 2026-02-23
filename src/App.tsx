@@ -493,6 +493,7 @@ const AUTO_LAYOUT_START_X = 40;
 const AUTO_LAYOUT_START_Y = 40;
 const AUTO_LAYOUT_COLUMN_GAP = 320;
 const AUTO_LAYOUT_ROW_GAP = 184;
+const AUTO_LAYOUT_SNAP_THRESHOLD = 20;
 const KNOWLEDGE_TOP_K_OPTIONS: FancySelectOption[] = [
   { value: "0", label: "0개" },
   { value: "1", label: "1개" },
@@ -2163,11 +2164,15 @@ function getAutoConnectionSides(fromNode: GraphNode, toNode: GraphNode): {
     : { fromSide: "top", toSide: "bottom" };
 }
 
-function snapToLayoutGrid(value: number, axis: "x" | "y"): number {
+function snapToLayoutGrid(value: number, axis: "x" | "y", thresholdPx?: number): number {
   const start = axis === "x" ? AUTO_LAYOUT_START_X : AUTO_LAYOUT_START_Y;
   const gap = axis === "x" ? AUTO_LAYOUT_COLUMN_GAP : AUTO_LAYOUT_ROW_GAP;
   const normalized = (value - start) / gap;
-  return Math.round(normalized) * gap + start;
+  const snapped = Math.round(normalized) * gap + start;
+  if (thresholdPx == null) {
+    return snapped;
+  }
+  return Math.abs(value - snapped) <= thresholdPx ? snapped : value;
 }
 
 function autoArrangeGraphLayout(input: GraphData): GraphData {
@@ -5708,8 +5713,11 @@ function App() {
           return {
             ...node,
             position: {
-              x: Math.min(maxX, Math.max(minPos, snapToLayoutGrid(node.position.x, "x"))),
-              y: Math.min(maxY, Math.max(minPos, snapToLayoutGrid(node.position.y, "y"))),
+              x: Math.min(
+                maxX,
+                Math.max(minPos, snapToLayoutGrid(node.position.x, "x", AUTO_LAYOUT_SNAP_THRESHOLD)),
+              ),
+              y: Math.min(maxY, Math.max(minPos, snapToLayoutGrid(node.position.y, "y", AUTO_LAYOUT_SNAP_THRESHOLD))),
             },
           };
         }),
