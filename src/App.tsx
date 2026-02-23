@@ -8895,6 +8895,7 @@ ${prompt}`;
                                 <span className="feed-action-label">{rawEnabled ? "마스킹 보기" : "원문 보기"}</span>
                               </button>
                               <button
+                                className="feed-primary-action"
                                 disabled={!post.sourceFile}
                                 onClick={() => onOpenFeedPostHistory(post)}
                                 type="button"
@@ -8908,6 +8909,7 @@ ${prompt}`;
                                 }}
                               >
                                 <button
+                                  className="feed-primary-action"
                                   onClick={() =>
                                     setFeedShareMenuPostId((prev) => (prev === post.id ? null : post.id))
                                   }

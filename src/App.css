@@ -2171,6 +2171,14 @@ h3 {
   background: #245fc4;
 }
 
+.feed-card-actions button.feed-primary-action {
+  background: #1d7cff;
+}
+
+.feed-card-actions button.feed-primary-action:hover:not(:disabled) {
+  background: #1d7cff;
+}
+
 .feed-card-actions button:disabled {
   background: #cfd6e2;
   color: #6b7788;
