@@ -1061,6 +1061,17 @@ function formatRunDateTime(input?: string | null): string {
   });
 }
 
+function formatRunFileLabel(fileName?: string | null): string {
+  if (!fileName) {
+    return "";
+  }
+  const trimmed = fileName.trim();
+  if (!trimmed) {
+    return "";
+  }
+  return trimmed.toUpperCase();
+}
+
 function formatUsedPercent(input: unknown): string {
   const value = readNumber(input);
   if (value == null || !Number.isFinite(value)) {
@@ -8830,7 +8841,7 @@ ${prompt}`;
                   onClick={() => loadRunDetail(file)}
                   type="button"
                 >
-                  {file}
+                  {formatRunFileLabel(file)}
                 </button>
               ))}
             </article>
@@ -8918,7 +8929,7 @@ ${prompt}`;
                 <li>기록 탭에서 실행 상세와 최종 결과를 비교하며 재사용 가능한 그래프로 다듬습니다.</li>
               </ol>
             </section>
-            {lastSavedRunFile && <div>최근 실행 파일: {lastSavedRunFile}</div>}
+            {lastSavedRunFile && <div>최근 실행 파일: {formatRunFileLabel(lastSavedRunFile)}</div>}
           </section>
         )}
 
