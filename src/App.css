@@ -1474,6 +1474,10 @@ h3 {
   min-width: 78px;
 }
 
+.lowercase-path-input {
+  text-transform: lowercase;
+}
+
 .prompt-template-textarea {
   min-height: 132px;
   max-height: 220px;

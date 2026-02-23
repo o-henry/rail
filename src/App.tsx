@@ -4417,7 +4417,7 @@ function App() {
         return;
       }
       setCwd(selectedDirectory);
-      setStatus(`작업 경로 선택됨: ${selectedDirectory}`);
+      setStatus(`작업 경로 선택됨: ${selectedDirectory.toLowerCase()}`);
     } catch (error) {
       setError(`작업 경로 선택 실패: ${String(error)}`);
     }
@@ -7175,7 +7175,7 @@ ${prompt}`;
         <label>
           작업 경로(CWD)
           <div className="settings-cwd-row">
-            <input readOnly value={cwd} />
+            <input className="lowercase-path-input" readOnly value={cwd} />
             <button className="settings-cwd-picker" onClick={onSelectCwdDirectory} type="button">
               폴더 선택
             </button>
@@ -8261,6 +8261,7 @@ ${prompt}`;
                             <label>
                               작업 경로
                               <input
+                                className="lowercase-path-input"
                                 onChange={(e) => updateSelectedNodeConfig("cwd", e.currentTarget.value)}
                                 value={String((selectedNode.config as TurnConfig).cwd ?? cwd)}
                               />
