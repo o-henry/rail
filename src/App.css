@@ -1962,12 +1962,12 @@ h3 {
 }
 
 .feed-stream > .log-empty {
-  padding: 14px 16px;
+  padding: 14px 0;
 }
 
 .feed-section-title {
   margin: 0;
-  padding: 14px 16px 10px;
+  padding: 14px 0 10px;
   font-size: 20px;
   font-family: "DialogNanumBody1984", "Noto Sans KR", sans-serif;
   letter-spacing: -0.01em;
@@ -1979,7 +1979,7 @@ h3 {
   border: 0;
   border-radius: 0;
   background: #ffffff;
-  padding: 16px;
+  padding: 16px 0;
   display: grid;
   gap: 10px;
   border-bottom: 1px solid #e8edf2;
@@ -2166,6 +2166,18 @@ h3 {
 
 .feed-card-actions button.feed-primary-action:hover:not(:disabled) {
   background: #1d7cff;
+}
+
+.feed-card-actions button.feed-danger-action {
+  background: #e45a5a;
+  min-height: 28px;
+  height: 28px;
+  padding: 0 9px;
+  font-size: 11px;
+}
+
+.feed-card-actions button.feed-danger-action:hover:not(:disabled) {
+  background: #d34d4d;
 }
 
 .feed-card-actions button:disabled {

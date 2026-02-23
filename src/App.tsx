@@ -4231,8 +4231,9 @@ function App() {
     }
   }
 
-  async function onOpenFeedPostHistory(post: FeedViewPost) {
+  async function onDeleteFeedPost(post: FeedViewPost) {
     setError("");
+    setFeedShareMenuPostId(null);
     const sourceFile = post.sourceFile.trim();
     if (!sourceFile) {
       return;
@@ -4242,11 +4243,27 @@ function App() {
       if (!run) {
         throw new Error("실행 기록을 불러오지 못했습니다.");
       }
-      setSelectedRunFile(sourceFile);
-      setSelectedRunDetail(run);
-      setWorkspaceTab("history");
+      const beforePosts = run.feedPosts ?? [];
+      const nextPosts = beforePosts.filter((item) => item.id !== post.id);
+      if (nextPosts.length === beforePosts.length) {
+        setStatus("삭제할 포스트를 찾지 못했습니다.");
+        return;
+      }
+
+      const nextRun: RunRecord = {
+        ...run,
+        feedPosts: nextPosts,
+      };
+
+      await invoke("run_save", { name: sourceFile, run: nextRun });
+      feedRunCacheRef.current[sourceFile] = nextRun;
+      setFeedPosts((prev) => prev.filter((item) => !(item.sourceFile === sourceFile && item.id === post.id)));
+      if (selectedRunFile === sourceFile) {
+        setSelectedRunDetail(nextRun);
+      }
+      setStatus(`포스트 삭제 완료: ${post.agentName}`);
     } catch (e) {
-      setError(`실행 기록 열기 실패: ${String(e)}`);
+      setError(`포스트 삭제 실패: ${String(e)}`);
     }
   }
 
@@ -8897,12 +8914,12 @@ ${prompt}`;
                             )}
                             <div className="button-row feed-card-actions">
                               <button
-                                className="feed-primary-action"
+                                className="feed-danger-action"
                                 disabled={!post.sourceFile}
-                                onClick={() => onOpenFeedPostHistory(post)}
+                                onClick={() => void onDeleteFeedPost(post)}
                                 type="button"
                               >
-                                <span className="feed-action-label">기록 열기</span>
+                                <span>삭제</span>
                               </button>
                               <div
                                 className="feed-share-menu-wrap"
@@ -8917,21 +8934,21 @@ ${prompt}`;
                                   }
                                   type="button"
                                 >
-                                  <span className="feed-action-label">공유</span>
+                                  <span>공유</span>
                                 </button>
                                 {feedShareMenuPostId === post.id && (
                                   <div className="feed-share-menu">
                                     <button onClick={() => void onShareFeedPost(post, "clipboard")} type="button">
-                                      <span className="feed-action-label">텍스트 복사</span>
+                                      <span>텍스트 복사</span>
                                     </button>
                                     <button onClick={() => void onShareFeedPost(post, "email")} type="button">
-                                      <span className="feed-action-label">이메일</span>
+                                      <span>이메일</span>
                                     </button>
                                     <button onClick={() => void onShareFeedPost(post, "obsidian")} type="button">
-                                      <span className="feed-action-label">옵시디언</span>
+                                      <span>옵시디언</span>
                                     </button>
                                     <button onClick={() => void onShareFeedPost(post, "json")} type="button">
-                                      <span className="feed-action-label">JSON 복사</span>
+                                      <span>JSON 복사</span>
                                     </button>
                                   </div>
                                 )}
