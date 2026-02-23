@@ -935,7 +935,7 @@ h3 {
 
 .node-input-chip-text {
   position: relative;
-  top: 2px;
+  top: 0px;
 }
 
 .node-head-subtitle {
@@ -1683,7 +1683,7 @@ h3 {
 
 .settings-button-label {
   position: relative;
-  top: 2px;
+  top: 0px;
 }
 
 .settings-account-button {
@@ -1875,7 +1875,7 @@ h3 {
 
 .feed-filter-toggle-label {
   position: relative;
-  top: 2px;
+  top: 0px;
 }
 
 .feed-filter-toggle.is-open {
@@ -1946,7 +1946,7 @@ h3 {
 
 .feed-topic-label {
   position: relative;
-  top: 2px;
+  top: 0px;
   font-size: 13px;
 }
 
@@ -2171,7 +2171,7 @@ h3 {
 
 .feed-step-chip-label {
   position: relative;
-  top: 2px;
+  top: 0px;
 }
 
 .feed-evidence-row {
