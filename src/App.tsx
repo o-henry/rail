@@ -4733,6 +4733,22 @@ function App() {
     }
   }
 
+  async function waitForAuthProbe(
+    attempts = 5,
+    delayMs = 280,
+  ): Promise<AuthProbeResult | null> {
+    for (let idx = 0; idx < attempts; idx += 1) {
+      const probe = await refreshAuthStateFromEngine(true);
+      if (probe && (probe.state === "authenticated" || probe.state === "login_required")) {
+        return probe;
+      }
+      if (idx < attempts - 1) {
+        await new Promise((resolve) => window.setTimeout(resolve, delayMs));
+      }
+    }
+    return null;
+  }
+
   async function onLoginCodex() {
     setError("");
     const shouldLogout = loginCompleted;
@@ -4740,10 +4756,21 @@ function App() {
       await ensureEngineStarted();
       if (shouldLogout) {
         await invoke("logout_codex");
+        let probe = await waitForAuthProbe(6, 260);
+        if (probe?.state === "authenticated") {
+          await invoke("engine_stop");
+          setEngineStarted(false);
+          await invoke("engine_start", { cwd });
+          setEngineStarted(true);
+          probe = await waitForAuthProbe(6, 260);
+        }
+        if (probe?.state === "authenticated") {
+          throw new Error("세션이 유지되고 있습니다. 앱을 완전히 종료 후 다시 시도해주세요.");
+        }
         setLoginCompleted(false);
         setAuthMode("unknown");
+        setUsageInfoText("");
         setStatus("Codex 로그아웃 완료");
-        void refreshAuthStateFromEngine(true);
         return;
       }
       const result = await invoke<LoginChatgptResult>("login_chatgpt");
@@ -4861,26 +4888,42 @@ function App() {
     try {
       await invoke("provider_child_view_open", { provider });
       setProviderChildViewOpen((prev) => ({ ...prev, [provider]: true }));
-      setStatus(`${webProviderLabel(provider)} child view 열림`);
+      setStatus(`${webProviderLabel(provider)} 세션 창 열림`);
+      void refreshWebWorkerHealth(true);
     } catch (error) {
-      setError(String(error));
+      const childError = String(error);
+      try {
+        await invoke("provider_window_open", { provider });
+        setProviderChildViewOpen((prev) => ({ ...prev, [provider]: true }));
+        setStatus(`${webProviderLabel(provider)} 세션 창 열림`);
+      } catch (windowError) {
+        setError(
+          `${webProviderLabel(provider)} 세션 관리 창 열기 실패: ${String(windowError)} (child view: ${childError})`,
+        );
+      }
     }
   }
 
   async function onCloseProviderChildView(provider: WebProvider) {
     try {
       await invoke("provider_child_view_hide", { provider });
-      setProviderChildViewOpen((prev) => ({ ...prev, [provider]: false }));
-      setStatus(`${webProviderLabel(provider)} child view 숨김`);
     } catch (error) {
       const message = String(error);
-      if (message.includes("provider child view not found")) {
-        setProviderChildViewOpen((prev) => ({ ...prev, [provider]: false }));
-        setStatus(`${webProviderLabel(provider)} child view 숨김`);
+      if (!message.includes("provider child view not found")) {
+        setError(`${webProviderLabel(provider)} 세션 창 숨기기 실패: ${message}`);
         return;
       }
-      setError(message);
     }
+
+    try {
+      await invoke("provider_window_close", { provider });
+    } catch {
+      // noop: standalone window not opened
+    }
+
+    setProviderChildViewOpen((prev) => ({ ...prev, [provider]: false }));
+    setStatus(`${webProviderLabel(provider)} 세션 창 숨김`);
+    void refreshWebWorkerHealth(true);
   }
 
   useEffect(() => {
@@ -7779,7 +7822,7 @@ ${prompt}`;
                       }
                       type="button"
                     >
-                      <span className="settings-button-label">세션 관리</span>
+                      <span className="settings-button-label">{isChildViewOpen ? "세션 숨기기" : "세션 열기"}</span>
                     </button>
                   </div>
                 </div>

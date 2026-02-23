@@ -1302,7 +1302,12 @@ pub async fn auth_probe(state: State<'_, EngineManager>) -> Result<AuthProbeResu
 #[tauri::command]
 pub async fn logout_codex(state: State<'_, EngineManager>) -> Result<(), String> {
     let runtime = current_runtime(&state).await?;
-    let candidates: [(&str, Value); 2] = [("account/logout", Value::Null), ("account/logout", json!({}))];
+    let candidates: [(&str, Value); 4] = [
+        ("logoutChatGpt", json!({})),
+        ("logoutChatGpt", Value::Null),
+        ("account/logout", Value::Null),
+        ("account/logout", json!({})),
+    ];
     let mut errors: Vec<String> = Vec::new();
 
     for (method, params) in candidates {
