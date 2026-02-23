@@ -32,6 +32,16 @@ type UsageCheckResult = {
   raw: unknown;
 };
 
+type AuthProbeState = "authenticated" | "login_required" | "unknown";
+
+type AuthProbeResult = {
+  state: AuthProbeState;
+  sourceMethod?: string | null;
+  authMode?: string | null;
+  raw?: unknown;
+  detail?: string | null;
+};
+
 type LoginChatgptResult = {
   authUrl: string;
   raw?: unknown;
@@ -522,6 +532,7 @@ const TURN_MODEL_OPTIONS = [
   "GPT-5.1-Codex-Mini",
 ] as const;
 const DEFAULT_TURN_MODEL = TURN_MODEL_OPTIONS[0];
+const WORKSPACE_CWD_STORAGE_KEY = "rail.settings.cwd";
 const COST_PRESET_OPTIONS: FancySelectOption[] = [
   { value: "conservative", label: "고사양 (품질 우선)" },
   { value: "balanced", label: "보통 (기본)" },
@@ -569,7 +580,45 @@ function toErrorText(error: unknown): string {
   if (error instanceof Error) {
     return error.message;
   }
+  if (typeof error === "string") {
+    return error;
+  }
+  if (error && typeof error === "object") {
+    const message = extractStringByPaths(error, [
+      "message",
+      "error",
+      "details",
+      "cause.message",
+      "data.message",
+    ]);
+    if (message) {
+      return message;
+    }
+    try {
+      return JSON.stringify(error);
+    } catch {
+      // fall through
+    }
+  }
   return String(error);
+}
+
+function loadPersistedCwd(fallback = "."): string {
+  if (typeof window === "undefined") {
+    return fallback;
+  }
+  try {
+    const raw = window.localStorage.getItem(WORKSPACE_CWD_STORAGE_KEY);
+    const parsed = typeof raw === "string" ? raw.trim() : "";
+    return parsed || fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function isEngineAlreadyStartedError(error: unknown): boolean {
+  const lower = toErrorText(error).toLowerCase();
+  return lower.includes("engine already started") || lower.includes("already started");
 }
 
 function toUsageCheckErrorMessage(error: unknown): string {
@@ -577,10 +626,20 @@ function toUsageCheckErrorMessage(error: unknown): string {
   const lower = raw.toLowerCase();
 
   if (
-    lower.includes("account/usage/get") ||
-    lower.includes("account/usage") ||
-    lower.includes("unknown variant `account/get`") ||
-    lower.includes("unknown variant `account/status`")
+    (lower.includes("login") || lower.includes("auth")) &&
+    (lower.includes("required") || lower.includes("unauthorized"))
+  ) {
+    return "로그인이 완료되지 않아 사용량을 조회할 수 없습니다. 설정에서 로그인 후 다시 시도해주세요.";
+  }
+
+  if (
+    (lower.includes("unknown variant") || lower.includes("method not found")) &&
+    (lower.includes("account/ratelimits/read") ||
+      lower.includes("account/read") ||
+      lower.includes("account/usage/get") ||
+      lower.includes("account/usage") ||
+      lower.includes("account/get") ||
+      lower.includes("account/status"))
   ) {
     return "사용량 조회 API를 지원하지 않는 엔진 버전입니다. 엔진 실행/로그인은 정상이어도 사용량은 현재 버전에서 조회할 수 없습니다.";
   }
@@ -597,13 +656,6 @@ function toUsageCheckErrorMessage(error: unknown): string {
     lower.includes("connection refused")
   ) {
     return "엔진 연결이 끊어져 사용량 조회에 실패했습니다. 엔진 상태를 확인하고 다시 시도해주세요.";
-  }
-
-  if (
-    (lower.includes("login") || lower.includes("auth")) &&
-    (lower.includes("required") || lower.includes("unauthorized"))
-  ) {
-    return "로그인이 완료되지 않아 사용량을 조회할 수 없습니다. 설정에서 로그인 후 다시 시도해주세요.";
   }
 
   const compact = raw.length > 140 ? `${raw.slice(0, 140)}...` : raw;
@@ -740,8 +792,12 @@ function extractAuthMode(input: unknown, depth = 0): AuthMode | null {
     return null;
   }
   if (typeof input === "string") {
-    if (input === "chatgpt" || input === "apikey") {
-      return input;
+    const normalized = input.trim().toLowerCase();
+    if (normalized === "chatgpt") {
+      return "chatgpt";
+    }
+    if (normalized === "apikey" || normalized === "api_key" || normalized === "api-key") {
+      return "apikey";
     }
     return null;
   }
@@ -964,6 +1020,134 @@ function formatUsage(usage?: UsageStats): string {
   const inputText = usage.inputTokens != null ? `${usage.inputTokens}` : "-";
   const outputText = usage.outputTokens != null ? `${usage.outputTokens}` : "-";
   return `${total}토큰 (입력 ${inputText} / 출력 ${outputText})`;
+}
+
+function asRecord(input: unknown): Record<string, unknown> | null {
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    return null;
+  }
+  return input as Record<string, unknown>;
+}
+
+function formatResetAt(input: unknown): string {
+  const raw = readNumber(input);
+  if (raw == null || raw <= 0) {
+    return "-";
+  }
+  const date = new Date(raw * 1000);
+  if (Number.isNaN(date.getTime())) {
+    return "-";
+  }
+  return date.toLocaleString("ko-KR", { hour12: false });
+}
+
+function formatUsedPercent(input: unknown): string {
+  const value = readNumber(input);
+  if (value == null || !Number.isFinite(value)) {
+    return "-";
+  }
+  const percentText = Number.isInteger(value) ? `${value}` : value.toFixed(1);
+  return `${percentText}%`;
+}
+
+function formatCreditSummary(input: unknown): string {
+  const credits = asRecord(input);
+  if (!credits) {
+    return "-";
+  }
+  const balance =
+    typeof credits.balance === "string" || typeof credits.balance === "number"
+      ? String(credits.balance)
+      : "-";
+  const hasCredits = credits.hasCredits === true;
+  const unlimited = credits.unlimited === true;
+  if (unlimited) {
+    return "무제한";
+  }
+  if (!hasCredits) {
+    return "없음";
+  }
+  return `잔액 ${balance}`;
+}
+
+function formatRateLimitBlock(title: string, source: Record<string, unknown>): string[] {
+  const lines: string[] = [title];
+  const planType = typeof source.planType === "string" && source.planType.trim() ? source.planType : "-";
+  const limitId = typeof source.limitId === "string" && source.limitId.trim() ? source.limitId : "-";
+  lines.push(`- 요금제: ${planType}`);
+  lines.push(`- 한도 ID: ${limitId}`);
+  lines.push(`- 크레딧: ${formatCreditSummary(source.credits)}`);
+
+  const primary = asRecord(source.primary);
+  if (primary) {
+    lines.push(
+      `- 기본 윈도우 (5시간): 사용량 ${formatUsedPercent(primary.usedPercent)} / 리셋 ${formatResetAt(primary.resetsAt)}`,
+    );
+  }
+  const secondary = asRecord(source.secondary);
+  if (secondary) {
+    lines.push(
+      `- 보조 윈도우 (1주일): 사용량 ${formatUsedPercent(secondary.usedPercent)} / 리셋 ${formatResetAt(secondary.resetsAt)}`,
+    );
+  }
+  return lines;
+}
+
+function formatUsageInfoForDisplay(raw: unknown): string {
+  const root = asRecord(raw);
+  if (!root) {
+    return JSON.stringify(raw, null, 2);
+  }
+
+  const lines: string[] = [];
+  const tokenUsage = extractUsageStats(raw);
+  if (tokenUsage) {
+    lines.push(`토큰 사용량: ${formatUsage(tokenUsage)}`);
+  }
+  const rateLimits = asRecord(root.rateLimits);
+  if (rateLimits) {
+    if (lines.length > 0) {
+      lines.push("");
+    }
+    lines.push(...formatRateLimitBlock("현재 한도", rateLimits));
+  }
+
+  const byLimitId = asRecord(root.rateLimitsByLimitId);
+  if (byLimitId) {
+    const entries = Object.entries(byLimitId)
+      .map(([limitKey, value]) => {
+        const item = asRecord(value);
+        if (!item) {
+          return null;
+        }
+        const rawName = typeof item.limitName === "string" ? item.limitName.trim() : "";
+        const rawId =
+          typeof item.limitId === "string" && item.limitId.trim() ? item.limitId.trim() : limitKey.trim();
+        const name = rawName || rawId || limitKey;
+        const header = rawId && rawId !== name ? `${name} (${rawId})` : name;
+        return { header, item };
+      })
+      .filter((entry): entry is { header: string; item: Record<string, unknown> } => entry != null);
+
+    if (entries.length > 0) {
+      if (lines.length > 0) {
+        lines.push("");
+      }
+      lines.push("모델별 한도");
+      for (const entry of entries) {
+        lines.push(...formatRateLimitBlock(`• ${entry.header}`, entry.item));
+        lines.push("");
+      }
+      if (lines[lines.length - 1] === "") {
+        lines.pop();
+      }
+    }
+  }
+
+  if (lines.length === 0) {
+    return JSON.stringify(raw, null, 2);
+  }
+  return lines.join("\n");
 }
 
 function redactSensitiveText(input: string): string {
@@ -2186,7 +2370,7 @@ function NavIcon({ tab }: { tab: WorkspaceTab }) {
     );
   }
   if (tab === "feed") {
-    return <img alt="" aria-hidden="true" className="nav-workflow-image" src="/feed.svg" />;
+    return <img alt="" aria-hidden="true" className="nav-workflow-image nav-feed-image" src="/feed3.svg" />;
   }
   if (tab === "history") {
     return <img alt="" aria-hidden="true" className="nav-workflow-image" src="/time.svg" />;
@@ -3231,7 +3415,7 @@ function isTurnTerminalEvent(method: string, params: unknown): TurnTerminal | nu
 }
 
 function App() {
-  const defaultCwd = useMemo(() => ".", []);
+  const defaultCwd = useMemo(() => loadPersistedCwd("."), []);
 
   const [workspaceTab, setWorkspaceTab] = useState<WorkspaceTab>("workflow");
 
@@ -3248,7 +3432,6 @@ function App() {
   const [error, setErrorState] = useState("");
   const [, setErrorLogs] = useState<string[]>([]);
 
-  const [usageSourceMethod, setUsageSourceMethod] = useState("");
   const [usageInfoText, setUsageInfoText] = useState("");
   const [authMode, setAuthMode] = useState<AuthMode>("unknown");
   const [loginCompleted, setLoginCompleted] = useState(false);
@@ -3623,12 +3806,14 @@ function App() {
             if (payload.method === "account/login/completed") {
               setLoginCompleted(true);
               setStatus("로그인 완료 이벤트 수신");
+              void refreshAuthStateFromEngine(true);
             }
 
             if (payload.method === "account/updated") {
               const mode = extractAuthMode(payload.params);
               if (mode) {
                 setAuthMode(mode);
+                setLoginCompleted(true);
                 setStatus(`계정 상태 갱신 수신 (인증 모드=${mode})`);
               } else {
                 setStatus("계정 상태 갱신 수신 (인증 모드 미확인)");
@@ -3699,13 +3884,13 @@ function App() {
 
             if (payload.state === "ready") {
               setEngineStarted(true);
+              void refreshAuthStateFromEngine(true);
             }
             if (payload.state === "stopped" || payload.state === "disconnected") {
               setEngineStarted(false);
               markCodexNodesStatusOnEngineIssue("cancelled", "엔진 중지 또는 연결 끊김");
               setAuthMode("unknown");
               setLoginCompleted(false);
-              setUsageSourceMethod("");
               setUsageInfoText("");
               setPendingApprovals([]);
               setApprovalSubmitting(false);
@@ -4037,18 +4222,19 @@ function App() {
     const boot = async () => {
       try {
         await ensureEngineStarted();
+        await refreshAuthStateFromEngine(true);
         if (!cancelled) {
           setStatus("준비됨");
         }
       } catch (e) {
-        const message = String(e);
-        if (message.includes("already started")) {
+        if (isEngineAlreadyStartedError(e)) {
           if (!cancelled) {
             setEngineStarted(true);
             setStatus("준비됨");
           }
           return;
         }
+        const message = toErrorText(e);
         if (!cancelled) {
           setStatus(`자동 시작 실패 (${message})`);
         }
@@ -4065,17 +4251,31 @@ function App() {
     if (engineStarted) {
       return;
     }
-    await invoke("engine_start", { cwd });
-    setEngineStarted(true);
+    try {
+      await invoke("engine_start", { cwd });
+      setEngineStarted(true);
+    } catch (error) {
+      if (isEngineAlreadyStartedError(error)) {
+        setEngineStarted(true);
+        return;
+      }
+      throw error;
+    }
   }
 
   async function onStartEngine() {
     setError("");
     try {
       await ensureEngineStarted();
+      await refreshAuthStateFromEngine(true);
       setStatus("준비됨");
     } catch (e) {
-      setError(String(e));
+      if (isEngineAlreadyStartedError(e)) {
+        setEngineStarted(true);
+        setStatus("준비됨");
+        return;
+      }
+      setError(toErrorText(e));
     }
   }
 
@@ -4088,10 +4288,42 @@ function App() {
       setStatus("중지됨");
       setRunning(false);
       setIsGraphRunning(false);
-      setUsageSourceMethod("");
+      setLoginCompleted(false);
+      setAuthMode("unknown");
       setUsageInfoText("");
     } catch (e) {
       setError(String(e));
+    }
+  }
+
+  async function refreshAuthStateFromEngine(silent = true): Promise<AuthProbeResult | null> {
+    try {
+      const result = await invoke<AuthProbeResult>("auth_probe");
+      const mode = extractAuthMode(result.authMode ?? null) ?? extractAuthMode(result.raw ?? null);
+      if (mode) {
+        setAuthMode(mode);
+      }
+
+      if (result.state === "authenticated") {
+        setLoginCompleted(true);
+        if (!silent) {
+          setStatus(mode ? `로그인 상태 확인됨 (인증 모드=${mode})` : "로그인 상태 확인됨");
+        }
+      } else if (result.state === "login_required") {
+        setLoginCompleted(false);
+        if (!silent) {
+          setStatus("로그인 필요");
+        }
+      } else if (!silent) {
+        setStatus("계정 상태 확인됨 (상태 미확인)");
+      }
+
+      return result;
+    } catch (error) {
+      if (!silent) {
+        setError(`계정 상태 확인 실패: ${String(error)}`);
+      }
+      return null;
     }
   }
 
@@ -4100,9 +4332,13 @@ function App() {
     try {
       await ensureEngineStarted();
       const result = await invoke<UsageCheckResult>("usage_check");
-      setUsageSourceMethod(result.sourceMethod);
-      setUsageInfoText(JSON.stringify(result.raw, null, 2));
-      setStatus(`사용량 조회 완료 (${result.sourceMethod})`);
+      const mode = extractAuthMode(result.raw);
+      if (mode) {
+        setAuthMode(mode);
+        setLoginCompleted(true);
+      }
+      setUsageInfoText(formatUsageInfoForDisplay(result.raw));
+      setStatus("사용량 조회 완료");
     } catch (e) {
       setError(toUsageCheckErrorMessage(e));
       setStatus("사용량 조회 실패");
@@ -4111,8 +4347,17 @@ function App() {
 
   async function onLoginCodex() {
     setError("");
+    const shouldLogout = loginCompleted;
     try {
       await ensureEngineStarted();
+      if (shouldLogout) {
+        await invoke("logout_codex");
+        setLoginCompleted(false);
+        setAuthMode("unknown");
+        setStatus("Codex 로그아웃 완료");
+        void refreshAuthStateFromEngine(true);
+        return;
+      }
       const result = await invoke<LoginChatgptResult>("login_chatgpt");
       const authUrl = typeof result?.authUrl === "string" ? result.authUrl.trim() : "";
       if (!authUrl) {
@@ -4121,7 +4366,11 @@ function App() {
       await openUrl(authUrl);
       setStatus("Codex 로그인 창 열림");
     } catch (e) {
-      setError(`Codex 로그인 시작 실패: ${String(e)}`);
+      if (shouldLogout) {
+        setError(`Codex 로그아웃 실패: ${String(e)}`);
+      } else {
+        setError(`Codex 로그인 시작 실패: ${String(e)}`);
+      }
     }
   }
 
@@ -5535,6 +5784,19 @@ function App() {
   }, [workspaceTab, selectedEdgeKey, selectedNodeIds, graph.edges, graph.nodes]);
 
   useEffect(() => {
+    try {
+      const next = cwd.trim();
+      if (!next) {
+        window.localStorage.removeItem(WORKSPACE_CWD_STORAGE_KEY);
+        return;
+      }
+      window.localStorage.setItem(WORKSPACE_CWD_STORAGE_KEY, next);
+    } catch {
+      // ignore persistence failures
+    }
+  }, [cwd]);
+
+  useEffect(() => {
     syncQuestionInputHeight();
   }, [workflowQuestion]);
 
@@ -6872,7 +7134,7 @@ ${prompt}`;
         {!compact && (
           <div className="button-row">
             <button
-              className="settings-engine-button"
+              className="settings-engine-button settings-account-button"
               onClick={engineStarted ? onStopEngine : onStartEngine}
               disabled={running || isGraphRunning}
               type="button"
@@ -6880,7 +7142,7 @@ ${prompt}`;
               <span className="settings-button-label">{engineStarted ? "엔진 중지" : "엔진 시작"}</span>
             </button>
             <button
-              className="settings-usage-button"
+              className="settings-usage-button settings-account-button"
               onClick={onCheckUsage}
               disabled={running || isGraphRunning}
               type="button"
@@ -6888,21 +7150,16 @@ ${prompt}`;
               <span className="settings-button-label">사용량 확인</span>
             </button>
             <button
-              className="settings-usage-button"
+              className="settings-usage-button settings-account-button"
               onClick={onLoginCodex}
               disabled={running || isGraphRunning}
               type="button"
             >
-              <span className="settings-button-label">Codex 로그인</span>
+              <span className="settings-button-label">{loginCompleted ? "CODEX 로그아웃" : "CODEX 로그인"}</span>
             </button>
           </div>
         )}
         <div className="usage-method">최근 상태: {status}</div>
-        {usageSourceMethod && (
-          <div className="usage-method">
-            사용량 조회 메서드: <code>{usageSourceMethod}</code>
-          </div>
-        )}
         {usageInfoText && (
           <div className="usage-result">
             <h3>사용량 조회 결과</h3>
@@ -6956,10 +7213,10 @@ ${prompt}`;
               return (
                 <div className="provider-hub-row" key={`session-${provider}`}>
                   <div className="provider-hub-meta">
-                    <span className="provider-hub-name">{webProviderLabel(provider)}</span>
                     <span className={`provider-session-pill ${session.tone}`}>
                       <span className="provider-session-label">{session.label}</span>
                     </span>
+                    <span className="provider-hub-name">{webProviderLabel(provider)}</span>
                   </div>
                   <div className="button-row provider-session-actions">
                     <button
@@ -8417,12 +8674,15 @@ ${prompt}`;
           <section className="history-layout">
             <article className="panel-card history-list">
               <h2>실행 기록</h2>
-              <div className="button-row">
-                <button onClick={refreshRunFiles} type="button">
-                  새로고침
+              <div className="button-row history-list-actions">
+                <button aria-label="새로고침" onClick={refreshRunFiles} title="새로고침" type="button">
+                  <img alt="" aria-hidden="true" className="history-list-action-icon" src="/reload.svg" />
                 </button>
-                <button onClick={onOpenRunsFolder} type="button">
-                  Finder에서 열기
+                <button aria-label="가져오기" onClick={onImportRunFile} title="가져오기" type="button">
+                  <img alt="" aria-hidden="true" className="history-list-action-icon" src="/import2.svg" />
+                </button>
+                <button aria-label="Finder에서 열기" onClick={onOpenRunsFolder} title="Finder에서 열기" type="button">
+                  <img alt="" aria-hidden="true" className="history-list-action-icon" src="/open2.svg" />
                 </button>
               </div>
               {runFiles.length === 0 && <div className={"log-empty"}>실행 기록 파일 없음</div>}
@@ -8508,15 +8768,6 @@ ${prompt}`;
           <section className="panel-card settings-view">
             {renderSettingsPanel(false)}
             {renderWebAutomationPanel()}
-            <section className="controls settings-share-panel">
-              <h2>실행 기록 공유</h2>
-              <div className="usage-method">Run 단위 JSON을 가져오거나, 피드 카드에서 내보낼 수 있습니다.</div>
-              <div className="button-row">
-                <button onClick={onImportRunFile} type="button">
-                  Run 가져오기
-                </button>
-              </div>
-            </section>
             <section className="settings-usage-guide">
               <h3>사용 방법</h3>
               <ol>

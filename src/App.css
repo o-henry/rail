@@ -235,6 +235,14 @@ h3 {
   object-fit: contain;
 }
 
+.nav-feed-image {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  clip-path: circle(50%);
+  object-fit: cover;
+}
+
 .nav-label {
   display: none;
 }
@@ -1521,6 +1529,21 @@ h3 {
   gap: 6px;
 }
 
+.usage-result pre {
+  max-height: 280px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.usage-result pre::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}
+
 .provider-hub {
   display: grid;
   gap: 8px;
@@ -1610,6 +1633,21 @@ h3 {
 .settings-button-label {
   position: relative;
   top: 2px;
+}
+
+.settings-account-button {
+  height: 28px;
+  min-height: 28px;
+  padding: 0 9px;
+  font-size: 11px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.settings-account-button .settings-button-label {
+  top: 1px;
 }
 
 .provider-session-toggle,
@@ -1822,7 +1860,7 @@ h3 {
 .feed-topic-tabs button {
   min-height: 35px;
   height: 35px;
-  border-radius: 11px;
+  border-radius: 6px;
   padding: 0 14px;
   font-size: 14px;
   color: #464f59;
@@ -2062,6 +2100,39 @@ h3 {
   overflow: auto;
 }
 
+.history-detail {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.history-detail::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}
+
+.history-list-actions {
+  flex-wrap: nowrap;
+  gap: 8px;
+}
+
+.history-list-actions button {
+  width: 31px;
+  min-width: 31px;
+  height: 31px;
+  min-height: 31px;
+  padding: 0;
+  display: inline-grid;
+  place-items: center;
+}
+
+.history-list-action-icon {
+  width: 14px;
+  height: 14px;
+  display: block;
+  object-fit: contain;
+}
+
 .history-detail-head {
   display: flex;
   align-items: center;
@@ -2179,6 +2250,7 @@ pre {
   background: #fbfcfe;
   color: #1f2730;
   padding: 10px;
+  font-family: Basically A Mono;
   font-size: 0.8rem;
   line-height: 1.45;
 }
