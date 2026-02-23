@@ -537,6 +537,8 @@ const AUTO_EDGE_STRAIGHTEN_THRESHOLD = 72;
 const AGENT_RULE_CACHE_TTL_MS = 12_000;
 const AGENT_RULE_MAX_DOCS = 16;
 const AGENT_RULE_MAX_DOC_CHARS = 6_000;
+const AUTH_LOGIN_REQUIRED_CONFIRM_COUNT = 3;
+const AUTH_LOGIN_REQUIRED_GRACE_MS = 120_000;
 const SIMPLE_WORKFLOW_UI = true;
 const KNOWLEDGE_TOP_K_OPTIONS: FancySelectOption[] = [
   { value: "0", label: "0개" },
@@ -4443,6 +4445,8 @@ function App() {
   const runStartGuardRef = useRef(false);
   const pendingWebTurnAutoOpenKeyRef = useRef("");
   const pendingWebLoginAutoOpenKeyRef = useRef("");
+  const authLoginRequiredProbeCountRef = useRef(0);
+  const lastAuthenticatedAtRef = useRef<number>(defaultLoginCompleted ? Date.now() : 0);
 
   const activeApproval = pendingApprovals[0];
   const canvasNodes = useMemo(() => {
@@ -4779,6 +4783,8 @@ function App() {
             }
 
             if (payload.method === "account/login/completed") {
+              authLoginRequiredProbeCountRef.current = 0;
+              lastAuthenticatedAtRef.current = Date.now();
               setLoginCompleted(true);
               setStatus("로그인 완료 이벤트 수신");
               void refreshAuthStateFromEngine(true);
@@ -4787,6 +4793,8 @@ function App() {
             if (payload.method === "account/updated") {
               const mode = extractAuthMode(payload.params);
               if (mode) {
+                authLoginRequiredProbeCountRef.current = 0;
+                lastAuthenticatedAtRef.current = Date.now();
                 setAuthMode(mode);
                 setLoginCompleted(true);
                 setStatus(`계정 상태 갱신 수신 (인증 모드=${mode})`);
@@ -5380,17 +5388,39 @@ function App() {
       }
 
       if (result.state === "authenticated") {
+        authLoginRequiredProbeCountRef.current = 0;
+        lastAuthenticatedAtRef.current = Date.now();
         setLoginCompleted(true);
         if (!silent) {
           setStatus(mode ? `로그인 상태 확인됨 (인증 모드=${mode})` : "로그인 상태 확인됨");
         }
       } else if (result.state === "login_required") {
-        setLoginCompleted(false);
-        if (!silent) {
-          setStatus("로그인 필요");
+        const now = Date.now();
+        const nextProbeCount = authLoginRequiredProbeCountRef.current + 1;
+        authLoginRequiredProbeCountRef.current = nextProbeCount;
+        const withinGraceWindow =
+          lastAuthenticatedAtRef.current > 0 &&
+          now - lastAuthenticatedAtRef.current < AUTH_LOGIN_REQUIRED_GRACE_MS;
+        const shouldKeepSession =
+          loginCompleted && (withinGraceWindow || nextProbeCount < AUTH_LOGIN_REQUIRED_CONFIRM_COUNT);
+
+        if (shouldKeepSession) {
+          if (!silent) {
+            setStatus(
+              `로그인 상태 재확인 중 (${Math.min(nextProbeCount, AUTH_LOGIN_REQUIRED_CONFIRM_COUNT)}/${AUTH_LOGIN_REQUIRED_CONFIRM_COUNT})`,
+            );
+          }
+        } else {
+          setLoginCompleted(false);
+          if (!silent) {
+            setStatus("로그인 필요");
+          }
         }
-      } else if (!silent) {
-        setStatus("계정 상태 확인됨 (상태 미확인)");
+      } else {
+        authLoginRequiredProbeCountRef.current = 0;
+        if (!silent) {
+          setStatus("계정 상태 확인됨 (상태 미확인)");
+        }
       }
 
       return result;
@@ -5407,7 +5437,7 @@ function App() {
     try {
       await ensureEngineStarted();
       const beforeProbe = await refreshAuthStateFromEngine(true);
-      if (beforeProbe?.state === "login_required") {
+      if (beforeProbe?.state === "login_required" && !loginCompleted) {
         setLoginCompleted(false);
         setUsageInfoText("");
         throw new Error("로그인이 완료되지 않아 사용량을 조회할 수 없습니다. 설정에서 로그인 후 다시 시도해주세요.");
@@ -5420,7 +5450,7 @@ function App() {
       const probed = await refreshAuthStateFromEngine(true);
       if (probed?.state === "authenticated") {
         setLoginCompleted(true);
-      } else if (probed?.state === "login_required") {
+      } else if (probed?.state === "login_required" && !loginCompleted) {
         setLoginCompleted(false);
       } else if (mode) {
         setLoginCompleted(true);
@@ -5454,6 +5484,8 @@ function App() {
         setEngineStarted(false);
         await invoke("engine_start", { cwd });
         setEngineStarted(true);
+        authLoginRequiredProbeCountRef.current = 0;
+        lastAuthenticatedAtRef.current = 0;
         setLoginCompleted(false);
         setAuthMode("unknown");
         setUsageInfoText("");
