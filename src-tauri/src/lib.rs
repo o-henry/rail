@@ -15,6 +15,7 @@ pub fn run() {
             engine::login_chatgpt,
             engine::logout_codex,
             engine::auth_probe,
+            engine::agent_rules_read,
             engine::usage_check,
             engine::thread_start,
             engine::turn_start,

@@ -143,6 +143,19 @@ pub struct AuthProbeResult {
     detail: Option<String>,
 }
 
+#[derive(Debug, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentRuleDoc {
+    pub path: String,
+    pub content: String,
+}
+
+#[derive(Debug, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentRulesReadResult {
+    pub docs: Vec<AgentRuleDoc>,
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct WebProviderRunMeta {
@@ -712,6 +725,89 @@ async fn ensure_private_dir(path: &Path, label: &str) -> Result<(), String> {
     Ok(())
 }
 
+fn append_if_file(out: &mut Vec<PathBuf>, path: PathBuf) {
+    if path.is_file() {
+        out.push(path);
+    }
+}
+
+fn collect_skill_docs(dir: &Path, out: &mut Vec<PathBuf>, max_docs: usize) {
+    if out.len() >= max_docs {
+        return;
+    }
+    let entries = match fs::read_dir(dir) {
+        Ok(entries) => entries,
+        Err(_) => return,
+    };
+    let mut paths: Vec<PathBuf> = entries.filter_map(|entry| entry.ok().map(|e| e.path())).collect();
+    paths.sort();
+
+    for path in paths {
+        if out.len() >= max_docs {
+            return;
+        }
+        if path.is_dir() {
+            collect_skill_docs(&path, out, max_docs);
+            continue;
+        }
+        let Some(file_name) = path.file_name().and_then(|name| name.to_str()) else {
+            continue;
+        };
+        if file_name.eq_ignore_ascii_case("skill.md") {
+            out.push(path);
+        }
+    }
+}
+
+#[tauri::command]
+pub async fn agent_rules_read(cwd: String) -> Result<AgentRulesReadResult, String> {
+    let cwd_trimmed = cwd.trim();
+    if cwd_trimmed.is_empty() {
+        return Ok(AgentRulesReadResult { docs: Vec::new() });
+    }
+
+    let cwd_path = PathBuf::from(cwd_trimmed);
+    if !cwd_path.is_dir() {
+        return Ok(AgentRulesReadResult { docs: Vec::new() });
+    }
+
+    let mut candidates: Vec<PathBuf> = Vec::new();
+    append_if_file(&mut candidates, cwd_path.join("agent.md"));
+    append_if_file(&mut candidates, cwd_path.join("AGENT.md"));
+    append_if_file(&mut candidates, cwd_path.join("agents.md"));
+    append_if_file(&mut candidates, cwd_path.join("AGENTS.md"));
+    append_if_file(&mut candidates, cwd_path.join("skill.md"));
+    append_if_file(&mut candidates, cwd_path.join("SKILL.md"));
+
+    collect_skill_docs(&cwd_path.join("skills"), &mut candidates, 24);
+
+    let mut docs: Vec<AgentRuleDoc> = Vec::new();
+    for path in candidates {
+        if docs.len() >= 24 {
+            break;
+        }
+        let content = match fs::read_to_string(&path) {
+            Ok(content) => content,
+            Err(_) => continue,
+        };
+        let trimmed = content.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        let relative_path = path
+            .strip_prefix(&cwd_path)
+            .unwrap_or(path.as_path())
+            .to_string_lossy()
+            .to_string();
+        docs.push(AgentRuleDoc {
+            path: relative_path,
+            content: trimmed.to_string(),
+        });
+    }
+
+    Ok(AgentRulesReadResult { docs })
+}
+
 fn logout_auth_candidate_paths(codex_home: &Path) -> Vec<PathBuf> {
     let mut paths = vec![
         codex_home.join("auth.json"),
@@ -1276,6 +1372,7 @@ pub async fn auth_probe(state: State<'_, EngineManager>) -> Result<AuthProbeResu
         "account.authenticated",
         "account.loggedIn",
     ];
+    let requires_openai_auth_paths = ["requiresOpenaiAuth", "account.requiresOpenaiAuth"];
 
     let mut errors: Vec<String> = Vec::new();
     let mut saw_login_required = false;
@@ -1284,6 +1381,8 @@ pub async fn auth_probe(state: State<'_, EngineManager>) -> Result<AuthProbeResu
         match runtime.request(method, params).await {
             Ok(raw) => {
                 let auth_mode = extract_auth_mode(&raw, 0);
+                let requires_openai_auth =
+                    extract_bool_by_paths(&raw, &requires_openai_auth_paths).unwrap_or(false);
                 let state = if auth_mode.is_some() {
                     "authenticated"
                 } else if let Some(flag) = extract_bool_by_paths(&raw, &auth_bool_paths) {
@@ -1292,6 +1391,8 @@ pub async fn auth_probe(state: State<'_, EngineManager>) -> Result<AuthProbeResu
                     } else {
                         "login_required"
                     }
+                } else if requires_openai_auth {
+                    "login_required"
                 } else if method.starts_with("account/usage")
                     || method == "account/rateLimits/read"
                     || method == "account/read"

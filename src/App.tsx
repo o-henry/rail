@@ -42,6 +42,15 @@ type AuthProbeResult = {
   detail?: string | null;
 };
 
+type AgentRuleDoc = {
+  path: string;
+  content: string;
+};
+
+type AgentRulesReadResult = {
+  docs?: AgentRuleDoc[];
+};
+
 type LoginChatgptResult = {
   authUrl: string;
   raw?: unknown;
@@ -495,6 +504,9 @@ const AUTO_LAYOUT_COLUMN_GAP = 320;
 const AUTO_LAYOUT_ROW_GAP = 184;
 const AUTO_LAYOUT_SNAP_THRESHOLD = 20;
 const AUTO_EDGE_STRAIGHTEN_THRESHOLD = 72;
+const AGENT_RULE_CACHE_TTL_MS = 12_000;
+const AGENT_RULE_MAX_DOCS = 16;
+const AGENT_RULE_MAX_DOC_CHARS = 6_000;
 const KNOWLEDGE_TOP_K_OPTIONS: FancySelectOption[] = [
   { value: "0", label: "0개" },
   { value: "1", label: "1개" },
@@ -1842,6 +1854,26 @@ function stringifyInput(input: unknown): string {
 
 function replaceInputPlaceholder(template: string, value: string): string {
   return template.split("{{input}}").join(value);
+}
+
+function buildForcedAgentRuleBlock(docs: AgentRuleDoc[]): string {
+  if (docs.length === 0) {
+    return "";
+  }
+
+  const parts = docs.map((doc, index) => {
+    const content = doc.content.trim();
+    return `## 규칙 문서 ${index + 1}: ${doc.path}\n${content}`;
+  });
+
+  return [
+    "[SYSTEM 강제 규칙]",
+    "아래 AGENT/SKILL 규칙은 선택사항이 아니며 반드시 준수해야 합니다.",
+    "규칙 충돌 시 문서에 명시된 우선순위를 따르고, 없으면 더 구체적인 규칙을 우선합니다.",
+    "",
+    ...parts,
+    "[/SYSTEM 강제 규칙]",
+  ].join("\n");
 }
 
 function defaultKnowledgeConfig(): KnowledgeConfig {
@@ -3835,6 +3867,7 @@ function App() {
   const feedRunCacheRef = useRef<Record<string, RunRecord>>({});
   const feedRawAttachmentRef = useRef<Record<string, string>>({});
   const pendingNodeRequestsRef = useRef<Record<string, string[]>>({});
+  const agentRulesCacheRef = useRef<Record<string, { loadedAt: number; docs: AgentRuleDoc[] }>>({});
   const runStartGuardRef = useRef(false);
 
   const activeApproval = pendingApprovals[0];
@@ -6754,6 +6787,36 @@ function App() {
     });
   }
 
+  async function loadAgentRuleDocs(nodeCwd: string): Promise<AgentRuleDoc[]> {
+    const cwdKey = nodeCwd.trim();
+    if (!cwdKey) {
+      return [];
+    }
+
+    const cached = agentRulesCacheRef.current[cwdKey];
+    if (cached && Date.now() - cached.loadedAt <= AGENT_RULE_CACHE_TTL_MS) {
+      return cached.docs;
+    }
+
+    try {
+      const result = await invoke<AgentRulesReadResult>("agent_rules_read", {
+        cwd: cwdKey,
+      });
+      const docs = (result.docs ?? [])
+        .filter((row) => row && typeof row.path === "string" && typeof row.content === "string")
+        .slice(0, AGENT_RULE_MAX_DOCS)
+        .map((row) => ({
+          path: String(row.path).trim() || "unknown.md",
+          content: String(row.content).slice(0, AGENT_RULE_MAX_DOC_CHARS).trim(),
+        }))
+        .filter((row) => row.content.length > 0);
+      agentRulesCacheRef.current[cwdKey] = { loadedAt: Date.now(), docs };
+      return docs;
+    } catch {
+      return [];
+    }
+  }
+
   async function injectKnowledgeContext(
     node: GraphNode,
     prompt: string,
@@ -6851,8 +6914,15 @@ ${prompt}`;
       ? replaceInputPlaceholder(promptTemplate, inputText)
       : `${promptTemplate}${inputText ? `\n${inputText}` : ""}`;
     const promptWithRequests = `${basePrompt}${queuedRequestBlock}`.trim();
+    const agentRuleDocs = await loadAgentRuleDocs(nodeCwd);
+    if (agentRuleDocs.length > 0) {
+      addNodeLog(node.id, `[규칙] agent/skill 문서 ${agentRuleDocs.length}개 강제 적용`);
+    }
+    const forcedRuleBlock = buildForcedAgentRuleBlock(agentRuleDocs);
     const withKnowledge = await injectKnowledgeContext(node, promptWithRequests, config);
-    const textToSend = withKnowledge.prompt;
+    const textToSend = forcedRuleBlock
+      ? `${forcedRuleBlock}\n\n${withKnowledge.prompt}`.trim()
+      : withKnowledge.prompt;
     const knowledgeTrace = withKnowledge.trace;
 
     if (executor === "ollama") {
