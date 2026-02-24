@@ -3170,9 +3170,9 @@ pre {
   max-height: 180px;
   overflow: auto;
   padding: 10px;
-  border-radius: 5px;
-  background: #f5f8fd;
-  border: 1px solid #dbe2ee;
+  border-radius: 4px;
+  background: #e0e3e8;
+  /* border: 1px solid #dbe2ee; */
   white-space: pre-wrap;
   word-break: break-word;
 }
@@ -3180,9 +3180,13 @@ pre {
 .web-turn-modal textarea {
   width: 100%;
   resize: vertical;
-  border: 1px solid #d7deea;
-  border-radius: 6px;
-  background: #ffffff;
+  /* border: 1px solid #d7deea; */
+  border-radius: 4px;
+  background: #edecec;
+}
+
+.web-turn-modal .button-row button {
+  background: var(--surface);
 }
 
 .web-turn-modal textarea:focus,
