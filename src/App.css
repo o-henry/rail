@@ -171,7 +171,7 @@ h3,
 h4,
 h5,
 h6 {
-  font-family: "Galmuri14", "DialogNanumBody1984", "Noto Sans KR", sans-serif;
+  font-family: "DialogNanumBody1984", "Noto Sans KR", sans-serif;
   letter-spacing: -0.7px;
 }
 
@@ -2208,7 +2208,7 @@ h3 {
 .feed-topbar h2 {
   margin: 0;
   font-size: 20px;
-  font-family: "Galmuri14", "DialogNanumBody1984", "Noto Sans KR", sans-serif;
+  font-family: "DialogNanumBody1984", "Noto Sans KR", sans-serif;
   letter-spacing: -0.015em;
   color: #14181f;
 }
