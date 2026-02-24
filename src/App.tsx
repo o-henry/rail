@@ -143,7 +143,7 @@ type PendingApproval = {
   params: unknown;
 };
 
-type WorkspaceTab = "workflow" | "feed" | "history" | "settings" | "bridge";
+type WorkspaceTab = "workflow" | "feed" | "settings" | "bridge";
 
 type CanvasDisplayEdge = {
   edge: GraphEdge;
@@ -2122,9 +2122,6 @@ function NavIcon({ tab, active = false }: { tab: WorkspaceTab; active?: boolean 
         src={active ? "/post.svg" : "/post.svg"}
       />
     );
-  }
-  if (tab === "history") {
-    return <img alt="" aria-hidden="true" className="nav-workflow-image" src="/time.svg" />;
   }
   if (tab === "settings") {
     return <img alt="" aria-hidden="true" className="nav-workflow-image" src="/setting.svg" />;
@@ -5287,10 +5284,8 @@ function App() {
       } else if (key === "2") {
         nextTab = "feed";
       } else if (key === "3") {
-        nextTab = "history";
-      } else if (key === "4") {
         nextTab = "settings";
-      } else if (key === "5") {
+      } else if (key === "4") {
         nextTab = "bridge";
       }
 
@@ -5305,9 +5300,7 @@ function App() {
           ? "워크플로우 탭으로 이동"
           : nextTab === "feed"
             ? "피드 탭으로 이동"
-            : nextTab === "history"
-              ? "기록 탭으로 이동"
-              : nextTab === "settings"
+            : nextTab === "settings"
                 ? "설정 탭으로 이동"
                 : "웹 연결 탭으로 이동",
       );
@@ -7004,7 +6997,7 @@ ${prompt}`;
   function renderSettingsPanel(compact = false) {
     return (
       <section className={`controls ${compact ? "settings-compact" : ""}`}>
-        <h2>엔진 및 계정</h2>
+        <h3>엔진 및 계정</h3>
         {!compact && (
           <div className="settings-badges">
             <span className={`status-tag ${engineStarted ? "on" : "off"}`}>
@@ -7071,6 +7064,92 @@ ${prompt}`;
             <h3>사용량 조회 결과</h3>
             <pre>{usageInfoText}</pre>
           </div>
+        )}
+        {!compact && (
+          <section className="settings-run-history">
+            <div className="settings-run-history-head">
+              <h3>실행 기록</h3>
+              <div className="button-row history-list-actions">
+                <button aria-label="새로고침" onClick={refreshRunFiles} title="새로고침" type="button">
+                  <img alt="" aria-hidden="true" className="history-list-action-icon" src="/reload.svg" />
+                </button>
+                <button onClick={onOpenRunsFolder} type="button">
+                  열기
+                </button>
+              </div>
+            </div>
+            <div className="settings-history-layout history-layout">
+              <article className="panel-card history-list">
+                {runFiles.length === 0 && <div className={"log-empty"}>실행 기록 파일 없음</div>}
+                {runFiles.map((file) => (
+                  <button
+                    className={selectedRunFile === file ? "is-active" : ""}
+                    key={file}
+                    onClick={() => loadRunDetail(file)}
+                    type="button"
+                  >
+                    {formatRunFileLabel(file)}
+                  </button>
+                ))}
+              </article>
+
+              <article className="panel-card history-detail">
+                {!selectedRunDetail && <div>실행 기록을 선택하세요.</div>}
+                {selectedRunDetail && (
+                  <>
+                    <div className="history-detail-head">
+                      <h5></h5>
+                    </div>
+                    <div>실행 ID: {selectedRunDetail.runId}</div>
+                    <div>시작 시간: {formatRunDateTime(selectedRunDetail.startedAt)}</div>
+                    <div>종료 시간: {formatRunDateTime(selectedRunDetail.finishedAt)}</div>
+                    <div className="history-detail-content">
+                      <div className="history-detail-group">
+                        <h3>질문</h3>
+                        <pre>{selectedRunDetail.question || "(비어 있음)"}</pre>
+                      </div>
+                      <div className="history-detail-group">
+                        <h3>최종 답변</h3>
+                        <pre>{selectedRunDetail.finalAnswer || "(없음)"}</pre>
+                      </div>
+                      <div className="history-detail-group">
+                        <h3>요약 로그</h3>
+                        <pre>{selectedRunDetail.summaryLogs.join("\n") || "(없음)"}</pre>
+                      </div>
+                      <div className="history-detail-group">
+                        <h3>품질 요약</h3>
+                        <pre>{formatUnknown(selectedRunDetail.qualitySummary ?? {})}</pre>
+                      </div>
+                      <div className="history-detail-group">
+                        <h3>회귀 비교</h3>
+                        <pre>{formatUnknown(selectedRunDetail.regression ?? {})}</pre>
+                      </div>
+                      <div className="history-detail-group">
+                        <h3>상태 전이</h3>
+                        <pre>{formatUnknown(selectedRunDetail.transitions)}</pre>
+                      </div>
+                      <div className="history-detail-group">
+                        <h3>프로바이더 추적</h3>
+                        <pre>{formatUnknown(selectedRunDetail.providerTrace ?? [])}</pre>
+                      </div>
+                      <div className="history-detail-group">
+                        <h3>첨부 참조 추적</h3>
+                        <pre>{formatUnknown(selectedRunDetail.knowledgeTrace ?? [])}</pre>
+                      </div>
+                      <div className="history-detail-group">
+                        <h3>노드 로그</h3>
+                        <pre>{formatUnknown(selectedRunDetail.nodeLogs ?? {})}</pre>
+                      </div>
+                      <div className="history-detail-group">
+                        <h3>노드 품질 지표</h3>
+                        <pre>{formatUnknown(selectedRunDetail.nodeMetrics ?? {})}</pre>
+                      </div>
+                    </div>
+                  </>
+                )}
+              </article>
+            </div>
+          </section>
         )}
       </section>
     );
@@ -7588,16 +7667,6 @@ ${prompt}`;
           >
             <span className="nav-icon"><NavIcon tab="feed" active={isActiveTab("feed")} /></span>
             <span className="nav-label">피드</span>
-          </button>
-          <button
-            className={isActiveTab("history") ? "is-active" : ""}
-            onClick={() => setWorkspaceTab("history")}
-            aria-label="기록"
-            title="기록"
-            type="button"
-          >
-            <span className="nav-icon"><NavIcon tab="history" active={isActiveTab("history")} /></span>
-            <span className="nav-label">기록</span>
           </button>
           <button
             className={isActiveTab("settings") ? "is-active" : ""}
@@ -9208,98 +9277,6 @@ ${prompt}`;
                     );
                   })}
               </article>
-            </article>
-          </section>
-        )}
-
-        {workspaceTab === "history" && (
-          <section className="history-layout workspace-tab-panel">
-            <article className="panel-card history-list">
-              {/* <h4>실행 기록</h4> */}
-              <div className="button-row history-list-actions">
-                <button aria-label="새로고침" onClick={refreshRunFiles} title="새로고침" type="button">
-                  <img alt="" aria-hidden="true" className="history-list-action-icon" src="/reload.svg" />
-                </button>
-                <button aria-label="Finder에서 열기" onClick={onOpenRunsFolder} title="Finder에서 열기" type="button">
-                  <img alt="" aria-hidden="true" className="history-list-action-icon" src="/open2.svg" />
-                </button>
-              </div>
-              {runFiles.length === 0 && <div className={"log-empty"}>실행 기록 파일 없음</div>}
-              {runFiles.map((file) => (
-                <button
-                  className={selectedRunFile === file ? "is-active" : ""}
-                  key={file}
-                  onClick={() => loadRunDetail(file)}
-                  type="button"
-                >
-                  {formatRunFileLabel(file)}
-                </button>
-              ))}
-            </article>
-
-            <article className="panel-card history-detail">
-              {!selectedRunDetail && <div>실행 기록을 선택하세요.</div>}
-              {selectedRunDetail && (
-                <>
-                  <div className="history-detail-head">
-                    {/* <h4>실행 상세</h4> */}
-                    <h5></h5>
-                    {/* <button
-                      aria-label="실행 기록 삭제"
-                      className="history-delete-button"
-                      onClick={onDeleteSelectedRun}
-                      type="button"
-                    >
-                      x
-                    </button> */}
-                  </div>
-                  <div>실행 ID: {selectedRunDetail.runId}</div>
-                  <div>시작 시간: {formatRunDateTime(selectedRunDetail.startedAt)}</div>
-                  <div>종료 시간: {formatRunDateTime(selectedRunDetail.finishedAt)}</div>
-                  <div className="history-detail-content">
-                    <div className="history-detail-group">
-                      <h3>질문</h3>
-                      <pre>{selectedRunDetail.question || "(비어 있음)"}</pre>
-                    </div>
-                    <div className="history-detail-group">
-                      <h3>최종 답변</h3>
-                      <pre>{selectedRunDetail.finalAnswer || "(없음)"}</pre>
-                    </div>
-                    <div className="history-detail-group">
-                      <h3>요약 로그</h3>
-                      <pre>{selectedRunDetail.summaryLogs.join("\n") || "(없음)"}</pre>
-                    </div>
-                    <div className="history-detail-group">
-                      <h3>품질 요약</h3>
-                      <pre>{formatUnknown(selectedRunDetail.qualitySummary ?? {})}</pre>
-                    </div>
-                    <div className="history-detail-group">
-                      <h3>회귀 비교</h3>
-                      <pre>{formatUnknown(selectedRunDetail.regression ?? {})}</pre>
-                    </div>
-                    <div className="history-detail-group">
-                      <h3>상태 전이</h3>
-                      <pre>{formatUnknown(selectedRunDetail.transitions)}</pre>
-                    </div>
-                    <div className="history-detail-group">
-                      <h3>프로바이더 추적</h3>
-                      <pre>{formatUnknown(selectedRunDetail.providerTrace ?? [])}</pre>
-                    </div>
-                    <div className="history-detail-group">
-                      <h3>첨부 참조 추적</h3>
-                      <pre>{formatUnknown(selectedRunDetail.knowledgeTrace ?? [])}</pre>
-                    </div>
-                    <div className="history-detail-group">
-                      <h3>노드 로그</h3>
-                      <pre>{formatUnknown(selectedRunDetail.nodeLogs ?? {})}</pre>
-                    </div>
-                    <div className="history-detail-group">
-                      <h3>노드 품질 지표</h3>
-                      <pre>{formatUnknown(selectedRunDetail.nodeMetrics ?? {})}</pre>
-                    </div>
-                  </div>
-                </>
-              )}
             </article>
           </section>
         )}

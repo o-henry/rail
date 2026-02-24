@@ -176,7 +176,8 @@ h6 {
 }
 
 h3 {
-  font-size: 0.9rem;
+  font-size: 1.2rem;
+  /* font-size: 0.9rem; */
 }
 
 .app-shell {
@@ -1880,6 +1881,34 @@ h3 {
   overflow: hidden;
 }
 
+.settings-run-history {
+  display: grid;
+  gap: 10px;
+}
+
+.settings-run-history-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.settings-run-history-head h3 {
+  margin: 0;
+}
+
+.settings-history-layout {
+  margin: 0;
+  height: auto;
+  min-height: 0;
+  grid-template-columns: 280px minmax(0, 1fr);
+}
+
+.settings-history-layout > .panel-card {
+  max-height: 420px;
+  overflow: auto;
+}
+
 .feed-layout {
   margin: 0 10px 10px;
   height: 100%;
@@ -3059,7 +3088,8 @@ pre {
 }
 
 .bridge-view h2 {
-  font-size: 16px;
+  font-size: 14px;
+  font-family: Galmuri14;
 }
 
 .bridge-head-panel,
