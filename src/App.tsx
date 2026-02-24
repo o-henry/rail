@@ -5953,6 +5953,26 @@ function App() {
     }
   }
 
+  async function onRestartWebBridge() {
+    setError("");
+    setWebWorkerBusy(true);
+    try {
+      await invoke("web_worker_stop");
+    } catch {
+      // noop
+    }
+    try {
+      await invoke("web_worker_start");
+      setStatus("웹 연결 워커 재시작 완료");
+      await refreshWebBridgeStatus(true);
+      await onCopyWebBridgeConnectCode();
+    } catch (error) {
+      setError(`웹 연결 재시작 실패: ${String(error)}`);
+    } finally {
+      setWebWorkerBusy(false);
+    }
+  }
+
   async function onCopyWebBridgeConnectCode() {
     try {
       const status = await refreshWebBridgeStatus(true);
@@ -9083,6 +9103,14 @@ ${prompt}`;
               type="button"
             >
               <span className="settings-button-label">연결 코드 복사</span>
+            </button>
+            <button
+              className="settings-account-button"
+              disabled={webWorkerBusy}
+              onClick={() => void onRestartWebBridge()}
+              type="button"
+            >
+              <span className="settings-button-label">웹 연결 재시작</span>
             </button>
             <button
               className="settings-account-button"
