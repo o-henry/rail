@@ -9,7 +9,6 @@ import {
 import "../App.css";
 import { invoke, listen, openUrl, revealItemInDir } from "../shared/tauri";
 import AppNav from "../components/AppNav";
-import FancySelect from "../components/FancySelect";
 import ApprovalModal from "../components/modals/ApprovalModal";
 import PendingWebLoginModal from "../components/modals/PendingWebLoginModal";
 import PendingWebTurnModal from "../components/modals/PendingWebTurnModal";
@@ -62,7 +61,6 @@ import {
   authModeLabel,
   extractFinalAnswer,
   formatRelativeFeedTime,
-  knowledgeStatusMeta,
   lifecycleStateLabel,
   nodeSelectionLabel,
   nodeStatusLabel,
@@ -152,7 +150,6 @@ import {
 } from "./mainAppUtils";
 import {
   GRAPH_SCHEMA_VERSION,
-  InspectorSectionTitle,
   KNOWLEDGE_DEFAULT_MAX_CHARS,
   KNOWLEDGE_DEFAULT_TOP_K,
   NavIcon,
@@ -223,6 +220,8 @@ import {
   WEB_TURN_FLOATING_MIN_VISIBLE_WIDTH,
   buildFeedShareText,
 } from "./main";
+import WorkflowCanvasPane from "./main/WorkflowCanvasPane";
+import WorkflowInspectorPane from "./main/WorkflowInspectorPane";
 import type {
   AgentRuleDoc,
   AgentRulesReadResult,
@@ -253,7 +252,7 @@ import type {
 } from "./main";
 
 function App() {
-  const { t, tp } = useI18n();
+  const { t } = useI18n();
   const defaultCwd = useMemo(() => loadPersistedCwd("."), []);
   const defaultLoginCompleted = useMemo(() => loadPersistedLoginCompleted(), []);
   const defaultAuthMode = useMemo(() => loadPersistedAuthMode(), []);
@@ -5992,974 +5991,130 @@ ${prompt}`;
 
         {workspaceTab === "workflow" && (
           <WorkflowPage canvasFullscreen={canvasFullscreen}>
-            <section className="canvas-pane">
-              <div className="graph-canvas-shell">
-                <div
-                  className={`graph-canvas ${panMode ? "pan-mode" : ""}`}
-                  onKeyDown={onCanvasKeyDown}
-                  onMouseDown={onCanvasMouseDown}
-                  onMouseMove={onCanvasMouseMove}
-                  onMouseUp={onCanvasMouseUp}
-                  onWheel={onCanvasWheel}
-                  ref={graphCanvasRef}
-                  tabIndex={-1}
-                >
-                <div
-                  className="graph-stage-shell"
-                  style={{
-                    width: Math.round(boundedStageWidth * canvasZoom + GRAPH_STAGE_INSET_X * 2),
-                    height: Math.round(boundedStageHeight * canvasZoom + GRAPH_STAGE_INSET_Y * 2),
-                  }}
-                >
-                  <div
-                    className="graph-stage"
-                    style={{
-                      left: GRAPH_STAGE_INSET_X,
-                      top: GRAPH_STAGE_INSET_Y,
-                      transform: `scale(${canvasZoom})`,
-                      width: boundedStageWidth,
-                      height: boundedStageHeight,
-                    }}
-                  >
-                    <svg className="edge-layer">
-                      <defs>
-                        <marker
-                          id="edge-arrow"
-                          markerHeight="7"
-                          markerUnits="userSpaceOnUse"
-                          markerWidth="7"
-                          orient="auto"
-                          refX="6"
-                          refY="3.5"
-                        >
-                          <path d="M0 0 L7 3.5 L0 7 Z" fill="#70848a" />
-                        </marker>
-                        <marker
-                          id="edge-arrow-readonly"
-                          markerHeight="7"
-                          markerUnits="userSpaceOnUse"
-                          markerWidth="7"
-                          orient="auto"
-                          refX="6"
-                          refY="3.5"
-                        >
-                          <path d="M0 0 L7 3.5 L0 7 Z" fill="#c07a2f" />
-                        </marker>
-                      </defs>
-                      {edgeLines.map((line) => (
-                        <g key={line.key}>
-                          {!line.readOnly && (
-                            <path
-                              className="edge-path-hit"
-                              d={line.path}
-                              fill="none"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setNodeSelection([]);
-                                setSelectedEdgeKey(line.edgeKey);
-                              }}
-                              onMouseDown={(e) => onEdgeDragStart(e, line.edgeKey, line.controlPoint)}
-                              pointerEvents="stroke"
-                              stroke="transparent"
-                              strokeWidth={(selectedEdgeKey === line.edgeKey ? 3 : 2) + 2}
-                            />
-                          )}
-                          <path
-                            className={`${selectedEdgeKey === line.edgeKey ? "edge-path selected" : "edge-path"} ${
-                              line.readOnly ? "readonly" : ""
-                            }`.trim()}
-                            d={line.path}
-                            fill="none"
-                            markerEnd={line.readOnly ? "url(#edge-arrow-readonly)" : "url(#edge-arrow)"}
-                            pointerEvents="none"
-                            stroke={line.readOnly ? "#c07a2f" : selectedEdgeKey === line.edgeKey ? "#4f83ff" : "#4f6271"}
-                            strokeDasharray={line.readOnly ? "7 4" : undefined}
-                            strokeLinejoin="round"
-                            strokeLinecap="round"
-                            strokeWidth={selectedEdgeKey === line.edgeKey ? 3 : 2}
-                          />
-                          {!line.readOnly && selectedEdgeKey === line.edgeKey && (
-                            <circle
-                              className="edge-control-point"
-                              cx={line.controlPoint.x}
-                              cy={line.controlPoint.y}
-                              fill="#ffffff"
-                              r={5}
-                              stroke="#4f83ff"
-                              strokeWidth={1.4}
-                            />
-                          )}
-                        </g>
-                      ))}
-                      {connectPreviewLine && (
-                        <path
-                          d={connectPreviewLine}
-                          fill="none"
-                          pointerEvents="none"
-                          stroke="#5b8cff"
-                          strokeDasharray="5 4"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                        />
-                      )}
-                    </svg>
+            <WorkflowCanvasPane
+              boundedStageHeight={boundedStageHeight}
+              boundedStageWidth={boundedStageWidth}
+              canRunGraphNow={canRunGraphNow}
+              canvasFullscreen={canvasFullscreen}
+              canvasNodes={canvasNodes}
+              canvasZoom={canvasZoom}
+              connectPreviewLine={connectPreviewLine}
+              deleteNode={deleteNode}
+              draggingNodeIds={draggingNodeIds}
+              edgeLines={edgeLines}
+              formatNodeElapsedTime={formatNodeElapsedTime}
+              formatUsage={formatUsage}
+              graphCanvasRef={graphCanvasRef}
+              isConnectingDrag={isConnectingDrag}
+              isGraphRunning={isGraphRunning}
+              isNodeDragAllowedTarget={isNodeDragAllowedTarget}
+              isWorkflowBusy={isWorkflowBusy}
+              marqueeSelection={marqueeSelection}
+              nodeAnchorSides={NODE_ANCHOR_SIDES}
+              nodeCardSummary={nodeCardSummary}
+              nodeStates={nodeStates}
+              nodeStatusLabel={nodeStatusLabel}
+              nodeTypeLabel={nodeTypeLabel}
+              onCancelGraphRun={onCancelGraphRun}
+              onCanvasKeyDown={onCanvasKeyDown}
+              onCanvasMouseDown={onCanvasMouseDown}
+              onCanvasMouseMove={onCanvasMouseMove}
+              onCanvasMouseUp={onCanvasMouseUp}
+              onCanvasWheel={onCanvasWheel}
+              onCanvasZoomIn={onCanvasZoomIn}
+              onCanvasZoomOut={onCanvasZoomOut}
+              onEdgeDragStart={onEdgeDragStart}
+              onNodeAnchorDragStart={onNodeAnchorDragStart}
+              onNodeAnchorDrop={onNodeAnchorDrop}
+              onNodeConnectDrop={onNodeConnectDrop}
+              onNodeDragStart={onNodeDragStart}
+              onOpenFeedFromNode={onOpenFeedFromNode}
+              onRedoGraph={onRedoGraph}
+              onReopenPendingWebTurn={onReopenPendingWebTurn}
+              onRunGraph={onRunGraph}
+              onUndoGraph={onUndoGraph}
+              panMode={panMode}
+              pendingWebTurn={pendingWebTurn}
+              questionDirectInputNodeIds={questionDirectInputNodeIds}
+              questionInputRef={questionInputRef}
+              redoStackLength={redoStack.length}
+              runtimeNowMs={runtimeNowMs}
+              selectedEdgeKey={selectedEdgeKey}
+              selectedNodeIds={selectedNodeIds}
+              setCanvasFullscreen={setCanvasFullscreen}
+              setNodeSelection={setNodeSelection}
+              setPanMode={setPanMode}
+              setSelectedEdgeKey={setSelectedEdgeKey}
+              setWorkflowQuestion={setWorkflowQuestion}
+              stageInsetX={GRAPH_STAGE_INSET_X}
+              stageInsetY={GRAPH_STAGE_INSET_Y}
+              suspendedWebTurn={suspendedWebTurn}
+              turnModelLabel={turnModelLabel}
+              turnRoleLabel={turnRoleLabel}
+              undoStackLength={undoStack.length}
+              workflowQuestion={workflowQuestion}
+            />
 
-                    {canvasNodes.map((node) => {
-                      const runState = nodeStates[node.id];
-                      const nodeStatus = runState?.status ?? "idle";
-                      const nodeSummary = nodeCardSummary(node);
-                      const isNodeSelected = selectedNodeIds.includes(node.id);
-                      const isNodeDragging = draggingNodeIds.includes(node.id);
-                      const showNodeAnchors = isNodeSelected || isConnectingDrag;
-                      const receivesQuestionDirectly = questionDirectInputNodeIds.has(node.id);
-                      return (
-                        <div
-                          className={`graph-node node-${node.type} ${isNodeSelected ? "selected" : ""} ${
-                            isNodeDragging ? "is-dragging" : ""
-                          }`.trim()}
-                          data-node-id={node.id}
-                          key={node.id}
-                          onClick={(event) => {
-                            if (event.shiftKey) {
-                              const toggled = selectedNodeIds.includes(node.id)
-                                ? selectedNodeIds.filter((id) => id !== node.id)
-                                : [...selectedNodeIds, node.id];
-                              setNodeSelection(toggled, node.id);
-                            } else {
-                              setNodeSelection([node.id], node.id);
-                            }
-                            setSelectedEdgeKey("");
-                          }}
-                          onMouseUp={(e) => {
-                            if (!isConnectingDrag) {
-                              return;
-                            }
-                            e.stopPropagation();
-                            onNodeConnectDrop(node.id);
-                          }}
-                          onMouseDown={(event) => {
-                            if (!isNodeDragAllowedTarget(event.target)) {
-                              return;
-                            }
-                            if (event.button !== 0 || isConnectingDrag) {
-                              return;
-                            }
-                            onNodeDragStart(event, node.id);
-                          }}
-                          style={{
-                            left: node.position.x,
-                            top: node.position.y,
-                            transition: isNodeDragging
-                              ? "none"
-                              : "left 220ms cubic-bezier(0.22, 1, 0.36, 1), top 220ms cubic-bezier(0.22, 1, 0.36, 1)",
-                          }}
-                        >
-                          <div className="node-head">
-                            <div className="node-head-main">
-                              {node.type === "turn" ? (
-                                <>
-                                  <div className="node-head-title-row">
-                                    <strong>{turnModelLabel(node)}</strong>
-                                  </div>
-                                  <span className="node-head-subtitle">{turnRoleLabel(node)}</span>
-                                </>
-                              ) : (
-                                <div className="node-head-title-row">
-                                  <strong className={node.type === "gate" ? "gate-node-title" : undefined}>
-                                    {nodeTypeLabel(node.type)}
-                                  </strong>
-                                </div>
-                              )}
-                            </div>
-                            <button onClick={() => deleteNode(node.id)} type="button">
-                              삭제
-                            </button>
-                          </div>
-                          <div className="node-body">
-                            {nodeSummary ? (
-                              <div className="node-summary-row">
-                                <div>{nodeSummary}</div>
-                              </div>
-                            ) : null}
-                            <div className="node-runtime-meta">
-                              <div>
-                                완료 여부:{" "}
-                                {nodeStatus === "done"
-                                  ? "완료"
-                                  : nodeStatus === "failed"
-                                    ? "오류"
-                                    : nodeStatus === "cancelled"
-                                      ? "정지"
-                                      : "대기"}
-                              </div>
-                              <div>생성 시간: {formatNodeElapsedTime(runState, runtimeNowMs)}</div>
-                              <div>사용량: {formatUsage(runState?.usage)}</div>
-                            </div>
-                            <button
-                              className="node-feed-link"
-                              onClick={() => onOpenFeedFromNode(node.id)}
-                              type="button"
-                            >
-                              {t("workflow.node.outputInFeed")}
-                            </button>
-                          </div>
-                          <div className="node-wait-slot">
-                            <span className={`status-pill status-${nodeStatus}`}>{nodeStatusLabel(nodeStatus)}</span>
-                            {receivesQuestionDirectly && (
-                              <span className="node-input-chip">
-                                <span className="node-input-chip-text">{t("workflow.node.inputDirect")}</span>
-                              </span>
-                            )}
-                          </div>
-                          {showNodeAnchors && (
-                            <div className="node-anchors">
-                              {NODE_ANCHOR_SIDES.map((side) => (
-                                <button
-                                  aria-label={`${t("workflow.node.connection")} ${side}`}
-                                  className={`node-anchor node-anchor-${side}`}
-                                  key={`${node.id}-${side}`}
-                                  onMouseDown={(e) => onNodeAnchorDragStart(e, node.id, side)}
-                                  onMouseUp={(e) => onNodeAnchorDrop(e, node.id, side)}
-                                  type="button"
-                                />
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                    {marqueeSelection && (
-                      <div
-                        className="marquee-selection"
-                        style={{
-                          left: Math.min(marqueeSelection.start.x, marqueeSelection.current.x),
-                          top: Math.min(marqueeSelection.start.y, marqueeSelection.current.y),
-                          width: Math.abs(marqueeSelection.current.x - marqueeSelection.start.x),
-                          height: Math.abs(marqueeSelection.current.y - marqueeSelection.start.y),
-                        }}
-                      />
-                    )}
-                  </div>
-                </div>
-                </div>
-
-                <div className="canvas-overlay">
-                  <div className="canvas-zoom-controls">
-                    <div className="canvas-zoom-group">
-                      <button onClick={onCanvasZoomIn} title={t("workflow.canvas.zoomIn")} type="button">
-                        <img alt="" aria-hidden="true" className="canvas-control-icon" src="/plus.svg" />
-                      </button>
-                      <button onClick={onCanvasZoomOut} title={t("workflow.canvas.zoomOut")} type="button">
-                        <img alt="" aria-hidden="true" className="canvas-control-icon" src="/minus.svg" />
-                      </button>
-                    </div>
-                    <button
-                      className="canvas-zoom-single"
-                      onClick={() => setCanvasFullscreen((prev) => !prev)}
-                      title={canvasFullscreen ? t("workflow.canvas.defaultView") : t("workflow.canvas.fullView")}
-                      type="button"
-                    >
-                      <img
-                        alt=""
-                        aria-hidden="true"
-                        className="canvas-control-icon"
-                        src="/canvas-fullscreen.svg"
-                      />
-                    </button>
-                    <button
-                      aria-label={t("workflow.canvas.move")}
-                      className={`canvas-zoom-single ${panMode ? "is-active" : ""}`}
-                      onClick={() => setPanMode((prev) => !prev)}
-                      title={t("workflow.canvas.moveCanvas")}
-                      type="button"
-                    >
-                      <img alt="" aria-hidden="true" className="canvas-control-icon" src="/scroll.svg" />
-                    </button>
-                  </div>
-
-                  <div className="canvas-runbar">
-                    <button
-                      aria-label={t("workflow.canvas.run")}
-                      className={`canvas-icon-btn play ${canRunGraphNow ? "is-ready" : "is-disabled"}`}
-                      disabled={!canRunGraphNow}
-                      onClick={onRunGraph}
-                      title={t("workflow.canvas.run")}
-                      type="button"
-                    >
-                      <img alt="" aria-hidden="true" className="canvas-icon-image" src="/canvas-play.svg" />
-                    </button>
-                    <button
-                      aria-label={t("workflow.canvas.stop")}
-                      className="canvas-icon-btn stop"
-                      disabled={!isGraphRunning}
-                      onClick={onCancelGraphRun}
-                      title={t("workflow.canvas.stop")}
-                      type="button"
-                    >
-                      <img alt="" aria-hidden="true" className="canvas-icon-image" src="/canvas-stop.svg" />
-                    </button>
-                    {suspendedWebTurn && !pendingWebTurn && isGraphRunning && (
-                      <button
-                        aria-label={t("workflow.canvas.reopenWebInput")}
-                        className="canvas-web-turn-reopen"
-                        onClick={onReopenPendingWebTurn}
-                        title={t("workflow.canvas.reopenWebInputWindow")}
-                        type="button"
-                      >
-                        WEB
-                      </button>
-                    )}
-                    <button
-                      aria-label={t("workflow.canvas.undo")}
-                      className="canvas-icon-btn"
-                      disabled={undoStack.length === 0}
-                      onClick={onUndoGraph}
-                      title={t("workflow.canvas.undo")}
-                      type="button"
-                    >
-                      <img alt="" aria-hidden="true" className="canvas-icon-image" src="/canvas-undo.svg" />
-                    </button>
-                    <button
-                      aria-label={t("workflow.canvas.redo")}
-                      className="canvas-icon-btn"
-                      disabled={redoStack.length === 0}
-                      onClick={onRedoGraph}
-                      title={t("workflow.canvas.redo")}
-                      type="button"
-                    >
-                      <img alt="" aria-hidden="true" className="canvas-icon-image" src="/canvas-replay.svg" />
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              <div className="canvas-topbar">
-                <div className="question-input">
-                  <textarea
-                    disabled={isWorkflowBusy}
-                    onChange={(e) => {
-                      setWorkflowQuestion(e.currentTarget.value);
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && !e.shiftKey) {
-                        e.preventDefault();
-                        if (!canRunGraphNow) {
-                          return;
-                        }
-                        void onRunGraph();
-                      }
-                    }}
-                    placeholder={t("workflow.question.placeholder")}
-                    ref={questionInputRef}
-                    rows={1}
-                    value={workflowQuestion}
-                  />
-                  <div className="question-input-footer">
-                    <button
-                      className="primary-action question-create-button"
-                      disabled={!canRunGraphNow}
-                      onClick={onRunGraph}
-                      type="button"
-                    >
-                      <img alt="" aria-hidden="true" className="question-create-icon" src="/up.svg" />
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </section>
-
-            {!canvasFullscreen && <aside className="inspector-pane">
-              <div className="inspector-head">
-                <div className="inspector-title-chip">{t("workflow.nodeSettings")}</div>
-              </div>
-              <div className="inspector-content">
-                <div className="inspector-section">
-                  <section className="inspector-block">
-                    <InspectorSectionTitle
-                      help={t("workflow.graphTools.help")}
-                      title={t("workflow.graphTools.title")}
-                    />
-                    <div className="tool-dropdown-group">
-                      <h4>{t("workflow.nodeSelect")}</h4>
-                      <FancySelect
-                        ariaLabel={t("workflow.nodeSelect")}
-                        className="modern-select"
-                        emptyMessage={t("workflow.nodeSelect.empty")}
-                        onChange={(value) => {
-                          if (value === "turn") {
-                            addNode("turn");
-                          } else if (!SIMPLE_WORKFLOW_UI && value === "transform") {
-                            addNode("transform");
-                          } else if (!SIMPLE_WORKFLOW_UI && value === "gate") {
-                            addNode("gate");
-                          }
-                        }}
-                        options={
-                          SIMPLE_WORKFLOW_UI
-                            ? [{ value: "turn", label: t("label.node.turn") }]
-                            : [
-                                { value: "turn", label: t("label.node.turn") },
-                                { value: "transform", label: t("label.node.transform") },
-                                { value: "gate", label: t("label.node.gate") },
-                              ]
-                        }
-                        placeholder={t("workflow.nodeSelect")}
-                        value=""
-                      />
-                    </div>
-
-                    <div className="tool-dropdown-group">
-                      <h4>{t("workflow.template")}</h4>
-                      <FancySelect
-                        ariaLabel={t("workflow.template.select")}
-                        className="modern-select template-select"
-                        emptyMessage={t("workflow.template.empty")}
-                        onChange={(value) => {
-                          if (isPresetKind(value)) {
-                            applyPreset(value);
-                          }
-                        }}
-                        options={PRESET_TEMPLATE_OPTIONS}
-                        placeholder={t("workflow.template.select")}
-                        value=""
-                      />
-                    </div>
-
-                    <div className="tool-dropdown-group">
-                      <h4>{t("workflow.costPreset")}</h4>
-                      <FancySelect
-                        ariaLabel={t("workflow.costPreset")}
-                        className="modern-select"
-                        emptyMessage={tp("선택 가능한 프리셋이 없습니다.")}
-                        onChange={(value) => {
-                          if (isCostPreset(value)) {
-                            applyCostPreset(value);
-                          }
-                        }}
-                        options={COST_PRESET_OPTIONS}
-                        value={costPreset}
-                      />
-                    </div>
-
-                    <div className="tool-dropdown-group">
-                      <h4>{t("workflow.graphFile")}</h4>
-                      <FancySelect
-                        ariaLabel={t("workflow.graphFile.select")}
-                        className="graph-file-select modern-select"
-                        emptyMessage={t("workflow.graphFile.empty")}
-                        onChange={(value) => {
-                          if (value) {
-                            setSelectedGraphFileName(value);
-                            setGraphFileName(value);
-                            loadGraph(value);
-                          }
-                        }}
-                        options={graphFiles.map((file) => ({ value: file, label: file }))}
-                        placeholder={t("workflow.graphFile.select")}
-                        value={graphFiles.includes(selectedGraphFileName) ? selectedGraphFileName : ""}
-                      />
-                      <div className="graph-file-actions">
-                        <button className="mini-action-button" onClick={saveGraph} type="button">
-                          <span className="mini-action-button-label">{t("common.save")}</span>
-                        </button>
-                        <button className="mini-action-button" onClick={onOpenRenameGraph} type="button">
-                          <span className="mini-action-button-label">{t("feed.rename")}</span>
-                        </button>
-                        <button className="mini-action-button" onClick={deleteGraph} type="button">
-                          <span className="mini-action-button-label">{t("common.delete")}</span>
-                        </button>
-                        <button className="mini-action-button" onClick={refreshGraphFiles} type="button">
-                          <span className="mini-action-button-label">{tp("새로고침")}</span>
-                        </button>
-                      </div>
-                      <div
-                        style={{
-                          display: "grid",
-                          gridTemplateRows: graphRenameOpen ? "1fr" : "0fr",
-                          opacity: graphRenameOpen ? 1 : 0,
-                          transform: graphRenameOpen ? "translateY(0)" : "translateY(-4px)",
-                          transition:
-                            "grid-template-rows 180ms ease, opacity 180ms ease, transform 180ms ease, margin-top 180ms ease",
-                          marginTop: graphRenameOpen ? "6px" : "0",
-                          pointerEvents: graphRenameOpen ? "auto" : "none",
-                        }}
-                      >
-                        <div style={{ minHeight: 0, overflow: "hidden", display: "grid", gap: "6px" }}>
-                          <input
-                            className="graph-rename-input"
-                            onChange={(event) => setGraphRenameDraft(event.currentTarget.value)}
-                            onKeyDown={(event) => {
-                              if (event.key === "Enter") {
-                                event.preventDefault();
-                                void renameGraph();
-                              }
-                              if (event.key === "Escape") {
-                                event.preventDefault();
-                                onCloseRenameGraph();
-                              }
-                            }}
-                            placeholder={t("workflow.graph.renamePlaceholder")}
-                            style={{
-                              height: "36px",
-                              minHeight: "36px",
-                              maxHeight: "36px",
-                              borderRadius: "6px",
-                              padding: "0 12px",
-                            }}
-                            value={graphRenameDraft}
-                          />
-                          <div className="graph-file-actions">
-                            <button className="mini-action-button" onClick={() => void renameGraph()} type="button">
-                              <span className="mini-action-button-label">{t("workflow.graph.applyRename")}</span>
-                            </button>
-                            <button className="mini-action-button" onClick={onCloseRenameGraph} type="button">
-                              <span className="mini-action-button-label">{t("common.cancel")}</span>
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="tool-dropdown-group">
-                      <h4>{t("workflow.knowledge.attachments")}</h4>
-                      <div className="graph-file-actions">
-                        <button className="mini-action-button" onClick={onOpenKnowledgeFilePicker} type="button">
-                          <span className="mini-action-button-label">{t("workflow.knowledge.addFile")}</span>
-                        </button>
-                      </div>
-                      <div className="knowledge-file-list">
-                        {graphKnowledge.files.length === 0 && (
-                          <div className="knowledge-file-empty">{t("workflow.knowledge.empty")}</div>
-                        )}
-                        {graphKnowledge.files.map((file) => {
-                          const statusMeta = knowledgeStatusMeta(file.status);
-                          return (
-                            <div className="knowledge-file-item" key={file.id}>
-                              <div className="knowledge-file-main">
-                                <span className="knowledge-file-name" title={file.path}>
-                                  {file.name}
-                                </span>
-                                <span className={`knowledge-status-pill ${statusMeta.tone}`}>
-                                  {statusMeta.label}
-                                </span>
-                              </div>
-                              <div className="knowledge-file-actions">
-                                <button
-                                  className={`mini-action-button ${file.enabled ? "is-enabled" : ""}`}
-                                  onClick={() => onToggleKnowledgeFileEnabled(file.id)}
-                                  type="button"
-                                >
-                                  <span className="mini-action-button-label">
-                                    {file.enabled ? t("workflow.knowledge.inUse") : t("workflow.knowledge.exclude")}
-                                  </span>
-                                </button>
-                                <button
-                                  className="mini-action-button"
-                                  onClick={() => onRemoveKnowledgeFile(file.id)}
-                                  type="button"
-                                >
-                                  <span className="mini-action-button-label">{t("common.delete")}</span>
-                                </button>
-                              </div>
-                              {file.statusMessage && <div className="knowledge-file-message">{file.statusMessage}</div>}
-                            </div>
-                          );
-                        })}
-                      </div>
-                      <label>
-                        {t("workflow.knowledge.topK")}
-                        <FancySelect
-                          ariaLabel={t("workflow.knowledge.topK")}
-                          className="modern-select"
-                              onChange={(next) => {
-                                const parsed = Number(next) || KNOWLEDGE_DEFAULT_TOP_K;
-                                applyGraphChange((prev) => ({
-                                  ...prev,
-                                  knowledge: {
-                                    ...(prev.knowledge ?? defaultKnowledgeConfig()),
-                                    topK: Math.max(0, Math.min(5, parsed)),
-                                  },
-                                }));
-                              }}
-                          options={KNOWLEDGE_TOP_K_OPTIONS}
-                          value={String(graphKnowledge.topK)}
-                        />
-                      </label>
-                      <div className="inspector-empty">
-                        {tp("질문과 가장 관련 있는 참고 자료를 몇 개까지 붙일지 정합니다.")}
-                      </div>
-                      <label>
-                        {t("workflow.knowledge.length")}
-                        <FancySelect
-                          ariaLabel={t("workflow.knowledge.length")}
-                          className="modern-select"
-                          onChange={(next) => {
-                            const parsed = Number(next) || KNOWLEDGE_DEFAULT_MAX_CHARS;
-                            applyGraphChange((prev) => ({
-                              ...prev,
-                              knowledge: {
-                                ...(prev.knowledge ?? defaultKnowledgeConfig()),
-                                maxChars: Math.max(300, Math.min(20_000, parsed)),
-                              },
-                            }));
-                          }}
-                          options={KNOWLEDGE_MAX_CHARS_OPTIONS}
-                          value={selectedKnowledgeMaxCharsOption}
-                        />
-                      </label>
-                      <div className="inspector-empty">
-                        {tp("길이를 길게 할수록 근거는 늘고, 응답 속도와 사용량은 증가할 수 있습니다.")}
-                      </div>
-                    </div>
-                  </section>
-
-                  {/* {!selectedNode && <div className="inspector-empty">노드를 선택하세요.</div>} */}
-                  {selectedNode && (
-                    <>
-                      {selectedNode.type === "turn" && (
-                        <section className="inspector-block form-grid">
-                          <InspectorSectionTitle
-                            help="실행기, 모델, 역할, 프롬프트를 설정해 해당 에이전트의 동작을 정의합니다."
-                            title="에이전트 설정"
-                          />
-                          <label>
-                            에이전트
-                            <FancySelect
-                              ariaLabel="Turn 에이전트"
-                              className="modern-select"
-                              onChange={(next) => updateSelectedNodeConfig("executor", next)}
-                              options={TURN_EXECUTOR_OPTIONS.map((option) => ({
-                                value: option,
-                                label: turnExecutorLabel(option),
-                              }))}
-                              value={selectedTurnExecutor}
-                            />
-                          </label>
-                          {selectedTurnExecutor === "codex" && (
-                            <label>
-                              모델
-                              <FancySelect
-                                ariaLabel="노드 모델"
-                                className="modern-select"
-                                onChange={(next) => updateSelectedNodeConfig("model", next)}
-                                options={TURN_MODEL_OPTIONS.map((option) => ({ value: option, label: option }))}
-                                value={toTurnModelDisplayName(
-                                  String((selectedNode.config as TurnConfig).model ?? model),
-                                )}
-                              />
-                            </label>
-                          )}
-                          {selectedTurnExecutor === "ollama" && (
-                            <label>
-                              Ollama 모델
-                              <input
-                                onChange={(e) => updateSelectedNodeConfig("ollamaModel", e.currentTarget.value)}
-                                placeholder="예: llama3.1:8b"
-                                value={String((selectedNode.config as TurnConfig).ollamaModel ?? "llama3.1:8b")}
-                              />
-                            </label>
-                          )}
-                          {selectedTurnExecutor === "codex" && (
-                            <label>
-                              작업 경로
-                              <input
-                                className="lowercase-path-input"
-                                onChange={(e) => updateSelectedNodeConfig("cwd", e.currentTarget.value)}
-                                value={String((selectedNode.config as TurnConfig).cwd ?? cwd)}
-                              />
-                            </label>
-                          )}
-                          {getWebProviderFromExecutor(selectedTurnExecutor) && (
-                            <>
-                              <label>
-                                웹 결과 모드
-                                <FancySelect
-                                  ariaLabel="웹 결과 모드"
-                                  className="modern-select"
-                                  onChange={(next) => updateSelectedNodeConfig("webResultMode", next)}
-                                  options={[
-                                    { value: "bridgeAssisted", label: t("feed.webMode.bridge") },
-                                    { value: "manualPasteText", label: t("feed.webMode.text") },
-                                    { value: "manualPasteJson", label: t("feed.webMode.json") },
-                                  ]}
-                                  value={String(
-                                    normalizeWebResultMode((selectedNode.config as TurnConfig).webResultMode),
-                                  )}
-                                />
-                              </label>
-                              <label>
-                                자동화 타임아웃(ms)
-                                <input
-                                  onChange={(e) =>
-                                    updateSelectedNodeConfig(
-                                      "webTimeoutMs",
-                                      Number(e.currentTarget.value) || 180_000,
-                                    )
-                                  }
-                                  type="number"
-                                  value={String((selectedNode.config as TurnConfig).webTimeoutMs ?? 180_000)}
-                                />
-                              </label>
-                              <div className="inspector-empty">
-                                웹 연결 반자동은 질문 자동 주입/답변 자동 수집을 시도하고, 실패 시 수동 입력으로 폴백합니다.
-                              </div>
-                            </>
-                          )}
-                          <label>
-                            역할
-                            <input
-                              onChange={(e) => updateSelectedNodeConfig("role", e.currentTarget.value)}
-                              placeholder={turnRoleLabel(selectedNode)}
-                              value={String((selectedNode.config as TurnConfig).role ?? "")}
-                            />
-                          </label>
-                          <label>
-                            첨부 참고 사용
-                            <FancySelect
-                              ariaLabel="첨부 참고 사용"
-                              className="modern-select"
-                              onChange={(next) =>
-                                updateSelectedNodeConfig("knowledgeEnabled", next === "true")
-                              }
-                              options={[
-                                { value: "true", label: t("feed.option.enabled") },
-                                { value: "false", label: t("feed.option.disabled") },
-                              ]}
-                              value={String(
-                                (selectedNode.config as TurnConfig).knowledgeEnabled !== false,
-                              )}
-                            />
-                          </label>
-                          <label>
-                            품질 프로필
-                            <FancySelect
-                              ariaLabel="품질 프로필"
-                              className="modern-select"
-                              onChange={(next) => updateSelectedNodeConfig("qualityProfile", next)}
-                              options={QUALITY_PROFILE_OPTIONS}
-                              value={selectedQualityProfile}
-                            />
-                          </label>
-                          <label>
-                            품질 통과 기준 점수
-                            <FancySelect
-                              ariaLabel="품질 통과 기준 점수"
-                              className="modern-select"
-                                onChange={(next) =>
-                                  updateSelectedNodeConfig(
-                                    "qualityThreshold",
-                                    normalizeQualityThreshold(next),
-                                  )
-                                }
-                              options={QUALITY_THRESHOLD_OPTIONS}
-                              value={selectedQualityThresholdOption}
-                            />
-                          </label>
-                          {selectedQualityProfile === "code_implementation" && (
-                            <>
-                              <label>
-                                로컬 품질 명령 실행
-                                <FancySelect
-                                  ariaLabel="로컬 품질 명령 실행"
-                                  className="modern-select"
-                                  onChange={(next) =>
-                                    updateSelectedNodeConfig("qualityCommandEnabled", next === "true")
-                                  }
-                                  options={[
-                                    { value: "false", label: t("feed.option.disabled") },
-                                    { value: "true", label: t("feed.option.enabled") },
-                                  ]}
-                                  value={String(selectedTurnConfig?.qualityCommandEnabled === true)}
-                                />
-                              </label>
-                              <label>
-                                품질 명령 목록(줄바꿈 구분)
-                                <textarea
-                                  className="prompt-template-textarea"
-                                  onChange={(e) =>
-                                    updateSelectedNodeConfig("qualityCommands", e.currentTarget.value)
-                                  }
-                                  rows={3}
-                                  value={String(selectedTurnConfig?.qualityCommands ?? "npm run build")}
-                                />
-                              </label>
-                            </>
-                          )}
-                          {!SIMPLE_WORKFLOW_UI && (
-                            <label>
-                              출력 형식(아티팩트)
-                              <FancySelect
-                                ariaLabel="출력 형식(아티팩트)"
-                                className="modern-select"
-                                onChange={(next) => updateSelectedNodeConfig("artifactType", next)}
-                                options={ARTIFACT_TYPE_OPTIONS}
-                                value={selectedArtifactType}
-                              />
-                            </label>
-                          )}
-                          <label>
-                            출력 스키마(JSON, 선택)
-                            <textarea
-                              className="prompt-template-textarea"
-                              onChange={(e) =>
-                                updateSelectedNodeConfig("outputSchemaJson", e.currentTarget.value)
-                              }
-                              rows={4}
-                              value={String((selectedNode.config as TurnConfig).outputSchemaJson ?? "")}
-                            />
-                          </label>
-                          <label>
-                            프롬프트 템플릿
-                            <textarea
-                              className="prompt-template-textarea"
-                              onChange={(e) =>
-                                updateSelectedNodeConfig("promptTemplate", e.currentTarget.value)
-                              }
-                              rows={6}
-                              value={String((selectedNode.config as TurnConfig).promptTemplate ?? "{{input}}")}
-                            />
-                          </label>
-                        </section>
-                      )}
-
-                      {!SIMPLE_WORKFLOW_UI && selectedNode.type === "transform" && (
-                        <section className="inspector-block form-grid">
-                          <InspectorSectionTitle
-                            help="앞 노드 결과를 읽기 쉬운 형태로 다시 정리하는 설정입니다. 쉽게 말해, 필요한 것만 꺼내거나, 고정 정보를 붙이거나, 문장 틀에 맞춰 다시 쓰는 역할입니다."
-                            title="결과 정리 설정"
-                          />
-                          <label>
-                            정리 방식
-                            <FancySelect
-                              ariaLabel="정리 방식"
-                              className="modern-select"
-                              onChange={(next) => updateSelectedNodeConfig("mode", next)}
-                              options={[
-                                { value: "pick", label: t("transform.mode.pick") },
-                                { value: "merge", label: t("transform.mode.merge") },
-                                { value: "template", label: t("transform.mode.template") },
-                              ]}
-                              value={String((selectedNode.config as TransformConfig).mode ?? "pick")}
-                            />
-                          </label>
-                          <label>
-                            꺼낼 값 위치
-                            <input
-                              onChange={(e) => updateSelectedNodeConfig("pickPath", e.currentTarget.value)}
-                              placeholder="예: text 또는 result.finalDraft"
-                              value={String((selectedNode.config as TransformConfig).pickPath ?? "")}
-                            />
-                          </label>
-                          <div className="inspector-empty">
-                            예를 들어 `text`를 쓰면 결과에서 text 부분만 가져옵니다.
-                          </div>
-                          <label>
-                            덧붙일 고정 정보(JSON)
-                            <textarea
-                              onChange={(e) => updateSelectedNodeConfig("mergeJson", e.currentTarget.value)}
-                              placeholder='예: {"source":"web","priority":"high"}'
-                              rows={3}
-                              value={String((selectedNode.config as TransformConfig).mergeJson ?? "{}")}
-                            />
-                          </label>
-                          <div className="inspector-empty">
-                            예: {"`{\"출처\":\"웹조사\"}`"}를 넣으면 모든 결과에 같은 정보를 붙입니다.
-                          </div>
-                          <label>
-                            문장 틀
-                            <textarea
-                              className="transform-template-textarea"
-                              onChange={(e) => updateSelectedNodeConfig("template", e.currentTarget.value)}
-                              rows={5}
-                              value={String((selectedNode.config as TransformConfig).template ?? "{{input}}")}
-                            />
-                          </label>
-                          <div className="inspector-empty">
-                            {"`{{input}}`"} 자리에 이전 결과가 들어갑니다. 원하는 문장 형태로 바꿀 때 사용합니다.
-                          </div>
-                        </section>
-                      )}
-
-                      {!SIMPLE_WORKFLOW_UI && selectedNode.type === "gate" && (
-                        <section className="inspector-block form-grid">
-                          <InspectorSectionTitle
-                            help="이 노드는 결과를 보고 길을 나눕니다. DECISION 값이 PASS면 통과 경로로, REJECT면 재검토 경로로 보냅니다."
-                            title="결정 나누기 설정"
-                          />
-                          <label>
-                            판단값 위치(DECISION)
-                            <input
-                              onChange={(e) => updateSelectedNodeConfig("decisionPath", e.currentTarget.value)}
-                              value={String((selectedNode.config as GateConfig).decisionPath ?? "DECISION")}
-                            />
-                          </label>
-                          <div className="inspector-empty">
-                            보통 `DECISION`을 사용합니다. 값은 PASS 또는 REJECT(대문자)여야 합니다.
-                          </div>
-                          <label>
-                            통과(PASS) 다음 노드
-                            <FancySelect
-                              ariaLabel="통과 다음 노드"
-                              className="modern-select"
-                              onChange={(next) => updateSelectedNodeConfig("passNodeId", next)}
-                              options={[
-                                { value: "", label: t("common.none") },
-                                ...outgoingNodeOptions,
-                              ]}
-                              value={String((selectedNode.config as GateConfig).passNodeId ?? "")}
-                            />
-                          </label>
-                          <div className="inspector-empty">
-                            결과가 좋으면(통과) 어디로 보낼지 선택합니다.
-                          </div>
-                          <label>
-                            재검토(REJECT) 다음 노드
-                            <FancySelect
-                              ariaLabel="재검토 다음 노드"
-                              className="modern-select"
-                              onChange={(next) => updateSelectedNodeConfig("rejectNodeId", next)}
-                              options={[
-                                { value: "", label: t("common.none") },
-                                ...outgoingNodeOptions,
-                              ]}
-                              value={String((selectedNode.config as GateConfig).rejectNodeId ?? "")}
-                            />
-                          </label>
-                          <div className="inspector-empty">
-                            결과가 부족하면(재검토) 어디로 보낼지 선택합니다.
-                          </div>
-                          <label>
-                            결과 형식 검사(선택)
-                            <textarea
-                              onChange={(e) => updateSelectedNodeConfig("schemaJson", e.currentTarget.value)}
-                              rows={4}
-                              value={String((selectedNode.config as GateConfig).schemaJson ?? "")}
-                            />
-                          </label>
-                          <div className="inspector-empty">
-                            고급 옵션입니다. 결과가 원하는 형식인지 자동 검사할 때만 사용하세요.
-                          </div>
-                        </section>
-                      )}
-                      {SIMPLE_WORKFLOW_UI && selectedNode.type !== "turn" && (
-                        <section className="inspector-block form-grid">
-                          <InspectorSectionTitle
-                            help="이 노드는 시스템이 내부적으로 사용하는 자동 처리 노드입니다."
-                            title="내부 처리 노드"
-                          />
-                          <div className="inspector-empty">
-                            단순 모드에서는 이 노드 설정을 직접 편집하지 않습니다.
-                          </div>
-                        </section>
-                      )}
-
-                    </>
-                  )}
-
-                </div>
-              </div>
-            </aside>}
+            <WorkflowInspectorPane
+              canvasFullscreen={canvasFullscreen}
+              nodeProps={{
+                artifactTypeOptions: [...ARTIFACT_TYPE_OPTIONS],
+                cwd,
+                model,
+                nodeSettingsTitle: t("workflow.nodeSettings"),
+                normalizeQualityThreshold,
+                outgoingNodeOptions,
+                qualityProfileOptions: [...QUALITY_PROFILE_OPTIONS],
+                qualityThresholdOptions: [...QUALITY_THRESHOLD_OPTIONS],
+                selectedArtifactType,
+                selectedNode,
+                selectedQualityProfile,
+                selectedQualityThresholdOption,
+                selectedTurnConfig,
+                selectedTurnExecutor,
+                simpleWorkflowUI: SIMPLE_WORKFLOW_UI,
+                turnExecutorLabel,
+                turnExecutorOptions: [...TURN_EXECUTOR_OPTIONS],
+                turnModelOptions: [...TURN_MODEL_OPTIONS],
+                updateSelectedNodeConfig,
+              }}
+              toolsProps={{
+                addNode,
+                applyCostPreset,
+                applyGraphChange,
+                applyPreset,
+                costPreset,
+                costPresetOptions: [...COST_PRESET_OPTIONS],
+                defaultKnowledgeConfig,
+                deleteGraph,
+                graphFiles,
+                graphKnowledge,
+                graphRenameDraft,
+                graphRenameOpen,
+                isCostPreset,
+                isPresetKind,
+                knowledgeDefaultMaxChars: KNOWLEDGE_DEFAULT_MAX_CHARS,
+                knowledgeDefaultTopK: KNOWLEDGE_DEFAULT_TOP_K,
+                knowledgeMaxCharsOptions: [...KNOWLEDGE_MAX_CHARS_OPTIONS],
+                knowledgeTopKOptions: [...KNOWLEDGE_TOP_K_OPTIONS],
+                loadGraph,
+                onCloseRenameGraph,
+                onOpenKnowledgeFilePicker,
+                onOpenRenameGraph,
+                onRemoveKnowledgeFile,
+                onToggleKnowledgeFileEnabled,
+                presetTemplateOptions: [...PRESET_TEMPLATE_OPTIONS],
+                refreshGraphFiles,
+                renameGraph,
+                saveGraph,
+                selectedGraphFileName,
+                selectedKnowledgeMaxCharsOption,
+                setGraphFileName,
+                setGraphRenameDraft,
+                setSelectedGraphFileName,
+                simpleWorkflowUI: SIMPLE_WORKFLOW_UI,
+              }}
+            />
           </WorkflowPage>
         )}
 
