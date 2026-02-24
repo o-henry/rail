@@ -2358,6 +2358,13 @@ h3 {
   font-size: 12px;
 }
 
+.feed-run-group-rename-row input:focus,
+.feed-run-group-rename-row input:focus-visible {
+  outline: none;
+  border-color: transparent;
+  box-shadow: none;
+}
+
 .feed-run-group-rename-row button {
   min-height: 34px;
   height: 34px;
