@@ -265,6 +265,7 @@ export function normalizeGraph(input: unknown): GraphData {
         qualityCommandEnabled:
           typeof config.qualityCommandEnabled === "boolean" ? config.qualityCommandEnabled : false,
         qualityCommands: String(config.qualityCommands ?? "npm run build"),
+        outputSchemaJson: String(config.outputSchemaJson ?? ""),
         artifactType: toArtifactType(config.artifactType),
       };
       return {

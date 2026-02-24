@@ -291,6 +291,25 @@ export default function FeedPage({ vm }: FeedPageProps) {
                         value={toArtifactType(feedInspectorTurnConfig?.artifactType)}
                       />
                     </label>
+                    <label>
+                      출력 스키마(JSON)
+                      <textarea
+                        className="prompt-template-textarea"
+                        disabled={!feedInspectorEditable}
+                        onChange={(event) => {
+                          if (!feedInspectorEditableNodeId) {
+                            return;
+                          }
+                          updateNodeConfigById(
+                            feedInspectorEditableNodeId,
+                            "outputSchemaJson",
+                            event.currentTarget.value,
+                          );
+                        }}
+                        rows={4}
+                        value={String(feedInspectorTurnConfig?.outputSchemaJson ?? "")}
+                      />
+                    </label>
                     {feedInspectorQualityProfile === "code_implementation" && (
                       <>
                         <label>

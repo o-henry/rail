@@ -46,6 +46,7 @@ export type TurnConfig = {
   role?: string;
   cwd?: string;
   promptTemplate?: string;
+  outputSchemaJson?: string;
   knowledgeEnabled?: boolean;
   webResultMode?: WebResultMode;
   webTimeoutMs?: number;

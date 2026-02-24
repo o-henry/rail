@@ -76,6 +76,7 @@ import {
   isLikelyWebPromptEcho,
   replaceInputPlaceholder,
   stringifyInput,
+  tryParseJsonText,
   toHumanReadableFeedText,
 } from "../features/workflow/promptUtils";
 import {
@@ -554,6 +555,7 @@ const WEB_TURN_FLOATING_DEFAULT_Y = 92;
 const WEB_TURN_FLOATING_MARGIN = 12;
 const WEB_TURN_FLOATING_MIN_VISIBLE_WIDTH = 120;
 const WEB_TURN_FLOATING_MIN_VISIBLE_HEIGHT = 72;
+const TURN_OUTPUT_SCHEMA_MAX_RETRY = 1;
 const SIMPLE_WORKFLOW_UI = true;
 const KNOWLEDGE_TOP_K_OPTIONS: FancySelectOption[] = [
   { value: "0", label: "0개" },
@@ -1595,7 +1597,12 @@ function buildFeedShareText(post: FeedViewPost, run: RunRecord | null): string {
     });
     try {
       const startedAtMs = Date.now();
-      const result = await executeTurnNode(node, followupInput);
+      const turnExecution = await executeTurnNodeWithOutputSchemaRetry(node, followupInput);
+      const result = turnExecution.result;
+      const effectiveOutput = turnExecution.normalizedOutput ?? result.output;
+      for (const warning of turnExecution.artifactWarnings) {
+        addNodeLog(node.id, `[아티팩트] ${warning}`);
+      }
       const finishedAt = new Date().toISOString();
       const durationMs = Date.now() - startedAtMs;
       if (!result.ok) {
@@ -1616,7 +1623,7 @@ function buildFeedShareText(post: FeedViewPost, run: RunRecord | null): string {
           createdAt: finishedAt,
           summary: result.error ?? "피드 추가 요청 실행 실패",
           logs: nodeStates[node.id]?.logs ?? [],
-          output: result.output,
+          output: effectiveOutput,
           error: result.error,
           durationMs,
           usage: result.usage,
@@ -1641,7 +1648,7 @@ function buildFeedShareText(post: FeedViewPost, run: RunRecord | null): string {
       setNodeStatus(node.id, "done", "피드 추가 요청 실행 완료");
       setNodeRuntimeFields(node.id, {
         status: "done",
-        output: result.output,
+        output: effectiveOutput,
         finishedAt,
         durationMs,
         threadId: result.threadId,
@@ -1655,7 +1662,7 @@ function buildFeedShareText(post: FeedViewPost, run: RunRecord | null): string {
         createdAt: finishedAt,
         summary: "피드 추가 요청 실행 완료",
         logs: nodeStates[node.id]?.logs ?? [],
-        output: result.output,
+        output: effectiveOutput,
         durationMs,
         usage: result.usage,
         inputSources: post.inputSources ?? [],
@@ -4756,6 +4763,195 @@ ${prompt}`;
     };
   }
 
+  function resolveProviderByExecutor(executor: TurnExecutor): string {
+    const webProvider = getWebProviderFromExecutor(executor);
+    if (webProvider) {
+      return webProvider;
+    }
+    if (executor === "ollama") {
+      return "ollama";
+    }
+    return "codex";
+  }
+
+  function mergeUsageStats(base?: UsageStats, next?: UsageStats): UsageStats | undefined {
+    if (!base && !next) {
+      return undefined;
+    }
+    return {
+      inputTokens: (base?.inputTokens ?? 0) + (next?.inputTokens ?? 0),
+      outputTokens: (base?.outputTokens ?? 0) + (next?.outputTokens ?? 0),
+      totalTokens: (base?.totalTokens ?? 0) + (next?.totalTokens ?? 0),
+    };
+  }
+
+  function extractSchemaValidationTarget(output: unknown): unknown {
+    if (!output || typeof output !== "object" || Array.isArray(output)) {
+      return output;
+    }
+    const row = output as Record<string, unknown>;
+    const artifact = row.artifact;
+    if (artifact && typeof artifact === "object" && !Array.isArray(artifact)) {
+      const payload = (artifact as Record<string, unknown>).payload;
+      if (payload !== undefined) {
+        return payload;
+      }
+    }
+    if (row.raw !== undefined) {
+      return row.raw;
+    }
+    if (typeof row.text === "string") {
+      return tryParseJsonText(row.text) ?? { text: row.text };
+    }
+    return output;
+  }
+
+  function buildSchemaRetryInput(
+    originalInput: unknown,
+    previousOutput: unknown,
+    schema: unknown,
+    schemaErrors: string[],
+  ): string {
+    const clip = (value: unknown, maxChars = 2800) => {
+      const text = stringifyInput(value).trim();
+      if (!text) {
+        return "(없음)";
+      }
+      if (text.length <= maxChars) {
+        return text;
+      }
+      return `${text.slice(0, maxChars)}\n...(중략)`;
+    };
+
+    const schemaText = (() => {
+      try {
+        return JSON.stringify(schema, null, 2);
+      } catch {
+        return stringifyInput(schema);
+      }
+    })();
+
+    return [
+      "[원래 입력]",
+      clip(originalInput),
+      "[이전 출력]",
+      clip(extractSchemaValidationTarget(previousOutput)),
+      "[출력 스키마(JSON)]",
+      schemaText,
+      "[스키마 오류 목록]",
+      schemaErrors.map((row, index) => `${index + 1}. ${row}`).join("\n"),
+      "[재요청 지시]",
+      "위 스키마를 엄격히 만족하는 결과만 다시 생성하세요. 불필요한 설명 없이 스키마에 맞는 구조만 출력하세요.",
+    ].join("\n\n");
+  }
+
+  async function executeTurnNodeWithOutputSchemaRetry(
+    node: GraphNode,
+    input: unknown,
+  ): Promise<{
+    result: Awaited<ReturnType<typeof executeTurnNode>>;
+    normalizedOutput?: unknown;
+    artifactWarnings: string[];
+  }> {
+    const config = node.config as TurnConfig;
+    const executor = getTurnExecutor(config);
+    const provider = resolveProviderByExecutor(executor);
+    const artifactType = toArtifactType(config.artifactType);
+    const warnings: string[] = [];
+    const schemaRaw = String(config.outputSchemaJson ?? "").trim();
+
+    let parsedSchema: unknown | null = null;
+    if (schemaRaw) {
+      try {
+        parsedSchema = JSON.parse(schemaRaw);
+      } catch (error) {
+        return {
+          result: {
+            ok: false,
+            error: `출력 스키마 JSON 형식 오류: ${String(error)}`,
+            executor,
+            provider,
+          },
+          artifactWarnings: warnings,
+        };
+      }
+    }
+
+    let result = await executeTurnNode(node, input);
+    if (!result.ok) {
+      return { result, artifactWarnings: warnings };
+    }
+
+    let normalized = normalizeArtifactOutput(node.id, artifactType, result.output);
+    warnings.push(...normalized.warnings);
+    let normalizedOutput = normalized.output;
+    if (!parsedSchema) {
+      return { result, normalizedOutput, artifactWarnings: warnings };
+    }
+
+    let schemaErrors = validateSimpleSchema(parsedSchema, extractSchemaValidationTarget(normalizedOutput));
+    if (schemaErrors.length === 0) {
+      return { result, normalizedOutput, artifactWarnings: warnings };
+    }
+
+    addNodeLog(node.id, `[스키마] 검증 실패: ${schemaErrors.join("; ")}`);
+    addNodeLog(node.id, `[스키마] 재질문 ${TURN_OUTPUT_SCHEMA_MAX_RETRY}회 제한 내에서 재시도합니다.`);
+
+    let attempts = 0;
+    let accumulatedUsage = result.usage;
+
+    while (attempts < TURN_OUTPUT_SCHEMA_MAX_RETRY && schemaErrors.length > 0) {
+      attempts += 1;
+      const retryInput = buildSchemaRetryInput(input, normalizedOutput, parsedSchema, schemaErrors);
+      const retryResult = await executeTurnNode(node, retryInput);
+      accumulatedUsage = mergeUsageStats(accumulatedUsage, retryResult.usage);
+      result = {
+        ...retryResult,
+        usage: accumulatedUsage,
+      };
+      if (!result.ok) {
+        return {
+          result: {
+            ...result,
+            error: `출력 스키마 재질문 실패: ${result.error ?? "턴 실행 실패"}`,
+          },
+          normalizedOutput,
+          artifactWarnings: warnings,
+        };
+      }
+
+      normalized = normalizeArtifactOutput(node.id, artifactType, result.output);
+      warnings.push(...normalized.warnings);
+      normalizedOutput = normalized.output;
+      schemaErrors = validateSimpleSchema(parsedSchema, extractSchemaValidationTarget(normalizedOutput));
+    }
+
+    if (schemaErrors.length > 0) {
+      return {
+        result: {
+          ...result,
+          ok: false,
+          output: normalizedOutput,
+          error: `출력 스키마 검증 실패: ${schemaErrors.join("; ")}`,
+          usage: accumulatedUsage,
+        },
+        normalizedOutput,
+        artifactWarnings: warnings,
+      };
+    }
+
+    addNodeLog(node.id, "[스키마] 출력 스키마 검증 PASS");
+    return {
+      result: {
+        ...result,
+        output: normalizedOutput,
+        usage: accumulatedUsage,
+      },
+      normalizedOutput,
+      artifactWarnings: warnings,
+    };
+  }
+
   async function onRunGraph() {
     if (isGraphRunning || runStartGuardRef.current) {
       return;
@@ -5027,7 +5223,8 @@ ${prompt}`;
         const input = nodeInput;
 
         if (node.type === "turn") {
-          const result = await executeTurnNode(node, input);
+          const turnExecution = await executeTurnNodeWithOutputSchemaRetry(node, input);
+          const result = turnExecution.result;
           if (result.knowledgeTrace && result.knowledgeTrace.length > 0) {
             runRecord.knowledgeTrace?.push(...result.knowledgeTrace);
           }
@@ -5079,12 +5276,10 @@ ${prompt}`;
           }
 
           const config = node.config as TurnConfig;
-          const artifactType = toArtifactType(config.artifactType);
-          const normalizedArtifact = normalizeArtifactOutput(nodeId, artifactType, result.output);
-          for (const warning of normalizedArtifact.warnings) {
+          for (const warning of turnExecution.artifactWarnings) {
             addNodeLog(nodeId, `[아티팩트] ${warning}`);
           }
-          const normalizedOutput = normalizedArtifact.output;
+          const normalizedOutput = turnExecution.normalizedOutput ?? result.output;
           const qualityReport = await buildQualityReport({
             node,
             config,
@@ -6697,6 +6892,17 @@ ${prompt}`;
                               />
                             </label>
                           )}
+                          <label>
+                            출력 스키마(JSON, 선택)
+                            <textarea
+                              className="prompt-template-textarea"
+                              onChange={(e) =>
+                                updateSelectedNodeConfig("outputSchemaJson", e.currentTarget.value)
+                              }
+                              rows={4}
+                              value={String((selectedNode.config as TurnConfig).outputSchemaJson ?? "")}
+                            />
+                          </label>
                           <label>
                             프롬프트 템플릿
                             <textarea

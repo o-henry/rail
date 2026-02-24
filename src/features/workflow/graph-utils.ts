@@ -565,6 +565,7 @@ export function defaultNodeConfig(type: NodeType): Record<string, unknown> {
       role: "",
       cwd: ".",
       promptTemplate: "{{input}}",
+      outputSchemaJson: "",
       knowledgeEnabled: true,
       qualityThreshold: QUALITY_DEFAULT_THRESHOLD,
       artifactType: "none",
