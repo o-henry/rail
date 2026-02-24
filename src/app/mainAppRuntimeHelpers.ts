@@ -212,7 +212,11 @@ export function buildFeedPost(input: any): {
     2,
   );
 
-  const markdownClip = clipTextByChars(markdownRaw);
+  const markdownClip = {
+    text: markdownRaw,
+    truncated: false,
+    charCount: markdownRaw.length,
+  };
   const jsonClip = clipTextByChars(jsonRaw);
 
   const markdownMasked = redactSensitiveText(markdownClip.text);
