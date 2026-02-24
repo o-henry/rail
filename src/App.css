@@ -1211,7 +1211,7 @@ h3 {
 }
 
 .canvas-runbar .play.is-ready {
-  border-color: #b9c4d0;
+  /* border-color: #b9c4d0; */
 }
 
 .canvas-runbar button {
@@ -2317,7 +2317,7 @@ h3 {
   height: 28px;
   min-height: 28px;
   padding: 0 10px;
-  border-radius: 6px;
+  border-radius: 3px;
   font-size: 12px;
   line-height: 1;
   background: #eef2f7;

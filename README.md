@@ -154,7 +154,9 @@ npm run build
 - 웹 연결 통신은 `127.0.0.1` 루프백 + Bearer 토큰으로만 허용
 - 웹 연결 HTTP 요청은 루프백 주소가 아니면 차단
 - CORS는 허용된 Origin(확장/지원 서비스 도메인)만 허용
-- 확장 Origin은 `RAIL_WEB_BRIDGE_ALLOWED_EXTENSION_IDS`에 등록된 ID만 허용(미설정 시 차단)
+- 확장 Origin은 `RAIL_WEB_BRIDGE_ALLOWED_EXTENSION_IDS`에 등록된 ID만 허용(권장 보안 모드)
+- 운영/배포 권장: `RAIL_WEB_BRIDGE_ALLOWED_EXTENSION_IDS`(또는 단일 `..._ID`)를 설정해 확장 Origin을 고정
+- 개발 폴백: allowlist 미설정이면 토큰 기반으로 `chrome-extension://<id>` 형식 Origin을 허용(보안 수준 낮음)
 - 웹 연결 토큰은 워커 메모리 세션에만 보관(프로세스 종료 시 폐기)
 - 확장 토큰은 `chrome.storage.session` 우선 저장(브라우저 종료 시 폐기)
 - 웹 연결 경로는 브라우저 프로세스를 새로 띄우거나 종료하지 않음
