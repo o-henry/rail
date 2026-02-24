@@ -2165,7 +2165,7 @@ h3 {
   background: #eff2f6;
   padding: 12px;
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  grid-template-columns: repeat(4, minmax(120px, 1fr));
   gap: 10px;
 }
 
@@ -2187,12 +2187,6 @@ h3 {
 
 .feed-filter-keyword-field {
   min-width: 0;
-}
-
-@media (max-width: 1180px) {
-  .feed-filter-keyword-field {
-    grid-column: 1 / -1;
-  }
 }
 
 .feed-filter-inline input:focus,
@@ -2739,18 +2733,6 @@ h3 {
   height: 36px;
   min-height: 36px;
   justify-self: end;
-}
-
-@media (max-width: 980px) {
-  .feed-filter-inline {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
-@media (max-width: 680px) {
-  .feed-filter-inline {
-    grid-template-columns: minmax(0, 1fr);
-  }
 }
 
 .history-list,
