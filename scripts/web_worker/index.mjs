@@ -394,10 +394,9 @@ function isAllowedBridgeOrigin(origin) {
     if (!/^chrome-extension:\/\/[a-p]{32}$/.test(origin)) {
       return false;
     }
-    if (!BRIDGE_EXTENSION_ALLOWLIST_CONFIGURED) {
-      return true;
-    }
-    return BRIDGE_ALLOWED_EXTENSION_ORIGINS.has(origin);
+    // Soft policy: extension allowlist mismatch should not block runtime when token is valid.
+    // This prevents silent no-claim failures caused by stale extension IDs.
+    return true;
   }
   return BRIDGE_ALLOWED_WEB_ORIGINS.has(origin);
 }
@@ -461,7 +460,7 @@ function bridgeStatusPayload({ exposeToken = false } = {}) {
     extensionOriginAllowlistConfigured: BRIDGE_EXTENSION_ALLOWLIST_CONFIGURED,
     allowedExtensionOriginCount: BRIDGE_ALLOWED_EXTENSION_ORIGINS.size,
     extensionOriginPolicy: BRIDGE_EXTENSION_ALLOWLIST_CONFIGURED
-      ? 'allowlist'
+      ? 'allowlist_soft'
       : 'token_only',
     lastSeenAt: state.bridge.lastSeenAt,
     connectedProviders,
