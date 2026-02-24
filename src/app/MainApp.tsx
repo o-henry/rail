@@ -4917,12 +4917,29 @@ ${prompt}`;
       const skipSet = new Set<string>();
       let lastDoneNodeId = "";
 
-      while (queue.length > 0) {
-        const nodeId = queue.shift() as string;
+      const dagMaxThreads = codexMultiAgentMode === "max" ? 4 : codexMultiAgentMode === "balanced" ? 2 : 1;
+      const activeTasks = new Map<string, Promise<void>>();
+      let activeTurnTasks = 0;
+
+      const scheduleChildren = (nodeId: string) => {
+        const children = adjacency.get(nodeId) ?? [];
+        for (const childId of children) {
+          const next = (indegree.get(childId) ?? 0) - 1;
+          indegree.set(childId, next);
+          if (next === 0) {
+            queue.push(childId);
+            setNodeStatus(childId, "queued");
+            transition(runRecord, childId, "queued");
+          }
+        }
+      };
+
+      const processNode = async (nodeId: string): Promise<void> => {
         const node = nodeMap.get(nodeId);
         if (!node) {
-          continue;
+          return;
         }
+
         const nodeInputSources = resolveFeedInputSources(nodeId);
         const nodeInput = nodeInputFor(nodeId, outputs, workflowQuestion);
 
@@ -4946,7 +4963,9 @@ ${prompt}`;
             cancelledFeed.rawAttachments.markdown;
           feedRawAttachmentRef.current[feedAttachmentRawKey(cancelledFeed.post.id, "json")] =
             cancelledFeed.rawAttachments.json;
-          break;
+          terminalStateByNodeId[nodeId] = "cancelled";
+          scheduleChildren(nodeId);
+          return;
         }
 
         if (skipSet.has(nodeId)) {
@@ -4957,203 +4976,152 @@ ${prompt}`;
           });
           transition(runRecord, nodeId, "skipped", "분기 결과로 건너뜀");
           terminalStateByNodeId[nodeId] = "skipped";
-        } else {
-          const parentIds = incoming.get(nodeId) ?? [];
-          const missingParent = parentIds.find((parentId) => !(parentId in outputs));
-          if (missingParent) {
-            const blockedAtIso = new Date().toISOString();
-            const blockedReason = `선행 노드(${missingParent}) 결과 없음으로 건너뜀`;
-            setNodeStatus(nodeId, "skipped", blockedReason);
-            setNodeRuntimeFields(nodeId, {
-              status: "skipped",
-              finishedAt: blockedAtIso,
-            });
-            transition(runRecord, nodeId, "skipped", blockedReason);
-            const blockedFeed = buildFeedPost({
-              runId: runRecord.runId,
-              node,
-              status: "cancelled",
-              createdAt: blockedAtIso,
-              summary: blockedReason,
-              logs: runLogCollectorRef.current[nodeId] ?? [],
-              inputSources: nodeInputSources,
-              inputData: nodeInput,
-            });
-            runRecord.feedPosts?.push(blockedFeed.post);
-            rememberFeedSource(blockedFeed.post);
-            feedRawAttachmentRef.current[feedAttachmentRawKey(blockedFeed.post.id, "markdown")] =
-              blockedFeed.rawAttachments.markdown;
-            feedRawAttachmentRef.current[feedAttachmentRawKey(blockedFeed.post.id, "json")] =
-              blockedFeed.rawAttachments.json;
-            terminalStateByNodeId[nodeId] = "skipped";
-          } else {
-          const startedAtMs = Date.now();
-          const startedAtIso = new Date(startedAtMs).toISOString();
-          setNodeStatus(nodeId, "running", "노드 실행 시작");
+          scheduleChildren(nodeId);
+          return;
+        }
+
+        const parentIds = incoming.get(nodeId) ?? [];
+        const missingParent = parentIds.find((parentId) => !(parentId in outputs));
+        if (missingParent) {
+          const blockedAtIso = new Date().toISOString();
+          const blockedReason = `선행 노드(${missingParent}) 결과 없음으로 건너뜀`;
+          setNodeStatus(nodeId, "skipped", blockedReason);
           setNodeRuntimeFields(nodeId, {
-            status: "running",
-            startedAt: startedAtIso,
-            finishedAt: undefined,
-            durationMs: undefined,
-            usage: undefined,
+            status: "skipped",
+            finishedAt: blockedAtIso,
           });
-          transition(runRecord, nodeId, "running");
+          transition(runRecord, nodeId, "skipped", blockedReason);
+          const blockedFeed = buildFeedPost({
+            runId: runRecord.runId,
+            node,
+            status: "cancelled",
+            createdAt: blockedAtIso,
+            summary: blockedReason,
+            logs: runLogCollectorRef.current[nodeId] ?? [],
+            inputSources: nodeInputSources,
+            inputData: nodeInput,
+          });
+          runRecord.feedPosts?.push(blockedFeed.post);
+          rememberFeedSource(blockedFeed.post);
+          feedRawAttachmentRef.current[feedAttachmentRawKey(blockedFeed.post.id, "markdown")] =
+            blockedFeed.rawAttachments.markdown;
+          feedRawAttachmentRef.current[feedAttachmentRawKey(blockedFeed.post.id, "json")] =
+            blockedFeed.rawAttachments.json;
+          terminalStateByNodeId[nodeId] = "skipped";
+          scheduleChildren(nodeId);
+          return;
+        }
 
-          const input = nodeInput;
+        const startedAtMs = Date.now();
+        const startedAtIso = new Date(startedAtMs).toISOString();
+        setNodeStatus(nodeId, "running", "노드 실행 시작");
+        setNodeRuntimeFields(nodeId, {
+          status: "running",
+          startedAt: startedAtIso,
+          finishedAt: undefined,
+          durationMs: undefined,
+          usage: undefined,
+        });
+        transition(runRecord, nodeId, "running");
 
-          if (node.type === "turn") {
-            const result = await executeTurnNode(node, input);
-            if (result.knowledgeTrace && result.knowledgeTrace.length > 0) {
-              runRecord.knowledgeTrace?.push(...result.knowledgeTrace);
-            }
-            if (!result.ok) {
-              const finishedAtIso = new Date().toISOString();
-              setNodeStatus(nodeId, "failed", result.error ?? "턴 실행 실패");
-              setNodeRuntimeFields(nodeId, {
-                error: result.error,
-                status: "failed",
-                threadId: result.threadId,
-                turnId: result.turnId,
-                usage: result.usage,
-                finishedAt: finishedAtIso,
-                durationMs: Date.now() - startedAtMs,
-              });
-              runRecord.providerTrace?.push({
-                nodeId,
-                executor: result.executor,
-                provider: result.provider,
-                status: cancelRequestedRef.current ? "cancelled" : "failed",
-                startedAt: startedAtIso,
-                finishedAt: finishedAtIso,
-                summary: result.error ?? "턴 실행 실패",
-              });
-              transition(runRecord, nodeId, "failed", result.error ?? "턴 실행 실패");
-              const failedFeed = buildFeedPost({
-                runId: runRecord.runId,
-                node,
-                status: "failed",
-                createdAt: finishedAtIso,
-                summary: result.error ?? "턴 실행 실패",
-                logs: runLogCollectorRef.current[nodeId] ?? [],
-                output: result.output,
-                error: result.error,
-                durationMs: Date.now() - startedAtMs,
-                usage: result.usage,
-                inputSources: nodeInputSources,
-                inputData: input,
-              });
-              runRecord.feedPosts?.push(failedFeed.post);
-              rememberFeedSource(failedFeed.post);
-              feedRawAttachmentRef.current[feedAttachmentRawKey(failedFeed.post.id, "markdown")] =
-                failedFeed.rawAttachments.markdown;
-              feedRawAttachmentRef.current[feedAttachmentRawKey(failedFeed.post.id, "json")] =
-                failedFeed.rawAttachments.json;
-              terminalStateByNodeId[nodeId] = "failed";
-              continue;
-            }
+        const input = nodeInput;
 
-            const config = node.config as TurnConfig;
-            const artifactType = toArtifactType(config.artifactType);
-            const normalizedArtifact = normalizeArtifactOutput(nodeId, artifactType, result.output);
-            for (const warning of normalizedArtifact.warnings) {
-              addNodeLog(nodeId, `[아티팩트] ${warning}`);
-            }
-            const normalizedOutput = normalizedArtifact.output;
-            const qualityReport = await buildQualityReport({
-              node,
-              config,
-              output: normalizedOutput,
-              cwd: String(config.cwd ?? cwd).trim() || cwd,
-            });
-            const nodeMetric: NodeMetric = {
-              nodeId,
-              profile: qualityReport.profile,
-              score: qualityReport.score,
-              decision: qualityReport.decision,
-              threshold: qualityReport.threshold,
-              failedChecks: qualityReport.failures.length,
-              warningCount: qualityReport.warnings.length,
-            };
-            runRecord.nodeMetrics = {
-              ...(runRecord.nodeMetrics ?? {}),
-              [nodeId]: nodeMetric,
-            };
-            for (const warning of qualityReport.warnings) {
-              addNodeLog(nodeId, `[품질] ${warning}`);
-            }
-
-            if (qualityReport.decision !== "PASS") {
-              const finishedAtIso = new Date().toISOString();
-              setNodeStatus(nodeId, "failed", "품질 게이트 REJECT");
-              setNodeRuntimeFields(nodeId, {
-                status: "failed",
-                output: normalizedOutput,
-                qualityReport,
-                error: `품질 게이트 REJECT (점수 ${qualityReport.score}/${qualityReport.threshold})`,
-                threadId: result.threadId,
-                turnId: result.turnId,
-                usage: result.usage,
-                finishedAt: finishedAtIso,
-                durationMs: Date.now() - startedAtMs,
-              });
-              runRecord.threadTurnMap[nodeId] = {
-                threadId: result.threadId,
-                turnId: result.turnId,
-              };
-              runRecord.providerTrace?.push({
-                nodeId,
-                executor: result.executor,
-                provider: result.provider,
-                status: "failed",
-                startedAt: startedAtIso,
-                finishedAt: finishedAtIso,
-                summary: `품질 REJECT (${qualityReport.score}/${qualityReport.threshold})`,
-              });
-              transition(
-                runRecord,
-                nodeId,
-                "failed",
-                `품질 REJECT (${qualityReport.score}/${qualityReport.threshold})`,
-              );
-              const rejectedFeed = buildFeedPost({
-                runId: runRecord.runId,
-                node,
-                status: "failed",
-                createdAt: finishedAtIso,
-                summary: `품질 REJECT (${qualityReport.score}/${qualityReport.threshold})`,
-                logs: runLogCollectorRef.current[nodeId] ?? [],
-                output: normalizedOutput,
-                error: `품질 게이트 REJECT (점수 ${qualityReport.score}/${qualityReport.threshold})`,
-                durationMs: Date.now() - startedAtMs,
-                usage: result.usage,
-                qualityReport,
-                inputSources: nodeInputSources,
-                inputData: input,
-              });
-              runRecord.feedPosts?.push(rejectedFeed.post);
-              rememberFeedSource(rejectedFeed.post);
-              feedRawAttachmentRef.current[feedAttachmentRawKey(rejectedFeed.post.id, "markdown")] =
-                rejectedFeed.rawAttachments.markdown;
-              feedRawAttachmentRef.current[feedAttachmentRawKey(rejectedFeed.post.id, "json")] =
-                rejectedFeed.rawAttachments.json;
-              terminalStateByNodeId[nodeId] = "failed";
-              continue;
-            }
-
+        if (node.type === "turn") {
+          const result = await executeTurnNode(node, input);
+          if (result.knowledgeTrace && result.knowledgeTrace.length > 0) {
+            runRecord.knowledgeTrace?.push(...result.knowledgeTrace);
+          }
+          if (!result.ok) {
             const finishedAtIso = new Date().toISOString();
-            outputs[nodeId] = normalizedOutput;
-            addNodeLog(nodeId, `[품질] PASS (${qualityReport.score}/${qualityReport.threshold})`);
+            setNodeStatus(nodeId, "failed", result.error ?? "턴 실행 실패");
             setNodeRuntimeFields(nodeId, {
-              status: "done",
-              output: normalizedOutput,
-              qualityReport,
+              error: result.error,
+              status: "failed",
               threadId: result.threadId,
               turnId: result.turnId,
               usage: result.usage,
               finishedAt: finishedAtIso,
               durationMs: Date.now() - startedAtMs,
             });
-            setNodeStatus(nodeId, "done", "턴 실행 완료");
+            runRecord.providerTrace?.push({
+              nodeId,
+              executor: result.executor,
+              provider: result.provider,
+              status: cancelRequestedRef.current ? "cancelled" : "failed",
+              startedAt: startedAtIso,
+              finishedAt: finishedAtIso,
+              summary: result.error ?? "턴 실행 실패",
+            });
+            transition(runRecord, nodeId, "failed", result.error ?? "턴 실행 실패");
+            const failedFeed = buildFeedPost({
+              runId: runRecord.runId,
+              node,
+              status: "failed",
+              createdAt: finishedAtIso,
+              summary: result.error ?? "턴 실행 실패",
+              logs: runLogCollectorRef.current[nodeId] ?? [],
+              output: result.output,
+              error: result.error,
+              durationMs: Date.now() - startedAtMs,
+              usage: result.usage,
+              inputSources: nodeInputSources,
+              inputData: input,
+            });
+            runRecord.feedPosts?.push(failedFeed.post);
+            rememberFeedSource(failedFeed.post);
+            feedRawAttachmentRef.current[feedAttachmentRawKey(failedFeed.post.id, "markdown")] =
+              failedFeed.rawAttachments.markdown;
+            feedRawAttachmentRef.current[feedAttachmentRawKey(failedFeed.post.id, "json")] =
+              failedFeed.rawAttachments.json;
+            terminalStateByNodeId[nodeId] = "failed";
+            scheduleChildren(nodeId);
+            return;
+          }
+
+          const config = node.config as TurnConfig;
+          const artifactType = toArtifactType(config.artifactType);
+          const normalizedArtifact = normalizeArtifactOutput(nodeId, artifactType, result.output);
+          for (const warning of normalizedArtifact.warnings) {
+            addNodeLog(nodeId, `[아티팩트] ${warning}`);
+          }
+          const normalizedOutput = normalizedArtifact.output;
+          const qualityReport = await buildQualityReport({
+            node,
+            config,
+            output: normalizedOutput,
+            cwd: String(config.cwd ?? cwd).trim() || cwd,
+          });
+          const nodeMetric: NodeMetric = {
+            nodeId,
+            profile: qualityReport.profile,
+            score: qualityReport.score,
+            decision: qualityReport.decision,
+            threshold: qualityReport.threshold,
+            failedChecks: qualityReport.failures.length,
+            warningCount: qualityReport.warnings.length,
+          };
+          runRecord.nodeMetrics = {
+            ...(runRecord.nodeMetrics ?? {}),
+            [nodeId]: nodeMetric,
+          };
+          for (const warning of qualityReport.warnings) {
+            addNodeLog(nodeId, `[품질] ${warning}`);
+          }
+
+          if (qualityReport.decision !== "PASS") {
+            const finishedAtIso = new Date().toISOString();
+            setNodeStatus(nodeId, "failed", "품질 게이트 REJECT");
+            setNodeRuntimeFields(nodeId, {
+              status: "failed",
+              output: normalizedOutput,
+              qualityReport,
+              error: `품질 게이트 REJECT (점수 ${qualityReport.score}/${qualityReport.threshold})`,
+              threadId: result.threadId,
+              turnId: result.turnId,
+              usage: result.usage,
+              finishedAt: finishedAtIso,
+              durationMs: Date.now() - startedAtMs,
+            });
             runRecord.threadTurnMap[nodeId] = {
               threadId: result.threadId,
               turnId: result.turnId,
@@ -5162,179 +5130,278 @@ ${prompt}`;
               nodeId,
               executor: result.executor,
               provider: result.provider,
-              status: "done",
+              status: "failed",
               startedAt: startedAtIso,
               finishedAt: finishedAtIso,
-              summary: "턴 실행 완료",
+              summary: `품질 REJECT (${qualityReport.score}/${qualityReport.threshold})`,
             });
-            transition(runRecord, nodeId, "done", "턴 실행 완료");
-            const doneFeed = buildFeedPost({
+            transition(
+              runRecord,
+              nodeId,
+              "failed",
+              `품질 REJECT (${qualityReport.score}/${qualityReport.threshold})`,
+            );
+            const rejectedFeed = buildFeedPost({
               runId: runRecord.runId,
               node,
-              status: "done",
+              status: "failed",
               createdAt: finishedAtIso,
-              summary: "턴 실행 완료",
+              summary: `품질 REJECT (${qualityReport.score}/${qualityReport.threshold})`,
               logs: runLogCollectorRef.current[nodeId] ?? [],
               output: normalizedOutput,
+              error: `품질 게이트 REJECT (점수 ${qualityReport.score}/${qualityReport.threshold})`,
               durationMs: Date.now() - startedAtMs,
               usage: result.usage,
               qualityReport,
               inputSources: nodeInputSources,
               inputData: input,
             });
-            runRecord.feedPosts?.push(doneFeed.post);
-            rememberFeedSource(doneFeed.post);
-            feedRawAttachmentRef.current[feedAttachmentRawKey(doneFeed.post.id, "markdown")] =
-              doneFeed.rawAttachments.markdown;
-            feedRawAttachmentRef.current[feedAttachmentRawKey(doneFeed.post.id, "json")] =
-              doneFeed.rawAttachments.json;
-            lastDoneNodeId = nodeId;
-            terminalStateByNodeId[nodeId] = "done";
-          } else if (node.type === "transform") {
-            const result = await executeTransformNode(node, input);
-            if (!result.ok) {
-              const finishedAtIso = new Date().toISOString();
-              setNodeStatus(nodeId, "failed", result.error ?? "변환 실패");
-              setNodeRuntimeFields(nodeId, {
-                status: "failed",
-                error: result.error,
-                finishedAt: finishedAtIso,
-                durationMs: Date.now() - startedAtMs,
-              });
-              transition(runRecord, nodeId, "failed", result.error ?? "변환 실패");
-              const transformFailedFeed = buildFeedPost({
-                runId: runRecord.runId,
-                node,
-                status: "failed",
-                createdAt: finishedAtIso,
-                summary: result.error ?? "변환 실패",
-                logs: runLogCollectorRef.current[nodeId] ?? [],
-                output: result.output,
-                error: result.error ?? "변환 실패",
-                durationMs: Date.now() - startedAtMs,
-                inputSources: nodeInputSources,
-                inputData: input,
-              });
-              runRecord.feedPosts?.push(transformFailedFeed.post);
-              rememberFeedSource(transformFailedFeed.post);
-              feedRawAttachmentRef.current[
-                feedAttachmentRawKey(transformFailedFeed.post.id, "markdown")
-              ] = transformFailedFeed.rawAttachments.markdown;
-              feedRawAttachmentRef.current[feedAttachmentRawKey(transformFailedFeed.post.id, "json")] =
-                transformFailedFeed.rawAttachments.json;
-              terminalStateByNodeId[nodeId] = "failed";
-              continue;
-            }
+            runRecord.feedPosts?.push(rejectedFeed.post);
+            rememberFeedSource(rejectedFeed.post);
+            feedRawAttachmentRef.current[feedAttachmentRawKey(rejectedFeed.post.id, "markdown")] =
+              rejectedFeed.rawAttachments.markdown;
+            feedRawAttachmentRef.current[feedAttachmentRawKey(rejectedFeed.post.id, "json")] =
+              rejectedFeed.rawAttachments.json;
+            terminalStateByNodeId[nodeId] = "failed";
+            scheduleChildren(nodeId);
+            return;
+          }
 
+          const finishedAtIso = new Date().toISOString();
+          outputs[nodeId] = normalizedOutput;
+          addNodeLog(nodeId, `[품질] PASS (${qualityReport.score}/${qualityReport.threshold})`);
+          setNodeRuntimeFields(nodeId, {
+            status: "done",
+            output: normalizedOutput,
+            qualityReport,
+            threadId: result.threadId,
+            turnId: result.turnId,
+            usage: result.usage,
+            finishedAt: finishedAtIso,
+            durationMs: Date.now() - startedAtMs,
+          });
+          setNodeStatus(nodeId, "done", "턴 실행 완료");
+          runRecord.threadTurnMap[nodeId] = {
+            threadId: result.threadId,
+            turnId: result.turnId,
+          };
+          runRecord.providerTrace?.push({
+            nodeId,
+            executor: result.executor,
+            provider: result.provider,
+            status: "done",
+            startedAt: startedAtIso,
+            finishedAt: finishedAtIso,
+            summary: "턴 실행 완료",
+          });
+          transition(runRecord, nodeId, "done", "턴 실행 완료");
+          const doneFeed = buildFeedPost({
+            runId: runRecord.runId,
+            node,
+            status: "done",
+            createdAt: finishedAtIso,
+            summary: "턴 실행 완료",
+            logs: runLogCollectorRef.current[nodeId] ?? [],
+            output: normalizedOutput,
+            durationMs: Date.now() - startedAtMs,
+            usage: result.usage,
+            qualityReport,
+            inputSources: nodeInputSources,
+            inputData: input,
+          });
+          runRecord.feedPosts?.push(doneFeed.post);
+          rememberFeedSource(doneFeed.post);
+          feedRawAttachmentRef.current[feedAttachmentRawKey(doneFeed.post.id, "markdown")] =
+            doneFeed.rawAttachments.markdown;
+          feedRawAttachmentRef.current[feedAttachmentRawKey(doneFeed.post.id, "json")] =
+            doneFeed.rawAttachments.json;
+          lastDoneNodeId = nodeId;
+          terminalStateByNodeId[nodeId] = "done";
+          scheduleChildren(nodeId);
+          return;
+        }
+
+        if (node.type === "transform") {
+          const result = await executeTransformNode(node, input);
+          if (!result.ok) {
             const finishedAtIso = new Date().toISOString();
-            outputs[nodeId] = result.output;
+            setNodeStatus(nodeId, "failed", result.error ?? "변환 실패");
             setNodeRuntimeFields(nodeId, {
-              status: "done",
-              output: result.output,
+              status: "failed",
+              error: result.error,
               finishedAt: finishedAtIso,
               durationMs: Date.now() - startedAtMs,
             });
-            setNodeStatus(nodeId, "done", "변환 완료");
-            transition(runRecord, nodeId, "done", "변환 완료");
-            const transformDoneFeed = buildFeedPost({
+            transition(runRecord, nodeId, "failed", result.error ?? "변환 실패");
+            const transformFailedFeed = buildFeedPost({
               runId: runRecord.runId,
               node,
-              status: "done",
+              status: "failed",
               createdAt: finishedAtIso,
-              summary: "변환 완료",
+              summary: result.error ?? "변환 실패",
               logs: runLogCollectorRef.current[nodeId] ?? [],
               output: result.output,
+              error: result.error ?? "변환 실패",
               durationMs: Date.now() - startedAtMs,
               inputSources: nodeInputSources,
               inputData: input,
             });
-            runRecord.feedPosts?.push(transformDoneFeed.post);
-            rememberFeedSource(transformDoneFeed.post);
-            feedRawAttachmentRef.current[feedAttachmentRawKey(transformDoneFeed.post.id, "markdown")] =
-              transformDoneFeed.rawAttachments.markdown;
-            feedRawAttachmentRef.current[feedAttachmentRawKey(transformDoneFeed.post.id, "json")] =
-              transformDoneFeed.rawAttachments.json;
-            lastDoneNodeId = nodeId;
-            terminalStateByNodeId[nodeId] = "done";
-          } else {
-            const result = executeGateNode(node, input, skipSet);
-            if (!result.ok) {
-              const finishedAtIso = new Date().toISOString();
-              setNodeStatus(nodeId, "failed", result.error ?? "분기 실패");
-              setNodeRuntimeFields(nodeId, {
-                status: "failed",
-                error: result.error,
-                finishedAt: finishedAtIso,
-                durationMs: Date.now() - startedAtMs,
-              });
-              transition(runRecord, nodeId, "failed", result.error ?? "분기 실패");
-              const gateFailedFeed = buildFeedPost({
-                runId: runRecord.runId,
-                node,
-                status: "failed",
-                createdAt: finishedAtIso,
-                summary: result.error ?? "분기 실패",
-                logs: runLogCollectorRef.current[nodeId] ?? [],
-                output: result.output,
-                error: result.error ?? "분기 실패",
-                durationMs: Date.now() - startedAtMs,
-                inputSources: nodeInputSources,
-                inputData: input,
-              });
-              runRecord.feedPosts?.push(gateFailedFeed.post);
-              rememberFeedSource(gateFailedFeed.post);
-              feedRawAttachmentRef.current[feedAttachmentRawKey(gateFailedFeed.post.id, "markdown")] =
-                gateFailedFeed.rawAttachments.markdown;
-              feedRawAttachmentRef.current[feedAttachmentRawKey(gateFailedFeed.post.id, "json")] =
-                gateFailedFeed.rawAttachments.json;
-              terminalStateByNodeId[nodeId] = "failed";
+            runRecord.feedPosts?.push(transformFailedFeed.post);
+            rememberFeedSource(transformFailedFeed.post);
+            feedRawAttachmentRef.current[feedAttachmentRawKey(transformFailedFeed.post.id, "markdown")] =
+              transformFailedFeed.rawAttachments.markdown;
+            feedRawAttachmentRef.current[feedAttachmentRawKey(transformFailedFeed.post.id, "json")] =
+              transformFailedFeed.rawAttachments.json;
+            terminalStateByNodeId[nodeId] = "failed";
+            scheduleChildren(nodeId);
+            return;
+          }
+
+          const finishedAtIso = new Date().toISOString();
+          outputs[nodeId] = result.output;
+          setNodeRuntimeFields(nodeId, {
+            status: "done",
+            output: result.output,
+            finishedAt: finishedAtIso,
+            durationMs: Date.now() - startedAtMs,
+          });
+          setNodeStatus(nodeId, "done", "변환 완료");
+          transition(runRecord, nodeId, "done", "변환 완료");
+          const transformDoneFeed = buildFeedPost({
+            runId: runRecord.runId,
+            node,
+            status: "done",
+            createdAt: finishedAtIso,
+            summary: "변환 완료",
+            logs: runLogCollectorRef.current[nodeId] ?? [],
+            output: result.output,
+            durationMs: Date.now() - startedAtMs,
+            inputSources: nodeInputSources,
+            inputData: input,
+          });
+          runRecord.feedPosts?.push(transformDoneFeed.post);
+          rememberFeedSource(transformDoneFeed.post);
+          feedRawAttachmentRef.current[feedAttachmentRawKey(transformDoneFeed.post.id, "markdown")] =
+            transformDoneFeed.rawAttachments.markdown;
+          feedRawAttachmentRef.current[feedAttachmentRawKey(transformDoneFeed.post.id, "json")] =
+            transformDoneFeed.rawAttachments.json;
+          lastDoneNodeId = nodeId;
+          terminalStateByNodeId[nodeId] = "done";
+          scheduleChildren(nodeId);
+          return;
+        }
+
+        const gateResult = executeGateNode(node, input, skipSet);
+        if (!gateResult.ok) {
+          const finishedAtIso = new Date().toISOString();
+          setNodeStatus(nodeId, "failed", gateResult.error ?? "분기 실패");
+          setNodeRuntimeFields(nodeId, {
+            status: "failed",
+            error: gateResult.error,
+            finishedAt: finishedAtIso,
+            durationMs: Date.now() - startedAtMs,
+          });
+          transition(runRecord, nodeId, "failed", gateResult.error ?? "분기 실패");
+          const gateFailedFeed = buildFeedPost({
+            runId: runRecord.runId,
+            node,
+            status: "failed",
+            createdAt: finishedAtIso,
+            summary: gateResult.error ?? "분기 실패",
+            logs: runLogCollectorRef.current[nodeId] ?? [],
+            output: gateResult.output,
+            error: gateResult.error ?? "분기 실패",
+            durationMs: Date.now() - startedAtMs,
+            inputSources: nodeInputSources,
+            inputData: input,
+          });
+          runRecord.feedPosts?.push(gateFailedFeed.post);
+          rememberFeedSource(gateFailedFeed.post);
+          feedRawAttachmentRef.current[feedAttachmentRawKey(gateFailedFeed.post.id, "markdown")] =
+            gateFailedFeed.rawAttachments.markdown;
+          feedRawAttachmentRef.current[feedAttachmentRawKey(gateFailedFeed.post.id, "json")] =
+            gateFailedFeed.rawAttachments.json;
+          terminalStateByNodeId[nodeId] = "failed";
+          scheduleChildren(nodeId);
+          return;
+        }
+
+        const finishedAtIso = new Date().toISOString();
+        outputs[nodeId] = gateResult.output;
+        setNodeRuntimeFields(nodeId, {
+          status: "done",
+          output: gateResult.output,
+          finishedAt: finishedAtIso,
+          durationMs: Date.now() - startedAtMs,
+        });
+        setNodeStatus(nodeId, "done", gateResult.message ?? "분기 완료");
+        transition(runRecord, nodeId, "done", gateResult.message ?? "분기 완료");
+        const gateDoneFeed = buildFeedPost({
+          runId: runRecord.runId,
+          node,
+          status: "done",
+          createdAt: finishedAtIso,
+          summary: gateResult.message ?? "분기 완료",
+          logs: runLogCollectorRef.current[nodeId] ?? [],
+          output: gateResult.output,
+          durationMs: Date.now() - startedAtMs,
+          inputSources: nodeInputSources,
+          inputData: input,
+        });
+        runRecord.feedPosts?.push(gateDoneFeed.post);
+        rememberFeedSource(gateDoneFeed.post);
+        feedRawAttachmentRef.current[feedAttachmentRawKey(gateDoneFeed.post.id, "markdown")] =
+          gateDoneFeed.rawAttachments.markdown;
+        feedRawAttachmentRef.current[feedAttachmentRawKey(gateDoneFeed.post.id, "json")] =
+          gateDoneFeed.rawAttachments.json;
+        lastDoneNodeId = nodeId;
+        terminalStateByNodeId[nodeId] = "done";
+        scheduleChildren(nodeId);
+      };
+
+      while (queue.length > 0 || activeTasks.size > 0) {
+        if (!cancelRequestedRef.current) {
+          for (let index = 0; index < queue.length && activeTasks.size < dagMaxThreads; ) {
+            const nodeId = queue[index];
+            const node = nodeMap.get(nodeId);
+            if (!node) {
+              queue.splice(index, 1);
               continue;
             }
-
-            const finishedAtIso = new Date().toISOString();
-            outputs[nodeId] = result.output;
-            setNodeRuntimeFields(nodeId, {
-              status: "done",
-              output: result.output,
-              finishedAt: finishedAtIso,
-              durationMs: Date.now() - startedAtMs,
-            });
-            setNodeStatus(nodeId, "done", result.message ?? "분기 완료");
-            transition(runRecord, nodeId, "done", result.message ?? "분기 완료");
-            const gateDoneFeed = buildFeedPost({
-              runId: runRecord.runId,
-              node,
-              status: "done",
-              createdAt: finishedAtIso,
-              summary: result.message ?? "분기 완료",
-              logs: runLogCollectorRef.current[nodeId] ?? [],
-              output: result.output,
-              durationMs: Date.now() - startedAtMs,
-              inputSources: nodeInputSources,
-              inputData: input,
-            });
-            runRecord.feedPosts?.push(gateDoneFeed.post);
-            rememberFeedSource(gateDoneFeed.post);
-            feedRawAttachmentRef.current[feedAttachmentRawKey(gateDoneFeed.post.id, "markdown")] =
-              gateDoneFeed.rawAttachments.markdown;
-            feedRawAttachmentRef.current[feedAttachmentRawKey(gateDoneFeed.post.id, "json")] =
-              gateDoneFeed.rawAttachments.json;
-            lastDoneNodeId = nodeId;
-            terminalStateByNodeId[nodeId] = "done";
-          }
+            const requiresTurnLock = node.type === "turn";
+            if (requiresTurnLock && activeTurnTasks > 0) {
+              index += 1;
+              continue;
+            }
+            queue.splice(index, 1);
+            if (requiresTurnLock) {
+              activeTurnTasks += 1;
+            }
+            const task = processNode(nodeId)
+              .catch((error) => {
+                reportSoftError(`노드 실행 실패(${nodeId})`, error);
+              })
+              .finally(() => {
+                activeTasks.delete(nodeId);
+                if (requiresTurnLock) {
+                  activeTurnTasks = Math.max(0, activeTurnTasks - 1);
+                }
+              });
+            activeTasks.set(nodeId, task);
           }
         }
 
-        const children = adjacency.get(nodeId) ?? [];
-        for (const childId of children) {
-          const next = (indegree.get(childId) ?? 0) - 1;
-          indegree.set(childId, next);
-          if (next === 0) {
-            queue.push(childId);
-            setNodeStatus(childId, "queued");
-            transition(runRecord, childId, "queued");
-          }
+        if (activeTasks.size > 0) {
+          await Promise.race(activeTasks.values());
+          continue;
         }
+
+        if (queue.length === 0) {
+          break;
+        }
+
+        const fallbackNodeId = queue.shift() as string;
+        await processNode(fallbackNodeId);
       }
 
       if (cancelRequestedRef.current) {
