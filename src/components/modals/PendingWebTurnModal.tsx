@@ -51,8 +51,8 @@ export default function PendingWebTurnModal({
       }}
     >
       <div className="web-turn-drag-handle" onPointerDown={onDragStart}>
-        <h2>웹 응답 입력 필요</h2>
-        <span>드래그 이동</span>
+        <h4>웹 응답 입력 필요</h4>
+        <span>➠</span>
       </div>
       <div>노드: {nodeId}</div>
       <div>서비스: {providerLabel}</div>
@@ -67,7 +67,7 @@ export default function PendingWebTurnModal({
       </div>
       <div className="web-turn-prompt">{prompt}</div>
       <label>
-        응답 붙여넣기
+        붙여넣기
         <textarea onChange={(e) => onChangeResponseDraft(e.currentTarget.value)} rows={8} value={responseDraft} />
       </label>
       <div className="button-row">
