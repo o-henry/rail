@@ -89,6 +89,8 @@ export default function FeedPage({ vm }: FeedPageProps) {
     buildFeedAvatarLabel,
     pendingNodeRequests,
     feedReplyDraftByPost,
+    feedReplySubmittingByPost,
+    feedReplyFeedbackByPost,
     feedExpandedByPost,
     onSelectFeedInspectorPost,
     onShareFeedPost,
@@ -104,6 +106,12 @@ export default function FeedPage({ vm }: FeedPageProps) {
   } = vm;
   const replyDraftMap =
     feedReplyDraftByPost && typeof feedReplyDraftByPost === "object" ? feedReplyDraftByPost : {};
+  const replySubmittingMap =
+    feedReplySubmittingByPost && typeof feedReplySubmittingByPost === "object"
+      ? feedReplySubmittingByPost
+      : {};
+  const replyFeedbackMap =
+    feedReplyFeedbackByPost && typeof feedReplyFeedbackByPost === "object" ? feedReplyFeedbackByPost : {};
   const safeSetFeedReplyDraftByPost =
     typeof setFeedReplyDraftByPost === "function" ? setFeedReplyDraftByPost : null;
 
@@ -600,6 +608,10 @@ export default function FeedPage({ vm }: FeedPageProps) {
                               );
                               const pendingRequestCount = (pendingNodeRequests[post.nodeId] ?? []).length;
                               const requestDraft = String(replyDraftMap[postId] ?? "");
+                              const requestSubmitting = Boolean(replySubmittingMap[postId]);
+                              const requestFeedback = String(replyFeedbackMap[postId] ?? "");
+                              const requestFeedbackError =
+                                requestFeedback.includes("실패") || requestFeedback.includes("불가");
                               const isExpanded = feedExpandedByPost[postId] === true;
                               const isDraftPost = post.status === "draft";
                               const canRequest = post.nodeType === "turn";
@@ -736,16 +748,27 @@ export default function FeedPage({ vm }: FeedPageProps) {
                                             }
                                           }}
                                           placeholder="에이전트에게 추가 요청을 남기세요"
+                                          disabled={requestSubmitting}
                                           value={requestDraft}
                                         />
                                         <button
-                                          aria-label="요청 보내기"
+                                          aria-label={requestSubmitting ? "요청 전송 중" : "요청 보내기"}
                                           className="primary-action question-create-button feed-reply-send-button"
+                                          disabled={requestSubmitting || !requestDraft.trim()}
                                           onClick={() => onSubmitFeedAgentRequest(post)}
                                           type="button"
                                         >
                                           <img alt="" aria-hidden="true" className="question-create-icon" src="/up.svg" />
                                         </button>
+                                      </div>
+                                    )}
+                                    {canRequest && requestFeedback && (
+                                      <div
+                                        className={`feed-reply-feedback ${
+                                          requestFeedbackError ? "is-error" : "is-ok"
+                                        }`.trim()}
+                                      >
+                                        {requestFeedback}
                                       </div>
                                     )}
                                   </div>

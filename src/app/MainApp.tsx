@@ -663,6 +663,8 @@ function App() {
   const [feedExpandedByPost, setFeedExpandedByPost] = useState<Record<string, boolean>>({});
   const [feedShareMenuPostId, setFeedShareMenuPostId] = useState<string | null>(null);
   const [feedReplyDraftByPost, setFeedReplyDraftByPost] = useState<Record<string, string>>({});
+  const [feedReplySubmittingByPost, setFeedReplySubmittingByPost] = useState<Record<string, boolean>>({});
+  const [feedReplyFeedbackByPost, setFeedReplyFeedbackByPost] = useState<Record<string, string>>({});
   const [feedInspectorPostId, setFeedInspectorPostId] = useState("");
   const [feedInspectorSnapshotNode, setFeedInspectorSnapshotNode] = useState<GraphNode | null>(null);
   const [, setFeedInspectorRuleDocs] = useState<AgentRuleDoc[]>([]);
@@ -1557,72 +1559,82 @@ function buildFeedShareText(post: FeedViewPost, run: RunRecord | null): string {
   }
 
   async function onSubmitFeedAgentRequest(post: FeedViewPost) {
-    const draft = (feedReplyDraftByPost[post.id] ?? "").trim();
+    const postId = String(post.id ?? "");
+    const draft = (feedReplyDraftByPost[postId] ?? "").trim();
     if (!draft) {
       return;
     }
+    if (!postId || feedReplySubmittingByPost[postId]) {
+      return;
+    }
+    setFeedReplySubmittingByPost((prev) => ({ ...prev, [postId]: true }));
+    setFeedReplyFeedbackByPost((prev) => ({ ...prev, [postId]: "요청 전송 중..." }));
+    let replyFeedbackText = "";
     let node = graph.nodes.find((row) => row.id === post.nodeId);
     const existsInCurrentGraph = !!node && node.type === "turn";
 
-    if ((!node || node.type !== "turn") && post.sourceFile) {
-      const runRecord = await ensureFeedRunRecord(post.sourceFile);
-      const snapshotNode = runRecord?.graphSnapshot?.nodes?.find((row: any) => row?.id === post.nodeId) ?? null;
-      if (snapshotNode && snapshotNode.type === "turn") {
-        node = {
-          ...snapshotNode,
-          position:
-            snapshotNode.position && typeof snapshotNode.position === "object"
-              ? { ...snapshotNode.position }
-              : { x: 0, y: 0 },
-          config: JSON.parse(JSON.stringify(snapshotNode.config ?? {})),
-        } as GraphNode;
+    try {
+      if ((!node || node.type !== "turn") && post.sourceFile) {
+        const runRecord = await ensureFeedRunRecord(post.sourceFile);
+        const snapshotNode = runRecord?.graphSnapshot?.nodes?.find((row: any) => row?.id === post.nodeId) ?? null;
+        if (snapshotNode && snapshotNode.type === "turn") {
+          node = {
+            ...snapshotNode,
+            position:
+              snapshotNode.position && typeof snapshotNode.position === "object"
+                ? { ...snapshotNode.position }
+                : { x: 0, y: 0 },
+            config: JSON.parse(JSON.stringify(snapshotNode.config ?? {})),
+          } as GraphNode;
+        }
       }
-    }
 
-    if (!node || node.type !== "turn") {
-      setError("이 포스트의 원본 노드 정보를 찾을 수 없습니다.");
-      return;
-    }
-
-    if (isGraphRunning) {
-      if (!existsInCurrentGraph) {
-        setError("현재 실행 중인 그래프에 없는 포스트입니다. 실행 종료 후 추가 요청을 보내세요.");
+      if (!node || node.type !== "turn") {
+        setError("이 포스트의 원본 노드 정보를 찾을 수 없습니다.");
+        replyFeedbackText = "요청 불가: 원본 노드를 찾지 못했습니다.";
         return;
       }
+
+      if (isGraphRunning) {
+        if (!existsInCurrentGraph) {
+          setError("현재 실행 중인 그래프에 없는 포스트입니다. 실행 종료 후 추가 요청을 보내세요.");
+          replyFeedbackText = "요청 불가: 현재 실행 그래프에 없는 포스트입니다.";
+          return;
+        }
+        enqueueNodeRequest(node.id, draft);
+        setFeedReplyDraftByPost((prev) => ({
+          ...prev,
+          [postId]: "",
+        }));
+        setStatus(`${turnModelLabel(node)} 에이전트 요청을 큐에 추가했습니다.`);
+        replyFeedbackText = "요청이 대기열에 추가되었습니다.";
+        return;
+      }
+
       enqueueNodeRequest(node.id, draft);
       setFeedReplyDraftByPost((prev) => ({
         ...prev,
-        [post.id]: "",
+        [postId]: "",
       }));
-      setStatus(`${turnModelLabel(node)} 에이전트 요청을 큐에 추가했습니다.`);
-      return;
-    }
 
-    enqueueNodeRequest(node.id, draft);
-    setFeedReplyDraftByPost((prev) => ({
-      ...prev,
-      [post.id]: "",
-    }));
+      const oneOffRunId = `manual-${Date.now()}`;
+      const startedAt = new Date().toISOString();
+      const followupInput = [
+        post.question ? `[원래 질문]\n${post.question}` : "",
+        post.summary ? `[이전 결과 요약]\n${post.summary}` : "",
+        `[사용자 추가 요청]\n${draft}`,
+      ]
+        .filter(Boolean)
+        .join("\n\n");
 
-    const oneOffRunId = `manual-${Date.now()}`;
-    const startedAt = new Date().toISOString();
-    const followupInput = [
-      post.question ? `[원래 질문]\n${post.question}` : "",
-      post.summary ? `[이전 결과 요약]\n${post.summary}` : "",
-      `[사용자 추가 요청]\n${draft}`,
-    ]
-      .filter(Boolean)
-      .join("\n\n");
-
-    setNodeStatus(node.id, "running", "피드 추가 요청 실행 시작");
-    setNodeRuntimeFields(node.id, {
-      status: "running",
-      startedAt,
-      finishedAt: undefined,
-      durationMs: undefined,
-      error: undefined,
-    });
-    try {
+      setNodeStatus(node.id, "running", "피드 추가 요청 실행 시작");
+      setNodeRuntimeFields(node.id, {
+        status: "running",
+        startedAt,
+        finishedAt: undefined,
+        durationMs: undefined,
+        error: undefined,
+      });
       const startedAtMs = Date.now();
       const turnExecution = await executeTurnNodeWithOutputSchemaRetry(node, followupInput);
       const result = turnExecution.result;
@@ -1669,6 +1681,7 @@ function buildFeedShareText(post: FeedViewPost, run: RunRecord | null): string {
           ...prev,
         ]);
         setStatus("피드 추가 요청 실행 실패");
+        replyFeedbackText = "요청 실행 실패";
         return;
       }
 
@@ -1706,8 +1719,25 @@ function buildFeedShareText(post: FeedViewPost, run: RunRecord | null): string {
         ...prev,
       ]);
       setStatus("피드 추가 요청 실행 완료");
+      replyFeedbackText = "요청 실행 완료";
     } catch (error) {
       setError(`피드 추가 요청 실행 실패: ${String(error)}`);
+      replyFeedbackText = "요청 실행 실패";
+    } finally {
+      setFeedReplySubmittingByPost((prev) => {
+        if (!(postId in prev)) {
+          return prev;
+        }
+        const next = { ...prev };
+        delete next[postId];
+        return next;
+      });
+      if (replyFeedbackText) {
+        setFeedReplyFeedbackByPost((prev) => ({
+          ...prev,
+          [postId]: replyFeedbackText,
+        }));
+      }
     }
   }
 
@@ -7149,6 +7179,8 @@ ${prompt}`;
               buildFeedAvatarLabel,
               pendingNodeRequests,
               feedReplyDraftByPost,
+              feedReplySubmittingByPost,
+              feedReplyFeedbackByPost,
               feedExpandedByPost,
               onSelectFeedInspectorPost,
               onShareFeedPost,

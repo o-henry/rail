@@ -3130,6 +3130,25 @@ h3 {
   justify-self: end;
 }
 
+.feed-reply-row .feed-reply-send-button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.feed-reply-feedback {
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.feed-reply-feedback.is-ok {
+  color: #2f5bb7;
+}
+
+.feed-reply-feedback.is-error {
+  color: #b24a4a;
+}
+
 .history-list,
 .history-detail {
   display: grid;
