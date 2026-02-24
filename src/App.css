@@ -2976,6 +2976,19 @@ h3 {
   border-radius: 12px;
 }
 
+.history-layout,
+.history-layout h2,
+.history-layout h3,
+.history-layout div,
+.history-layout span,
+.history-layout button {
+  font-family: "BasicallyAMono", "DialogNanumBody1984", "Noto Sans KR", sans-serif;
+}
+
+.history-layout pre {
+  font-family: "BasicallyAMono", "DialogNanumBody1984", "Noto Sans KR", monospace;
+}
+
 .history-list button.is-active {
   background: #eaf2ff;
   border-color: #b9cefa;
