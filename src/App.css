@@ -1648,6 +1648,7 @@ h3 {
 .usage-result {
   display: grid;
   gap: 6px;
+  margin-top: 1rem;
 }
 
 .usage-result pre {
@@ -1895,7 +1896,8 @@ h3 {
 
 .settings-run-history-head h3 {
   margin: 0;
-  font-family: "Galmuri14", "DialogNanumBody1984", "Noto Sans KR", sans-serif;
+  font-family: "DialogNanumBody1984", "Noto Sans KR", sans-serif;
+  font-size: 13px;
 }
 
 .settings-history-layout {
@@ -3091,7 +3093,8 @@ pre {
 
 .bridge-view h2 {
   font-size: 14px;
-  font-family: Galmuri14;
+  /* font-family: Galmuri14; */
+  font-family: "DialogNanumBody1984";
 }
 
 .bridge-head-panel,

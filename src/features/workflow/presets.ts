@@ -13,6 +13,8 @@ const QUALITY_DEFAULT_THRESHOLD = 70;
 const QUALITY_THRESHOLD_MIN = 10;
 const QUALITY_THRESHOLD_MAX = 100;
 const QUALITY_THRESHOLD_STEP = 10;
+const PREPROCESS_NODE_SHIFT_X = 300;
+const PREPROCESS_NODE_X = 120;
 
 function defaultKnowledgeConfig(): KnowledgeConfig {
   return {
@@ -62,6 +64,14 @@ const DEFAULT_PRESET_TURN_POLICY: PresetTurnPolicy = {
 
 function resolvePresetTurnPolicy(kind: PresetKind, nodeId: string): PresetTurnPolicy {
   const key = nodeId.toLowerCase();
+  if (key.includes("preprocess")) {
+    return {
+      ...DEFAULT_PRESET_TURN_POLICY,
+      profile: "design_planning",
+      threshold: 76,
+      artifactType: "RequirementArtifact",
+    };
+  }
 
   if (kind === "validation") {
     if (key.includes("intake")) {
@@ -403,6 +413,117 @@ export function simplifyPresetForSimpleWorkflow(graphData: GraphData, simpleWork
     ...graphData,
     nodes: turnNodes,
     edges: nextEdges,
+  };
+}
+
+function presetIntentByKind(kind: PresetKind): string {
+  if (kind === "validation") return "검증 가능한 결론 도출";
+  if (kind === "development") return "개발 실행 가능한 계획/구현";
+  if (kind === "research") return "근거 중심 조사/분석";
+  if (kind === "expert") return "전문가 수준 의사결정";
+  if (kind === "unityGame") return "유니티 게임 개발 실행";
+  if (kind === "fullstack") return "풀스택 제품 구현";
+  if (kind === "creative") return "창의 아이디어를 실행 가능한 제안으로 전환";
+  return "뉴스/트렌드 기반 판단";
+}
+
+function buildPreprocessPrompt(kind: PresetKind): string {
+  const intent = presetIntentByKind(kind);
+  return (
+    "당신은 사용자 요구사항 전처리 전담 에이전트다.\n" +
+    "목표: 사용자의 모호한 요청을 실행 가능한 브리프로 정제하고, 이후 멀티에이전트가 놓치기 쉬운 필수 요소를 강제한다.\n" +
+    "중요: 원문 의도를 왜곡하지 말고, 필요한 경우 보수적 가정을 명시하라.\n" +
+    "반드시 아래 JSON만 출력하라:\n" +
+    "{\n" +
+    '  "intent":"...",\n' +
+    '  "userGoal":"...",\n' +
+    '  "requiredOutputs":["..."],\n' +
+    '  "constraints":["..."],\n' +
+    '  "assumptions":["..."],\n' +
+    '  "acceptanceCriteria":["..."],\n' +
+    '  "riskChecklist":["..."],\n' +
+    '  "selfValidationPlan":["정확성","완전성","실행가능성","누락여부"],\n' +
+    `  "templateIntent":"${intent}"\n` +
+    "}\n" +
+    "질문: {{input}}"
+  );
+}
+
+function prependPreprocessAgent(kind: PresetKind, graphData: GraphData): GraphData {
+  const preprocessNodeId = `turn-${kind}-preprocess`;
+  if (graphData.nodes.some((node) => node.id === preprocessNodeId)) {
+    return graphData;
+  }
+
+  const incomingIds = new Set(graphData.edges.map((edge) => edge.to.nodeId));
+  let rootNodes = graphData.nodes.filter((node) => !incomingIds.has(node.id));
+  if (rootNodes.length === 0 && graphData.nodes.length > 0) {
+    rootNodes = [graphData.nodes[0]];
+  }
+
+  const avgRootY =
+    rootNodes.length > 0
+      ? Math.round(rootNodes.reduce((sum, node) => sum + node.position.y, 0) / rootNodes.length)
+      : 120;
+
+  const preprocessNode = makePresetNode(preprocessNodeId, "turn", PREPROCESS_NODE_X, avgRootY, {
+    model: "GPT-5.3-Codex",
+    role: "REQUEST PREPROCESS AGENT",
+    cwd: ".",
+    promptTemplate: buildPreprocessPrompt(kind),
+  });
+
+  const shiftedNodes = graphData.nodes.map((node) => ({
+    ...node,
+    position: {
+      ...node.position,
+      x: node.position.x + PREPROCESS_NODE_SHIFT_X,
+    },
+  }));
+
+  const preprocessEdges: GraphEdge[] = rootNodes.map((node) => ({
+    from: { nodeId: preprocessNodeId, port: "out" },
+    to: { nodeId: node.id, port: "in" },
+  }));
+
+  return {
+    ...graphData,
+    nodes: [preprocessNode, ...shiftedNodes],
+    edges: [...preprocessEdges, ...graphData.edges],
+  };
+}
+
+function applyRoleDisciplinePrompt(graphData: GraphData): GraphData {
+  return {
+    ...graphData,
+    nodes: graphData.nodes.map((node) => {
+      if (node.type !== "turn") {
+        return node;
+      }
+      const config = node.config as TurnConfig;
+      const role = String(config.role ?? "SPECIALIST AGENT").trim() || "SPECIALIST AGENT";
+      const body = String(config.promptTemplate ?? "{{input}}").trim() || "{{input}}";
+      if (body.includes("__ROLE_DISCIPLINE__")) {
+        return node;
+      }
+
+      const discipline =
+        "__ROLE_DISCIPLINE__\n" +
+        `당신은 ${role} 역할이다.\n` +
+        "역할 규율:\n" +
+        "1) 담당 범위 외 결론/판정/구현을 임의 확정하지 않는다.\n" +
+        "2) 입력이 불완전하면 치명적 누락 항목을 먼저 드러내고 보수적 가정을 명시한다.\n" +
+        "3) 산출 전 자기검증(정확성/완전성/실행가능성/근거충분성)을 수행한다.\n" +
+        "4) 출력은 다음 에이전트가 재사용 가능한 구조로 작성한다.\n";
+
+      return {
+        ...node,
+        config: {
+          ...config,
+          promptTemplate: `${discipline}\n${body}`,
+        },
+      };
+    }),
   };
 }
 
@@ -1027,26 +1148,24 @@ function buildNewsTrendPreset(): GraphData {
 }
 
 export function buildPresetGraphByKind(kind: PresetKind): GraphData {
+  let base: GraphData;
   if (kind === "validation") {
-    return buildValidationPreset();
+    base = buildValidationPreset();
+  } else if (kind === "development") {
+    base = buildDevelopmentPreset();
+  } else if (kind === "research") {
+    base = buildResearchPreset();
+  } else if (kind === "unityGame") {
+    base = buildUnityGamePreset();
+  } else if (kind === "fullstack") {
+    base = buildFullstackPreset();
+  } else if (kind === "creative") {
+    base = buildCreativePreset();
+  } else if (kind === "newsTrend") {
+    base = buildNewsTrendPreset();
+  } else {
+    base = buildExpertPreset();
   }
-  if (kind === "development") {
-    return buildDevelopmentPreset();
-  }
-  if (kind === "research") {
-    return buildResearchPreset();
-  }
-  if (kind === "unityGame") {
-    return buildUnityGamePreset();
-  }
-  if (kind === "fullstack") {
-    return buildFullstackPreset();
-  }
-  if (kind === "creative") {
-    return buildCreativePreset();
-  }
-  if (kind === "newsTrend") {
-    return buildNewsTrendPreset();
-  }
-  return buildExpertPreset();
+  const withPreprocess = prependPreprocessAgent(kind, base);
+  return applyRoleDisciplinePrompt(withPreprocess);
 }
