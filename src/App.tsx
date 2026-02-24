@@ -1369,7 +1369,9 @@ function buildFeedSummary(status: FeedPostStatus, output: unknown, error?: strin
   if (status !== "done") {
     return error?.trim() || "실행 실패로 상세 로그 확인이 필요합니다.";
   }
-  const outputText = extractFinalAnswer(output).trim();
+  const outputText = toHumanReadableFeedText(
+    extractFinalAnswer(output).trim() || stringifyInput(output).trim(),
+  );
   if (!outputText) {
     return "실행은 완료되었지만 표시할 결과 텍스트가 없습니다.";
   }
@@ -1439,10 +1441,12 @@ function buildFeedPost(input: FeedBuildInput): {
   const steps = summarizeFeedSteps(logs);
   const summary = buildFeedSummary(input.status, input.output, input.error, input.summary);
   const inputSources = normalizeFeedInputSources(input.inputSources);
-  const inputContextRaw = stringifyInput(input.inputData).trim();
+  const inputContextRaw = toHumanReadableFeedText(stringifyInput(input.inputData).trim());
   const inputContextClip = inputContextRaw ? clipTextByChars(inputContextRaw, 1200) : null;
   const inputContextMasked = inputContextClip ? redactSensitiveText(inputContextClip.text) : "";
-  const outputText = extractFinalAnswer(input.output).trim() || stringifyInput(input.output).trim();
+  const outputText = toHumanReadableFeedText(
+    extractFinalAnswer(input.output).trim() || stringifyInput(input.output).trim(),
+  );
   const logsText = logs.length > 0 ? logs.join("\n") : "(로그 없음)";
   const markdownRaw = [
     `# ${agentName}`,
@@ -1903,6 +1907,101 @@ function stringifyInput(input: unknown): string {
     return input;
   }
   return formatUnknown(input);
+}
+
+function decodeEscapedControlText(input: string): string {
+  const source = String(input ?? "");
+  if (!source) {
+    return "";
+  }
+  const escapedControlCount = (source.match(/\\n|\\r\\n|\\t/g) ?? []).length;
+  if (escapedControlCount === 0) {
+    return source;
+  }
+  return source
+    .replace(/\\r\\n/g, "\n")
+    .replace(/\\n/g, "\n")
+    .replace(/\\t/g, "\t")
+    .replace(/\\"/g, '"')
+    .replace(/\\\//g, "/")
+    .replace(/\\\\/g, "\\");
+}
+
+function tryParseJsonText(input: string): unknown | null {
+  const trimmed = String(input ?? "").trim();
+  if (!trimmed) {
+    return null;
+  }
+  if (!(trimmed.startsWith("{") || trimmed.startsWith("["))) {
+    return null;
+  }
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    return null;
+  }
+}
+
+function extractReadableTextFromPayload(input: unknown): string | null {
+  if (typeof input === "string") {
+    const trimmed = input.trim();
+    return trimmed ? trimmed : null;
+  }
+  if (!input || typeof input !== "object") {
+    return null;
+  }
+  const row = input as Record<string, unknown>;
+  const directCandidates: unknown[] = [
+    row.text,
+    row.content,
+    row.message,
+    (row.payload as Record<string, unknown> | undefined)?.text,
+    (row.payload as Record<string, unknown> | undefined)?.content,
+    (row.artifact as Record<string, unknown> | undefined)?.text,
+    ((row.artifact as Record<string, unknown> | undefined)?.payload as Record<string, unknown> | undefined)?.text,
+    (row.output as Record<string, unknown> | undefined)?.text,
+    (row.response as Record<string, unknown> | undefined)?.text,
+  ];
+  for (const candidate of directCandidates) {
+    if (typeof candidate !== "string") {
+      continue;
+    }
+    const trimmed = candidate.trim();
+    if (trimmed) {
+      return trimmed;
+    }
+  }
+  return null;
+}
+
+function toHumanReadableFeedText(input: string): string {
+  let current = String(input ?? "").trim();
+  if (!current) {
+    return "";
+  }
+
+  current = decodeEscapedControlText(current).trim();
+
+  for (let depth = 0; depth < 3; depth += 1) {
+    const parsed = tryParseJsonText(current);
+    if (parsed == null) {
+      break;
+    }
+
+    const extracted = extractReadableTextFromPayload(parsed);
+    if (extracted) {
+      const next = decodeEscapedControlText(extracted).trim();
+      if (next && next !== current) {
+        current = next;
+        continue;
+      }
+    }
+
+    current = JSON.stringify(parsed, null, 2);
+    break;
+  }
+
+  return current;
 }
 
 function replaceInputPlaceholder(template: string, value: string): string {
@@ -3386,7 +3485,7 @@ function App() {
 
 function buildFeedShareText(post: FeedViewPost, run: RunRecord | null): string {
     const markdownAttachment = post.attachments.find((attachment) => attachment.kind === "markdown");
-    const rawContent = markdownAttachment?.content?.trim() ?? "";
+    const rawContent = toHumanReadableFeedText(markdownAttachment?.content?.trim() ?? "");
     const visibleSteps = normalizeFeedSteps(post.steps);
     const lines: string[] = [
       `# ${post.agentName}`,
@@ -3400,14 +3499,15 @@ function buildFeedShareText(post: FeedViewPost, run: RunRecord | null): string {
     if (post.sourceFile) {
       lines.push(`- 기록 파일: ${formatRunFileLabel(post.sourceFile)}`);
     }
-  if (post.question?.trim()) {
-    lines.push("", "## 질문", post.question.trim());
+  const normalizedQuestion = toHumanReadableFeedText(post.question?.trim() ?? "");
+  if (normalizedQuestion) {
+    lines.push("", "## 질문", normalizedQuestion);
   }
   if (Array.isArray(post.inputSources) && post.inputSources.length > 0) {
     lines.push("", "## 입력 출처", ...post.inputSources.map((source) => `- ${formatFeedInputSourceLabel(source)}`));
   }
   if (post.inputContext?.preview) {
-    lines.push("", "## 전달 입력 스냅샷", post.inputContext.preview);
+    lines.push("", "## 전달 입력 스냅샷", toHumanReadableFeedText(post.inputContext.preview));
   }
   lines.push("", "## 요약", post.summary?.trim() || "(요약 없음)");
     if (visibleSteps.length > 0) {
@@ -9468,7 +9568,10 @@ ${prompt}`;
                           <div className="feed-run-group-posts">
                             {group.posts.map((post) => {
                               const markdownAttachment = post.attachments.find((attachment) => attachment.kind === "markdown");
-                              const visibleContent = markdownAttachment?.content ?? post.summary ?? "(첨부 없음)";
+                              const visibleContentRaw = markdownAttachment?.content ?? post.summary ?? "(첨부 없음)";
+                              const visibleContent = toHumanReadableFeedText(visibleContentRaw);
+                              const readableQuestion = toHumanReadableFeedText(post.question ?? "");
+                              const readableInputPreview = toHumanReadableFeedText(post.inputContext?.preview ?? "");
                               const avatarHue = hashStringToHue(`${post.nodeId}:${post.agentName}:${post.roleLabel}`);
                               const avatarStyle = {
                                 backgroundColor: `hsl(${avatarHue} 78% 92%)`,
@@ -9576,16 +9679,16 @@ ${prompt}`;
                                           ))}
                                         </ul>
                                       </section>
-                                    ) : post.question ? (
-                                      <div className="feed-card-question">Q: {post.question}</div>
+                                    ) : readableQuestion ? (
+                                      <div className="feed-card-question">Q: {readableQuestion}</div>
                                     ) : null}
-                                    {post.inputContext?.preview && (
+                                    {readableInputPreview && (
                                       <section className="feed-card-input-sources">
                                         <div className="feed-card-input-sources-title">
                                           전달 입력 스냅샷
-                                          {post.inputContext.truncated ? " (일부)" : ""}
+                                          {post.inputContext?.truncated ? " (일부)" : ""}
                                         </div>
-                                        <pre className="feed-sns-content">{post.inputContext.preview}</pre>
+                                        <pre className="feed-sns-content">{readableInputPreview}</pre>
                                       </section>
                                     )}
                                     <pre className="feed-sns-content">{visibleContent}</pre>
