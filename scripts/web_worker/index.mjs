@@ -712,6 +712,7 @@ async function handleBridgeHttpRequest(req, res) {
       writeHttpJson(req, res, 400, { ok: false, error: `unsupported provider: ${provider}` });
       return;
     }
+    recordBridgeSeen(provider, pageUrl);
     const task = claimBridgeTask(provider, pageUrl);
     if (!task) {
       writeHttpJson(req, res, 200, { ok: true, task: null });
@@ -727,6 +728,37 @@ async function handleBridgeHttpRequest(req, res) {
         timeoutMs: task.timeoutMs,
       },
     });
+    return;
+  }
+
+  if (pathname === '/v1/bridge/event' && req.method === 'POST') {
+    let body = {};
+    try {
+      body = await readJsonBody(req);
+    } catch (error) {
+      writeHttpJson(req, res, 400, {
+        ok: false,
+        error: error?.message || String(error),
+      });
+      return;
+    }
+    const provider = String(body.provider ?? '').trim().toLowerCase();
+    if (!SESSION_PROVIDER_CONFIG[provider]) {
+      writeHttpJson(req, res, 400, { ok: false, error: `unsupported provider: ${provider}` });
+      return;
+    }
+    const pageUrl = sanitizeUrlForUi(String(body.pageUrl ?? '').trim()) ?? null;
+    recordBridgeSeen(provider, pageUrl);
+    const level = String(body.level ?? 'info').trim().toLowerCase();
+    const code = String(body.code ?? '').trim();
+    const message = String(body.message ?? '').trim() || '웹 연결 확장 이벤트';
+    const prefix = code ? `${code}: ` : '';
+    bridgeProgress(
+      provider,
+      level === 'error' ? 'bridge_extension_error' : 'bridge_extension_event',
+      `${prefix}${message}`,
+    );
+    writeHttpJson(req, res, 200, { ok: true });
     return;
   }
 

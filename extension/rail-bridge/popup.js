@@ -59,10 +59,6 @@ async function writeSessionConfig(values) {
   await chrome.storage.session.set(values);
 }
 
-async function removeLocalToken() {
-  await chrome.storage.local.remove([TOKEN_KEY]);
-}
-
 async function loadConfig() {
   const [sessionStored, localStored] = await Promise.all([
     readSessionConfig(),
@@ -75,7 +71,6 @@ async function loadConfig() {
 
   if (!sessionToken && localToken) {
     await writeSessionConfig({ [TOKEN_KEY]: localToken });
-    await removeLocalToken();
   }
 
   urlInput.value = nextUrl;
@@ -94,11 +89,10 @@ async function saveConfig() {
     return;
   }
   await Promise.all([
-    chrome.storage.local.set({ [URL_KEY]: nextUrl }),
+    chrome.storage.local.set({ [URL_KEY]: nextUrl, [TOKEN_KEY]: nextToken }),
     writeSessionConfig({ [URL_KEY]: nextUrl, [TOKEN_KEY]: nextToken }),
-    removeLocalToken(),
   ]);
-  setStatus("저장 완료 (토큰은 브라우저 세션에만 저장됨)");
+  setStatus("저장 완료 (토큰은 세션/로컬 동시 저장)");
 }
 
 async function testConnection() {

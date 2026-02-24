@@ -5049,6 +5049,9 @@ function App() {
                 } else if (providerKey && stage === "bridge_waiting_user_send") {
                   clearWebBridgeStageWarnTimer(providerKey);
                   setStatus(`${webProviderLabel(providerKey)} 탭에서 전송 1회가 필요합니다.`);
+                } else if (providerKey && stage === "bridge_extension_error") {
+                  clearWebBridgeStageWarnTimer(providerKey);
+                  setStatus(`${webProviderLabel(providerKey)} 웹 연결 오류 - 확장 연결 상태를 확인하세요.`);
                 } else if (providerKey && stage === "bridge_done") {
                   clearWebBridgeStageWarnTimer(providerKey);
                   setStatus(`${webProviderLabel(providerKey)} 응답 수집 완료`);
@@ -8249,8 +8252,8 @@ ${prompt}`;
         activeWebProviderRef.current = webProvider;
         activeWebPromptRef.current[webProvider] = textToSend;
         addNodeLog(node.id, `[WEB] ${webProviderLabel(webProvider)} 웹 연결 반자동 시작`);
-        addNodeLog(node.id, "[WEB] 웹 서비스 탭에서 전송 버튼을 1회 눌러주세요.");
-        setStatus(`${webProviderLabel(webProvider)} 웹 연결 대기 중 - 웹 탭에서 전송 1회 필요`);
+        addNodeLog(node.id, "[WEB] 프롬프트 자동 주입/전송을 시도합니다. 자동 전송 실패 시 웹 탭에서 전송 1회가 필요합니다.");
+        setStatus(`${webProviderLabel(webProvider)} 웹 연결 대기 중 - 자동 주입/전송 준비`);
         try {
           await openUrl(webProviderHomeUrl(webProvider));
           addNodeLog(node.id, `[WEB] ${webProviderLabel(webProvider)} 웹 탭을 자동으로 열었습니다.`);
@@ -9229,7 +9232,7 @@ ${prompt}`;
             토큰 저장 위치: {webBridgeStatus.tokenStorage === "memory" ? "메모리 세션(앱 종료 시 폐기)" : "확인 필요"}
           </div>
           <div className="usage-method">
-            실행 후 해당 웹 탭에서 전송 버튼을 1회 눌러야 답변 수집이 시작됩니다.
+            실행 시 프롬프트 자동 주입/전송을 먼저 시도하며, 자동 전송 실패 시에만 웹 탭에서 전송 1회가 필요합니다.
           </div>
           <div className="usage-method">
             고급 보안(선택): `RAIL_WEB_BRIDGE_ALLOWED_EXTENSION_IDS` 설정 시 등록한 확장 ID만 허용합니다.

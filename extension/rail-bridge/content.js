@@ -23,6 +23,11 @@ const PROVIDER_CONFIG = {
       "main .markdown",
       "main .prose",
     ],
+    submitSelectors: [
+      'button[aria-label*="Send" i]',
+      'button[aria-label*="전송" i]',
+      'button[type="submit"]',
+    ],
   },
   gpt: {
     hostMatch: (host) => host === "chatgpt.com",
@@ -40,6 +45,11 @@ const PROVIDER_CONFIG = {
       "main .markdown",
       "main .prose",
     ],
+    submitSelectors: [
+      'button[data-testid*="send" i]',
+      'button[aria-label*="Send" i]',
+      'button[type="submit"]',
+    ],
   },
   grok: {
     hostMatch: (host) => host === "grok.com",
@@ -54,6 +64,11 @@ const PROVIDER_CONFIG = {
       "main article",
       "main .markdown",
       "main .prose",
+    ],
+    submitSelectors: [
+      'button[aria-label*="Send" i]',
+      'button[data-testid*="send" i]',
+      'button[type="submit"]',
     ],
   },
   perplexity: {
@@ -70,6 +85,11 @@ const PROVIDER_CONFIG = {
       "main .markdown",
       "main .prose",
     ],
+    submitSelectors: [
+      'button[aria-label*="Submit" i]',
+      'button[aria-label*="Send" i]',
+      'button[type="submit"]',
+    ],
   },
   claude: {
     hostMatch: (host) => host === "claude.ai",
@@ -84,6 +104,10 @@ const PROVIDER_CONFIG = {
       "main article",
       "main .markdown",
       "main .prose",
+    ],
+    submitSelectors: [
+      'button[aria-label*="Send" i]',
+      'button[type="submit"]',
     ],
   },
 };
@@ -102,6 +126,8 @@ let bridgeUrl = DEFAULT_BRIDGE_URL;
 let bridgeToken = "";
 let claimInFlight = false;
 let activeTask = null;
+let lastBridgeErrorText = "";
+let lastBridgeErrorAt = 0;
 
 function normalizeBridgeUrl(raw) {
   const validated = validateBridgeUrl(raw);
@@ -163,8 +189,58 @@ async function loadBridgeConfig() {
 
   if (!sessionToken && localToken) {
     await writeSessionBridgeConfig({ [TOKEN_KEY]: localToken });
-    await chrome.storage.local.remove([TOKEN_KEY]);
   }
+}
+
+function isSendButtonCandidate(element) {
+  if (!(element instanceof HTMLElement)) {
+    return false;
+  }
+  if (!isElementVisible(element)) {
+    return false;
+  }
+  if ("disabled" in element && element.disabled) {
+    return false;
+  }
+  if (element.getAttribute("aria-disabled") === "true") {
+    return false;
+  }
+  return true;
+}
+
+function clickSendButton(provider) {
+  const selectors = PROVIDER_CONFIG[provider]?.submitSelectors ?? [];
+  for (const selector of selectors) {
+    const element = document.querySelector(selector);
+    if (!isSendButtonCandidate(element)) {
+      continue;
+    }
+    element.click();
+    return true;
+  }
+  return false;
+}
+
+function trySendWithEnter(inputElement) {
+  if (!(inputElement instanceof HTMLElement)) {
+    return false;
+  }
+  inputElement.focus();
+  const enterDown = new KeyboardEvent("keydown", {
+    key: "Enter",
+    code: "Enter",
+    bubbles: true,
+    cancelable: true,
+  });
+  const enterUp = new KeyboardEvent("keyup", {
+    key: "Enter",
+    code: "Enter",
+    bubbles: true,
+    cancelable: true,
+  });
+  const downAccepted = inputElement.dispatchEvent(enterDown);
+  inputElement.dispatchEvent(enterUp);
+  return downAccepted;
 }
 
 function isElementVisible(element) {
@@ -333,6 +409,16 @@ async function postTaskResult(text) {
   });
 }
 
+async function postBridgeEvent(code, message, provider) {
+  await callBridge("/v1/bridge/event", {
+    provider,
+    level: "error",
+    code,
+    message,
+    pageUrl: window.location.href,
+  });
+}
+
 async function runTask(taskPayload) {
   const provider = detectProvider();
   if (!provider || provider !== taskPayload.provider) {
@@ -355,7 +441,12 @@ async function runTask(taskPayload) {
     }
     writePromptToInput(input, activeTask.prompt);
     await postTaskStage("prompt_filled", "프롬프트 자동 주입 완료");
-    await postTaskStage("waiting_user_send", "사용자 전송 클릭 대기");
+    const autoSent = clickSendButton(provider) || trySendWithEnter(input);
+    if (autoSent) {
+      await postTaskStage("responding", "전송 자동 클릭 완료");
+    } else {
+      await postTaskStage("waiting_user_send", "자동 전송 실패: 사용자 전송 클릭 대기");
+    }
     const text = await waitForResponse(provider, activeTask.prompt, timeoutMs);
     if (!text) {
       throw new Error("TIMEOUT");
@@ -391,8 +482,18 @@ async function tick() {
       return;
     }
     await runTask(payload.task);
-  } catch {
-    // noop: worker/app side handles status
+  } catch (error) {
+    const message = String(error ?? "unknown bridge error");
+    const now = Date.now();
+    if (message !== lastBridgeErrorText || now - lastBridgeErrorAt > 5_000) {
+      lastBridgeErrorText = message;
+      lastBridgeErrorAt = now;
+      try {
+        await postBridgeEvent("CLAIM_FAILED", message, provider);
+      } catch {
+        // ignore secondary error
+      }
+    }
   } finally {
     claimInFlight = false;
   }
