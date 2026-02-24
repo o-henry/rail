@@ -10354,6 +10354,7 @@ ${prompt}`;
                       >
                         <div style={{ minHeight: 0, overflow: "hidden", display: "grid", gap: "6px" }}>
                           <input
+                            className="graph-rename-input"
                             onChange={(event) => setGraphRenameDraft(event.currentTarget.value)}
                             onKeyDown={(event) => {
                               if (event.key === "Enter") {

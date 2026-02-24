@@ -549,6 +549,13 @@ h3 {
   gap: 6px;
 }
 
+.graph-rename-input:focus,
+.graph-rename-input:focus-visible {
+  outline: none;
+  border-color: transparent;
+  box-shadow: none;
+}
+
 .knowledge-file-input {
   display: none;
 }
