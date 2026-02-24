@@ -3130,6 +3130,42 @@ pre {
   width: min(860px, 100%);
 }
 
+.web-turn-floating {
+  position: fixed;
+  z-index: 46;
+  width: min(860px, calc(100vw - 24px));
+  max-height: calc(100vh - 24px);
+  overflow: auto;
+  box-shadow: 0 14px 36px rgba(8, 19, 38, 0.28);
+}
+
+.web-turn-floating.is-dragging {
+  cursor: grabbing;
+}
+
+.web-turn-drag-handle {
+  margin: -14px -14px 2px;
+  padding: 10px 14px;
+  border-bottom: 1px solid #d6dce3;
+  border-radius: 5px 5px 0 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  user-select: none;
+  cursor: grab;
+  background: #ffffff;
+}
+
+.web-turn-drag-handle h2 {
+  margin: 0;
+}
+
+.web-turn-drag-handle span {
+  font-size: 11px;
+  color: #6b7384;
+}
+
 .web-turn-prompt {
   max-height: 180px;
   overflow: auto;

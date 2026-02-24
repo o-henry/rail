@@ -1,6 +1,7 @@
 import {
   KeyboardEvent as ReactKeyboardEvent,
   MouseEvent as ReactMouseEvent,
+  PointerEvent as ReactPointerEvent,
   WheelEvent as ReactWheelEvent,
   useEffect,
   useMemo,
@@ -508,6 +509,11 @@ const AUTH_LOGIN_REQUIRED_GRACE_MS = 120_000;
 const CODEX_LOGIN_COOLDOWN_MS = 45_000;
 const WEB_BRIDGE_CLAIM_WARN_MS = 8_000;
 const WEB_BRIDGE_PROMPT_FILLED_WARN_MS = 8_000;
+const WEB_TURN_FLOATING_DEFAULT_X = 24;
+const WEB_TURN_FLOATING_DEFAULT_Y = 92;
+const WEB_TURN_FLOATING_MARGIN = 12;
+const WEB_TURN_FLOATING_MIN_VISIBLE_WIDTH = 120;
+const WEB_TURN_FLOATING_MIN_VISIBLE_HEIGHT = 72;
 const SIMPLE_WORKFLOW_UI = true;
 const KNOWLEDGE_TOP_K_OPTIONS: FancySelectOption[] = [
   { value: "0", label: "0개" },
@@ -2714,6 +2720,11 @@ function App() {
   const [pendingWebTurn, setPendingWebTurn] = useState<PendingWebTurn | null>(null);
   const [suspendedWebTurn, setSuspendedWebTurn] = useState<PendingWebTurn | null>(null);
   const [suspendedWebResponseDraft, setSuspendedWebResponseDraft] = useState("");
+  const [webTurnFloatingPosition, setWebTurnFloatingPosition] = useState({
+    x: WEB_TURN_FLOATING_DEFAULT_X,
+    y: WEB_TURN_FLOATING_DEFAULT_Y,
+  });
+  const [webTurnDragging, setWebTurnDragging] = useState(false);
   const [pendingWebLogin, setPendingWebLogin] = useState<PendingWebLogin | null>(null);
   const [webResponseDraft, setWebResponseDraft] = useState("");
   const [, setWebWorkerHealth] = useState<WebWorkerHealth>({
@@ -2840,6 +2851,14 @@ function App() {
   const agentRulesCacheRef = useRef<Record<string, { loadedAt: number; docs: AgentRuleDoc[] }>>({});
   const runStartGuardRef = useRef(false);
   const pendingWebTurnAutoOpenKeyRef = useRef("");
+  const webTurnFloatingRef = useRef<HTMLElement | null>(null);
+  const webTurnDragRef = useRef<{
+    pointerId: number;
+    startX: number;
+    startY: number;
+    originX: number;
+    originY: number;
+  } | null>(null);
   const pendingWebLoginAutoOpenKeyRef = useRef("");
   const authLoginRequiredProbeCountRef = useRef(0);
   const lastAuthenticatedAtRef = useRef<number>(defaultLoginCompleted ? Date.now() : 0);
@@ -4447,6 +4466,82 @@ function buildFeedShareText(post: FeedViewPost, run: RunRecord | null): string {
     return () => window.clearInterval(timer);
   }, [hasActiveNodeRuntime]);
 
+  function clampWebTurnFloatingPosition(nextX: number, nextY: number) {
+    const panel = webTurnFloatingRef.current;
+    const panelWidth = panel?.offsetWidth ?? 860;
+    const panelHeight = panel?.offsetHeight ?? 540;
+    const maxX = window.innerWidth - WEB_TURN_FLOATING_MARGIN - WEB_TURN_FLOATING_MIN_VISIBLE_WIDTH;
+    const maxY = window.innerHeight - WEB_TURN_FLOATING_MARGIN - WEB_TURN_FLOATING_MIN_VISIBLE_HEIGHT;
+    const minX = WEB_TURN_FLOATING_MARGIN - Math.max(0, panelWidth - WEB_TURN_FLOATING_MIN_VISIBLE_WIDTH);
+    const minY = WEB_TURN_FLOATING_MARGIN - Math.max(0, panelHeight - WEB_TURN_FLOATING_MIN_VISIBLE_HEIGHT);
+    return {
+      x: Math.min(Math.max(nextX, minX), Math.max(maxX, minX)),
+      y: Math.min(Math.max(nextY, minY), Math.max(maxY, minY)),
+    };
+  }
+
+  function onWebTurnDragStart(event: ReactPointerEvent<HTMLDivElement>) {
+    if (event.button !== 0) {
+      return;
+    }
+    webTurnDragRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      originX: webTurnFloatingPosition.x,
+      originY: webTurnFloatingPosition.y,
+    };
+    setWebTurnDragging(true);
+    event.preventDefault();
+  }
+
+  useEffect(() => {
+    if (!webTurnDragging) {
+      return;
+    }
+    const onPointerMove = (event: PointerEvent) => {
+      const dragState = webTurnDragRef.current;
+      if (!dragState || event.pointerId !== dragState.pointerId) {
+        return;
+      }
+      const deltaX = event.clientX - dragState.startX;
+      const deltaY = event.clientY - dragState.startY;
+      const next = clampWebTurnFloatingPosition(dragState.originX + deltaX, dragState.originY + deltaY);
+      setWebTurnFloatingPosition(next);
+      event.preventDefault();
+    };
+    const onPointerEnd = (event: PointerEvent) => {
+      const dragState = webTurnDragRef.current;
+      if (!dragState || event.pointerId !== dragState.pointerId) {
+        return;
+      }
+      webTurnDragRef.current = null;
+      setWebTurnDragging(false);
+    };
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", onPointerEnd);
+    window.addEventListener("pointercancel", onPointerEnd);
+    return () => {
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", onPointerEnd);
+      window.removeEventListener("pointercancel", onPointerEnd);
+    };
+  }, [webTurnDragging]);
+
+  useEffect(() => {
+    if (!pendingWebTurn) {
+      return;
+    }
+    const snap = () => {
+      setWebTurnFloatingPosition((prev) => clampWebTurnFloatingPosition(prev.x, prev.y));
+    };
+    snap();
+    window.addEventListener("resize", snap);
+    return () => {
+      window.removeEventListener("resize", snap);
+    };
+  }, [pendingWebTurn]);
+
   async function ensureWebWorkerReady() {
     try {
       await invoke("web_worker_start");
@@ -4501,6 +4596,8 @@ function buildFeedShareText(post: FeedViewPost, run: RunRecord | null): string {
     if (!pendingWebTurn) {
       return;
     }
+    webTurnDragRef.current = null;
+    setWebTurnDragging(false);
     setSuspendedWebTurn(pendingWebTurn);
     setSuspendedWebResponseDraft(webResponseDraft);
     setPendingWebTurn(null);
@@ -6393,6 +6490,8 @@ function buildFeedShareText(post: FeedViewPost, run: RunRecord | null): string {
   function resolvePendingWebTurn(result: { ok: boolean; output?: unknown; error?: string }) {
     const resolver = webTurnResolverRef.current;
     webTurnResolverRef.current = null;
+    webTurnDragRef.current = null;
+    setWebTurnDragging(false);
     setPendingWebTurn(null);
     setSuspendedWebTurn(null);
     setSuspendedWebResponseDraft("");
@@ -9869,42 +9968,50 @@ ${prompt}`;
       )}
 
       {pendingWebTurn && (
-        <div className="modal-backdrop">
-          <section className="approval-modal web-turn-modal">
+        <section
+          className={`approval-modal web-turn-modal web-turn-floating${webTurnDragging ? " is-dragging" : ""}`}
+          ref={webTurnFloatingRef}
+          style={{
+            left: `${webTurnFloatingPosition.x}px`,
+            top: `${webTurnFloatingPosition.y}px`,
+          }}
+        >
+          <div className="web-turn-drag-handle" onPointerDown={onWebTurnDragStart}>
             <h2>웹 응답 입력 필요</h2>
-            <div>노드: {pendingWebTurn.nodeId}</div>
-            <div>서비스: {webProviderLabel(pendingWebTurn.provider)}</div>
-            <div>수집 모드: {pendingWebTurn.mode === "manualPasteJson" ? "JSON" : "텍스트"}</div>
-            <div className="button-row">
-              <button onClick={onOpenPendingProviderWindow} type="button">
-                서비스 창 열기
-              </button>
-              <button onClick={onCopyPendingWebPrompt} type="button">
-                프롬프트 복사
-              </button>
-            </div>
-            <div className="web-turn-prompt">{pendingWebTurn.prompt}</div>
-            <label>
-              응답 붙여넣기
-              <textarea
-                onChange={(e) => setWebResponseDraft(e.currentTarget.value)}
-                rows={8}
-                value={webResponseDraft}
-              />
-            </label>
-            <div className="button-row">
-              <button onClick={onSubmitPendingWebTurn} type="button">
-                입력 완료
-              </button>
-              <button onClick={onDismissPendingWebTurn} type="button">
-                취소
-              </button>
-              <button onClick={onCancelPendingWebTurn} type="button">
-                실행 취소
-              </button>
-            </div>
-          </section>
-        </div>
+            <span>드래그 이동</span>
+          </div>
+          <div>노드: {pendingWebTurn.nodeId}</div>
+          <div>서비스: {webProviderLabel(pendingWebTurn.provider)}</div>
+          <div>수집 모드: {pendingWebTurn.mode === "manualPasteJson" ? "JSON" : "텍스트"}</div>
+          <div className="button-row">
+            <button onClick={onOpenPendingProviderWindow} type="button">
+              서비스 창 열기
+            </button>
+            <button onClick={onCopyPendingWebPrompt} type="button">
+              프롬프트 복사
+            </button>
+          </div>
+          <div className="web-turn-prompt">{pendingWebTurn.prompt}</div>
+          <label>
+            응답 붙여넣기
+            <textarea
+              onChange={(e) => setWebResponseDraft(e.currentTarget.value)}
+              rows={8}
+              value={webResponseDraft}
+            />
+          </label>
+          <div className="button-row">
+            <button onClick={onSubmitPendingWebTurn} type="button">
+              입력 완료
+            </button>
+            <button onClick={onDismissPendingWebTurn} type="button">
+              취소
+            </button>
+            <button onClick={onCancelPendingWebTurn} type="button">
+              실행 취소
+            </button>
+          </div>
+        </section>
       )}
 
       {activeApproval && (
