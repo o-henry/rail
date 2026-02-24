@@ -1004,6 +1004,10 @@ export function I18nProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     setCurrentLocale(locale);
+    if (typeof document !== "undefined") {
+      document.documentElement.lang = locale;
+      document.documentElement.setAttribute("data-locale", locale);
+    }
     try {
       window.localStorage.setItem(STORAGE_KEY, locale);
     } catch {

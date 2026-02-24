@@ -60,10 +60,26 @@
   font-display: swap;
 }
 
+@font-face {
+  font-family: "MPlus2Rail";
+  src: url("/fonts/mplus2-variable-wght.ttf") format("truetype");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+3000-30FF, U+31F0-31FF, U+4E00-9FFF, U+FF00-FFEF;
+}
+
 :root {
-  font-family: "BasicallyAMono", "DialogNanumBody1984", "IBM Plex Sans", "Noto Sans KR", sans-serif;
+  --font-latin: "BasicallyAMono";
+  --font-ko: "DialogNanumBody1984";
+  --font-ja: "MPlus2Rail";
+  --font-stack-default: var(--font-latin), var(--font-ko), "IBM Plex Sans", "Noto Sans KR", sans-serif;
+  --font-stack-ja: var(--font-latin), var(--font-ja), "Noto Sans JP", "Hiragino Sans", sans-serif;
+  --ui-font-stack: var(--font-stack-default);
+  --ui-letter-spacing: -0.7px;
+  font-family: var(--ui-font-stack);
   font-size: 13px;
-  letter-spacing: -0.7px;
+  letter-spacing: var(--ui-letter-spacing);
   color: #1b2229;
   background: #ffffff;
   --header-control-height: 34px;
@@ -71,6 +87,22 @@
   --surface-strong: #e7ebf1;
   --surface-soft: #f7f9fc;
   --text-muted: #667180;
+}
+
+html[data-locale="en"] {
+  --ui-font-stack: var(--font-stack-default);
+  --ui-letter-spacing: -0.7px;
+}
+
+html[data-locale="ja"] {
+  --ui-font-stack: var(--font-stack-ja);
+  --ui-letter-spacing: -0.7px;
+}
+
+html[data-locale="en"] :where(*):not(svg):not(path):not(img),
+html[data-locale="ja"] :where(*):not(svg):not(path):not(img) {
+  font-family: var(--ui-font-stack) !important;
+  letter-spacing: var(--ui-letter-spacing);
 }
 
 html,
@@ -171,8 +203,8 @@ h3,
 h4,
 h5,
 h6 {
-  font-family: "DialogNanumBody1984", "Noto Sans KR", sans-serif;
-  letter-spacing: -0.7px;
+  font-family: var(--ui-font-stack);
+  letter-spacing: var(--ui-letter-spacing);
 }
 
 h3 {
