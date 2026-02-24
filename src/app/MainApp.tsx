@@ -738,6 +738,7 @@ function App() {
   const lastAuthenticatedAtRef = useRef<number>(defaultLoginCompleted ? Date.now() : 0);
   const codexLoginLastAttemptAtRef = useRef(0);
   const webBridgeStageWarnTimerRef = useRef<Record<string, number>>({});
+  const feedReplyFeedbackClearTimerRef = useRef<Record<string, number>>({});
   const activeWebPromptRef = useRef<Partial<Record<WebProvider, string>>>({});
   const lastAppliedPresetRef = useRef<{ kind: PresetKind; graph: GraphData } | null>(null);
   const graphClipboardRef = useRef<GraphClipboardSnapshot | null>(null);
@@ -1567,6 +1568,11 @@ function buildFeedShareText(post: FeedViewPost, run: RunRecord | null): string {
     if (!postId || feedReplySubmittingByPost[postId]) {
       return;
     }
+    const existingClearTimer = feedReplyFeedbackClearTimerRef.current[postId];
+    if (existingClearTimer) {
+      window.clearTimeout(existingClearTimer);
+      delete feedReplyFeedbackClearTimerRef.current[postId];
+    }
     setFeedReplySubmittingByPost((prev) => ({ ...prev, [postId]: true }));
     setFeedReplyFeedbackByPost((prev) => ({ ...prev, [postId]: "요청 전송 중..." }));
     let replyFeedbackText = "";
@@ -1737,6 +1743,20 @@ function buildFeedShareText(post: FeedViewPost, run: RunRecord | null): string {
           ...prev,
           [postId]: replyFeedbackText,
         }));
+        if (replyFeedbackText.includes("요청 실행 완료")) {
+          const timerId = window.setTimeout(() => {
+            setFeedReplyFeedbackByPost((prev) => {
+              if (!(postId in prev)) {
+                return prev;
+              }
+              const next = { ...prev };
+              delete next[postId];
+              return next;
+            });
+            delete feedReplyFeedbackClearTimerRef.current[postId];
+          }, 10_000);
+          feedReplyFeedbackClearTimerRef.current[postId] = timerId;
+        }
       }
     }
   }
@@ -1774,6 +1794,10 @@ function buildFeedShareText(post: FeedViewPost, run: RunRecord | null): string {
     boot();
     return () => {
       cancelled = true;
+      for (const timerId of Object.values(feedReplyFeedbackClearTimerRef.current)) {
+        window.clearTimeout(timerId);
+      }
+      feedReplyFeedbackClearTimerRef.current = {};
     };
   }, []);
 

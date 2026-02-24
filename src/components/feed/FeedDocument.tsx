@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, type ReactNode } from "react";
 import FeedChart from "./FeedChart";
 import { extractChartSpecsFromContent } from "../../features/feed/chartSpec";
 
@@ -192,6 +192,52 @@ function parseDocumentBlocks(content: string): TextBlock[] {
   return blocks;
 }
 
+function renderInlineMarkdown(text: string): ReactNode[] {
+  const source = String(text ?? "");
+  if (!source) {
+    return [];
+  }
+  const nodes: ReactNode[] = [];
+  const pattern = /\*\*([^*]+)\*\*|`([^`]+)`|\*([^*]+)\*|\[([^\]]+)\]\(([^)\s]+)\)/g;
+  let cursor = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = pattern.exec(source)) !== null) {
+    const start = match.index;
+    if (start > cursor) {
+      nodes.push(source.slice(cursor, start));
+    }
+    if (match[1]) {
+      nodes.push(
+        <strong key={`inline-bold-${start}-${match[1].length}`}>{match[1]}</strong>,
+      );
+    } else if (match[2]) {
+      nodes.push(<code key={`inline-code-${start}-${match[2].length}`}>{match[2]}</code>);
+    } else if (match[3]) {
+      nodes.push(<em key={`inline-italic-${start}-${match[3].length}`}>{match[3]}</em>);
+    } else if (match[4] && match[5]) {
+      nodes.push(
+        <a
+          href={match[5]}
+          key={`inline-link-${start}-${match[4].length}`}
+          rel="noreferrer noopener"
+          target="_blank"
+        >
+          {match[4]}
+        </a>,
+      );
+    } else {
+      nodes.push(match[0]);
+    }
+    cursor = start + match[0].length;
+  }
+
+  if (cursor < source.length) {
+    nodes.push(source.slice(cursor));
+  }
+  return nodes.length > 0 ? nodes : [source];
+}
+
 export default function FeedDocument({ text, className = "" }: FeedDocumentProps) {
   const extracted = useMemo(() => extractChartSpecsFromContent(text), [text]);
   const blocks = useMemo(
@@ -209,20 +255,20 @@ export default function FeedDocument({ text, className = "" }: FeedDocumentProps
           if (block.level === 1) {
             return (
               <h1 className="feed-document-h1" key={`block-${index}`}>
-                {block.text}
+                {renderInlineMarkdown(block.text)}
               </h1>
             );
           }
           if (block.level === 2) {
             return (
               <h2 className="feed-document-h2" key={`block-${index}`}>
-                {block.text}
+                {renderInlineMarkdown(block.text)}
               </h2>
             );
           }
           return (
             <h3 className="feed-document-h3" key={`block-${index}`}>
-              {block.text}
+              {renderInlineMarkdown(block.text)}
             </h3>
           );
         }
@@ -232,7 +278,7 @@ export default function FeedDocument({ text, className = "" }: FeedDocumentProps
             return (
               <ol className="feed-document-list" key={`block-${index}`}>
                 {block.items.map((item, itemIndex) => (
-                  <li key={`item-${index}-${itemIndex}`}>{item}</li>
+                  <li key={`item-${index}-${itemIndex}`}>{renderInlineMarkdown(item)}</li>
                 ))}
               </ol>
             );
@@ -240,7 +286,7 @@ export default function FeedDocument({ text, className = "" }: FeedDocumentProps
           return (
             <ul className="feed-document-list" key={`block-${index}`}>
               {block.items.map((item, itemIndex) => (
-                <li key={`item-${index}-${itemIndex}`}>{item}</li>
+                <li key={`item-${index}-${itemIndex}`}>{renderInlineMarkdown(item)}</li>
               ))}
             </ul>
           );
@@ -264,7 +310,7 @@ export default function FeedDocument({ text, className = "" }: FeedDocumentProps
                 <thead>
                   <tr>
                     {block.headers.map((header, headerIndex) => (
-                      <th key={`header-${index}-${headerIndex}`}>{header}</th>
+                      <th key={`header-${index}-${headerIndex}`}>{renderInlineMarkdown(header)}</th>
                     ))}
                   </tr>
                 </thead>
@@ -272,7 +318,7 @@ export default function FeedDocument({ text, className = "" }: FeedDocumentProps
                   {block.rows.map((row, rowIndex) => (
                     <tr key={`row-${index}-${rowIndex}`}>
                       {row.map((cell, cellIndex) => (
-                        <td key={`cell-${index}-${rowIndex}-${cellIndex}`}>{cell}</td>
+                        <td key={`cell-${index}-${rowIndex}-${cellIndex}`}>{renderInlineMarkdown(cell)}</td>
                       ))}
                     </tr>
                   ))}
@@ -296,7 +342,7 @@ export default function FeedDocument({ text, className = "" }: FeedDocumentProps
 
         return (
           <p className="feed-document-paragraph" key={`block-${index}`}>
-            {block.text}
+            {renderInlineMarkdown(block.text)}
           </p>
         );
       })}
