@@ -2983,6 +2983,15 @@ h3 {
   display: inline-grid;
 }
 
+.feed-card-render-error {
+  border-radius: 8px;
+  background: #fff1f1;
+  color: #a93a3a;
+  padding: 10px 12px;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
 .feed-share-icon-button {
   width: 34px;
   min-width: 34px;

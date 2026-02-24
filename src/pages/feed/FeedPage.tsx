@@ -1,9 +1,35 @@
+import { Component, type ErrorInfo, type ReactNode } from "react";
 import FancySelect from "../../components/FancySelect";
 import FeedDocument from "../../components/feed/FeedDocument";
 
 type FeedPageProps = {
   vm: any;
 };
+
+class FeedCardBoundary extends Component<
+  { children: ReactNode; postId: string },
+  { hasError: boolean }
+> {
+  constructor(props: { children: ReactNode; postId: string }) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: unknown, errorInfo: ErrorInfo) {
+    console.error("[feed-card-render-error]", this.props.postId, error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return <div className="feed-card-render-error">이 포스트 렌더링 중 오류가 발생했습니다.</div>;
+    }
+    return this.props.children;
+  }
+}
 
 export default function FeedPage({ vm }: FeedPageProps) {
   const {
@@ -549,6 +575,7 @@ export default function FeedPage({ vm }: FeedPageProps) {
                         <div className={`feed-run-group-body ${isGroupExpanded ? "is-expanded" : ""}`}>
                           <div className="feed-run-group-posts">
                             {group.posts.map((post: any) => {
+                              const postId = String(post?.id ?? "");
                               const attachments = Array.isArray(post.attachments) ? post.attachments : [];
                               const evidence = post.evidence && typeof post.evidence === "object" ? post.evidence : {};
                               const markdownAttachment = attachments.find((attachment: any) => attachment?.kind === "markdown");
@@ -568,18 +595,19 @@ export default function FeedPage({ vm }: FeedPageProps) {
                                 Math.min(99, Number((evidence as any).qualityScore ?? (post.status === "done" ? 95 : 55))),
                               );
                               const pendingRequestCount = (pendingNodeRequests[post.nodeId] ?? []).length;
-                              const requestDraft = feedReplyDraftByPost[post.id] ?? "";
-                              const isExpanded = feedExpandedByPost[post.id] === true;
+                              const requestDraft = feedReplyDraftByPost[postId] ?? "";
+                              const isExpanded = feedExpandedByPost[postId] === true;
                               const isDraftPost = post.status === "draft";
                               const canRequest = post.nodeType === "turn";
                               const nodeInputSources = post.inputSources ?? [];
                               const upstreamSources = nodeInputSources.filter((source: any) => source.kind === "node");
                               return (
+                                <FeedCardBoundary key={postId || `${post.nodeId}:${post.createdAt}`} postId={postId}>
                                 <section
                                   className={`feed-card feed-card-sns ${
-                                    feedInspectorPost?.id === post.id ? "is-selected" : ""
+                                    feedInspectorPost?.id === postId ? "is-selected" : ""
                                   }`.trim()}
-                                  key={post.id}
+                                  key={postId}
                                   onClick={() => onSelectFeedInspectorPost(post)}
                                 >
                                   <div className="feed-card-head">
@@ -610,12 +638,12 @@ export default function FeedPage({ vm }: FeedPageProps) {
                                         <button
                                           aria-label="공유하기"
                                           className="feed-share-icon-button"
-                                          onClick={() => setFeedShareMenuPostId((prev: any) => (prev === post.id ? null : post.id))}
+                                          onClick={() => setFeedShareMenuPostId((prev: any) => (prev === postId ? null : postId))}
                                           type="button"
                                         >
                                           <img alt="" aria-hidden="true" className="feed-share-icon" src="/share-svgrepo-com.svg" />
                                         </button>
-                                        {feedShareMenuPostId === post.id && (
+                                        {feedShareMenuPostId === postId && (
                                           <div className="feed-share-menu">
                                             <button onClick={() => void onShareFeedPost(post, "clipboard")} type="button">
                                               <span>텍스트 복사</span>
@@ -644,7 +672,7 @@ export default function FeedPage({ vm }: FeedPageProps) {
                                     onClick={() =>
                                       setFeedExpandedByPost((prev: any) => ({
                                         ...prev,
-                                        [post.id]: !prev[post.id],
+                                        [postId]: !prev[postId],
                                       }))
                                     }
                                     type="button"
@@ -657,7 +685,7 @@ export default function FeedPage({ vm }: FeedPageProps) {
                                         <div className="feed-card-input-sources-title">입력 출처</div>
                                         <ul>
                                           {upstreamSources.map((source: any, index: any) => (
-                                            <li key={`${post.id}:source:${source.nodeId ?? source.agentName}:${index}`}>
+                                            <li key={`${postId}:source:${source.nodeId ?? source.agentName}:${index}`}>
                                               {formatFeedInputSourceLabel(source)}
                                             </li>
                                           ))}
@@ -685,10 +713,12 @@ export default function FeedPage({ vm }: FeedPageProps) {
                                     {canRequest && (
                                       <div className="feed-reply-row">
                                         <input
+                                          onClick={(event) => event.stopPropagation()}
+                                          onFocus={(event) => event.stopPropagation()}
                                           onChange={(event) =>
                                             setFeedReplyDraftByPost((prev: any) => ({
-                                              ...prev,
-                                              [post.id]: event.currentTarget.value,
+                                              ...(prev && typeof prev === "object" ? prev : {}),
+                                              [postId]: event.currentTarget.value ?? "",
                                             }))
                                           }
                                           placeholder="에이전트에게 추가 요청을 남기세요"
@@ -706,6 +736,7 @@ export default function FeedPage({ vm }: FeedPageProps) {
                                     )}
                                   </div>
                                 </section>
+                                </FeedCardBoundary>
                               );
                             })}
                           </div>
