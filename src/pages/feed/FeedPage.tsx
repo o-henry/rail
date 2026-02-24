@@ -1,4 +1,5 @@
 import FancySelect from "../../components/FancySelect";
+import FeedDocument from "../../components/feed/FeedDocument";
 
 type FeedPageProps = {
   vm: any;
@@ -672,7 +673,7 @@ export default function FeedPage({ vm }: FeedPageProps) {
                                         <pre className="feed-sns-content">{readableInputPreview}</pre>
                                       </section>
                                     )}
-                                    <pre className="feed-sns-content">{visibleContent}</pre>
+                                    <FeedDocument className="feed-sns-content" text={visibleContent} />
                                     <div className="feed-evidence-row">
                                       <span>{formatRelativeFeedTime(post.createdAt)}</span>
                                       <span>생성 시간 {formatDuration(post.evidence.durationMs)}</span>

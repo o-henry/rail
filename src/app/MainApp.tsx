@@ -69,6 +69,7 @@ import {
   turnRoleLabel,
 } from "../features/workflow/labels";
 import {
+  buildFinalVisualizationDirective,
   buildCodexMultiAgentDirective,
   buildForcedAgentRuleBlock,
   extractPromptInputText,
@@ -4449,9 +4450,14 @@ ${prompt}`;
     const knowledgeTrace = withKnowledge.trace;
     if (executor === "codex") {
       const multiAgentDirective = buildCodexMultiAgentDirective(codexMultiAgentMode);
+      const visualizationDirective = isCriticalTurnNode(node) ? buildFinalVisualizationDirective() : "";
       if (multiAgentDirective) {
         textToSend = `${multiAgentDirective}\n\n${textToSend}`.trim();
         addNodeLog(node.id, `[멀티에이전트] Codex 최적화 모드 적용: ${codexMultiAgentModeLabel(codexMultiAgentMode)}`);
+      }
+      if (visualizationDirective) {
+        textToSend = `${textToSend}\n\n${visualizationDirective}`.trim();
+        addNodeLog(node.id, "[시각화] 최종 문서용 차트/도표 출력 지침 적용");
       }
     }
 

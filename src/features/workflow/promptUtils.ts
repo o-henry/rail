@@ -303,3 +303,23 @@ export function buildCodexMultiAgentDirective(mode: "off" | "balanced" | "max"):
     "[/CODEx MULTI-AGENT ORCHESTRATION]",
   ].join("\n");
 }
+
+export function buildFinalVisualizationDirective(): string {
+  return [
+    "[시각화 출력 지침]",
+    "- 최종 문서 이해를 돕는 차트/도표가 필요할 때만 포함하세요.",
+    "- 차트는 아래 포맷의 fenced code block으로 작성하세요.",
+    "- 언어 태그는 반드시 rail-chart 를 사용하세요.",
+    "```rail-chart",
+    "{",
+    '  "type": "bar|line|pie",',
+    '  "title": "차트 제목",',
+    '  "labels": ["항목1", "항목2"],',
+    '  "series": [',
+    '    { "name": "시리즈명", "data": [10, 20], "color": "#4A7BFF" }',
+    "  ]",
+    "}",
+    "```",
+    "- 본문은 일반 Markdown 형식으로 작성하세요.",
+  ].join("\n");
+}
