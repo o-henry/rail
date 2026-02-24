@@ -4448,16 +4448,17 @@ ${prompt}`;
       ? `${forcedRuleBlock}\n\n${withKnowledge.prompt}`.trim()
       : withKnowledge.prompt;
     const knowledgeTrace = withKnowledge.trace;
+    const shouldAutoVisualization = inferQualityProfile(node, config) === "synthesis_final";
+    const visualizationDirective = shouldAutoVisualization ? buildFinalVisualizationDirective() : "";
+    if (visualizationDirective) {
+      textToSend = `${textToSend}\n\n${visualizationDirective}`.trim();
+      addNodeLog(node.id, "[시각화] 품질 프로필(최종 종합) 기반 시각화 지침 자동 적용");
+    }
     if (executor === "codex") {
       const multiAgentDirective = buildCodexMultiAgentDirective(codexMultiAgentMode);
-      const visualizationDirective = isCriticalTurnNode(node) ? buildFinalVisualizationDirective() : "";
       if (multiAgentDirective) {
         textToSend = `${multiAgentDirective}\n\n${textToSend}`.trim();
         addNodeLog(node.id, `[멀티에이전트] Codex 최적화 모드 적용: ${codexMultiAgentModeLabel(codexMultiAgentMode)}`);
-      }
-      if (visualizationDirective) {
-        textToSend = `${textToSend}\n\n${visualizationDirective}`.trim();
-        addNodeLog(node.id, "[시각화] 최종 문서용 차트/도표 출력 지침 적용");
       }
     }
 
