@@ -165,14 +165,22 @@ async function readSessionBridgeConfig() {
   if (!chrome.storage.session) {
     return {};
   }
-  return chrome.storage.session.get([URL_KEY, TOKEN_KEY]);
+  try {
+    return await chrome.storage.session.get([URL_KEY, TOKEN_KEY]);
+  } catch {
+    return {};
+  }
 }
 
 async function writeSessionBridgeConfig(values) {
   if (!chrome.storage.session) {
     return;
   }
-  await chrome.storage.session.set(values);
+  try {
+    await chrome.storage.session.set(values);
+  } catch {
+    // In some contexts storage.session is blocked; local storage fallback is enough.
+  }
 }
 
 async function loadBridgeConfig() {

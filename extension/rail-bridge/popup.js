@@ -49,14 +49,22 @@ async function readSessionConfig() {
   if (!chrome.storage.session) {
     return {};
   }
-  return chrome.storage.session.get([URL_KEY, TOKEN_KEY]);
+  try {
+    return await chrome.storage.session.get([URL_KEY, TOKEN_KEY]);
+  } catch {
+    return {};
+  }
 }
 
 async function writeSessionConfig(values) {
   if (!chrome.storage.session) {
     return;
   }
-  await chrome.storage.session.set(values);
+  try {
+    await chrome.storage.session.set(values);
+  } catch {
+    // ignore: popup still persists local storage
+  }
 }
 
 async function loadConfig() {
