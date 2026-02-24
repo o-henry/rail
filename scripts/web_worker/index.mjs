@@ -32,8 +32,15 @@ const BRIDGE_ALLOWED_WEB_ORIGINS = new Set([
   'https://www.perplexity.ai',
   'https://perplexity.ai',
 ]);
-const BRIDGE_ALLOWED_EXTENSION_ORIGINS = parseAllowedExtensionOrigins(
+const BRIDGE_ALLOWED_EXTENSION_IDS_RAW = [
   process.env.RAIL_WEB_BRIDGE_ALLOWED_EXTENSION_IDS ?? '',
+  process.env.RAIL_WEB_BRIDGE_ALLOWED_EXTENSION_ID ?? '',
+]
+  .map((row) => String(row).trim())
+  .filter(Boolean)
+  .join(',');
+const BRIDGE_ALLOWED_EXTENSION_ORIGINS = parseAllowedExtensionOrigins(
+  BRIDGE_ALLOWED_EXTENSION_IDS_RAW,
 );
 const BRIDGE_EXTENSION_ALLOWLIST_CONFIGURED = BRIDGE_ALLOWED_EXTENSION_ORIGINS.size > 0;
 const SESSION_PROVIDER_CONFIG = {
