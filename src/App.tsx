@@ -1127,16 +1127,6 @@ function feedPostStatusLabel(status: FeedPostStatus): string {
   }
 }
 
-function sanitizeShareTitle(input: string): string {
-  const compact = input
-    .trim()
-    .replace(/[\\/:*?"<>|#^\[\]]+/g, " ")
-    .replace(/\s+/g, " ")
-    .slice(0, 60)
-    .trim();
-  return compact || "rail-share";
-}
-
 function hashStringToHue(input: string): number {
   let hash = 0;
   for (let index = 0; index < input.length; index += 1) {
@@ -3257,12 +3247,11 @@ function App() {
     return lines.join("\n");
   }
 
-  async function onShareFeedPost(post: FeedViewPost, mode: "clipboard" | "obsidian" | "json") {
+  async function onShareFeedPost(post: FeedViewPost, mode: "clipboard" | "json") {
     setError("");
     setFeedShareMenuPostId(null);
     const run = await ensureFeedRunRecord(post.sourceFile);
     const shareText = buildFeedShareText(post, run);
-    const title = sanitizeShareTitle(`${post.agentName}-${new Date(post.createdAt).toISOString().slice(0, 10)}`);
     try {
       if (mode === "clipboard") {
         await navigator.clipboard.writeText(shareText);
@@ -3280,17 +3269,6 @@ function App() {
         setStatus("공유 JSON 복사 완료");
         return;
       }
-      const obsidianUri = `obsidian://new?name=${encodeURIComponent(title)}&content=${encodeURIComponent(
-        shareText.slice(0, 2400),
-      )}`;
-      try {
-        await openUrl(obsidianUri);
-        setStatus("옵시디언 공유 창 열림");
-      } catch {
-        await navigator.clipboard.writeText(shareText);
-        setStatus("옵시디언 URI 공유에 실패해 텍스트를 클립보드에 복사했습니다.");
-      }
-      return;
     } catch (e) {
       setError(`공유 실패: ${String(e)}`);
     }
@@ -9232,9 +9210,6 @@ ${prompt}`;
                                           <div className="feed-share-menu">
                                             <button onClick={() => void onShareFeedPost(post, "clipboard")} type="button">
                                               <span>텍스트 복사</span>
-                                            </button>
-                                            <button onClick={() => void onShareFeedPost(post, "obsidian")} type="button">
-                                              <span>옵시디언</span>
                                             </button>
                                             <button onClick={() => void onShareFeedPost(post, "json")} type="button">
                                               <span>JSON 복사</span>
