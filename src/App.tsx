@@ -9172,7 +9172,30 @@ ${prompt}`;
       <section className="panel-card settings-view bridge-view workspace-tab-panel">
         <section className="controls bridge-head-panel">
           <div className="web-automation-head">
-            <h2>웹 연결</h2>
+            <div className="bridge-head-title-row">
+              <h2>웹 연결</h2>
+              <div className="bridge-help-wrap">
+                <button
+                  aria-label="웹 연결 안내"
+                  className="bridge-help-trigger"
+                  type="button"
+                >
+                  ?
+                </button>
+                <div className="bridge-help-panel">
+                  <div>확장과의 통신은 127.0.0.1 로컬 루프백 + Bearer 토큰으로만 허용됩니다.</div>
+                  <div>
+                    토큰 저장 위치:{" "}
+                    {webBridgeStatus.tokenStorage === "memory" ? "메모리 세션(앱 종료 시 폐기)" : "확인 필요"}
+                  </div>
+                  <div>
+                    실행 시 프롬프트 자동 주입/전송을 먼저 시도하며, 자동 전송 실패 시에만 웹 탭에서 전송 1회가
+                    필요합니다.
+                  </div>
+                  <div>고급 보안(선택): `RAIL_WEB_BRIDGE_ALLOWED_EXTENSION_IDS` 설정 시 등록한 확장 ID만 허용합니다.</div>
+                </div>
+              </div>
+            </div>
             <button
               aria-label="웹 연결 상태 동기화"
               className="settings-refresh-button settings-refresh-icon-button"
@@ -9225,18 +9248,6 @@ ${prompt}`;
               <span className="settings-button-label">토큰 재발급</span>
             </button>
           </div>
-          <div className="usage-method">
-            확장과의 통신은 127.0.0.1 로컬 루프백 + Bearer 토큰으로만 허용됩니다.
-          </div>
-          <div className="usage-method">
-            토큰 저장 위치: {webBridgeStatus.tokenStorage === "memory" ? "메모리 세션(앱 종료 시 폐기)" : "확인 필요"}
-          </div>
-          <div className="usage-method">
-            실행 시 프롬프트 자동 주입/전송을 먼저 시도하며, 자동 전송 실패 시에만 웹 탭에서 전송 1회가 필요합니다.
-          </div>
-          <div className="usage-method">
-            고급 보안(선택): `RAIL_WEB_BRIDGE_ALLOWED_EXTENSION_IDS` 설정 시 등록한 확장 ID만 허용합니다.
-          </div>
           {webBridgeConnectCode && (
             <div className="bridge-code-card">
               <div className="bridge-code-head">
@@ -9282,7 +9293,7 @@ ${prompt}`;
               );
             })}
           </div>
-          <div className="usage-method">
+          <div className="bridge-provider-queue-meta">
             큐: {webBridgeStatus.queuedTasks} · 진행 중: {webBridgeStatus.activeTasks}
           </div>
         </section>

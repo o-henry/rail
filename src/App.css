@@ -52,6 +52,14 @@
   unicode-range: U+0000-00FF, U+0100-024F, U+1E00-1EFF;
 }
 
+@font-face {
+  font-family: "Galmuri14";
+  src: url("/fonts/galmuri14.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
 :root {
   font-family: "BasicallyAMono", "DialogNanumBody1984", "IBM Plex Sans", "Noto Sans KR", sans-serif;
   font-size: 13px;
@@ -163,7 +171,7 @@ h3,
 h4,
 h5,
 h6 {
-  font-family: "DialogNanumBody1984", sans-serif;
+  font-family: "Galmuri14", "DialogNanumBody1984", "Noto Sans KR", sans-serif;
   letter-spacing: -0.7px;
 }
 
@@ -2181,9 +2189,9 @@ h3 {
   width: 100%;
   min-height: 0;
   overflow: visible;
-  display: grid;
-  grid-template-rows: auto auto auto auto;
-  gap: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
   padding: 18px 20px 14px;
   border-radius: 12px;
   background: #ffffff;
@@ -2194,12 +2202,13 @@ h3 {
   align-items: center;
   justify-content: space-between;
   gap: 14px;
+  margin-bottom: 6px;
 }
 
 .feed-topbar h2 {
   margin: 0;
   font-size: 20px;
-  font-family: "DialogNanumBody1984", "Noto Sans KR", sans-serif;
+  font-family: "Galmuri14", "DialogNanumBody1984", "Noto Sans KR", sans-serif;
   letter-spacing: -0.015em;
   color: #14181f;
 }
@@ -2227,10 +2236,12 @@ h3 {
   transform: translateY(-5px);
   pointer-events: none;
   overflow: hidden;
+  margin-bottom: 0;
   transition:
     grid-template-rows 220ms cubic-bezier(0.22, 1, 0.36, 1),
     opacity 180ms ease,
-    transform 220ms cubic-bezier(0.22, 1, 0.36, 1);
+    transform 220ms cubic-bezier(0.22, 1, 0.36, 1),
+    margin-bottom 220ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .feed-filter-inline-wrap.is-open {
@@ -2239,6 +2250,7 @@ h3 {
   transform: translateY(0);
   pointer-events: auto;
   overflow: visible;
+  margin-bottom: 8px;
 }
 
 .feed-filter-inline {
@@ -2292,6 +2304,7 @@ h3 {
   display: flex;
   flex-wrap: wrap;
   gap: 26px;
+  margin: 0;
 }
 
 .feed-topic-tabs button {
@@ -2352,6 +2365,7 @@ h3 {
   min-height: auto;
   overflow: visible;
   padding: 0;
+  margin-top: 10px;
   border: 0;
   border-radius: 12px;
   background: #ffffff;
@@ -3037,6 +3051,60 @@ pre {
   gap: 10px;
 }
 
+.bridge-head-title-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.bridge-help-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.bridge-help-trigger {
+  width: 18px;
+  min-width: 18px;
+  height: 18px;
+  min-height: 18px;
+  border-radius: 999px;
+  padding: 0;
+  display: inline-grid;
+  place-items: center;
+  font-size: 11px;
+  line-height: 1;
+  background: #e9edf3;
+  color: #4a5669;
+}
+
+.bridge-help-panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 35;
+  width: min(420px, calc(100vw - 64px));
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #1f2631;
+  color: #ffffff;
+  font-size: 11px;
+  line-height: 1.45;
+  display: grid;
+  gap: 6px;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-4px);
+  transition: opacity 140ms ease, transform 140ms ease;
+}
+
+.bridge-help-wrap:hover .bridge-help-panel,
+.bridge-help-wrap:focus-within .bridge-help-panel {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
 .bridge-action-row {
   display: flex;
   gap: 8px;
@@ -3047,6 +3115,11 @@ pre {
   color: var(--muted-text, #5a6676);
   font-size: 12px;
   font-family: "DialogNanumBody1984", "Noto Sans KR", sans-serif;
+}
+
+.bridge-provider-queue-meta {
+  color: var(--text-muted);
+  font-size: 0.82rem;
 }
 
 .bridge-log-list {
