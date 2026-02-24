@@ -549,7 +549,9 @@ export default function FeedPage({ vm }: FeedPageProps) {
                         <div className={`feed-run-group-body ${isGroupExpanded ? "is-expanded" : ""}`}>
                           <div className="feed-run-group-posts">
                             {group.posts.map((post: any) => {
-                              const markdownAttachment = post.attachments.find((attachment: any) => attachment.kind === "markdown");
+                              const attachments = Array.isArray(post.attachments) ? post.attachments : [];
+                              const evidence = post.evidence && typeof post.evidence === "object" ? post.evidence : {};
+                              const markdownAttachment = attachments.find((attachment: any) => attachment?.kind === "markdown");
                               const visibleContentRaw = markdownAttachment?.content ?? post.summary ?? "(첨부 없음)";
                               const visibleContent = toHumanReadableFeedText(visibleContentRaw);
                               const readableQuestion = toHumanReadableFeedText(post.question ?? "");
@@ -563,7 +565,7 @@ export default function FeedPage({ vm }: FeedPageProps) {
                               const avatarLabel = buildFeedAvatarLabel(post);
                               const score = Math.max(
                                 1,
-                                Math.min(99, Number(post.evidence.qualityScore ?? (post.status === "done" ? 95 : 55))),
+                                Math.min(99, Number((evidence as any).qualityScore ?? (post.status === "done" ? 95 : 55))),
                               );
                               const pendingRequestCount = (pendingNodeRequests[post.nodeId] ?? []).length;
                               const requestDraft = feedReplyDraftByPost[post.id] ?? "";
@@ -676,8 +678,8 @@ export default function FeedPage({ vm }: FeedPageProps) {
                                     <FeedDocument className="feed-sns-content" text={visibleContent} />
                                     <div className="feed-evidence-row">
                                       <span>{formatRelativeFeedTime(post.createdAt)}</span>
-                                      <span>생성 시간 {formatDuration(post.evidence.durationMs)}</span>
-                                      <span>사용량 {formatUsage(post.evidence.usage)}</span>
+                                      <span>생성 시간 {formatDuration((evidence as any).durationMs)}</span>
+                                      <span>사용량 {formatUsage((evidence as any).usage)}</span>
                                       {pendingRequestCount > 0 && <span>추가 요청 대기 {pendingRequestCount}건</span>}
                                     </div>
                                     {canRequest && (
