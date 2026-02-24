@@ -8,10 +8,10 @@ type FeedPageProps = {
 };
 
 class FeedCardBoundary extends Component<
-  { children: ReactNode; postId: string },
+  { children: ReactNode; postId: string; fallbackText: string },
   { hasError: boolean }
 > {
-  constructor(props: { children: ReactNode; postId: string }) {
+  constructor(props: { children: ReactNode; postId: string; fallbackText: string }) {
     super(props);
     this.state = { hasError: false };
   }
@@ -26,14 +26,14 @@ class FeedCardBoundary extends Component<
 
   render() {
     if (this.state.hasError) {
-      return <div className="feed-card-render-error">This post failed to render.</div>;
+      return <div className="feed-card-render-error">{this.props.fallbackText}</div>;
     }
     return this.props.children;
   }
 }
 
 export default function FeedPage({ vm }: FeedPageProps) {
-  const { t, tp } = useI18n();
+  const { t } = useI18n();
   const {
     feedInspectorTurnNode,
     feedInspectorPost,
@@ -116,6 +116,8 @@ export default function FeedPage({ vm }: FeedPageProps) {
     feedReplyFeedbackByPost && typeof feedReplyFeedbackByPost === "object" ? feedReplyFeedbackByPost : {};
   const safeSetFeedReplyDraftByPost =
     typeof setFeedReplyDraftByPost === "function" ? setFeedReplyDraftByPost : null;
+  const isFeedbackErrorMessage = (feedback: string) =>
+    /(실패|불가|오류|error|failed|failure|不可|失败|失敗|エラー|失敗)/i.test(feedback);
 
   return (
     <section className="feed-layout workspace-tab-panel">
@@ -146,7 +148,7 @@ export default function FeedPage({ vm }: FeedPageProps) {
                 <section className="feed-agent-settings">
                   <div className="feed-agent-settings-header">
                     <strong>{feedInspectorPost?.agentName ?? turnModelLabel(feedInspectorTurnNode)}</strong>
-                    {!feedInspectorEditable && <span className="feed-agent-readonly-badge">{tp("기록 스냅샷")}</span>}
+                    {!feedInspectorEditable && <span className="feed-agent-readonly-badge">{t("feed.snapshot")}</span>}
                   </div>
                   <div className="feed-agent-settings-grid">
                     <label>
@@ -370,8 +372,8 @@ export default function FeedPage({ vm }: FeedPageProps) {
                               );
                             }}
                             options={[
-                              { value: "false", label: "미사용" },
-                              { value: "true", label: "사용" },
+                              { value: "false", label: t("feed.option.disabled") },
+                              { value: "true", label: t("feed.option.enabled") },
                             ]}
                             value={String(feedInspectorTurnConfig?.qualityCommandEnabled === true)}
                           />
@@ -616,8 +618,7 @@ export default function FeedPage({ vm }: FeedPageProps) {
                               const requestDraft = String(replyDraftMap[postId] ?? "");
                               const requestSubmitting = Boolean(replySubmittingMap[postId]);
                               const requestFeedback = String(replyFeedbackMap[postId] ?? "");
-                              const requestFeedbackError =
-                                requestFeedback.includes("실패") || requestFeedback.includes("불가");
+                              const requestFeedbackError = isFeedbackErrorMessage(requestFeedback);
                               const isExpanded = feedExpandedByPost[postId] === true;
                               const isDraftPost = post.status === "draft";
                               const canRequest = post.nodeType === "turn";
@@ -626,7 +627,11 @@ export default function FeedPage({ vm }: FeedPageProps) {
                                 (source: any) => source && source.kind === "node",
                               );
                               return (
-                                <FeedCardBoundary key={postId || `${post.nodeId}:${post.createdAt}`} postId={postId}>
+                                <FeedCardBoundary
+                                  fallbackText={t("feed.renderError")}
+                                  key={postId || `${post.nodeId}:${post.createdAt}`}
+                                  postId={postId}
+                                >
                                 <section
                                   className={`feed-card feed-card-sns ${
                                     feedInspectorPost?.id === postId ? "is-selected" : ""
