@@ -2438,7 +2438,6 @@ function App() {
   const [graphRenameOpen, setGraphRenameOpen] = useState(false);
   const [graphRenameDraft, setGraphRenameDraft] = useState("");
   const [graphFiles, setGraphFiles] = useState<string[]>([]);
-  const [runFiles, setRunFiles] = useState<string[]>([]);
   const [feedPosts, setFeedPosts] = useState<FeedViewPost[]>([]);
   const [feedLoading, setFeedLoading] = useState(false);
   const [feedStatusFilter, setFeedStatusFilter] = useState<FeedStatusFilter>("all");
@@ -2466,8 +2465,6 @@ function App() {
     groupKind: RunGroupKind;
     presetKind?: PresetKind;
   } | null>(null);
-  const [selectedRunFile, setSelectedRunFile] = useState("");
-  const [selectedRunDetail, setSelectedRunDetail] = useState<RunRecord | null>(null);
   const [, setLastSavedRunFile] = useState("");
   const [nodeStates, setNodeStates] = useState<Record<string, NodeRunState>>({});
   const [isGraphRunning, setIsGraphRunning] = useState(false);
@@ -3115,19 +3112,6 @@ function App() {
     }
   }
 
-  async function refreshRunFiles() {
-    if (!hasTauriRuntime) {
-      setRunFiles([]);
-      return;
-    }
-    try {
-      const files = await invoke<string[]>("run_list");
-      setRunFiles(files);
-    } catch (e) {
-      setError(String(e));
-    }
-  }
-
   async function refreshFeedTimeline() {
     if (!hasTauriRuntime) {
       setFeedPosts([]);
@@ -3183,21 +3167,6 @@ function App() {
       setStatus("실행 기록 폴더 열림");
     } catch (e) {
       setError(toOpenRunsFolderErrorMessage(e));
-    }
-  }
-
-  async function loadRunDetail(name: string) {
-    const target = name.trim();
-    if (!target) {
-      return;
-    }
-
-    try {
-      const run = await invoke<RunRecord>("run_load", { name: target });
-      setSelectedRunFile(target);
-      setSelectedRunDetail(normalizeRunRecord(run));
-    } catch (e) {
-      setError(String(e));
     }
   }
 
@@ -3346,9 +3315,6 @@ function App() {
       await invoke("run_save", { name: sourceFile, run: nextRun });
       feedRunCacheRef.current[sourceFile] = nextRun;
       setFeedPosts((prev) => prev.filter((item) => !(item.sourceFile === sourceFile && item.id === post.id)));
-      if (selectedRunFile === sourceFile) {
-        setSelectedRunDetail(nextRun);
-      }
       setStatus(`포스트 삭제 완료: ${post.agentName}`);
     } catch (e) {
       setError(`포스트 삭제 실패: ${String(e)}`);
@@ -3379,9 +3345,6 @@ function App() {
       };
       await invoke("run_save", { name: target, run: nextRun });
       feedRunCacheRef.current[target] = nextRun;
-      if (selectedRunFile === target) {
-        setSelectedRunDetail(nextRun);
-      }
       if (activeFeedRunMeta?.runId === runId) {
         setActiveFeedRunMeta((prev) => {
           if (!prev || prev.runId !== runId) {
@@ -3526,7 +3489,6 @@ function App() {
 
   useEffect(() => {
     refreshGraphFiles();
-    refreshRunFiles();
     refreshFeedTimeline();
   }, []);
 
@@ -5643,7 +5605,6 @@ function App() {
         run: runRecord,
       });
       setLastSavedRunFile(fileName);
-      await refreshRunFiles();
       await refreshFeedTimeline();
     } catch (e) {
       setError(String(e));
@@ -6902,8 +6863,6 @@ ${prompt}`;
       const normalizedRunRecord = normalizeRunRecord(runRecord);
       const runFileName = `run-${runRecord.runId}.json`;
       feedRunCacheRef.current[runFileName] = normalizedRunRecord;
-      setSelectedRunDetail(normalizedRunRecord);
-      setSelectedRunFile(runFileName);
       setStatus("그래프 실행 완료");
     } catch (e) {
       markCodexNodesStatusOnEngineIssue("failed", `그래프 실행 실패: ${String(e)}`, true);
@@ -7069,85 +7028,9 @@ ${prompt}`;
           <section className="settings-run-history">
             <div className="settings-run-history-head">
               <h3>실행 기록</h3>
-              <div className="button-row history-list-actions">
-                <button aria-label="새로고침" onClick={refreshRunFiles} title="새로고침" type="button">
-                  <img alt="" aria-hidden="true" className="history-list-action-icon" src="/reload.svg" />
-                </button>
-                <button onClick={onOpenRunsFolder} type="button">
-                  열기
-                </button>
-              </div>
-            </div>
-            <div className="settings-history-layout history-layout">
-              <article className="panel-card history-list">
-                {runFiles.length === 0 && <div className={"log-empty"}>실행 기록 파일 없음</div>}
-                {runFiles.map((file) => (
-                  <button
-                    className={selectedRunFile === file ? "is-active" : ""}
-                    key={file}
-                    onClick={() => loadRunDetail(file)}
-                    type="button"
-                  >
-                    {formatRunFileLabel(file)}
-                  </button>
-                ))}
-              </article>
-
-              <article className="panel-card history-detail">
-                {!selectedRunDetail && <div>실행 기록을 선택하세요.</div>}
-                {selectedRunDetail && (
-                  <>
-                    <div className="history-detail-head">
-                      <h5></h5>
-                    </div>
-                    <div>실행 ID: {selectedRunDetail.runId}</div>
-                    <div>시작 시간: {formatRunDateTime(selectedRunDetail.startedAt)}</div>
-                    <div>종료 시간: {formatRunDateTime(selectedRunDetail.finishedAt)}</div>
-                    <div className="history-detail-content">
-                      <div className="history-detail-group">
-                        <h3>질문</h3>
-                        <pre>{selectedRunDetail.question || "(비어 있음)"}</pre>
-                      </div>
-                      <div className="history-detail-group">
-                        <h3>최종 답변</h3>
-                        <pre>{selectedRunDetail.finalAnswer || "(없음)"}</pre>
-                      </div>
-                      <div className="history-detail-group">
-                        <h3>요약 로그</h3>
-                        <pre>{selectedRunDetail.summaryLogs.join("\n") || "(없음)"}</pre>
-                      </div>
-                      <div className="history-detail-group">
-                        <h3>품질 요약</h3>
-                        <pre>{formatUnknown(selectedRunDetail.qualitySummary ?? {})}</pre>
-                      </div>
-                      <div className="history-detail-group">
-                        <h3>회귀 비교</h3>
-                        <pre>{formatUnknown(selectedRunDetail.regression ?? {})}</pre>
-                      </div>
-                      <div className="history-detail-group">
-                        <h3>상태 전이</h3>
-                        <pre>{formatUnknown(selectedRunDetail.transitions)}</pre>
-                      </div>
-                      <div className="history-detail-group">
-                        <h3>프로바이더 추적</h3>
-                        <pre>{formatUnknown(selectedRunDetail.providerTrace ?? [])}</pre>
-                      </div>
-                      <div className="history-detail-group">
-                        <h3>첨부 참조 추적</h3>
-                        <pre>{formatUnknown(selectedRunDetail.knowledgeTrace ?? [])}</pre>
-                      </div>
-                      <div className="history-detail-group">
-                        <h3>노드 로그</h3>
-                        <pre>{formatUnknown(selectedRunDetail.nodeLogs ?? {})}</pre>
-                      </div>
-                      <div className="history-detail-group">
-                        <h3>노드 품질 지표</h3>
-                        <pre>{formatUnknown(selectedRunDetail.nodeMetrics ?? {})}</pre>
-                      </div>
-                    </div>
-                  </>
-                )}
-              </article>
+              <button onClick={onOpenRunsFolder} type="button">
+                열기
+              </button>
             </div>
           </section>
         )}
