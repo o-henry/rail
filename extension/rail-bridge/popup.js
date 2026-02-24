@@ -85,7 +85,7 @@ async function loadConfig() {
 async function saveConfig() {
   const nextUrl = validateBridgeUrl(urlInput.value);
   if (!nextUrl) {
-    setStatus("브리지 URL은 http://127.0.0.1:<port> 형식만 허용됩니다.", true);
+    setStatus("웹 연결 URL은 http://127.0.0.1:<port> 형식만 허용됩니다.", true);
     return;
   }
   const nextToken = String(tokenInput.value ?? "").trim();
@@ -104,7 +104,7 @@ async function saveConfig() {
 async function testConnection() {
   const baseUrl = validateBridgeUrl(urlInput.value);
   if (!baseUrl) {
-    setStatus("브리지 URL은 http://127.0.0.1:<port> 형식만 허용됩니다.", true);
+    setStatus("웹 연결 URL은 http://127.0.0.1:<port> 형식만 허용됩니다.", true);
     return;
   }
   const token = String(tokenInput.value ?? "").trim();

@@ -276,7 +276,7 @@ async function waitForResponse(provider, prompt, timeoutMs) {
 
 async function callBridge(path, body, method = "POST") {
   if (!validateBridgeUrl(bridgeUrl)) {
-    throw new Error("브리지 URL은 http://127.0.0.1:<port>만 허용됩니다.");
+    throw new Error("웹 연결 URL은 http://127.0.0.1:<port>만 허용됩니다.");
   }
   const response = await fetch(`${bridgeUrl}${path}`, {
     method,

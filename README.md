@@ -93,9 +93,14 @@ npm run build
 
 1. `웹 연결` 탭에서 `연결 코드 복사`를 눌러 URL+토큰을 복사합니다.
 2. Chrome `확장 프로그램`에서 개발자 모드 활성화 후 `extension/rail-bridge` 폴더를 언팩 설치합니다.
-3. 확장 팝업에서 연결 URL/토큰을 저장하고 `연결 테스트`를 실행합니다.
-4. 노드 실행기를 `WEB / GEMINI|GPT|GROK|CLAUDE|PERPLEXITY`로 선택하고, `웹 결과 모드`를 `웹 연결 반자동(권장)`으로 둡니다.
-5. 실행 시 질문은 자동 주입되고, 사용자는 웹 서비스에서 전송 1회 클릭만 하면 답변이 자동 전달됩니다.
+3. 확장 ID를 확인합니다: `chrome://extensions` → 해당 확장 카드의 `ID`.
+4. 앱 실행 전에 환경변수를 설정합니다(콤마로 여러 ID 가능).
+   - macOS/Linux: `export RAIL_WEB_BRIDGE_ALLOWED_EXTENSION_IDS=\"<extension_id>\"`
+   - Windows PowerShell: `$env:RAIL_WEB_BRIDGE_ALLOWED_EXTENSION_IDS=\"<extension_id>\"`
+5. 같은 셸에서 앱을 실행합니다(`npm run tauri dev` 등).
+6. 확장 팝업에서 연결 URL/토큰을 저장하고 `연결 테스트`를 실행합니다.
+7. 노드 실행기를 `WEB / GEMINI|GPT|GROK|CLAUDE|PERPLEXITY`로 선택하고, `웹 결과 모드`를 `웹 연결 반자동(권장)`으로 둡니다.
+8. 실행 시 질문은 자동 주입되고, 사용자는 웹 서비스에서 전송 1회 클릭만 하면 답변이 자동 전달됩니다.
 
 ### 3) 피드 확인
 
@@ -149,6 +154,7 @@ npm run build
 - 웹 연결 통신은 `127.0.0.1` 루프백 + Bearer 토큰으로만 허용
 - 웹 연결 HTTP 요청은 루프백 주소가 아니면 차단
 - CORS는 허용된 Origin(확장/지원 서비스 도메인)만 허용
+- 확장 Origin은 `RAIL_WEB_BRIDGE_ALLOWED_EXTENSION_IDS`에 등록된 ID만 허용(미설정 시 차단)
 - 웹 연결 토큰은 워커 메모리 세션에만 보관(프로세스 종료 시 폐기)
 - 확장 토큰은 `chrome.storage.session` 우선 저장(브라우저 종료 시 폐기)
 - 웹 연결 경로는 브라우저 프로세스를 새로 띄우거나 종료하지 않음

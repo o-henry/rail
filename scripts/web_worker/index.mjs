@@ -35,6 +35,7 @@ const BRIDGE_ALLOWED_WEB_ORIGINS = new Set([
 const BRIDGE_ALLOWED_EXTENSION_ORIGINS = parseAllowedExtensionOrigins(
   process.env.RAIL_WEB_BRIDGE_ALLOWED_EXTENSION_IDS ?? '',
 );
+const BRIDGE_EXTENSION_ALLOWLIST_CONFIGURED = BRIDGE_ALLOWED_EXTENSION_ORIGINS.size > 0;
 const SESSION_PROVIDER_CONFIG = {
   gemini: {
     homeUrls: ['https://gemini.google.com/app', 'https://gemini.google.com/'],
@@ -348,10 +349,10 @@ function maskToken(token) {
 
 function parseAllowedExtensionOrigins(raw) {
   const text = String(raw ?? '').trim();
-  if (!text) {
-    return null;
-  }
   const set = new Set();
+  if (!text) {
+    return set;
+  }
   const rows = text.split(',').map((row) => row.trim()).filter(Boolean);
   for (const row of rows) {
     if (row.startsWith('chrome-extension://')) {
@@ -362,7 +363,7 @@ function parseAllowedExtensionOrigins(raw) {
       set.add(`chrome-extension://${row}`);
     }
   }
-  return set.size > 0 ? set : null;
+  return set;
 }
 
 function requestOrigin(req) {
@@ -383,9 +384,6 @@ function isAllowedBridgeOrigin(origin) {
     return false;
   }
   if (origin.startsWith('chrome-extension://')) {
-    if (!BRIDGE_ALLOWED_EXTENSION_ORIGINS) {
-      return true;
-    }
     return BRIDGE_ALLOWED_EXTENSION_ORIGINS.has(origin);
   }
   return BRIDGE_ALLOWED_WEB_ORIGINS.has(origin);
@@ -447,6 +445,8 @@ function bridgeStatusPayload({ exposeToken = false } = {}) {
     tokenMasked: maskToken(state.bridge.token),
     token: exposeToken ? state.bridge.token : undefined,
     tokenStorage: 'memory',
+    extensionOriginAllowlistConfigured: BRIDGE_EXTENSION_ALLOWLIST_CONFIGURED,
+    allowedExtensionOriginCount: BRIDGE_ALLOWED_EXTENSION_ORIGINS.size,
     lastSeenAt: state.bridge.lastSeenAt,
     connectedProviders,
     queuedTasks,
@@ -1765,6 +1765,15 @@ async function bootstrap() {
     logPath: LOG_PATH,
     startedAt: nowIso(),
   });
+  if (!BRIDGE_EXTENSION_ALLOWLIST_CONFIGURED) {
+    const message =
+      '확장 ID allowlist 미설정: RAIL_WEB_BRIDGE_ALLOWED_EXTENSION_IDS를 설정하지 않으면 확장 연결이 차단됩니다.';
+    await logLine(`bridge security: ${message}`);
+    notify('web/progress', {
+      stage: 'bridge_extension_allowlist_missing',
+      message,
+    });
+  }
 
   const rl = createInterface({
     input: process.stdin,

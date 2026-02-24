@@ -471,6 +471,8 @@ type WebBridgeStatus = {
   tokenMasked: string;
   token?: string;
   tokenStorage?: string;
+  extensionOriginAllowlistConfigured?: boolean;
+  allowedExtensionOriginCount?: number;
   lastSeenAt?: string | null;
   connectedProviders: WebBridgeProviderSeen[];
   queuedTasks: number;
@@ -2791,6 +2793,8 @@ function toWebBridgeStatus(raw: unknown): WebBridgeStatus {
     running: false,
     port: 38961,
     tokenMasked: "",
+    extensionOriginAllowlistConfigured: false,
+    allowedExtensionOriginCount: 0,
     connectedProviders: [],
     queuedTasks: 0,
     activeTasks: 0,
@@ -2829,6 +2833,8 @@ function toWebBridgeStatus(raw: unknown): WebBridgeStatus {
     tokenMasked: typeof row.tokenMasked === "string" ? row.tokenMasked : "",
     token: typeof row.token === "string" ? row.token : undefined,
     tokenStorage: typeof row.tokenStorage === "string" ? row.tokenStorage : undefined,
+    extensionOriginAllowlistConfigured: row.extensionOriginAllowlistConfigured === true,
+    allowedExtensionOriginCount: Math.max(0, Number(row.allowedExtensionOriginCount ?? 0) || 0),
     lastSeenAt: typeof row.lastSeenAt === "string" ? row.lastSeenAt : row.lastSeenAt == null ? null : undefined,
     connectedProviders,
     queuedTasks: Math.max(0, Number(row.queuedTasks ?? 0) || 0),
@@ -4458,6 +4464,8 @@ function App() {
     running: false,
     port: 38961,
     tokenMasked: "",
+    extensionOriginAllowlistConfigured: false,
+    allowedExtensionOriginCount: 0,
     connectedProviders: [],
     queuedTasks: 0,
     activeTasks: 0,
@@ -9051,6 +9059,15 @@ ${prompt}`;
               {webBridgeStatus.running ? "웹 연결 준비됨" : "웹 연결 중지됨"}
             </span>
             <span className="status-tag neutral">엔드포인트: {bridgeUrl}</span>
+            <span
+              className={`status-tag ${
+                webBridgeStatus.extensionOriginAllowlistConfigured ? "on" : "off"
+              }`}
+            >
+              {webBridgeStatus.extensionOriginAllowlistConfigured
+                ? `확장 ID 허용 목록 ${webBridgeStatus.allowedExtensionOriginCount ?? 0}개`
+                : "확장 ID 허용 목록 미설정"}
+            </span>
           </div>
           <div className="button-row bridge-action-row">
             <button
@@ -9079,6 +9096,11 @@ ${prompt}`;
           <div className="usage-method">
             실행 후 해당 웹 탭에서 전송 버튼을 1회 눌러야 답변 수집이 시작됩니다.
           </div>
+          {!webBridgeStatus.extensionOriginAllowlistConfigured && (
+            <div className="usage-method">
+              보안 설정 필요: 환경변수 `RAIL_WEB_BRIDGE_ALLOWED_EXTENSION_IDS`에 확장 ID를 설정해야 연결됩니다.
+            </div>
+          )}
           {webBridgeConnectCode && (
             <div className="bridge-code-card">
               <div className="bridge-code-head">

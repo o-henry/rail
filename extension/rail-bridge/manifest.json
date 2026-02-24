@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
-  "name": "Rail Bridge Connector",
-  "description": "Bridge extension for semi-automatic web AI prompt injection and response capture.",
+  "name": "Rail Web Connect",
+  "description": "Web connection extension for semi-automatic web AI prompt injection and response capture.",
   "version": "0.1.0",
   "permissions": ["storage", "tabs"],
   "host_permissions": [
@@ -14,7 +14,7 @@
     "https://perplexity.ai/*"
   ],
   "action": {
-    "default_title": "Rail Bridge",
+    "default_title": "Rail Web Connect",
     "default_popup": "popup.html"
   },
   "background": {
