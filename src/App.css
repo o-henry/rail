@@ -2271,6 +2271,118 @@ h3 {
   padding: 14px 0;
 }
 
+.feed-run-group {
+  display: grid;
+  gap: 0;
+  border-bottom: 1px solid #e8edf2;
+}
+
+.feed-run-group:last-child {
+  border-bottom: 0;
+}
+
+.feed-run-group-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 0 8px;
+}
+
+.feed-run-group-meta {
+  display: grid;
+  gap: 2px;
+}
+
+.feed-run-group-meta strong {
+  font-size: 13px;
+  line-height: 1.2;
+  font-family: "BasicallyAMono", "DialogNanumBody1984", "Noto Sans KR", sans-serif;
+  color: #0f1419;
+}
+
+.feed-run-group-meta span {
+  font-size: 12px;
+  color: #657285;
+  line-height: 1.2;
+}
+
+.feed-run-group-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.feed-run-group-actions button {
+  height: 28px;
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 1;
+  background: #eef2f7;
+  color: #3a4656;
+  box-shadow: none;
+}
+
+.feed-run-group-toggle {
+  background: #f2f5f9;
+}
+
+.feed-run-group-rename {
+  background: #f2f5f9;
+}
+
+.feed-run-group-rename-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 8px;
+  align-items: center;
+  padding: 0 0 8px;
+}
+
+.feed-run-group-rename-row input {
+  min-height: 34px;
+  height: 34px;
+  border-radius: 6px;
+  border: 0;
+  background: var(--surface);
+  padding: 0 10px;
+  font-size: 12px;
+}
+
+.feed-run-group-rename-row button {
+  min-height: 34px;
+  height: 34px;
+  border-radius: 6px;
+  padding: 0 10px;
+  font-size: 12px;
+  line-height: 1;
+}
+
+.feed-run-group-body {
+  max-height: 0;
+  opacity: 0;
+  overflow: hidden;
+  pointer-events: none;
+  transform: translateY(-3px);
+  transition:
+    max-height 300ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 230ms ease,
+    transform 300ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.feed-run-group-body.is-expanded {
+  max-height: 9000px;
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.feed-run-group-posts {
+  display: grid;
+}
+
 .feed-card {
   border: 0;
   border-radius: 0;
@@ -2285,7 +2397,7 @@ h3 {
   background: #ffffff;
 }
 
-.feed-stream > .feed-card:last-child {
+.feed-run-group-posts > .feed-card:last-child {
   border-bottom: 0;
 }
 

@@ -201,6 +201,7 @@ type FeedStatusFilter = "all" | FeedPostStatus;
 type FeedExecutorFilter = "all" | "codex" | "web" | "ollama";
 type FeedPeriodFilter = "all" | "today" | "7d";
 type FeedCategory = "all_posts" | "completed_posts" | "web_posts" | "error_posts";
+type RunGroupKind = "template" | "custom";
 
 type NodeRunState = {
   status: NodeExecutionStatus;
@@ -228,6 +229,9 @@ type RunRecord = {
   question?: string;
   startedAt: string;
   finishedAt?: string;
+  workflowGroupName?: string;
+  workflowGroupKind?: RunGroupKind;
+  workflowPresetKind?: PresetKind;
   finalAnswer?: string;
   graphSnapshot: GraphData;
   transitions: RunTransition[];
@@ -664,6 +668,27 @@ const PRESET_TEMPLATE_OPTIONS: FancySelectOption[] = PRESET_TEMPLATE_META.map((r
   value: row.key,
   label: row.label,
 }));
+
+function presetTemplateLabel(kind: PresetKind): string {
+  return PRESET_TEMPLATE_META.find((row) => row.key === kind)?.label ?? "템플릿";
+}
+
+function inferRunGroupMeta(
+  currentGraph: GraphData,
+  lastPreset: { kind: PresetKind; graph: GraphData } | null,
+): { name: string; kind: RunGroupKind; presetKind?: PresetKind } {
+  if (lastPreset && graphEquals(lastPreset.graph, currentGraph)) {
+    return {
+      name: presetTemplateLabel(lastPreset.kind),
+      kind: "template",
+      presetKind: lastPreset.kind,
+    };
+  }
+  return {
+    name: "사용자 정의",
+    kind: "custom",
+  };
+}
 
 function formatUnknown(value: unknown): string {
   try {
@@ -4476,6 +4501,9 @@ function App() {
   const [feedKeyword, setFeedKeyword] = useState("");
   const [feedCategory, setFeedCategory] = useState<FeedCategory>("all_posts");
   const [feedFilterOpen, setFeedFilterOpen] = useState(false);
+  const [feedGroupExpandedByRunId, setFeedGroupExpandedByRunId] = useState<Record<string, boolean>>({});
+  const [feedGroupRenameRunId, setFeedGroupRenameRunId] = useState<string | null>(null);
+  const [feedGroupRenameDraft, setFeedGroupRenameDraft] = useState("");
   const [feedExpandedByPost, setFeedExpandedByPost] = useState<Record<string, boolean>>({});
   const [feedShareMenuPostId, setFeedShareMenuPostId] = useState<string | null>(null);
   const [feedReplyDraftByPost, setFeedReplyDraftByPost] = useState<Record<string, string>>({});
@@ -4488,6 +4516,9 @@ function App() {
     runId: string;
     question: string;
     startedAt: string;
+    groupName: string;
+    groupKind: RunGroupKind;
+    presetKind?: PresetKind;
   } | null>(null);
   const [selectedRunFile, setSelectedRunFile] = useState("");
   const [selectedRunDetail, setSelectedRunDetail] = useState<RunRecord | null>(null);
@@ -4549,6 +4580,7 @@ function App() {
   const authLoginRequiredProbeCountRef = useRef(0);
   const lastAuthenticatedAtRef = useRef<number>(defaultLoginCompleted ? Date.now() : 0);
   const codexLoginLastAttemptAtRef = useRef(0);
+  const lastAppliedPresetRef = useRef<{ kind: PresetKind; graph: GraphData } | null>(null);
 
   const activeApproval = pendingApprovals[0];
   const canvasNodes = useMemo(() => {
@@ -5172,6 +5204,36 @@ function App() {
     }
   }
 
+  function resolveRunGroupFromRecord(run: RunRecord | null): {
+    name: string;
+    kind: RunGroupKind;
+    presetKind?: PresetKind;
+  } {
+    if (!run) {
+      return { name: "사용자 정의", kind: "custom" };
+    }
+    const explicitName = String(run.workflowGroupName ?? "").trim();
+    const explicitKind = run.workflowGroupKind;
+    if (explicitName) {
+      return {
+        name: explicitName,
+        kind: explicitKind === "template" ? "template" : "custom",
+        presetKind: run.workflowPresetKind,
+      };
+    }
+    if (run.workflowPresetKind) {
+      return {
+        name: presetTemplateLabel(run.workflowPresetKind),
+        kind: "template",
+        presetKind: run.workflowPresetKind,
+      };
+    }
+    return {
+      name: "사용자 정의",
+      kind: explicitKind === "template" ? "template" : "custom",
+    };
+  }
+
   function buildFeedShareText(post: FeedViewPost, run: RunRecord | null): string {
     const markdownAttachment = post.attachments.find((attachment) => attachment.kind === "markdown");
     const rawContent = markdownAttachment?.content?.trim() ?? "";
@@ -5274,6 +5336,55 @@ function App() {
       setStatus(`포스트 삭제 완료: ${post.agentName}`);
     } catch (e) {
       setError(`포스트 삭제 실패: ${String(e)}`);
+    }
+  }
+
+  async function onSubmitFeedRunGroupRename(runId: string, sourceFile: string) {
+    const trimmed = feedGroupRenameDraft.trim();
+    if (!trimmed) {
+      setError("세트 이름을 입력하세요.");
+      return;
+    }
+    const target = sourceFile.trim();
+    if (!target) {
+      setError("세트 원본 실행 파일을 찾을 수 없습니다.");
+      return;
+    }
+    setError("");
+    try {
+      const run = await ensureFeedRunRecord(target);
+      if (!run) {
+        throw new Error("실행 기록을 불러오지 못했습니다.");
+      }
+      const nextRun: RunRecord = {
+        ...run,
+        workflowGroupName: trimmed,
+        workflowGroupKind: "custom",
+      };
+      await invoke("run_save", { name: target, run: nextRun });
+      feedRunCacheRef.current[target] = nextRun;
+      if (selectedRunFile === target) {
+        setSelectedRunDetail(nextRun);
+      }
+      if (activeFeedRunMeta?.runId === runId) {
+        setActiveFeedRunMeta((prev) => {
+          if (!prev || prev.runId !== runId) {
+            return prev;
+          }
+          return {
+            ...prev,
+            groupName: trimmed,
+            groupKind: "custom",
+            presetKind: undefined,
+          };
+        });
+      }
+      setFeedPosts((prev) => [...prev]);
+      setFeedGroupRenameRunId(null);
+      setFeedGroupRenameDraft("");
+      setStatus(`피드 세트 이름 변경 완료: ${trimmed}`);
+    } catch (error) {
+      setError(`피드 세트 이름 변경 실패: ${String(error)}`);
     }
   }
 
@@ -5808,7 +5919,7 @@ function App() {
       return next;
     } catch (error) {
       if (!silent) {
-        setError(`브리지 상태 조회 실패: ${String(error)}`);
+        setError(`웹 연결 상태 조회 실패: ${String(error)}`);
       }
       return null;
     }
@@ -5820,9 +5931,9 @@ function App() {
     try {
       const raw = await invokeBridgeRpcWithRecovery("web_bridge_rotate_token");
       setWebBridgeStatus(toWebBridgeStatus(raw));
-      setStatus("브리지 토큰을 재발급했습니다.");
+      setStatus("웹 연결 토큰을 재발급했습니다.");
     } catch (error) {
-      setError(`브리지 토큰 재발급 실패: ${String(error)}`);
+      setError(`웹 연결 토큰 재발급 실패: ${String(error)}`);
     } finally {
       setWebWorkerBusy(false);
     }
@@ -5869,14 +5980,14 @@ function App() {
       }
 
       if (copied) {
-        setStatus("브리지 연결 코드 복사 완료");
+        setStatus("웹 연결 코드 복사 완료");
         setError("");
       } else {
         setStatus("자동 복사 권한이 없어 코드 박스를 표시했습니다. 아래에서 수동 복사하세요.");
         setError("");
       }
     } catch (error) {
-      setError(`브리지 연결 코드 준비 실패: ${String(error)}`);
+      setError(`웹 연결 코드 준비 실패: ${String(error)}`);
     }
   }
 
@@ -6167,6 +6278,7 @@ function App() {
     setConnectPreviewPoint(null);
     setIsConnectingDrag(false);
     setMarqueeSelection(null);
+    lastAppliedPresetRef.current = { kind, graph: cloneGraph(nextPreset) };
     const templateMeta = PRESET_TEMPLATE_META.find((row) => row.key === kind);
     setStatus(`${templateMeta?.statusLabel ?? "템플릿"} 로드됨`);
   }
@@ -7061,6 +7173,7 @@ function App() {
       const loaded = await invoke<unknown>("graph_load", { name: target });
       const normalized = autoArrangeGraphLayout(normalizeGraph(loaded));
       setGraph(cloneGraph(normalized));
+      lastAppliedPresetRef.current = null;
       setUndoStack([]);
       setRedoStack([]);
       const initialNodeId = pickDefaultCanvasNodeId(normalized.nodes);
@@ -7157,7 +7270,7 @@ function App() {
               ? "기록 탭으로 이동"
               : nextTab === "settings"
                 ? "설정 탭으로 이동"
-                : "브리지 탭으로 이동",
+                : "웹 연결 탭으로 이동",
       );
     };
 
@@ -8011,9 +8124,9 @@ ${prompt}`;
       if (webResultMode === "bridgeAssisted") {
         activeWebNodeIdRef.current = node.id;
         activeWebProviderRef.current = webProvider;
-        addNodeLog(node.id, `[WEB] ${webProviderLabel(webProvider)} 브리지 반자동 시작`);
+        addNodeLog(node.id, `[WEB] ${webProviderLabel(webProvider)} 웹 연결 반자동 시작`);
         addNodeLog(node.id, "[WEB] 웹 서비스 탭에서 전송 버튼을 1회 눌러주세요.");
-        setStatus(`${webProviderLabel(webProvider)} 브리지 대기 중 - 웹 탭에서 전송 1회 필요`);
+        setStatus(`${webProviderLabel(webProvider)} 웹 연결 대기 중 - 웹 탭에서 전송 1회 필요`);
         try {
           await openUrl(webProviderHomeUrl(webProvider));
           addNodeLog(node.id, `[WEB] ${webProviderLabel(webProvider)} 웹 탭을 자동으로 열었습니다.`);
@@ -8022,7 +8135,7 @@ ${prompt}`;
         }
         const workerReady = await ensureWebWorkerReady();
         if (!workerReady) {
-          addNodeLog(node.id, `[WEB] 브리지 워커 준비 실패, 수동 입력으로 전환`);
+          addNodeLog(node.id, `[WEB] 웹 연결 워커 준비 실패, 수동 입력으로 전환`);
           activeWebNodeIdRef.current = "";
           activeWebProviderRef.current = null;
           setNodeStatus(node.id, "waiting_user", `${webProvider} 응답 입력 대기`);
@@ -8054,7 +8167,7 @@ ${prompt}`;
             result = await runBridgeAssisted();
 
             if (result.ok && result.text) {
-              addNodeLog(node.id, `[WEB] ${webProviderLabel(webProvider)} 브리지 응답 수집 완료`);
+              addNodeLog(node.id, `[WEB] ${webProviderLabel(webProvider)} 웹 연결 응답 수집 완료`);
               return {
                 ok: true,
                 output: {
@@ -8080,7 +8193,7 @@ ${prompt}`;
               };
             }
 
-            const fallbackReason = `[WEB] 브리지 수집 실패 (${result?.errorCode ?? "UNKNOWN"}): ${
+            const fallbackReason = `[WEB] 웹 연결 수집 실패 (${result?.errorCode ?? "UNKNOWN"}): ${
               result?.error ?? "unknown error"
             }`;
             addNodeLog(node.id, fallbackReason);
@@ -8110,7 +8223,7 @@ ${prompt}`;
                 knowledgeTrace,
               };
             }
-            addNodeLog(node.id, `[WEB] 브리지 예외: ${String(error)}`);
+            addNodeLog(node.id, `[WEB] 웹 연결 예외: ${String(error)}`);
             addNodeLog(node.id, "[WEB] 수동 입력 모달로 전환합니다.");
             setNodeStatus(node.id, "waiting_user", `${webProvider} 응답 입력 대기`);
             setNodeRuntimeFields(node.id, {
@@ -8298,10 +8411,14 @@ ${prompt}`;
     }, {});
     setNodeStates(initialState);
 
+    const runGroup = inferRunGroupMeta(graph, lastAppliedPresetRef.current);
     const runRecord: RunRecord = {
       runId: `${Date.now()}`,
       question: workflowQuestion,
       startedAt: new Date().toISOString(),
+      workflowGroupName: runGroup.name,
+      workflowGroupKind: runGroup.kind,
+      workflowPresetKind: runGroup.presetKind,
       graphSnapshot: graph,
       transitions: [],
       summaryLogs: [],
@@ -8316,6 +8433,9 @@ ${prompt}`;
       runId: runRecord.runId,
       question: workflowQuestion,
       startedAt: runRecord.startedAt,
+      groupName: runGroup.name,
+      groupKind: runGroup.kind,
+      presetKind: runGroup.presetKind,
     });
 
     try {
@@ -8914,13 +9034,13 @@ ${prompt}`;
       <section className="panel-card settings-view bridge-view workspace-tab-panel">
         <section className="controls bridge-head-panel">
           <div className="web-automation-head">
-            <h2>브리지</h2>
+            <h2>웹 연결</h2>
             <button
-              aria-label="브리지 상태 동기화"
+              aria-label="웹 연결 상태 동기화"
               className="settings-refresh-button settings-refresh-icon-button"
               disabled={webWorkerBusy}
               onClick={() => void refreshWebBridgeStatus()}
-              title="브리지 상태 동기화"
+              title="웹 연결 상태 동기화"
               type="button"
             >
               <img alt="" aria-hidden="true" className="settings-refresh-icon" src="/reload.svg" />
@@ -8928,7 +9048,7 @@ ${prompt}`;
           </div>
           <div className="settings-badges">
             <span className={`status-tag ${webBridgeStatus.running ? "on" : "off"}`}>
-              {webBridgeStatus.running ? "브리지 준비됨" : "브리지 중지됨"}
+              {webBridgeStatus.running ? "웹 연결 준비됨" : "웹 연결 중지됨"}
             </span>
             <span className="status-tag neutral">엔드포인트: {bridgeUrl}</span>
           </div>
@@ -9291,6 +9411,60 @@ ${prompt}`;
     ),
   };
   const currentFeedPosts = feedCategoryPosts[feedCategory] ?? filteredFeedPosts;
+  const groupedFeedRuns = (() => {
+    const groups = new Map<
+      string,
+      {
+        runId: string;
+        sourceFile: string;
+        name: string;
+        kind: RunGroupKind;
+        presetKind?: PresetKind;
+        latestAt: string;
+        isLive: boolean;
+        posts: FeedViewPost[];
+      }
+    >();
+    for (const post of currentFeedPosts) {
+      const existing = groups.get(post.runId);
+      if (existing) {
+        existing.posts.push(post);
+        if (new Date(post.createdAt).getTime() > new Date(existing.latestAt).getTime()) {
+          existing.latestAt = post.createdAt;
+        }
+        if (post.status === "draft") {
+          existing.isLive = true;
+        }
+        continue;
+      }
+      const isLive = activeFeedRunMeta?.runId === post.runId;
+      const runRecord = feedRunCacheRef.current[post.sourceFile] ?? null;
+      const meta = isLive
+        ? {
+            name: activeFeedRunMeta?.groupName ?? "사용자 정의",
+            kind: activeFeedRunMeta?.groupKind ?? "custom",
+            presetKind: activeFeedRunMeta?.presetKind,
+          }
+        : resolveRunGroupFromRecord(runRecord);
+      groups.set(post.runId, {
+        runId: post.runId,
+        sourceFile: post.sourceFile,
+        name: meta.name,
+        kind: meta.kind,
+        presetKind: meta.presetKind,
+        latestAt: post.createdAt,
+        isLive: post.status === "draft",
+        posts: [post],
+      });
+    }
+    return Array.from(groups.values())
+      .map((group) => ({
+        ...group,
+        posts: group.posts.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
+      }))
+      .sort((a, b) => new Date(b.latestAt).getTime() - new Date(a.latestAt).getTime());
+  })();
+  const groupedFeedRunIdsKey = groupedFeedRuns.map((group) => group.runId).join("|");
   const feedCategoryMeta: Array<{ key: FeedCategory; label: string }> = [
     { key: "all_posts", label: "전체포스트" },
     { key: "completed_posts", label: "완료 답변" },
@@ -9331,6 +9505,33 @@ ${prompt}`;
     feedInspectorTurnNode.type === "turn";
   const feedInspectorEditableNodeId =
     feedInspectorEditable && feedInspectorTurnNode ? feedInspectorTurnNode.id : "";
+
+  useEffect(() => {
+    setFeedGroupExpandedByRunId((prev) => {
+      const next: Record<string, boolean> = {};
+      let changed = false;
+      for (const runId of groupedFeedRuns.map((group) => group.runId)) {
+        if (Object.prototype.hasOwnProperty.call(prev, runId)) {
+          next[runId] = prev[runId];
+        } else {
+          next[runId] = true;
+          changed = true;
+        }
+      }
+      for (const runId of Object.keys(prev)) {
+        if (!Object.prototype.hasOwnProperty.call(next, runId)) {
+          changed = true;
+        }
+      }
+      if (!changed && Object.keys(prev).length === Object.keys(next).length) {
+        return prev;
+      }
+      return next;
+    });
+    setFeedGroupRenameRunId((prev) =>
+      prev && groupedFeedRuns.some((group) => group.runId === prev) ? prev : null,
+    );
+  }, [groupedFeedRunIdsKey]);
 
   useEffect(() => {
     if (workspaceTab !== "feed") {
@@ -9482,12 +9683,12 @@ ${prompt}`;
           <button
             className={isActiveTab("bridge") ? "is-active" : ""}
             onClick={() => setWorkspaceTab("bridge")}
-            aria-label="브리지"
-            title="브리지"
+            aria-label="웹 연결"
+            title="웹 연결"
             type="button"
           >
             <span className="nav-icon"><NavIcon tab="bridge" active={isActiveTab("bridge")} /></span>
-            <span className="nav-label">브리지</span>
+            <span className="nav-label">웹 연결</span>
           </button>
         </nav>
       </aside>
@@ -10186,7 +10387,7 @@ ${prompt}`;
                                   className="modern-select"
                                   onChange={(next) => updateSelectedNodeConfig("webResultMode", next)}
                                   options={[
-                                    { value: "bridgeAssisted", label: "브리지 반자동 (권장)" },
+                                    { value: "bridgeAssisted", label: "웹 연결 반자동 (권장)" },
                                     { value: "manualPasteText", label: "텍스트 붙여넣기" },
                                     { value: "manualPasteJson", label: "JSON 붙여넣기" },
                                   ]}
@@ -10209,7 +10410,7 @@ ${prompt}`;
                                 />
                               </label>
                               <div className="inspector-empty">
-                                브리지 반자동은 질문 자동 주입/답변 자동 수집을 시도하고, 실패 시 수동 입력으로 폴백합니다.
+                                웹 연결 반자동은 질문 자동 주입/답변 자동 수집을 시도하고, 실패 시 수동 입력으로 폴백합니다.
                               </div>
                             </>
                           )}
@@ -10565,7 +10766,7 @@ ${prompt}`;
                               updateNodeConfigById(feedInspectorEditableNodeId, "webResultMode", next);
                             }}
                             options={[
-                              { value: "bridgeAssisted", label: "브리지 반자동 (권장)" },
+                              { value: "bridgeAssisted", label: "웹 연결 반자동 (권장)" },
                               { value: "manualPasteText", label: "텍스트 붙여넣기" },
                               { value: "manualPasteJson", label: "JSON 붙여넣기" },
                             ]}
@@ -10865,139 +11066,213 @@ ${prompt}`;
                   <div className="log-empty">표시할 포스트가 없습니다.</div>
                 )}
                 {!feedLoading &&
-                  currentFeedPosts.map((post) => {
-                    const markdownAttachment = post.attachments.find((attachment) => attachment.kind === "markdown");
-                    const visibleContent = markdownAttachment?.content ?? post.summary ?? "(첨부 없음)";
-                    const avatarHue = hashStringToHue(`${post.nodeId}:${post.agentName}:${post.roleLabel}`);
-                    const avatarStyle = {
-                      backgroundColor: `hsl(${avatarHue} 78% 92%)`,
-                      color: `hsl(${avatarHue} 54% 28%)`,
-                      borderColor: `hsl(${avatarHue} 36% 76%)`,
-                    };
-                    const avatarLabel = buildFeedAvatarLabel(post);
-                    const score = Math.max(
-                      1,
-                      Math.min(99, Number(post.evidence.qualityScore ?? (post.status === "done" ? 95 : 55))),
-                    );
-                    const pendingRequestCount = (pendingNodeRequests[post.nodeId] ?? []).length;
-                    const requestDraft = feedReplyDraftByPost[post.id] ?? "";
-                    const isExpanded = feedExpandedByPost[post.id] === true;
-                    const isDraftPost = post.status === "draft";
-                    const canRequest = post.nodeType === "turn";
+                  groupedFeedRuns.map((group) => {
+                    const isGroupExpanded = feedGroupExpandedByRunId[group.runId] !== false;
+                    const isRenamingGroup = feedGroupRenameRunId === group.runId;
                     return (
                       <section
-                        className={`feed-card feed-card-sns ${
-                          feedInspectorPost?.id === post.id ? "is-selected" : ""
-                        }`.trim()}
-                        key={post.id}
-                        onClick={() => onSelectFeedInspectorPost(post)}
+                        className={`feed-run-group ${isGroupExpanded ? "is-expanded" : ""}`}
+                        key={`feed-run-group-${group.runId}`}
                       >
-                        <div className="feed-card-head">
-                          <div className="feed-card-avatar" style={avatarStyle}>
-                            <span>{avatarLabel}</span>
-                          </div>
-                          <div className="feed-card-title-wrap">
-                            <h3 className={post.nodeType === "gate" ? "gate-node-title" : undefined}>
-                              {post.agentName}
-                            </h3>
-                            <div className="feed-card-sub">{post.roleLabel}</div>
-                          </div>
-                          <div className="feed-card-head-actions">
-                            <span
-                              className={`feed-score-badge ${
-                                isDraftPost ? "live" : post.status === "done" ? "good" : "warn"
-                              }`}
-                              title={isDraftPost ? "에이전트 작업 중" : `품질 점수 ${score}`}
-                            >
-                              {isDraftPost ? "LIVE" : score}
+                        <header className="feed-run-group-head">
+                          <div className="feed-run-group-meta">
+                            <strong>{group.name}</strong>
+                            <span>
+                              {group.posts.length}개 · {formatRunDateTime(group.latestAt)}
+                              {group.isLive ? " · 실행 중" : ""}
                             </span>
-                            <div
-                              className="feed-share-menu-wrap feed-share-menu-wrap-head"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                              }}
-                            >
+                          </div>
+                          <div className="feed-run-group-actions">
+                            {group.kind === "custom" && !isRenamingGroup && !group.isLive && (
                               <button
-                                aria-label="공유하기"
-                                className="feed-share-icon-button"
-                                onClick={() => setFeedShareMenuPostId((prev) => (prev === post.id ? null : post.id))}
+                                className="feed-run-group-rename"
+                                onClick={() => {
+                                  setFeedGroupRenameRunId(group.runId);
+                                  setFeedGroupRenameDraft(group.name);
+                                }}
                                 type="button"
                               >
-                                <img alt="" aria-hidden="true" className="feed-share-icon" src="/share-svgrepo-com.svg" />
+                                이름 변경
                               </button>
-                              {feedShareMenuPostId === post.id && (
-                                <div className="feed-share-menu">
-                                  <button onClick={() => void onShareFeedPost(post, "clipboard")} type="button">
-                                    <span>텍스트 복사</span>
-                                  </button>
-                                  <button onClick={() => void onShareFeedPost(post, "email")} type="button">
-                                    <span>이메일</span>
-                                  </button>
-                                  <button onClick={() => void onShareFeedPost(post, "obsidian")} type="button">
-                                    <span>옵시디언</span>
-                                  </button>
-                                  <button onClick={() => void onShareFeedPost(post, "json")} type="button">
-                                    <span>JSON 복사</span>
-                                  </button>
-                                  </div>
-                                )}
-                              </div>
+                            )}
                             <button
-                              aria-label="포스트 삭제"
-                              className="feed-delete-icon-button"
-                              disabled={!post.sourceFile}
-                              onClick={() => void onDeleteFeedPost(post)}
+                              className="feed-run-group-toggle"
+                              onClick={() =>
+                                setFeedGroupExpandedByRunId((prev) => ({
+                                  ...prev,
+                                  [group.runId]: !(prev[group.runId] !== false),
+                                }))
+                              }
                               type="button"
                             >
-                              <img alt="" aria-hidden="true" className="feed-delete-icon" src="/xmark.svg" />
+                              {isGroupExpanded ? "접기" : "펼치기"}
                             </button>
                           </div>
-                        </div>
-                        <div className="feed-card-summary">{post.summary || "(요약 없음)"}</div>
-                        <button
-                          className="feed-more-button"
-                          aria-expanded={isExpanded}
-                          onClick={() =>
-                            setFeedExpandedByPost((prev) => ({
-                              ...prev,
-                              [post.id]: !prev[post.id],
-                            }))
-                          }
-                          type="button"
-                        >
-                          {isExpanded ? "접기" : "더보기"}
-                        </button>
-                        <div className={`feed-card-details ${isExpanded ? "is-expanded" : ""}`} aria-hidden={!isExpanded}>
-                          {post.question && <div className="feed-card-question">Q: {post.question}</div>}
-                          <pre className="feed-sns-content">{visibleContent}</pre>
-                          <div className="feed-evidence-row">
-                            <span>{formatRelativeFeedTime(post.createdAt)}</span>
-                            <span>생성 시간 {formatDuration(post.evidence.durationMs)}</span>
-                            <span>사용량 {formatUsage(post.evidence.usage)}</span>
-                            {pendingRequestCount > 0 && <span>추가 요청 대기 {pendingRequestCount}건</span>}
+                        </header>
+                        {isRenamingGroup && (
+                          <div className="feed-run-group-rename-row">
+                            <input
+                              onChange={(event) => setFeedGroupRenameDraft(event.currentTarget.value)}
+                              placeholder="세트 이름 입력"
+                              value={feedGroupRenameDraft}
+                            />
+                            <button
+                              onClick={() => void onSubmitFeedRunGroupRename(group.runId, group.sourceFile)}
+                              type="button"
+                            >
+                              저장
+                            </button>
+                            <button
+                              onClick={() => {
+                                setFeedGroupRenameRunId(null);
+                                setFeedGroupRenameDraft("");
+                              }}
+                              type="button"
+                            >
+                              취소
+                            </button>
                           </div>
-                          {canRequest && (
-                            <div className="feed-reply-row">
-                              <input
-                                onChange={(event) =>
-                                  setFeedReplyDraftByPost((prev) => ({
-                                    ...prev,
-                                    [post.id]: event.currentTarget.value,
-                                  }))
-                                }
-                                placeholder="에이전트에게 추가 요청을 남기세요"
-                                value={requestDraft}
-                              />
-                              <button
-                                aria-label="요청 보내기"
-                                className="primary-action question-create-button feed-reply-send-button"
-                                onClick={() => onSubmitFeedAgentRequest(post)}
-                                type="button"
-                              >
-                                <img alt="" aria-hidden="true" className="question-create-icon" src="/up.svg" />
-                              </button>
-                            </div>
-                          )}
+                        )}
+                        <div className={`feed-run-group-body ${isGroupExpanded ? "is-expanded" : ""}`}>
+                          <div className="feed-run-group-posts">
+                            {group.posts.map((post) => {
+                              const markdownAttachment = post.attachments.find((attachment) => attachment.kind === "markdown");
+                              const visibleContent = markdownAttachment?.content ?? post.summary ?? "(첨부 없음)";
+                              const avatarHue = hashStringToHue(`${post.nodeId}:${post.agentName}:${post.roleLabel}`);
+                              const avatarStyle = {
+                                backgroundColor: `hsl(${avatarHue} 78% 92%)`,
+                                color: `hsl(${avatarHue} 54% 28%)`,
+                                borderColor: `hsl(${avatarHue} 36% 76%)`,
+                              };
+                              const avatarLabel = buildFeedAvatarLabel(post);
+                              const score = Math.max(
+                                1,
+                                Math.min(99, Number(post.evidence.qualityScore ?? (post.status === "done" ? 95 : 55))),
+                              );
+                              const pendingRequestCount = (pendingNodeRequests[post.nodeId] ?? []).length;
+                              const requestDraft = feedReplyDraftByPost[post.id] ?? "";
+                              const isExpanded = feedExpandedByPost[post.id] === true;
+                              const isDraftPost = post.status === "draft";
+                              const canRequest = post.nodeType === "turn";
+                              return (
+                                <section
+                                  className={`feed-card feed-card-sns ${
+                                    feedInspectorPost?.id === post.id ? "is-selected" : ""
+                                  }`.trim()}
+                                  key={post.id}
+                                  onClick={() => onSelectFeedInspectorPost(post)}
+                                >
+                                  <div className="feed-card-head">
+                                    <div className="feed-card-avatar" style={avatarStyle}>
+                                      <span>{avatarLabel}</span>
+                                    </div>
+                                    <div className="feed-card-title-wrap">
+                                      <h3 className={post.nodeType === "gate" ? "gate-node-title" : undefined}>
+                                        {post.agentName}
+                                      </h3>
+                                      <div className="feed-card-sub">{post.roleLabel}</div>
+                                    </div>
+                                    <div className="feed-card-head-actions">
+                                      <span
+                                        className={`feed-score-badge ${
+                                          isDraftPost ? "live" : post.status === "done" ? "good" : "warn"
+                                        }`}
+                                        title={isDraftPost ? "에이전트 작업 중" : `품질 점수 ${score}`}
+                                      >
+                                        {isDraftPost ? "LIVE" : score}
+                                      </span>
+                                      <div
+                                        className="feed-share-menu-wrap feed-share-menu-wrap-head"
+                                        onClick={(event) => {
+                                          event.stopPropagation();
+                                        }}
+                                      >
+                                        <button
+                                          aria-label="공유하기"
+                                          className="feed-share-icon-button"
+                                          onClick={() => setFeedShareMenuPostId((prev) => (prev === post.id ? null : post.id))}
+                                          type="button"
+                                        >
+                                          <img alt="" aria-hidden="true" className="feed-share-icon" src="/share-svgrepo-com.svg" />
+                                        </button>
+                                        {feedShareMenuPostId === post.id && (
+                                          <div className="feed-share-menu">
+                                            <button onClick={() => void onShareFeedPost(post, "clipboard")} type="button">
+                                              <span>텍스트 복사</span>
+                                            </button>
+                                            <button onClick={() => void onShareFeedPost(post, "email")} type="button">
+                                              <span>이메일</span>
+                                            </button>
+                                            <button onClick={() => void onShareFeedPost(post, "obsidian")} type="button">
+                                              <span>옵시디언</span>
+                                            </button>
+                                            <button onClick={() => void onShareFeedPost(post, "json")} type="button">
+                                              <span>JSON 복사</span>
+                                            </button>
+                                          </div>
+                                        )}
+                                      </div>
+                                      <button
+                                        aria-label="포스트 삭제"
+                                        className="feed-delete-icon-button"
+                                        disabled={!post.sourceFile}
+                                        onClick={() => void onDeleteFeedPost(post)}
+                                        type="button"
+                                      >
+                                        <img alt="" aria-hidden="true" className="feed-delete-icon" src="/xmark.svg" />
+                                      </button>
+                                    </div>
+                                  </div>
+                                  <div className="feed-card-summary">{post.summary || "(요약 없음)"}</div>
+                                  <button
+                                    className="feed-more-button"
+                                    aria-expanded={isExpanded}
+                                    onClick={() =>
+                                      setFeedExpandedByPost((prev) => ({
+                                        ...prev,
+                                        [post.id]: !prev[post.id],
+                                      }))
+                                    }
+                                    type="button"
+                                  >
+                                    {isExpanded ? "접기" : "더보기"}
+                                  </button>
+                                  <div className={`feed-card-details ${isExpanded ? "is-expanded" : ""}`} aria-hidden={!isExpanded}>
+                                    {post.question && <div className="feed-card-question">Q: {post.question}</div>}
+                                    <pre className="feed-sns-content">{visibleContent}</pre>
+                                    <div className="feed-evidence-row">
+                                      <span>{formatRelativeFeedTime(post.createdAt)}</span>
+                                      <span>생성 시간 {formatDuration(post.evidence.durationMs)}</span>
+                                      <span>사용량 {formatUsage(post.evidence.usage)}</span>
+                                      {pendingRequestCount > 0 && <span>추가 요청 대기 {pendingRequestCount}건</span>}
+                                    </div>
+                                    {canRequest && (
+                                      <div className="feed-reply-row">
+                                        <input
+                                          onChange={(event) =>
+                                            setFeedReplyDraftByPost((prev) => ({
+                                              ...prev,
+                                              [post.id]: event.currentTarget.value,
+                                            }))
+                                          }
+                                          placeholder="에이전트에게 추가 요청을 남기세요"
+                                          value={requestDraft}
+                                        />
+                                        <button
+                                          aria-label="요청 보내기"
+                                          className="primary-action question-create-button feed-reply-send-button"
+                                          onClick={() => onSubmitFeedAgentRequest(post)}
+                                          type="button"
+                                        >
+                                          <img alt="" aria-hidden="true" className="question-create-icon" src="/up.svg" />
+                                        </button>
+                                      </div>
+                                    )}
+                                  </div>
+                                </section>
+                              );
+                            })}
+                          </div>
                         </div>
                       </section>
                     );

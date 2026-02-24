@@ -548,14 +548,14 @@ function enqueueBridgeTask(provider, prompt, timeoutMs) {
   });
   task.timeoutHandle = setTimeout(() => {
     task.status = 'timeout';
-    bridgeProgress(provider, 'bridge_timeout', '브리지 응답 대기 시간이 초과되었습니다.');
-    failBridgeTask(task, 'BRIDGE_TIMEOUT', `브리지 응답 대기 시간 초과 (${timeoutMs}ms)`);
+    bridgeProgress(provider, 'bridge_timeout', '웹 연결 응답 대기 시간이 초과되었습니다.');
+    failBridgeTask(task, 'BRIDGE_TIMEOUT', `웹 연결 응답 대기 시간 초과 (${timeoutMs}ms)`);
   }, timeoutMs);
   state.bridge.tasks.set(task.id, task);
   const queue = state.bridge.providerQueue.get(provider) ?? [];
   queue.push(task.id);
   state.bridge.providerQueue.set(provider, queue);
-  bridgeProgress(provider, 'bridge_queued', '브리지 대기열에 프롬프트를 등록했습니다.');
+  bridgeProgress(provider, 'bridge_queued', '웹 연결 대기열에 프롬프트를 등록했습니다.');
   return { task, completion };
 }
 
@@ -744,14 +744,14 @@ async function handleBridgeHttpRequest(req, res) {
       }
       task.status = stage;
       const detail = String(body.detail ?? '').trim();
-      bridgeProgress(provider, `bridge_${stage}`, detail || `브리지 단계: ${stage}`);
+      bridgeProgress(provider, `bridge_${stage}`, detail || `웹 연결 단계: ${stage}`);
       writeHttpJson(req, res, 200, { ok: true });
       return;
     }
 
     if (taskRoute.action === 'error') {
       const code = String(body.code ?? 'BRIDGE_ERROR').trim() || 'BRIDGE_ERROR';
-      const message = String(body.message ?? '브리지 오류').trim() || '브리지 오류';
+      const message = String(body.message ?? '웹 연결 오류').trim() || '웹 연결 오류';
       task.status = 'failed';
       bridgeProgress(provider, 'bridge_failed', `${code}: ${message}`);
       failBridgeTask(task, code, message);
@@ -766,7 +766,7 @@ async function handleBridgeHttpRequest(req, res) {
         return;
       }
       task.status = 'done';
-      bridgeProgress(provider, 'bridge_done', '브리지 응답 수집 완료');
+      bridgeProgress(provider, 'bridge_done', '웹 연결 응답 수집 완료');
       settleBridgeTask(task, {
         text,
         raw: body.raw ?? null,
@@ -805,7 +805,7 @@ async function startBridgeServer() {
   await logLine(`bridge server started: http://${BRIDGE_HOST}:${BRIDGE_PORT}`);
   notify('web/progress', {
     stage: 'bridge_started',
-    message: `브리지 서버 시작 (${BRIDGE_HOST}:${BRIDGE_PORT})`,
+    message: `웹 연결 서버 시작 (${BRIDGE_HOST}:${BRIDGE_PORT})`,
   });
 }
 
@@ -1386,7 +1386,7 @@ async function runProviderAutomation(provider, { prompt, timeoutMs }) {
 
 async function runProviderBridgeAssisted(provider, { prompt, timeoutMs, runToken }) {
   if (!state.bridge.server?.listening) {
-    throw workerError('BRIDGE_NOT_RUNNING', '브리지 서버가 실행 중이 아닙니다.');
+    throw workerError('BRIDGE_NOT_RUNNING', '웹 연결 서버가 실행 중이 아닙니다.');
   }
   const startedAt = nowIso();
   const startedMs = Date.now();
@@ -1530,7 +1530,7 @@ async function closeAllProviderContexts() {
   }
 }
 
-function closeAllBridgeTasks(reason = '브리지 작업이 중단되었습니다.') {
+function closeAllBridgeTasks(reason = '웹 연결 작업이 중단되었습니다.') {
   const tasks = Array.from(state.bridge.tasks.values());
   state.bridge.tasks.clear();
   state.bridge.providerQueue.clear();
@@ -1552,7 +1552,7 @@ async function gracefulShutdown(reason, exitCode = 0) {
   shutdownRequested = true;
   notify('web/worker/stopped', { reason, stoppedAt: nowIso() });
   await logLine(`web worker shutdown: ${reason}`);
-  closeAllBridgeTasks('브리지 서버가 종료되었습니다.');
+  closeAllBridgeTasks('웹 연결 서버가 종료되었습니다.');
   await stopBridgeServer();
   await closeAllProviderContexts();
   await releaseWorkerLock();
@@ -1578,7 +1578,7 @@ async function handleRpcRequest(message) {
     const result = await rotateBridgeToken();
     notify('web/progress', {
       stage: 'bridge_token_rotated',
-      message: '브리지 토큰을 재발급했습니다.',
+      message: '웹 연결 토큰을 재발급했습니다.',
     });
     respond(id, result);
     return;
@@ -1756,7 +1756,7 @@ async function bootstrap() {
     await logLine(`bridge server unavailable: ${String(error)}`);
     notify('web/progress', {
       stage: 'bridge_unavailable',
-      message: '브리지 서버를 시작하지 못했습니다. 수동 폴백을 사용하세요.',
+      message: '웹 연결 서버를 시작하지 못했습니다. 수동 폴백을 사용하세요.',
     });
   }
   await logLine('web worker boot');
