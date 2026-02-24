@@ -4833,10 +4833,13 @@ ${prompt}`;
       const nodeMap = new Map(graph.nodes.map((node) => [node.id, node]));
       const indegree = new Map<string, number>();
       const adjacency = new Map<string, string[]>();
+      const incoming = new Map<string, string[]>();
+      const terminalStateByNodeId: Record<string, NodeExecutionStatus> = {};
 
       for (const node of graph.nodes) {
         indegree.set(node.id, 0);
         adjacency.set(node.id, []);
+        incoming.set(node.id, []);
       }
 
       for (const edge of graph.edges) {
@@ -4844,6 +4847,9 @@ ${prompt}`;
         const children = adjacency.get(edge.from.nodeId) ?? [];
         children.push(edge.to.nodeId);
         adjacency.set(edge.from.nodeId, children);
+        const parents = incoming.get(edge.to.nodeId) ?? [];
+        parents.push(edge.from.nodeId);
+        incoming.set(edge.to.nodeId, parents);
       }
 
       const latestFeedSourceByNodeId = new Map<string, FeedInputSource>();
@@ -4950,7 +4956,37 @@ ${prompt}`;
             finishedAt: new Date().toISOString(),
           });
           transition(runRecord, nodeId, "skipped", "분기 결과로 건너뜀");
+          terminalStateByNodeId[nodeId] = "skipped";
         } else {
+          const parentIds = incoming.get(nodeId) ?? [];
+          const missingParent = parentIds.find((parentId) => !(parentId in outputs));
+          if (missingParent) {
+            const blockedAtIso = new Date().toISOString();
+            const blockedReason = `선행 노드(${missingParent}) 결과 없음으로 건너뜀`;
+            setNodeStatus(nodeId, "skipped", blockedReason);
+            setNodeRuntimeFields(nodeId, {
+              status: "skipped",
+              finishedAt: blockedAtIso,
+            });
+            transition(runRecord, nodeId, "skipped", blockedReason);
+            const blockedFeed = buildFeedPost({
+              runId: runRecord.runId,
+              node,
+              status: "cancelled",
+              createdAt: blockedAtIso,
+              summary: blockedReason,
+              logs: runLogCollectorRef.current[nodeId] ?? [],
+              inputSources: nodeInputSources,
+              inputData: nodeInput,
+            });
+            runRecord.feedPosts?.push(blockedFeed.post);
+            rememberFeedSource(blockedFeed.post);
+            feedRawAttachmentRef.current[feedAttachmentRawKey(blockedFeed.post.id, "markdown")] =
+              blockedFeed.rawAttachments.markdown;
+            feedRawAttachmentRef.current[feedAttachmentRawKey(blockedFeed.post.id, "json")] =
+              blockedFeed.rawAttachments.json;
+            terminalStateByNodeId[nodeId] = "skipped";
+          } else {
           const startedAtMs = Date.now();
           const startedAtIso = new Date(startedAtMs).toISOString();
           setNodeStatus(nodeId, "running", "노드 실행 시작");
@@ -5012,7 +5048,8 @@ ${prompt}`;
                 failedFeed.rawAttachments.markdown;
               feedRawAttachmentRef.current[feedAttachmentRawKey(failedFeed.post.id, "json")] =
                 failedFeed.rawAttachments.json;
-              break;
+              terminalStateByNodeId[nodeId] = "failed";
+              continue;
             }
 
             const config = node.config as TurnConfig;
@@ -5099,7 +5136,8 @@ ${prompt}`;
                 rejectedFeed.rawAttachments.markdown;
               feedRawAttachmentRef.current[feedAttachmentRawKey(rejectedFeed.post.id, "json")] =
                 rejectedFeed.rawAttachments.json;
-              break;
+              terminalStateByNodeId[nodeId] = "failed";
+              continue;
             }
 
             const finishedAtIso = new Date().toISOString();
@@ -5151,6 +5189,7 @@ ${prompt}`;
             feedRawAttachmentRef.current[feedAttachmentRawKey(doneFeed.post.id, "json")] =
               doneFeed.rawAttachments.json;
             lastDoneNodeId = nodeId;
+            terminalStateByNodeId[nodeId] = "done";
           } else if (node.type === "transform") {
             const result = await executeTransformNode(node, input);
             if (!result.ok) {
@@ -5183,7 +5222,8 @@ ${prompt}`;
               ] = transformFailedFeed.rawAttachments.markdown;
               feedRawAttachmentRef.current[feedAttachmentRawKey(transformFailedFeed.post.id, "json")] =
                 transformFailedFeed.rawAttachments.json;
-              break;
+              terminalStateByNodeId[nodeId] = "failed";
+              continue;
             }
 
             const finishedAtIso = new Date().toISOString();
@@ -5215,6 +5255,7 @@ ${prompt}`;
             feedRawAttachmentRef.current[feedAttachmentRawKey(transformDoneFeed.post.id, "json")] =
               transformDoneFeed.rawAttachments.json;
             lastDoneNodeId = nodeId;
+            terminalStateByNodeId[nodeId] = "done";
           } else {
             const result = executeGateNode(node, input, skipSet);
             if (!result.ok) {
@@ -5246,7 +5287,8 @@ ${prompt}`;
                 gateFailedFeed.rawAttachments.markdown;
               feedRawAttachmentRef.current[feedAttachmentRawKey(gateFailedFeed.post.id, "json")] =
                 gateFailedFeed.rawAttachments.json;
-              break;
+              terminalStateByNodeId[nodeId] = "failed";
+              continue;
             }
 
             const finishedAtIso = new Date().toISOString();
@@ -5278,6 +5320,8 @@ ${prompt}`;
             feedRawAttachmentRef.current[feedAttachmentRawKey(gateDoneFeed.post.id, "json")] =
               gateDoneFeed.rawAttachments.json;
             lastDoneNodeId = nodeId;
+            terminalStateByNodeId[nodeId] = "done";
+          }
           }
         }
 
@@ -5319,26 +5363,34 @@ ${prompt}`;
       const sinkNodeIds = graph.nodes
         .map((node) => node.id)
         .filter((nodeId) => !outgoingNodeIdSet.has(nodeId));
-      const doneSinkNodeIds = sinkNodeIds.filter((nodeId) => nodeId in outputs);
       let finalNodeId = "";
-      if (doneSinkNodeIds.length === 1) {
-        finalNodeId = doneSinkNodeIds[0];
-      } else if (doneSinkNodeIds.length > 1) {
-        const doneSinkSet = new Set(doneSinkNodeIds);
+      if (sinkNodeIds.length === 1) {
+        finalNodeId = sinkNodeIds[0];
+      } else if (sinkNodeIds.length > 1) {
+        const sinkSet = new Set(sinkNodeIds);
         for (let index = runRecord.transitions.length - 1; index >= 0; index -= 1) {
           const row = runRecord.transitions[index];
-          if (row.status !== "done" || !doneSinkSet.has(row.nodeId)) {
+          if (!sinkSet.has(row.nodeId)) {
             continue;
           }
           finalNodeId = row.nodeId;
           break;
         }
       }
-      if (!finalNodeId && lastDoneNodeId && lastDoneNodeId in outputs) {
+      if (!finalNodeId && lastDoneNodeId) {
         finalNodeId = lastDoneNodeId;
       }
-      if (finalNodeId && finalNodeId in outputs) {
+      const finalNodeState = finalNodeId ? terminalStateByNodeId[finalNodeId] : undefined;
+      if (finalNodeId && finalNodeState === "done" && finalNodeId in outputs) {
         runRecord.finalAnswer = extractFinalAnswer(outputs[finalNodeId]);
+        setStatus("그래프 실행 완료");
+      } else {
+        const reason =
+          finalNodeId && finalNodeState
+            ? `최종 노드(${finalNodeId}) 상태=${nodeStatusLabel(finalNodeState)}`
+            : "최종 노드를 확정하지 못했습니다.";
+        setStatus(`그래프 실행 실패 (${reason})`);
+        setError(`최종 노드 실패: ${reason}`);
       }
       runRecord.finishedAt = new Date().toISOString();
       runRecord.regression = await buildRegressionSummary(runRecord);
@@ -5346,7 +5398,6 @@ ${prompt}`;
       const normalizedRunRecord = normalizeRunRecord(runRecord);
       const runFileName = `run-${runRecord.runId}.json`;
       feedRunCacheRef.current[runFileName] = normalizedRunRecord;
-      setStatus("그래프 실행 완료");
     } catch (e) {
       markCodexNodesStatusOnEngineIssue("failed", `그래프 실행 실패: ${String(e)}`, true);
       setError(String(e));
