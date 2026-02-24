@@ -4446,7 +4446,7 @@ function App() {
   const [model, setModel] = useState<string>(DEFAULT_TURN_MODEL);
   const [costPreset, setCostPreset] = useState<CostPreset>("balanced");
   const [workflowQuestion, setWorkflowQuestion] = useState(
-    "언어 학습에서 AI가 기존 학습 패러다임을 어떻게 개선할 수 있는지 분석해줘.",
+    "",
   );
 
   const [engineStarted, setEngineStarted] = useState(false);
@@ -4538,7 +4538,7 @@ function App() {
   } | null>(null);
   const [selectedRunFile, setSelectedRunFile] = useState("");
   const [selectedRunDetail, setSelectedRunDetail] = useState<RunRecord | null>(null);
-  const [lastSavedRunFile, setLastSavedRunFile] = useState("");
+  const [, setLastSavedRunFile] = useState("");
   const [nodeStates, setNodeStates] = useState<Record<string, NodeRunState>>({});
   const [isGraphRunning, setIsGraphRunning] = useState(false);
   const [isRunStarting, setIsRunStarting] = useState(false);
@@ -11264,7 +11264,7 @@ ${prompt}`;
                               }
                               type="button"
                             >
-                              {isGroupExpanded ? "CLOSE" : "OPEN"}
+                              {isGroupExpanded ? "닫기" : "열기"}
                             </button>
                           </div>
                         </header>
@@ -11535,7 +11535,7 @@ ${prompt}`;
         {workspaceTab === "settings" && (
           <section className="panel-card settings-view workspace-tab-panel">
             {renderSettingsPanel(false)}
-            {lastSavedRunFile && <div>최근 실행 파일: {formatRunFileLabel(lastSavedRunFile)}</div>}
+            {/* {lastSavedRunFile && <div>최근 실행 파일: {formatRunFileLabel(lastSavedRunFile)}</div>} */}
           </section>
         )}
 
