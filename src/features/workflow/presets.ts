@@ -493,40 +493,6 @@ function prependPreprocessAgent(kind: PresetKind, graphData: GraphData): GraphDa
   };
 }
 
-function applyRoleDisciplinePrompt(graphData: GraphData): GraphData {
-  return {
-    ...graphData,
-    nodes: graphData.nodes.map((node) => {
-      if (node.type !== "turn") {
-        return node;
-      }
-      const config = node.config as TurnConfig;
-      const role = String(config.role ?? "SPECIALIST AGENT").trim() || "SPECIALIST AGENT";
-      const body = String(config.promptTemplate ?? "{{input}}").trim() || "{{input}}";
-      if (body.includes("__ROLE_DISCIPLINE__")) {
-        return node;
-      }
-
-      const discipline =
-        "__ROLE_DISCIPLINE__\n" +
-        `당신은 ${role} 역할이다.\n` +
-        "역할 규율:\n" +
-        "1) 담당 범위 외 결론/판정/구현을 임의 확정하지 않는다.\n" +
-        "2) 입력이 불완전하면 치명적 누락 항목을 먼저 드러내고 보수적 가정을 명시한다.\n" +
-        "3) 산출 전 자기검증(정확성/완전성/실행가능성/근거충분성)을 수행한다.\n" +
-        "4) 출력은 다음 에이전트가 재사용 가능한 구조로 작성한다.\n";
-
-      return {
-        ...node,
-        config: {
-          ...config,
-          promptTemplate: `${discipline}\n${body}`,
-        },
-      };
-    }),
-  };
-}
-
 function buildValidationPreset(): GraphData {
   const nodes: GraphNode[] = [
     makePresetNode("turn-intake", "turn", 120, 120, {
@@ -1167,5 +1133,5 @@ export function buildPresetGraphByKind(kind: PresetKind): GraphData {
     base = buildExpertPreset();
   }
   const withPreprocess = prependPreprocessAgent(kind, base);
-  return applyRoleDisciplinePrompt(withPreprocess);
+  return withPreprocess;
 }
