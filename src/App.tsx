@@ -5284,9 +5284,9 @@ function App() {
       } else if (key === "2") {
         nextTab = "feed";
       } else if (key === "3") {
-        nextTab = "settings";
-      } else if (key === "4") {
         nextTab = "bridge";
+      } else if (key === "4") {
+        nextTab = "settings";
       }
 
       if (!nextTab) {
@@ -5300,9 +5300,9 @@ function App() {
           ? "워크플로우 탭으로 이동"
           : nextTab === "feed"
             ? "피드 탭으로 이동"
-            : nextTab === "settings"
-                ? "설정 탭으로 이동"
-                : "웹 연결 탭으로 이동",
+            : nextTab === "bridge"
+              ? "웹 연결 탭으로 이동"
+              : "설정 탭으로 이동",
       );
     };
 
@@ -7669,16 +7669,6 @@ ${prompt}`;
             <span className="nav-label">피드</span>
           </button>
           <button
-            className={isActiveTab("settings") ? "is-active" : ""}
-            onClick={() => setWorkspaceTab("settings")}
-            aria-label="설정"
-            title="설정"
-            type="button"
-          >
-            <span className="nav-icon"><NavIcon tab="settings" active={isActiveTab("settings")} /></span>
-            <span className="nav-label">설정</span>
-          </button>
-          <button
             className={isActiveTab("bridge") ? "is-active" : ""}
             onClick={() => setWorkspaceTab("bridge")}
             aria-label="웹 연결"
@@ -7687,6 +7677,16 @@ ${prompt}`;
           >
             <span className="nav-icon"><NavIcon tab="bridge" active={isActiveTab("bridge")} /></span>
             <span className="nav-label">웹 연결</span>
+          </button>
+          <button
+            className={isActiveTab("settings") ? "is-active" : ""}
+            onClick={() => setWorkspaceTab("settings")}
+            aria-label="설정"
+            title="설정"
+            type="button"
+          >
+            <span className="nav-icon"><NavIcon tab="settings" active={isActiveTab("settings")} /></span>
+            <span className="nav-label">설정</span>
           </button>
         </nav>
       </aside>
