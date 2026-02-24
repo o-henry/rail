@@ -3113,6 +3113,8 @@ pre {
 }
 
 .bridge-help-trigger {
+  position: relative;
+  bottom: 2px;
   width: 18px;
   min-width: 18px;
   height: 18px;
