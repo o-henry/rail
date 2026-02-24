@@ -4,7 +4,6 @@ import {
   WheelEvent as ReactWheelEvent,
   useEffect,
   useMemo,
-  useRef,
   useState,
 } from "react";
 import "../App.css";
@@ -19,6 +18,10 @@ import FeedPage from "../pages/feed/FeedPage";
 import SettingsPage from "../pages/settings/SettingsPage";
 import WorkflowPage from "../pages/workflow/WorkflowPage";
 import { useFloatingPanel } from "../features/ui/useFloatingPanel";
+import { useExecutionState } from "./hooks/useExecutionState";
+import { useFeedState } from "./hooks/useFeedState";
+import { useGraphState } from "./hooks/useGraphState";
+import { useWebConnectState } from "./hooks/useWebConnectState";
 import {
   COST_PRESET_DEFAULT_MODEL,
   DEFAULT_TURN_MODEL,
@@ -154,7 +157,6 @@ import {
   KNOWLEDGE_DEFAULT_TOP_K,
   NavIcon,
   type TurnTerminal,
-  type WebBridgeStatus,
   type WorkspaceTab,
   isTurnTerminalEvent,
   normalizeGraph,
@@ -225,38 +227,23 @@ import type {
   AgentRuleDoc,
   AgentRulesReadResult,
   ApprovalDecision,
-  AuthMode,
   AuthProbeResult,
   CanvasDisplayEdge,
-  CodexMultiAgentMode,
-  DragState,
-  EdgeDragState,
   EngineApprovalRequestEvent,
   EngineLifecycleEvent,
   EngineNotificationEvent,
   FeedCategory,
-  FeedExecutorFilter,
   FeedInputSource,
-  FeedPeriodFilter,
   FeedPost,
-  FeedStatusFilter,
   FeedViewPost,
-  GraphClipboardSnapshot,
   KnowledgeRetrieveResult,
   KnowledgeTraceEntry,
   LoginChatgptResult,
   LogicalPoint,
-  MarqueeSelection,
   NodeMetric,
   NodeRunState,
   NodeVisualSize,
-  PanState,
-  PendingApproval,
-  PendingWebLogin,
-  PendingWebTurn,
-  PointerState,
   RegressionSummary,
-  RunGroupKind,
   RunRecord,
   ThreadStartResult,
   UsageCheckResult,
@@ -266,7 +253,7 @@ import type {
 } from "./main";
 
 function App() {
-  const { t } = useI18n();
+  const { t, tp } = useI18n();
   const defaultCwd = useMemo(() => loadPersistedCwd("."), []);
   const defaultLoginCompleted = useMemo(() => loadPersistedLoginCompleted(), []);
   const defaultAuthMode = useMemo(() => loadPersistedAuthMode(), []);
@@ -281,162 +268,214 @@ function App() {
     "",
   );
 
-  const [engineStarted, setEngineStarted] = useState(false);
-  const [status, setStatus] = useState("대기 중");
-  const [running, setRunning] = useState(false);
-  const [error, setErrorState] = useState("");
-  const [, setErrorLogs] = useState<string[]>([]);
-
-  const [usageInfoText, setUsageInfoText] = useState("");
-  const [usageResultClosed, setUsageResultClosed] = useState(false);
-  const [authMode, setAuthMode] = useState<AuthMode>(defaultAuthMode);
-  const [codexMultiAgentMode, setCodexMultiAgentMode] = useState<CodexMultiAgentMode>(defaultCodexMultiAgentMode);
-  const [loginCompleted, setLoginCompleted] = useState(defaultLoginCompleted);
-  const [codexAuthBusy, setCodexAuthBusy] = useState(false);
-  const [pendingApprovals, setPendingApprovals] = useState<PendingApproval[]>([]);
-  const [approvalSubmitting, setApprovalSubmitting] = useState(false);
-  const [pendingWebTurn, setPendingWebTurn] = useState<PendingWebTurn | null>(null);
-  const [suspendedWebTurn, setSuspendedWebTurn] = useState<PendingWebTurn | null>(null);
-  const [suspendedWebResponseDraft, setSuspendedWebResponseDraft] = useState("");
-  const [pendingWebLogin, setPendingWebLogin] = useState<PendingWebLogin | null>(null);
-  const [webResponseDraft, setWebResponseDraft] = useState("");
-  const [, setWebWorkerHealth] = useState<WebWorkerHealth>({
-    running: false,
+  const {
+    engineStarted,
+    setEngineStarted,
+    status,
+    setStatus,
+    running,
+    setRunning,
+    error,
+    setErrorState,
+    setErrorLogs,
+    usageInfoText,
+    setUsageInfoText,
+    usageResultClosed,
+    setUsageResultClosed,
+    authMode,
+    setAuthMode,
+    codexMultiAgentMode,
+    setCodexMultiAgentMode,
+    loginCompleted,
+    setLoginCompleted,
+    codexAuthBusy,
+    setCodexAuthBusy,
+    pendingApprovals,
+    setPendingApprovals,
+    approvalSubmitting,
+    setApprovalSubmitting,
+    nodeStates,
+    setNodeStates,
+    isGraphRunning,
+    setIsGraphRunning,
+    isRunStarting,
+    setIsRunStarting,
+    runtimeNowMs,
+    setRuntimeNowMs,
+    cancelRequestedRef,
+    activeTurnNodeIdRef,
+    turnTerminalResolverRef,
+    activeRunDeltaRef,
+    collectingRunRef,
+    runLogCollectorRef,
+    feedRunCacheRef,
+    runStartGuardRef,
+    authLoginRequiredProbeCountRef,
+    lastAuthenticatedAtRef,
+    codexLoginLastAttemptAtRef,
+  } = useExecutionState({
+    defaultAuthMode,
+    defaultCodexMultiAgentMode,
+    defaultLoginCompleted,
   });
-  const [webWorkerBusy, setWebWorkerBusy] = useState(false);
-  const [webBridgeStatus, setWebBridgeStatus] = useState<WebBridgeStatus>({
-    running: false,
-    port: 38961,
-    tokenMasked: "",
-    extensionOriginAllowlistConfigured: false,
-    allowedExtensionOriginCount: 0,
-    connectedProviders: [],
-    queuedTasks: 0,
-    activeTasks: 0,
+  const {
+    pendingWebTurn,
+    setPendingWebTurn,
+    suspendedWebTurn,
+    setSuspendedWebTurn,
+    suspendedWebResponseDraft,
+    setSuspendedWebResponseDraft,
+    pendingWebLogin,
+    setPendingWebLogin,
+    webResponseDraft,
+    setWebResponseDraft,
+    setWebWorkerHealth,
+    webWorkerBusy,
+    setWebWorkerBusy,
+    webBridgeStatus,
+    setWebBridgeStatus,
+    setWebBridgeLogs,
+    webBridgeConnectCode,
+    setWebBridgeConnectCode,
+    providerChildViewOpen,
+    setProviderChildViewOpen,
+    activeWebNodeIdRef,
+    activeWebProviderRef,
+    webTurnResolverRef,
+    webLoginResolverRef,
+    pendingWebTurnAutoOpenKeyRef,
+    webTurnFloatingRef,
+    pendingWebLoginAutoOpenKeyRef,
+    webBridgeStageWarnTimerRef,
+    activeWebPromptRef,
+  } = useWebConnectState();
+  const {
+    graph,
+    setGraph,
+    selectedNodeId,
+    setSelectedNodeId,
+    selectedNodeIds,
+    setSelectedNodeIds,
+    selectedEdgeKey,
+    setSelectedEdgeKey,
+    connectFromNodeId,
+    setConnectFromNodeId,
+    connectFromSide,
+    setConnectFromSide,
+    connectPreviewStartPoint,
+    setConnectPreviewStartPoint,
+    connectPreviewPoint,
+    setConnectPreviewPoint,
+    isConnectingDrag,
+    setIsConnectingDrag,
+    draggingNodeIds,
+    setDraggingNodeIds,
+    graphFileName,
+    setGraphFileName,
+    selectedGraphFileName,
+    setSelectedGraphFileName,
+    graphRenameOpen,
+    setGraphRenameOpen,
+    graphRenameDraft,
+    setGraphRenameDraft,
+    graphFiles,
+    setGraphFiles,
+    canvasZoom,
+    setCanvasZoom,
+    panMode,
+    setPanMode,
+    canvasFullscreen,
+    setCanvasFullscreen,
+    canvasLogicalViewport,
+    setCanvasLogicalViewport,
+    undoStack,
+    setUndoStack,
+    redoStack,
+    setRedoStack,
+    setNodeSizeVersion,
+    marqueeSelection,
+    setMarqueeSelection,
+    dragRef,
+    edgeDragRef,
+    graphCanvasRef,
+    nodeSizeMapRef,
+    questionInputRef,
+    panRef,
+    dragPointerRef,
+    dragAutoPanFrameRef,
+    dragWindowMoveHandlerRef,
+    dragWindowUpHandlerRef,
+    dragStartSnapshotRef,
+    edgeDragStartSnapshotRef,
+    edgeDragWindowMoveHandlerRef,
+    edgeDragWindowUpHandlerRef,
+    zoomStatusTimerRef,
+    lastAppliedPresetRef,
+    graphClipboardRef,
+    graphPasteSerialRef,
+  } = useGraphState({
+    initialGraph: {
+      version: GRAPH_SCHEMA_VERSION,
+      nodes: [],
+      edges: [],
+      knowledge: defaultKnowledgeConfig(),
+    },
+    defaultStageWidth: DEFAULT_STAGE_WIDTH,
+    defaultStageHeight: DEFAULT_STAGE_HEIGHT,
   });
-  const [, setWebBridgeLogs] = useState<string[]>([]);
-  const [webBridgeConnectCode, setWebBridgeConnectCode] = useState("");
-  const [providerChildViewOpen, setProviderChildViewOpen] = useState<Record<WebProvider, boolean>>({
-    gemini: false,
-    gpt: false,
-    grok: false,
-    perplexity: false,
-    claude: false,
-  });
-  const [graph, setGraph] = useState<GraphData>({
-    version: GRAPH_SCHEMA_VERSION,
-    nodes: [],
-    edges: [],
-    knowledge: defaultKnowledgeConfig(),
-  });
-  const [selectedNodeId, setSelectedNodeId] = useState<string>("");
-  const [selectedNodeIds, setSelectedNodeIds] = useState<string[]>([]);
-  const [selectedEdgeKey, setSelectedEdgeKey] = useState<string>("");
-  const [connectFromNodeId, setConnectFromNodeId] = useState<string>("");
-  const [connectFromSide, setConnectFromSide] = useState<NodeAnchorSide | null>(null);
-  const [connectPreviewStartPoint, setConnectPreviewStartPoint] = useState<LogicalPoint | null>(null);
-  const [connectPreviewPoint, setConnectPreviewPoint] = useState<LogicalPoint | null>(null);
-  const [isConnectingDrag, setIsConnectingDrag] = useState(false);
-  const [draggingNodeIds, setDraggingNodeIds] = useState<string[]>([]);
-  const [graphFileName, setGraphFileName] = useState("");
-  const [selectedGraphFileName, setSelectedGraphFileName] = useState("");
-  const [graphRenameOpen, setGraphRenameOpen] = useState(false);
-  const [graphRenameDraft, setGraphRenameDraft] = useState("");
-  const [graphFiles, setGraphFiles] = useState<string[]>([]);
-  const [feedPosts, setFeedPosts] = useState<FeedViewPost[]>([]);
-  const [feedLoading, setFeedLoading] = useState(false);
-  const [feedStatusFilter, setFeedStatusFilter] = useState<FeedStatusFilter>("all");
-  const [feedExecutorFilter, setFeedExecutorFilter] = useState<FeedExecutorFilter>("all");
-  const [feedPeriodFilter, setFeedPeriodFilter] = useState<FeedPeriodFilter>("all");
-  const [feedKeyword, setFeedKeyword] = useState("");
-  const [feedCategory, setFeedCategory] = useState<FeedCategory>("all_posts");
-  const [feedFilterOpen, setFeedFilterOpen] = useState(false);
-  const [feedGroupExpandedByRunId, setFeedGroupExpandedByRunId] = useState<Record<string, boolean>>({});
-  const [feedGroupRenameRunId, setFeedGroupRenameRunId] = useState<string | null>(null);
-  const [feedGroupRenameDraft, setFeedGroupRenameDraft] = useState("");
-  const [feedExpandedByPost, setFeedExpandedByPost] = useState<Record<string, boolean>>({});
-  const [feedShareMenuPostId, setFeedShareMenuPostId] = useState<string | null>(null);
-  const [feedReplyDraftByPost, setFeedReplyDraftByPost] = useState<Record<string, string>>({});
-  const [feedReplySubmittingByPost, setFeedReplySubmittingByPost] = useState<Record<string, boolean>>({});
-  const [feedReplyFeedbackByPost, setFeedReplyFeedbackByPost] = useState<Record<string, string>>({});
-  const [feedInspectorPostId, setFeedInspectorPostId] = useState("");
-  const [feedInspectorSnapshotNode, setFeedInspectorSnapshotNode] = useState<GraphNode | null>(null);
-  const [, setFeedInspectorRuleDocs] = useState<AgentRuleDoc[]>([]);
-  const [, setFeedInspectorRuleLoading] = useState(false);
-  const [pendingNodeRequests, setPendingNodeRequests] = useState<Record<string, string[]>>({});
-  const [activeFeedRunMeta, setActiveFeedRunMeta] = useState<{
-    runId: string;
-    question: string;
-    startedAt: string;
-    groupName: string;
-    groupKind: RunGroupKind;
-    presetKind?: PresetKind;
-  } | null>(null);
-  const [, setLastSavedRunFile] = useState("");
-  const [nodeStates, setNodeStates] = useState<Record<string, NodeRunState>>({});
-  const [isGraphRunning, setIsGraphRunning] = useState(false);
-  const [isRunStarting, setIsRunStarting] = useState(false);
-  const [runtimeNowMs, setRuntimeNowMs] = useState(() => Date.now());
-  const [canvasZoom, setCanvasZoom] = useState(1);
-  const [panMode, setPanMode] = useState(false);
-  const [canvasFullscreen, setCanvasFullscreen] = useState(false);
-  const [canvasLogicalViewport, setCanvasLogicalViewport] = useState({
-    width: DEFAULT_STAGE_WIDTH,
-    height: DEFAULT_STAGE_HEIGHT,
-  });
-  const [undoStack, setUndoStack] = useState<GraphData[]>([]);
-  const [redoStack, setRedoStack] = useState<GraphData[]>([]);
-  const [, setNodeSizeVersion] = useState(0);
-  const [marqueeSelection, setMarqueeSelection] = useState<MarqueeSelection | null>(null);
+  const {
+    feedPosts,
+    setFeedPosts,
+    feedLoading,
+    setFeedLoading,
+    feedStatusFilter,
+    setFeedStatusFilter,
+    feedExecutorFilter,
+    setFeedExecutorFilter,
+    feedPeriodFilter,
+    setFeedPeriodFilter,
+    feedKeyword,
+    setFeedKeyword,
+    feedCategory,
+    setFeedCategory,
+    feedFilterOpen,
+    setFeedFilterOpen,
+    feedGroupExpandedByRunId,
+    setFeedGroupExpandedByRunId,
+    feedGroupRenameRunId,
+    setFeedGroupRenameRunId,
+    feedGroupRenameDraft,
+    setFeedGroupRenameDraft,
+    feedExpandedByPost,
+    setFeedExpandedByPost,
+    feedShareMenuPostId,
+    setFeedShareMenuPostId,
+    feedReplyDraftByPost,
+    setFeedReplyDraftByPost,
+    feedReplySubmittingByPost,
+    setFeedReplySubmittingByPost,
+    feedReplyFeedbackByPost,
+    setFeedReplyFeedbackByPost,
+    feedInspectorPostId,
+    setFeedInspectorPostId,
+    feedInspectorSnapshotNode,
+    setFeedInspectorSnapshotNode,
+    setFeedInspectorRuleDocs,
+    setFeedInspectorRuleLoading,
+    pendingNodeRequests,
+    setPendingNodeRequests,
+    activeFeedRunMeta,
+    setActiveFeedRunMeta,
+    setLastSavedRunFile,
+    feedRawAttachmentRef,
+    pendingNodeRequestsRef,
+    agentRulesCacheRef,
+    feedReplyFeedbackClearTimerRef,
+  } = useFeedState();
   const hasTauriRuntime = useMemo(
     () => Boolean((window as Window & { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__),
     [],
   );
-
-  const dragRef = useRef<DragState | null>(null);
-  const edgeDragRef = useRef<EdgeDragState | null>(null);
-  const graphCanvasRef = useRef<HTMLDivElement | null>(null);
-  const nodeSizeMapRef = useRef<Record<string, NodeVisualSize>>({});
-  const questionInputRef = useRef<HTMLTextAreaElement | null>(null);
-  const panRef = useRef<PanState | null>(null);
-  const dragPointerRef = useRef<PointerState | null>(null);
-  const dragAutoPanFrameRef = useRef<number | null>(null);
-  const dragWindowMoveHandlerRef = useRef<((event: MouseEvent) => void) | null>(null);
-  const dragWindowUpHandlerRef = useRef<((event: MouseEvent) => void) | null>(null);
-  const dragStartSnapshotRef = useRef<GraphData | null>(null);
-  const edgeDragStartSnapshotRef = useRef<GraphData | null>(null);
-  const edgeDragWindowMoveHandlerRef = useRef<((event: MouseEvent) => void) | null>(null);
-  const edgeDragWindowUpHandlerRef = useRef<((event: MouseEvent) => void) | null>(null);
-  const zoomStatusTimerRef = useRef<number | null>(null);
-  const cancelRequestedRef = useRef(false);
-  const activeTurnNodeIdRef = useRef<string>("");
-  const activeWebNodeIdRef = useRef<string>("");
-  const activeWebProviderRef = useRef<WebProvider | null>(null);
-  const turnTerminalResolverRef = useRef<((terminal: TurnTerminal) => void) | null>(null);
-  const webTurnResolverRef = useRef<((result: { ok: boolean; output?: unknown; error?: string }) => void) | null>(
-    null,
-  );
-  const webLoginResolverRef = useRef<((retry: boolean) => void) | null>(null);
-  const activeRunDeltaRef = useRef<Record<string, string>>({});
-  const collectingRunRef = useRef(false);
-  const runLogCollectorRef = useRef<Record<string, string[]>>({});
-  const feedRunCacheRef = useRef<Record<string, RunRecord>>({});
-  const feedRawAttachmentRef = useRef<Record<string, string>>({});
-  const pendingNodeRequestsRef = useRef<Record<string, string[]>>({});
-  const agentRulesCacheRef = useRef<Record<string, { loadedAt: number; docs: AgentRuleDoc[] }>>({});
-  const runStartGuardRef = useRef(false);
-  const pendingWebTurnAutoOpenKeyRef = useRef("");
-  const webTurnFloatingRef = useRef<HTMLElement | null>(null);
-  const pendingWebLoginAutoOpenKeyRef = useRef("");
-  const authLoginRequiredProbeCountRef = useRef(0);
-  const lastAuthenticatedAtRef = useRef<number>(defaultLoginCompleted ? Date.now() : 0);
-  const codexLoginLastAttemptAtRef = useRef(0);
-  const webBridgeStageWarnTimerRef = useRef<Record<string, number>>({});
-  const feedReplyFeedbackClearTimerRef = useRef<Record<string, number>>({});
-  const activeWebPromptRef = useRef<Partial<Record<WebProvider, string>>>({});
-  const lastAppliedPresetRef = useRef<{ kind: PresetKind; graph: GraphData } | null>(null);
-  const graphClipboardRef = useRef<GraphClipboardSnapshot | null>(null);
-  const graphPasteSerialRef = useRef(0);
   const webTurnPanel = useFloatingPanel({
     enabled: Boolean(pendingWebTurn),
     panelRef: webTurnFloatingRef,
@@ -6162,14 +6201,14 @@ ${prompt}`;
                               onClick={() => onOpenFeedFromNode(node.id)}
                               type="button"
                             >
-                              출력/로그는 피드에서 보기
+                              {t("workflow.node.outputInFeed")}
                             </button>
                           </div>
                           <div className="node-wait-slot">
                             <span className={`status-pill status-${nodeStatus}`}>{nodeStatusLabel(nodeStatus)}</span>
                             {receivesQuestionDirectly && (
                               <span className="node-input-chip">
-                                <span className="node-input-chip-text">질문 직접 입력</span>
+                                <span className="node-input-chip-text">{t("workflow.node.inputDirect")}</span>
                               </span>
                             )}
                           </div>
@@ -6177,7 +6216,7 @@ ${prompt}`;
                             <div className="node-anchors">
                               {NODE_ANCHOR_SIDES.map((side) => (
                                 <button
-                                  aria-label={`연결 ${side}`}
+                                  aria-label={`${t("workflow.node.connection")} ${side}`}
                                   className={`node-anchor node-anchor-${side}`}
                                   key={`${node.id}-${side}`}
                                   onMouseDown={(e) => onNodeAnchorDragStart(e, node.id, side)}
@@ -6208,17 +6247,17 @@ ${prompt}`;
                 <div className="canvas-overlay">
                   <div className="canvas-zoom-controls">
                     <div className="canvas-zoom-group">
-                      <button onClick={onCanvasZoomIn} title="확대" type="button">
+                      <button onClick={onCanvasZoomIn} title={t("workflow.canvas.zoomIn")} type="button">
                         <img alt="" aria-hidden="true" className="canvas-control-icon" src="/plus.svg" />
                       </button>
-                      <button onClick={onCanvasZoomOut} title="축소" type="button">
+                      <button onClick={onCanvasZoomOut} title={t("workflow.canvas.zoomOut")} type="button">
                         <img alt="" aria-hidden="true" className="canvas-control-icon" src="/minus.svg" />
                       </button>
                     </div>
                     <button
                       className="canvas-zoom-single"
                       onClick={() => setCanvasFullscreen((prev) => !prev)}
-                      title={canvasFullscreen ? "캔버스 기본 보기" : "캔버스 전체 보기"}
+                      title={canvasFullscreen ? t("workflow.canvas.defaultView") : t("workflow.canvas.fullView")}
                       type="button"
                     >
                       <img
@@ -6229,10 +6268,10 @@ ${prompt}`;
                       />
                     </button>
                     <button
-                      aria-label="이동"
+                      aria-label={t("workflow.canvas.move")}
                       className={`canvas-zoom-single ${panMode ? "is-active" : ""}`}
                       onClick={() => setPanMode((prev) => !prev)}
-                      title="캔버스 이동"
+                      title={t("workflow.canvas.moveCanvas")}
                       type="button"
                     >
                       <img alt="" aria-hidden="true" className="canvas-control-icon" src="/scroll.svg" />
@@ -6241,52 +6280,52 @@ ${prompt}`;
 
                   <div className="canvas-runbar">
                     <button
-                      aria-label="실행"
+                      aria-label={t("workflow.canvas.run")}
                       className={`canvas-icon-btn play ${canRunGraphNow ? "is-ready" : "is-disabled"}`}
                       disabled={!canRunGraphNow}
                       onClick={onRunGraph}
-                      title="실행"
+                      title={t("workflow.canvas.run")}
                       type="button"
                     >
                       <img alt="" aria-hidden="true" className="canvas-icon-image" src="/canvas-play.svg" />
                     </button>
                     <button
-                      aria-label="중지"
+                      aria-label={t("workflow.canvas.stop")}
                       className="canvas-icon-btn stop"
                       disabled={!isGraphRunning}
                       onClick={onCancelGraphRun}
-                      title="중지"
+                      title={t("workflow.canvas.stop")}
                       type="button"
                     >
                       <img alt="" aria-hidden="true" className="canvas-icon-image" src="/canvas-stop.svg" />
                     </button>
                     {suspendedWebTurn && !pendingWebTurn && isGraphRunning && (
                       <button
-                        aria-label="웹 입력 다시 열기"
+                        aria-label={t("workflow.canvas.reopenWebInput")}
                         className="canvas-web-turn-reopen"
                         onClick={onReopenPendingWebTurn}
-                        title="웹 응답 입력 창 다시 열기"
+                        title={t("workflow.canvas.reopenWebInputWindow")}
                         type="button"
                       >
                         WEB
                       </button>
                     )}
                     <button
-                      aria-label="되돌리기"
+                      aria-label={t("workflow.canvas.undo")}
                       className="canvas-icon-btn"
                       disabled={undoStack.length === 0}
                       onClick={onUndoGraph}
-                      title="되돌리기"
+                      title={t("workflow.canvas.undo")}
                       type="button"
                     >
                       <img alt="" aria-hidden="true" className="canvas-icon-image" src="/canvas-undo.svg" />
                     </button>
                     <button
-                      aria-label="다시하기"
+                      aria-label={t("workflow.canvas.redo")}
                       className="canvas-icon-btn"
                       disabled={redoStack.length === 0}
                       onClick={onRedoGraph}
-                      title="다시하기"
+                      title={t("workflow.canvas.redo")}
                       type="button"
                     >
                       <img alt="" aria-hidden="true" className="canvas-icon-image" src="/canvas-replay.svg" />
@@ -6311,7 +6350,7 @@ ${prompt}`;
                         void onRunGraph();
                       }
                     }}
-                    placeholder="질문 입력"
+                    placeholder={t("workflow.question.placeholder")}
                     ref={questionInputRef}
                     rows={1}
                     value={workflowQuestion}
@@ -6332,21 +6371,21 @@ ${prompt}`;
 
             {!canvasFullscreen && <aside className="inspector-pane">
               <div className="inspector-head">
-                <div className="inspector-title-chip">노드 설정</div>
+                <div className="inspector-title-chip">{t("workflow.nodeSettings")}</div>
               </div>
               <div className="inspector-content">
                 <div className="inspector-section">
                   <section className="inspector-block">
                     <InspectorSectionTitle
-                      help="노드 추가, 템플릿 불러오기, 비용 프리셋 적용, 그래프 저장/불러오기를 관리합니다."
-                      title="그래프 도구"
+                      help={t("workflow.graphTools.help")}
+                      title={t("workflow.graphTools.title")}
                     />
                     <div className="tool-dropdown-group">
-                      <h4>노드 선택</h4>
+                      <h4>{t("workflow.nodeSelect")}</h4>
                       <FancySelect
-                        ariaLabel="노드 선택"
+                        ariaLabel={t("workflow.nodeSelect")}
                         className="modern-select"
-                        emptyMessage="선택 가능한 노드가 없습니다."
+                        emptyMessage={t("workflow.nodeSelect.empty")}
                         onChange={(value) => {
                           if (value === "turn") {
                             addNode("turn");
@@ -6358,41 +6397,41 @@ ${prompt}`;
                         }}
                         options={
                           SIMPLE_WORKFLOW_UI
-                            ? [{ value: "turn", label: "응답 에이전트" }]
+                            ? [{ value: "turn", label: t("label.node.turn") }]
                             : [
-                                { value: "turn", label: "응답 에이전트" },
-                                { value: "transform", label: "데이터 변환" },
-                                { value: "gate", label: "분기" },
+                                { value: "turn", label: t("label.node.turn") },
+                                { value: "transform", label: t("label.node.transform") },
+                                { value: "gate", label: t("label.node.gate") },
                               ]
                         }
-                        placeholder="노드 선택"
+                        placeholder={t("workflow.nodeSelect")}
                         value=""
                       />
                     </div>
 
                     <div className="tool-dropdown-group">
-                      <h4>템플릿</h4>
+                      <h4>{t("workflow.template")}</h4>
                       <FancySelect
-                        ariaLabel="템플릿 선택"
+                        ariaLabel={t("workflow.template.select")}
                         className="modern-select template-select"
-                        emptyMessage="선택 가능한 템플릿이 없습니다."
+                        emptyMessage={t("workflow.template.empty")}
                         onChange={(value) => {
                           if (isPresetKind(value)) {
                             applyPreset(value);
                           }
                         }}
                         options={PRESET_TEMPLATE_OPTIONS}
-                        placeholder="템플릿 선택"
+                        placeholder={t("workflow.template.select")}
                         value=""
                       />
                     </div>
 
                     <div className="tool-dropdown-group">
-                      <h4>비용 프리셋</h4>
+                      <h4>{t("workflow.costPreset")}</h4>
                       <FancySelect
-                        ariaLabel="비용 프리셋"
+                        ariaLabel={t("workflow.costPreset")}
                         className="modern-select"
-                        emptyMessage="선택 가능한 프리셋이 없습니다."
+                        emptyMessage={tp("선택 가능한 프리셋이 없습니다.")}
                         onChange={(value) => {
                           if (isCostPreset(value)) {
                             applyCostPreset(value);
@@ -6404,11 +6443,11 @@ ${prompt}`;
                     </div>
 
                     <div className="tool-dropdown-group">
-                      <h4>그래프 파일</h4>
+                      <h4>{t("workflow.graphFile")}</h4>
                       <FancySelect
-                        ariaLabel="그래프 파일 선택"
+                        ariaLabel={t("workflow.graphFile.select")}
                         className="graph-file-select modern-select"
-                        emptyMessage="저장된 그래프가 없습니다."
+                        emptyMessage={t("workflow.graphFile.empty")}
                         onChange={(value) => {
                           if (value) {
                             setSelectedGraphFileName(value);
@@ -6417,21 +6456,21 @@ ${prompt}`;
                           }
                         }}
                         options={graphFiles.map((file) => ({ value: file, label: file }))}
-                        placeholder="그래프 파일 선택"
+                        placeholder={t("workflow.graphFile.select")}
                         value={graphFiles.includes(selectedGraphFileName) ? selectedGraphFileName : ""}
                       />
                       <div className="graph-file-actions">
                         <button className="mini-action-button" onClick={saveGraph} type="button">
-                          <span className="mini-action-button-label">저장</span>
+                          <span className="mini-action-button-label">{t("common.save")}</span>
                         </button>
                         <button className="mini-action-button" onClick={onOpenRenameGraph} type="button">
-                          <span className="mini-action-button-label">이름 변경</span>
+                          <span className="mini-action-button-label">{t("feed.rename")}</span>
                         </button>
                         <button className="mini-action-button" onClick={deleteGraph} type="button">
-                          <span className="mini-action-button-label">삭제</span>
+                          <span className="mini-action-button-label">{t("common.delete")}</span>
                         </button>
                         <button className="mini-action-button" onClick={refreshGraphFiles} type="button">
-                          <span className="mini-action-button-label">새로고침</span>
+                          <span className="mini-action-button-label">{tp("새로고침")}</span>
                         </button>
                       </div>
                       <div
@@ -6460,7 +6499,7 @@ ${prompt}`;
                                 onCloseRenameGraph();
                               }
                             }}
-                            placeholder="이름 변경 파일명"
+                            placeholder={t("workflow.graph.renamePlaceholder")}
                             style={{
                               height: "36px",
                               minHeight: "36px",
@@ -6472,10 +6511,10 @@ ${prompt}`;
                           />
                           <div className="graph-file-actions">
                             <button className="mini-action-button" onClick={() => void renameGraph()} type="button">
-                              <span className="mini-action-button-label">변경 적용</span>
+                              <span className="mini-action-button-label">{t("workflow.graph.applyRename")}</span>
                             </button>
                             <button className="mini-action-button" onClick={onCloseRenameGraph} type="button">
-                              <span className="mini-action-button-label">취소</span>
+                              <span className="mini-action-button-label">{t("common.cancel")}</span>
                             </button>
                           </div>
                         </div>
@@ -6483,15 +6522,15 @@ ${prompt}`;
                     </div>
 
                     <div className="tool-dropdown-group">
-                      <h4>첨부 자료</h4>
+                      <h4>{t("workflow.knowledge.attachments")}</h4>
                       <div className="graph-file-actions">
                         <button className="mini-action-button" onClick={onOpenKnowledgeFilePicker} type="button">
-                          <span className="mini-action-button-label">파일 추가</span>
+                          <span className="mini-action-button-label">{t("workflow.knowledge.addFile")}</span>
                         </button>
                       </div>
                       <div className="knowledge-file-list">
                         {graphKnowledge.files.length === 0 && (
-                          <div className="knowledge-file-empty">첨부된 자료가 없습니다.</div>
+                          <div className="knowledge-file-empty">{t("workflow.knowledge.empty")}</div>
                         )}
                         {graphKnowledge.files.map((file) => {
                           const statusMeta = knowledgeStatusMeta(file.status);
@@ -6512,7 +6551,7 @@ ${prompt}`;
                                   type="button"
                                 >
                                   <span className="mini-action-button-label">
-                                    {file.enabled ? "사용 중" : "제외"}
+                                    {file.enabled ? t("workflow.knowledge.inUse") : t("workflow.knowledge.exclude")}
                                   </span>
                                 </button>
                                 <button
@@ -6520,7 +6559,7 @@ ${prompt}`;
                                   onClick={() => onRemoveKnowledgeFile(file.id)}
                                   type="button"
                                 >
-                                  <span className="mini-action-button-label">삭제</span>
+                                  <span className="mini-action-button-label">{t("common.delete")}</span>
                                 </button>
                               </div>
                               {file.statusMessage && <div className="knowledge-file-message">{file.statusMessage}</div>}
@@ -6529,9 +6568,9 @@ ${prompt}`;
                         })}
                       </div>
                       <label>
-                        참고할 자료 개수
+                        {t("workflow.knowledge.topK")}
                         <FancySelect
-                          ariaLabel="참고할 자료 개수"
+                          ariaLabel={t("workflow.knowledge.topK")}
                           className="modern-select"
                               onChange={(next) => {
                                 const parsed = Number(next) || KNOWLEDGE_DEFAULT_TOP_K;
@@ -6548,12 +6587,12 @@ ${prompt}`;
                         />
                       </label>
                       <div className="inspector-empty">
-                        질문과 가장 관련 있는 참고 자료를 몇 개까지 붙일지 정합니다.
+                        {tp("질문과 가장 관련 있는 참고 자료를 몇 개까지 붙일지 정합니다.")}
                       </div>
                       <label>
-                        참고 내용 길이
+                        {t("workflow.knowledge.length")}
                         <FancySelect
-                          ariaLabel="참고 내용 길이"
+                          ariaLabel={t("workflow.knowledge.length")}
                           className="modern-select"
                           onChange={(next) => {
                             const parsed = Number(next) || KNOWLEDGE_DEFAULT_MAX_CHARS;
@@ -6570,7 +6609,7 @@ ${prompt}`;
                         />
                       </label>
                       <div className="inspector-empty">
-                        길이를 길게 할수록 근거는 늘고, 응답 속도와 사용량은 증가할 수 있습니다.
+                        {tp("길이를 길게 할수록 근거는 늘고, 응답 속도와 사용량은 증가할 수 있습니다.")}
                       </div>
                     </div>
                   </section>
@@ -6640,9 +6679,9 @@ ${prompt}`;
                                   className="modern-select"
                                   onChange={(next) => updateSelectedNodeConfig("webResultMode", next)}
                                   options={[
-                                    { value: "bridgeAssisted", label: "웹 연결 반자동 (권장)" },
-                                    { value: "manualPasteText", label: "텍스트 붙여넣기" },
-                                    { value: "manualPasteJson", label: "JSON 붙여넣기" },
+                                    { value: "bridgeAssisted", label: t("feed.webMode.bridge") },
+                                    { value: "manualPasteText", label: t("feed.webMode.text") },
+                                    { value: "manualPasteJson", label: t("feed.webMode.json") },
                                   ]}
                                   value={String(
                                     normalizeWebResultMode((selectedNode.config as TurnConfig).webResultMode),
@@ -6684,8 +6723,8 @@ ${prompt}`;
                                 updateSelectedNodeConfig("knowledgeEnabled", next === "true")
                               }
                               options={[
-                                { value: "true", label: "사용" },
-                                { value: "false", label: "미사용" },
+                                { value: "true", label: t("feed.option.enabled") },
+                                { value: "false", label: t("feed.option.disabled") },
                               ]}
                               value={String(
                                 (selectedNode.config as TurnConfig).knowledgeEnabled !== false,
@@ -6728,8 +6767,8 @@ ${prompt}`;
                                     updateSelectedNodeConfig("qualityCommandEnabled", next === "true")
                                   }
                                   options={[
-                                    { value: "false", label: "미사용" },
-                                    { value: "true", label: "사용" },
+                                    { value: "false", label: t("feed.option.disabled") },
+                                    { value: "true", label: t("feed.option.enabled") },
                                   ]}
                                   value={String(selectedTurnConfig?.qualityCommandEnabled === true)}
                                 />
@@ -6797,9 +6836,9 @@ ${prompt}`;
                               className="modern-select"
                               onChange={(next) => updateSelectedNodeConfig("mode", next)}
                               options={[
-                                { value: "pick", label: "필요한 값만 꺼내기" },
-                                { value: "merge", label: "고정 정보 덧붙이기" },
-                                { value: "template", label: "문장 틀로 다시 쓰기" },
+                                { value: "pick", label: t("transform.mode.pick") },
+                                { value: "merge", label: t("transform.mode.merge") },
+                                { value: "template", label: t("transform.mode.template") },
                               ]}
                               value={String((selectedNode.config as TransformConfig).mode ?? "pick")}
                             />
@@ -6865,7 +6904,7 @@ ${prompt}`;
                               className="modern-select"
                               onChange={(next) => updateSelectedNodeConfig("passNodeId", next)}
                               options={[
-                                { value: "", label: "(없음)" },
+                                { value: "", label: t("common.none") },
                                 ...outgoingNodeOptions,
                               ]}
                               value={String((selectedNode.config as GateConfig).passNodeId ?? "")}
@@ -6881,7 +6920,7 @@ ${prompt}`;
                               className="modern-select"
                               onChange={(next) => updateSelectedNodeConfig("rejectNodeId", next)}
                               options={[
-                                { value: "", label: "(없음)" },
+                                { value: "", label: t("common.none") },
                                 ...outgoingNodeOptions,
                               ]}
                               value={String((selectedNode.config as GateConfig).rejectNodeId ?? "")}

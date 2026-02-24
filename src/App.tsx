@@ -1,6 +1,6 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
 import MainApp from "./app/MainApp";
-import { I18nProvider } from "./i18n";
+import { I18nProvider, t } from "./i18n";
 
 type AppErrorBoundaryState = {
   hasError: boolean;
@@ -45,9 +45,9 @@ class AppErrorBoundary extends Component<{ children: ReactNode }, AppErrorBounda
             fontFamily: "DialogNanumBody1984, Noto Sans KR, sans-serif",
           }}
         >
-          <h2 style={{ margin: 0, fontSize: "16px" }}>렌더링 오류가 발생했습니다.</h2>
+          <h2 style={{ margin: 0, fontSize: "16px" }}>{t("app.error.title")}</h2>
           <p style={{ margin: 0, fontSize: "13px", color: "#475569" }}>
-            아래 오류 메시지를 복사해서 전달해 주세요.
+            {t("app.error.copy")}
           </p>
           <pre
             style={{
@@ -62,7 +62,7 @@ class AppErrorBoundary extends Component<{ children: ReactNode }, AppErrorBounda
               lineHeight: 1.45,
             }}
           >
-            {this.state.message || "(메시지 없음)"}
+            {this.state.message || t("app.error.noMessage")}
             {this.state.stack ? `\n\n${this.state.stack}` : ""}
           </pre>
           <button
@@ -77,7 +77,7 @@ class AppErrorBoundary extends Component<{ children: ReactNode }, AppErrorBounda
             }}
             type="button"
           >
-            다시 로드
+            {t("app.error.reload")}
           </button>
         </main>
       );

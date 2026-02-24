@@ -25,6 +25,7 @@ import {
   extractStringByPaths,
   readNumber,
 } from "./mainAppUtils";
+import { useI18n } from "../i18n";
 
 export type WorkspaceTab = "workflow" | "feed" | "settings" | "bridge";
 
@@ -217,10 +218,11 @@ export function NavIcon({ tab, active = false }: { tab: WorkspaceTab; active?: b
 }
 
 export function InspectorSectionTitle({ title, help }: { title: string; help: string }) {
+  const { t } = useI18n();
   return (
     <div className="inspector-section-title">
       <h3>{title}</h3>
-      <span aria-label={`${title} 도움말`} className="help-tooltip" data-tooltip={help} role="note" tabIndex={0}>
+      <span aria-label={`${title} ${t("common.help")}`} className="help-tooltip" data-tooltip={help} role="note" tabIndex={0}>
         ?
       </span>
       <div className="help-tooltip-panel" role="tooltip">

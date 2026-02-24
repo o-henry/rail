@@ -1,169 +1,322 @@
 # RAIL
 
-노드 기반 에이전트 워크플로우를 데스크톱에서 실행/검증/기록하는 Tauri + React 앱입니다.  
-구성은 Next.js/Vite 계열의 실무 README 스타일(개요 → 빠른 시작 → 사용법 → 문제해결)을 참고해 정리했습니다.
+> Local-first Multi-Agent Workflow Desktop for Codex + Web AI (Tauri + React + TypeScript)
 
-## 핵심 기능
+RAIL은 여러 에이전트(코덱스/웹 AI/로컬 모델)를 **노드 그래프(DAG)** 로 연결해,
+질문 수집 → 분석 → 검증 → 종합까지 한 번에 실행하는 데스크톱 앱입니다.
 
-- 워크플로우 캔버스
-  - Turn / Transform / Gate 노드 추가, 연결, 실행
-  - 자동 레이아웃 정렬(행/열 배치)
-  - 실행 중 엣지(연결선) 데이터 흐름 dot 애니메이션
-- 피드 뷰
-  - 실행 결과/요약/로그/점수 확인
-  - 추가 요청, 공유, 포스트 삭제
-- 기록 뷰
-  - 실행 파일 목록 및 상세 추적(전이, 품질, provider trace)
-- 설정 뷰
-  - Codex 로그인/사용량 확인
-  - 그래프 파일 저장/불러오기/이름변경/삭제
-- 웹 연결 뷰
-  - 브라우저 확장 연동 상태 확인
-  - 로컬 웹 연결 토큰 발급/재발급
-  - 웹 응답 자동 수집 이벤트 추적
+- 로컬 실행 중심 (Tauri)
+- 실행 기록(run JSON) 기반 재현/검토
+- 웹 AI는 API 키 없이 브라우저 확장(Web Connect)으로 반자동 연동
 
-## 기술 스택
+---
 
-- Frontend: React 19, TypeScript, Vite
-- Desktop Shell: Tauri v2 (Rust)
-- Web automation worker: Node.js + Playwright Core
+## Demo
 
-## 프로젝트 구조
+> 아래 영상은 실제 `npm run dev` 실행 상태에서 녹화한 앱 동작 데모입니다.
 
-```text
+<video src="./docs/rail-demo.webm" controls muted playsinline width="100%"></video>
+
+---
+
+## Table of Contents
+
+- [What It Solves](#what-it-solves)
+- [Key Features](#key-features)
+- [How It Works](#how-it-works)
+- [Project Structure](#project-structure)
+- [Tech Stack](#tech-stack)
+- [Requirements](#requirements)
+- [Quick Start](#quick-start)
+- [Usage Guide](#usage-guide)
+- [Web Connect Setup](#web-connect-setup)
+- [Data & Persistence](#data--persistence)
+- [Security Model](#security-model)
+- [Architecture Rules (Guardrails)](#architecture-rules-guardrails)
+- [Troubleshooting](#troubleshooting)
+- [Development Scripts](#development-scripts)
+- [Roadmap](#roadmap)
+
+---
+
+## What It Solves
+
+단일 AI 채팅은 빠르지만, 다음 문제가 자주 생깁니다.
+
+- 근거 부족/할루시네이션
+- 긴 작업에서 컨텍스트 오염
+- 검증/재현 어려움
+- 역할 분업(조사/구현/검토/최종 종합) 부재
+
+RAIL은 이 문제를 해결하기 위해,
+**역할별 에이전트 노드 + 실행 로그 + 품질 게이트**를 결합합니다.
+
+---
+
+## Key Features
+
+### 1) Workflow Canvas (노드 그래프)
+- `Turn / Transform / Gate` 노드 구성
+- 노드 연결, 선택, 드래그, 자동 정렬
+- 실행/중지/되돌리기/다시하기
+- 연결선 시각화 + 실행 상태 표시
+
+### 2) Multi-Agent Execution
+- Codex 기반 에이전트 실행
+- 웹 에이전트(`web/gpt`, `web/gemini`, `web/claude`, `web/perplexity`, `web/grok`) 반자동 연동
+- Ollama 로컬 모델 연결
+- DAG 기반 상류 출력 → 하류 입력 자동 전달
+
+### 3) Feed (결과/문서 뷰)
+- 실행 결과를 카드 단위로 표시
+- 요약/원문/입력 스냅샷/입력 출처 확인
+- 추가 요청(후속 프롬프트) 전송
+- 공유(텍스트/JSON 복사), 삭제
+- 그룹(템플릿 실행 단위/사용자 정의 실행 단위) 접기/펼치기
+
+### 4) Run Records (재현 가능한 실행 로그)
+- `src-tauri/runs/run-*.json` 저장
+- 상태 전이, provider trace, 품질 요약 보존
+- 과거 실행 재검토 가능
+
+### 5) Settings / Engine
+- 엔진 시작/중지
+- Codex 로그인/로그아웃
+- 사용량 확인
+- 작업 경로(CWD) 관리
+
+### 6) Web Connect (브라우저 확장 연동)
+- 로컬 루프백(`127.0.0.1`) + 토큰 기반 브리지
+- 프롬프트 자동 주입/자동 전송 시도
+- 실패 시 사용자 1회 전송으로 폴백
+- 응답 자동 수집 후 다음 노드로 전달
+
+---
+
+## How It Works
+
+1. 사용자가 Workflow 질문 입력
+2. 시작 노드(또는 연결된 DAG) 실행
+3. 각 노드가 입력을 처리
+   - Turn: LLM 실행
+   - Transform: 데이터 형태 변환
+   - Gate: 조건 분기
+4. 노드 출력은 다음 노드로 전달
+5. 최종 노드 결과가 Feed/Run에 저장
+6. 필요하면 Feed에서 후속 요청 → 해당 노드 재실행
+
+---
+
+## Project Structure
+
+```txt
 rail/
-├─ src/                 # React UI
-├─ src-tauri/           # Tauri(Rust) backend commands
-├─ scripts/
-│  ├─ web_worker/       # 웹 provider 세션/자동화 워커
-│  ├─ install_git_hooks.sh
-│  └─ secret_scan.sh
-├─ extension/
-│  └─ rail-bridge/      # Chrome/Chromium 웹 연결 확장(MV3)
-├─ graphs/              # 저장된 그래프 JSON
-├─ runs/                # 실행 기록 JSON
-└─ public/              # 아이콘/정적 리소스
+├─ src/
+│  ├─ app/                # 앱 루트 조립
+│  ├─ pages/              # 라우트 단위 페이지
+│  ├─ components/         # 재사용 UI
+│  ├─ features/           # 기능 단위 로직
+│  ├─ shared/
+│  │  ├─ tauri/           # Tauri IPC 래퍼(invoke/listen)
+│  │  └─ lib/             # 공용 유틸
+│  └─ i18n/
+├─ src-tauri/             # Rust backend, run 저장
+├─ extension/rail-bridge/ # Chrome MV3 확장(Web Connect)
+├─ scripts/               # 도구 스크립트/검사 스크립트
+├─ docs/
+│  └─ rail-demo.webm      # 실행 데모 영상
+└─ public/
 ```
 
-## 요구사항
+---
+
+## Tech Stack
+
+- Desktop: **Tauri v2**
+- Frontend: **React 19 + TypeScript + Vite**
+- Browser automation bridge: **Playwright Core + Chrome Extension (MV3)**
+- Data format: JSON (graph/runs)
+
+---
+
+## Requirements
 
 - Node.js 18+
-- Rust toolchain (stable)
-- macOS/Linux/Windows (Tauri 지원 환경)
+- npm 9+
+- Rust stable toolchain (Tauri 빌드용)
+- macOS / Linux / Windows (Tauri 지원 환경)
 
-## 빠른 시작
+---
 
-1) 의존성 설치
+## Quick Start
 
 ```bash
 npm install
-```
-
-2) 프론트엔드 개발 서버
-
-```bash
 npm run dev
 ```
 
-3) 데스크톱 앱 실행(Tauri)
+Tauri 데스크톱으로 실행:
 
 ```bash
 npm run tauri dev
 ```
 
-4) 프로덕션 빌드
+프로덕션 빌드:
 
 ```bash
 npm run build
 ```
 
-## 사용 가이드
-
-### 1) 워크플로우 구성
-
-- 워크플로우 탭에서 노드를 추가하고 연결합니다.
-- 연결/노드 변경 시 레이아웃이 자동 정렬됩니다.
-
-### 2) 실행
-
-- 상단 질문 입력 후 실행 버튼을 누릅니다.
-- 실행 상태는 노드와 피드에서 동시에 확인할 수 있습니다.
-
-### 2-1) 웹 연결(반자동) 설정
-
-1. `웹 연결` 탭에서 `연결 코드 복사`를 눌러 URL+토큰을 복사합니다.
-2. Chrome `확장 프로그램`에서 개발자 모드 활성화 후 `extension/rail-bridge` 폴더를 언팩 설치합니다.
-3. 확장 팝업에서 연결 URL/토큰을 저장하고 `연결 테스트`를 실행합니다.
-4. 노드 실행기를 `WEB / GEMINI|GPT|GROK|CLAUDE|PERPLEXITY`로 선택하고, `웹 결과 모드`를 `웹 연결 반자동(권장)`으로 둡니다.
-5. 실행 시 앱이 웹 탭을 열고 프롬프트 자동 주입/자동 전송을 먼저 시도합니다.
-6. 자동 전송이 실패한 경우에만, 같은 브라우저 탭에서 전송 버튼을 1회 클릭하면 답변이 자동 전달됩니다.
-7. 노드 로그에 `작업 수신 지연` 또는 `CLAIM_FAILED`가 뜨면 확장 팝업의 `연결 테스트`부터 다시 확인합니다.
-
-### 3) 피드 확인
-
-- 결과 요약, 상세 로그, 점수, 사용량을 확인합니다.
-- 필요하면 추가 요청을 보내 후속 실행을 유도할 수 있습니다.
-
-### 4) 그래프 파일 관리
-
-- 설정/노드설정의 그래프 파일 영역에서:
-  - `저장`: 현재 그래프 저장
-  - `이름 변경`: 선택한 파일명을 새 이름으로 변경(동일 이름 있으면 overwrite)
-  - `삭제`: 선택한 그래프 파일 삭제
-  - `새로고침`: 파일 목록 재동기화
-
-## 데이터 저장 위치
-
-- 그래프: `graphs/*.json`
-- 실행 기록: `runs/*.json`
-- 웹 워커 로그/프로필: 사용자 홈 디렉터리 하위 `.rail/` (환경에 따라 다를 수 있음)
-
-## 단축키
-
-- `Cmd/Ctrl + 1~5`: 탭 이동
-- `H` 또는 한글 `ㅗ`: 캔버스 이동 모드 토글
-- `Cmd/Ctrl + A`: 노드 전체 선택
-- `Delete/Backspace`: 선택 노드/엣지 삭제
-
-## 문제 해결
-
-- provider 세션 에러 발생 시
-  - 설정 탭에서 해당 provider `로그인` 후 `상태 동기화`
-- 웹 연결 수집 실패 시
-  - 웹 결과 모드를 `텍스트 붙여넣기`로 전환해 즉시 폴백 가능
-  - 웹 연결 탭에서 토큰 재발급 후 확장 팝업에 재등록
-- 그래프 목록이 최신이 아닐 때
-  - `새로고침` 버튼으로 재조회
-- CPU 사용량이 비정상적으로 높을 때
-  - 웹 워커 프로세스 상태를 확인하고 앱 재시작
-
-## 배포 전 보안 체크리스트
-
-- `scripts/secret_scan.sh --all` 통과 확인
-- 웹 연결 토큰 재발급 후 확장에 재등록(구 토큰 폐기)
-- 웹 연결 확장에서 URL이 `http://127.0.0.1:<port>`인지 확인
-- 브라우저 확장에서 불필요한 타 확장 비활성화(토큰 탈취 표면 축소)
-- 워크플로우/피드/로그에 API 키/개인정보가 남지 않도록 샘플 실행 점검
-- 프로덕션 배포 빌드(`npm run build`) 성공 로그 확인
-
-## 보안 가드레일
-
-- 웹 연결 통신은 `127.0.0.1` 루프백 + Bearer 토큰으로만 허용
-- 웹 연결 HTTP 요청은 루프백 주소가 아니면 차단
-- CORS는 허용된 Origin(확장/지원 서비스 도메인)만 허용
-- 기본: 토큰 기반으로 `chrome-extension://<id>` 형식 Origin 허용
-- 고급 보안(선택): `RAIL_WEB_BRIDGE_ALLOWED_EXTENSION_IDS`(또는 단일 `..._ID`)를 설정해 확장 Origin을 고정
-- 웹 연결 토큰은 워커 메모리 세션에만 보관(프로세스 종료 시 폐기)
-- 확장 토큰은 `chrome.storage.session` 우선 저장(브라우저 종료 시 폐기)
-- 웹 연결 경로는 브라우저 프로세스를 새로 띄우거나 종료하지 않음
-- 확장은 쿠키/세션 저장소를 직접 읽거나 수정하지 않음
-- 확장 host permission은 Gemini/GPT/Grok/Claude/Perplexity + localhost로 제한
-
-이 저장소는 커밋/푸시 시 일반적인 시크릿 패턴(API 키, 토큰, 개인키)을 차단합니다.
+아키텍처 + 빌드 동시 검사:
 
 ```bash
-bash scripts/install_git_hooks.sh
+npm run check
+```
+
+---
+
+## Usage Guide
+
+### A. 기본 실행
+
+1. `워크플로우` 탭에서 템플릿 선택 또는 노드 직접 구성
+2. 질문 입력
+3. 실행 버튼 클릭
+4. `피드` 탭에서 결과 카드 확인
+
+### B. 피드에서 후속 요청
+
+1. 결과 카드 펼치기
+2. `에이전트에게 추가 요청` 입력
+3. 전송 버튼 클릭
+4. 후속 실행 결과가 같은 런 컨텍스트로 누적
+
+### C. 그래프 저장/불러오기
+
+- 저장: 현재 그래프를 파일로 저장
+- 이름 변경: 저장 그래프명 수정
+- 삭제: 그래프 파일 삭제
+- 새로고침: 목록 재동기화
+
+---
+
+## Web Connect Setup
+
+웹 AI를 API 키 없이 연동하는 방법입니다.
+
+### 1) 확장 설치
+
+1. Chrome `chrome://extensions` 진입
+2. 개발자 모드 ON
+3. `압축해제된 확장 프로그램 로드`
+4. `extension/rail-bridge` 폴더 선택
+
+### 2) 앱에서 연결 코드 발급
+
+1. 앱 `웹 연결` 탭 이동
+2. `연결 코드 복사`
+3. 확장 팝업에 URL/토큰 입력 후 저장
+
+### 3) 노드 설정
+
+- 에이전트 실행기를 웹 계열로 선택 (`web/gpt` 등)
+- 웹 결과 모드: `웹 연결 반자동(권장)`
+
+### 4) 실행 동작
+
+- 앱이 프롬프트 자동 주입/자동 전송 시도
+- 자동 전송 실패 시에만 브라우저에서 1회 전송 필요
+- 응답 완료 후 앱이 수집해 다음 노드로 전달
+
+---
+
+## Data & Persistence
+
+- 그래프 파일: `graphs/*.json`
+- 실행 기록: `src-tauri/runs/run-*.json`
+- UI locale: browser localStorage (`rail_ui_locale`)
+
+---
+
+## Security Model
+
+### 기본 원칙
+- 로컬 우선 실행
+- 민감 정보 최소 보관
+- 브리지 통신 최소 권한
+
+### Web Connect 보호
+- `127.0.0.1` 루프백만 허용
+- Bearer 토큰 인증
+- 확장 ID allowlist 정책 지원
+- 토큰 재발급 지원
+
+### 개발 시 체크
+
+```bash
 bash scripts/secret_scan.sh --all
 ```
 
-CI에서도 동일 스캐너를 실행합니다.
+---
+
+## Architecture Rules (Guardrails)
+
+현재 레포에는 구조 재오염 방지를 위한 검사 스크립트가 포함되어 있습니다.
+
+```bash
+npm run check:arch
+```
+
+검사 항목:
+- `src/main.tsx` 엔트리포인트 규칙
+- 파일 라인수 제한(예외 목록 제외)
+- 레이어 의존 방향
+- cross-slice import 제한
+
+---
+
+## Troubleshooting
+
+### 1) 웹 노드가 응답 없이 완료됨
+- Web Connect 상태 확인
+- 해당 서비스 탭 열림 여부 확인
+- 확장 팝업 연결 테스트 재실행
+- 자동 전송 실패 시 수동 1회 전송
+
+### 2) 사용량 조회 실패
+- 로그인 세션 상태 확인
+- 엔진 버전에서 usage API 미지원일 수 있음
+
+### 3) 그래프/피드가 기대와 다름
+- 최신 run 파일 확인
+- 동일 runId로 그룹핑되는지 확인
+- 노드 연결(상류 → 하류) 점검
+
+### 4) 개발 환경 성능 이슈
+- dev 서버/워커 프로세스 중복 실행 여부 확인
+- 불필요한 브라우저 자동화 세션 정리
+
+---
+
+## Development Scripts
+
+- `npm run dev` : Vite 개발 서버
+- `npm run tauri dev` : Tauri 개발 실행
+- `npm run build` : 타입체크 + 번들
+- `npm run check:arch` : 아키텍처 규칙 검사
+- `npm run check` : 아키텍처 + 빌드 통합 검사
+
+---
+
+## Roadmap
+
+- MainApp 대형 파일 추가 분해(FSD 강제)
+- 페이지/기능별 테스트 보강
+- 피드 문서 렌더링(표/차트/미디어) 고도화
+- 실행/비용 관찰 지표 강화
+
+---
+
+## License
+
+프로젝트 정책에 따릅니다. (라이선스 파일/고지 문서 참조)

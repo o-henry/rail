@@ -22,10 +22,7 @@ const MAX_LINES_MAIN = 80;
 // Transitional allowlist: block new regressions while refactor is in progress.
 const LEGACY_LINE_EXCEPTIONS = new Set([
   "src/app/MainApp.tsx",
-  "src/features/workflow/presets.ts",
-  "src/i18n/index.tsx",
   "src/pages/feed/FeedPage.tsx",
-  "src/features/workflow/graph-utils.ts",
   "src/app/mainAppUtils.ts",
   "src/app/mainAppRuntimeHelpers.ts",
   "src/app/mainAppGraphHelpers.tsx",
