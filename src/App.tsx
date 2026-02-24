@@ -5516,18 +5516,24 @@ function App() {
       if (!(event.metaKey || event.ctrlKey) || event.altKey || event.shiftKey) {
         return;
       }
-      if (isEditableTarget(event.target) || hasUserTextSelection()) {
+      if (isEditableTarget(event.target)) {
         return;
       }
       const key = event.key.toLowerCase();
-      if (key === "c") {
+      const isCopy = key === "c" || key === "ㅊ" || event.code === "KeyC";
+      const isPaste = key === "v" || key === "ㅍ" || event.code === "KeyV";
+
+      if (isCopy) {
+        if (selectedNodeIds.length === 0 && hasUserTextSelection()) {
+          return;
+        }
         const copied = copySelectedNodesToClipboard();
         if (copied) {
           event.preventDefault();
         }
         return;
       }
-      if (key === "v") {
+      if (isPaste) {
         const pasted = pasteNodesFromClipboard();
         if (pasted) {
           event.preventDefault();
