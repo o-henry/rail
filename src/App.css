@@ -2839,6 +2839,78 @@ h3 {
   overflow: auto;
 }
 
+.feed-document-image {
+  margin: 0;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #f7f9fc;
+  display: grid;
+  gap: 6px;
+  padding: 8px;
+}
+
+.feed-document-image img {
+  width: 100%;
+  height: auto;
+  display: block;
+  border-radius: 6px;
+  object-fit: contain;
+  background: #ffffff;
+}
+
+.feed-document-image figcaption {
+  margin: 0;
+  color: #5b6778;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.feed-document-table-wrap {
+  width: 100%;
+}
+
+.feed-document-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  background: #ffffff;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.feed-document-table th,
+.feed-document-table td {
+  border-bottom: 1px solid #e7e9ec;
+  border-right: 1px solid #e7e9ec;
+  padding: 8px 10px;
+  vertical-align: top;
+  text-align: left;
+  word-break: break-word;
+  white-space: pre-wrap;
+}
+
+.feed-document-table th:last-child,
+.feed-document-table td:last-child {
+  border-right: 0;
+}
+
+.feed-document-table thead th {
+  background: #f7f9fc;
+  color: #233144;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.feed-document-table tbody td {
+  color: #0f1419;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.feed-document-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
 .feed-chart-card {
   border-radius: 8px;
   background: #f7f9fc;

@@ -308,6 +308,8 @@ export function buildFinalVisualizationDirective(): string {
   return [
     "[시각화 출력 지침]",
     "- 최종 문서 이해를 돕는 차트/도표가 필요할 때만 포함하세요.",
+    "- 시각 자료가 더 적합하면 관련 이미지도 포함하세요(신뢰 가능한 출처 URL만).",
+    '- 이미지는 Markdown 형식 `![설명](https://...)`으로 작성하세요.',
     "- 차트는 아래 포맷의 fenced code block으로 작성하세요.",
     "- 언어 태그는 반드시 rail-chart 를 사용하세요.",
     "```rail-chart",

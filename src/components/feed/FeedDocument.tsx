@@ -11,8 +11,34 @@ type TextBlock =
   | { kind: "heading"; level: 1 | 2 | 3; text: string }
   | { kind: "list"; ordered: boolean; items: string[] }
   | { kind: "paragraph"; text: string }
+  | { kind: "image"; alt: string; src: string; title?: string }
+  | { kind: "table"; headers: string[]; rows: string[][] }
   | { kind: "rule" }
   | { kind: "code"; language: string; code: string };
+
+function parseImageLine(input: string): { alt: string; src: string; title?: string } | null {
+  const line = input.trim();
+  const matched = line.match(/^!\[([^\]]*)\]\(([^)\s]+)(?:\s+"([^"]*)")?\)$/);
+  if (!matched) {
+    return null;
+  }
+  const alt = String(matched[1] ?? "").trim();
+  const src = String(matched[2] ?? "").trim();
+  const title = String(matched[3] ?? "").trim();
+  if (!src) {
+    return null;
+  }
+  return { alt, src, ...(title ? { title } : {}) };
+}
+
+function parseTableRow(input: string): string[] {
+  const normalized = input.trim().replace(/^\|/, "").replace(/\|$/, "");
+  return normalized.split("|").map((cell) => cell.trim());
+}
+
+function isTableDividerLine(input: string): boolean {
+  return /^\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?$/.test(input.trim());
+}
 
 function parseTextBlocks(source: string): TextBlock[] {
   const lines = source.split("\n");
@@ -31,6 +57,13 @@ function parseTextBlocks(source: string): TextBlock[] {
     const trimmed = line.trim();
 
     if (!trimmed) {
+      index += 1;
+      continue;
+    }
+
+    const image = parseImageLine(trimmed);
+    if (image) {
+      blocks.push({ kind: "image", ...image });
       index += 1;
       continue;
     }
@@ -84,12 +117,41 @@ function parseTextBlocks(source: string): TextBlock[] {
       continue;
     }
 
+    if (trimmed.includes("|") && index + 1 < lines.length && isTableDividerLine(lines[index + 1] ?? "")) {
+      const headerCells = parseTableRow(trimmed);
+      index += 2;
+      const rows: string[][] = [];
+      while (index < lines.length) {
+        const rowRaw = lines[index] ?? "";
+        const row = rowRaw.trim();
+        if (!row || !row.includes("|")) {
+          break;
+        }
+        const cells = parseTableRow(row);
+        rows.push(cells);
+        index += 1;
+      }
+      if (headerCells.length > 0) {
+        const fixedRows = rows.map((row) => {
+          const cloned = row.slice(0, headerCells.length);
+          while (cloned.length < headerCells.length) {
+            cloned.push("");
+          }
+          return cloned;
+        });
+        blocks.push({ kind: "table", headers: headerCells, rows: fixedRows });
+      }
+      continue;
+    }
+
     const paragraph: string[] = [];
     while (index < lines.length) {
       const rowRaw = lines[index] ?? "";
       const row = rowRaw.trim();
       if (
         !row ||
+        parseImageLine(row) ||
+        (row.includes("|") && index + 1 < lines.length && isTableDividerLine(lines[index + 1] ?? "")) ||
         /^(#{1,3})\s+/.test(row) ||
         /^-\s+/.test(row) ||
         /^\d+\.\s+/.test(row) ||
@@ -181,6 +243,42 @@ export default function FeedDocument({ text, className = "" }: FeedDocumentProps
                 <li key={`item-${index}-${itemIndex}`}>{item}</li>
               ))}
             </ul>
+          );
+        }
+
+        if (block.kind === "image") {
+          return (
+            <figure className="feed-document-image" key={`block-${index}`}>
+              <img alt={block.alt || "문서 이미지"} loading="lazy" src={block.src} />
+              {(block.title || block.alt) && (
+                <figcaption>{block.title || block.alt}</figcaption>
+              )}
+            </figure>
+          );
+        }
+
+        if (block.kind === "table") {
+          return (
+            <div className="feed-document-table-wrap" key={`block-${index}`}>
+              <table className="feed-document-table">
+                <thead>
+                  <tr>
+                    {block.headers.map((header, headerIndex) => (
+                      <th key={`header-${index}-${headerIndex}`}>{header}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {block.rows.map((row, rowIndex) => (
+                    <tr key={`row-${index}-${rowIndex}`}>
+                      {row.map((cell, cellIndex) => (
+                        <td key={`cell-${index}-${rowIndex}-${cellIndex}`}>{cell}</td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           );
         }
 
