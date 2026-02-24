@@ -4597,6 +4597,7 @@ function App() {
   const lastAuthenticatedAtRef = useRef<number>(defaultLoginCompleted ? Date.now() : 0);
   const codexLoginLastAttemptAtRef = useRef(0);
   const webBridgeStageWarnTimerRef = useRef<Record<string, number>>({});
+  const activeWebPromptRef = useRef<Partial<Record<WebProvider, string>>>({});
   const lastAppliedPresetRef = useRef<{ kind: PresetKind; graph: GraphData } | null>(null);
 
   const activeApproval = pendingApprovals[0];
@@ -4874,6 +4875,7 @@ function App() {
     timeoutMs: number,
     statusMessage: string,
     nodeLogMessage: string,
+    onTimeout?: () => void,
   ) {
     clearWebBridgeStageWarnTimer(providerKey);
     webBridgeStageWarnTimerRef.current[providerKey] = window.setTimeout(() => {
@@ -4883,6 +4885,7 @@ function App() {
       if (activeWebNodeId && activeProvider && activeProvider === providerKey) {
         addNodeLog(activeWebNodeId, nodeLogMessage);
       }
+      onTimeout?.();
       delete webBridgeStageWarnTimerRef.current[providerKey];
     }, timeoutMs);
   }
@@ -5013,6 +5016,24 @@ function App() {
                     WEB_BRIDGE_CLAIM_WARN_MS,
                     `${webProviderLabel(providerKey)} 탭에서 작업 수신이 지연되고 있습니다.`,
                     "[WEB] 작업 수신 지연: 해당 서비스 탭이 열려 있고 확장이 활성화되어 있는지 확인하세요.",
+                    () => {
+                      const prompt = activeWebPromptRef.current[providerKey];
+                      if (!prompt) {
+                        return;
+                      }
+                      void navigator.clipboard
+                        .writeText(prompt)
+                        .then(() => {
+                          const activeWebNodeId = activeWebNodeIdRef.current;
+                          const activeProvider = activeWebProviderRef.current;
+                          if (activeWebNodeId && activeProvider === providerKey) {
+                            addNodeLog(activeWebNodeId, "[WEB] 자동 주입 지연으로 프롬프트를 클립보드에 복사했습니다.");
+                          }
+                        })
+                        .catch(() => {
+                          // clipboard permission can be denied depending on runtime context
+                        });
+                    },
                   );
                 } else if (providerKey && stage === "bridge_claimed") {
                   setStatus(`${webProviderLabel(providerKey)} 탭 연결됨, 프롬프트 주입 중`);
@@ -8226,6 +8247,7 @@ ${prompt}`;
       if (webResultMode === "bridgeAssisted") {
         activeWebNodeIdRef.current = node.id;
         activeWebProviderRef.current = webProvider;
+        activeWebPromptRef.current[webProvider] = textToSend;
         addNodeLog(node.id, `[WEB] ${webProviderLabel(webProvider)} 웹 연결 반자동 시작`);
         addNodeLog(node.id, "[WEB] 웹 서비스 탭에서 전송 버튼을 1회 눌러주세요.");
         setStatus(`${webProviderLabel(webProvider)} 웹 연결 대기 중 - 웹 탭에서 전송 1회 필요`);
@@ -8241,6 +8263,7 @@ ${prompt}`;
           clearWebBridgeStageWarnTimer(webProvider);
           activeWebNodeIdRef.current = "";
           activeWebProviderRef.current = null;
+          delete activeWebPromptRef.current[webProvider];
           setNodeStatus(node.id, "waiting_user", `${webProvider} 응답 입력 대기`);
           setNodeRuntimeFields(node.id, {
             status: "waiting_user",
@@ -8347,6 +8370,7 @@ ${prompt}`;
             clearWebBridgeStageWarnTimer(webProvider);
             activeWebNodeIdRef.current = "";
             activeWebProviderRef.current = null;
+            delete activeWebPromptRef.current[webProvider];
           }
         }
       }
@@ -8981,6 +9005,7 @@ ${prompt}`;
         window.clearTimeout(timerId);
       }
       webBridgeStageWarnTimerRef.current = {};
+      activeWebPromptRef.current = {};
       turnTerminalResolverRef.current = null;
       webTurnResolverRef.current = null;
       webLoginResolverRef.current = null;
@@ -9015,6 +9040,7 @@ ${prompt}`;
         await invoke("web_provider_cancel", { provider: activeWebProvider });
         addNodeLog(activeWebNodeId, "[WEB] 취소 요청 전송");
         clearWebBridgeStageWarnTimer(activeWebProvider);
+        delete activeWebPromptRef.current[activeWebProvider];
       } catch (e) {
         setError(String(e));
       }
