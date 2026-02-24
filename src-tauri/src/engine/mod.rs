@@ -1068,6 +1068,41 @@ async fn ensure_web_worker_started(
     Ok(runtime)
 }
 
+fn is_web_worker_recoverable_error(message: &str) -> bool {
+    let lower = message.to_lowercase();
+    lower.contains("web worker stopped")
+        || lower.contains("response channel closed")
+        || lower.contains("failed to write to web worker stdin")
+        || lower.contains("failed to flush web worker stdin")
+        || lower.contains("request timed out")
+}
+
+async fn request_web_worker_with_recovery(
+    app: &AppHandle,
+    state: &EngineManager,
+    method: &str,
+    params: Value,
+) -> Result<Value, String> {
+    let runtime = ensure_web_worker_started(app, state).await?;
+    match runtime.request(method, params.clone()).await {
+        Ok(value) => Ok(value),
+        Err(error) if is_web_worker_recoverable_error(&error) => {
+            {
+                let mut locked = state.web_worker.lock().await;
+                if let Some(current) = locked.as_ref() {
+                    if Arc::ptr_eq(current, &runtime) {
+                        locked.take();
+                    }
+                }
+            }
+            let _ = runtime.stop().await;
+            let restarted = ensure_web_worker_started(app, state).await?;
+            restarted.request(method, params).await
+        }
+        Err(error) => Err(error),
+    }
+}
+
 fn extract_string_by_paths(value: &Value, paths: &[&str]) -> Option<String> {
     for path in paths {
         let mut current = value;
@@ -1228,7 +1263,22 @@ pub async fn web_provider_health(
     state: State<'_, EngineManager>,
 ) -> Result<WebWorkerHealth, String> {
     if let Ok(runtime) = current_web_worker(&state).await {
-        let raw = runtime.request("health", json!({})).await?;
+        let raw = match runtime.request("health", json!({})).await {
+            Ok(raw) => raw,
+            Err(error) if is_web_worker_recoverable_error(&error) => {
+                {
+                    let mut locked = state.web_worker.lock().await;
+                    if let Some(current) = locked.as_ref() {
+                        if Arc::ptr_eq(current, &runtime) {
+                            locked.take();
+                        }
+                    }
+                }
+                let _ = runtime.stop().await;
+                request_web_worker_with_recovery(&app, &state, "health", json!({})).await?
+            }
+            Err(error) => return Err(error),
+        };
         let mut parsed = serde_json::from_value::<WebWorkerHealth>(raw).unwrap_or(WebWorkerHealth {
             running: true,
             last_error: None,
@@ -1269,18 +1319,18 @@ pub async fn web_provider_run(
     timeout_ms: Option<u64>,
     mode: Option<String>,
 ) -> Result<WebProviderRunResult, String> {
-    let runtime = ensure_web_worker_started(&app, &state).await?;
-    let raw = runtime
-        .request(
-            "provider/run",
-            json!({
-                "provider": provider,
-                "prompt": prompt,
-                "timeoutMs": timeout_ms.unwrap_or(90_000),
-                "mode": mode.unwrap_or_else(|| "auto".to_string())
-            }),
-        )
-        .await?;
+    let raw = request_web_worker_with_recovery(
+        &app,
+        &state,
+        "provider/run",
+        json!({
+            "provider": provider,
+            "prompt": prompt,
+            "timeoutMs": timeout_ms.unwrap_or(90_000),
+            "mode": mode.unwrap_or_else(|| "auto".to_string())
+        }),
+    )
+    .await?;
 
     serde_json::from_value(raw).map_err(|e| format!("invalid web provider run response: {e}"))
 }
@@ -1291,10 +1341,13 @@ pub async fn web_provider_open_session(
     state: State<'_, EngineManager>,
     provider: String,
 ) -> Result<Value, String> {
-    let runtime = ensure_web_worker_started(&app, &state).await?;
-    runtime
-        .request("provider/openSession", json!({ "provider": provider }))
-        .await
+    request_web_worker_with_recovery(
+        &app,
+        &state,
+        "provider/openSession",
+        json!({ "provider": provider }),
+    )
+    .await
 }
 
 #[tauri::command]
@@ -1303,25 +1356,29 @@ pub async fn web_provider_reset_session(
     state: State<'_, EngineManager>,
     provider: String,
 ) -> Result<(), String> {
-    let runtime = ensure_web_worker_started(&app, &state).await?;
-    let _ = runtime
-        .request("provider/resetSession", json!({ "provider": provider }))
-        .await?;
+    let _ = request_web_worker_with_recovery(
+        &app,
+        &state,
+        "provider/resetSession",
+        json!({ "provider": provider }),
+    )
+    .await?;
     Ok(())
 }
 
 #[tauri::command]
 pub async fn web_provider_cancel(
+    app: AppHandle,
     state: State<'_, EngineManager>,
     provider: String,
 ) -> Result<(), String> {
-    let runtime = match current_web_worker(&state).await {
-        Ok(runtime) => runtime,
-        Err(_) => return Ok(()),
-    };
-    let _ = runtime
-        .request("provider/cancel", json!({ "provider": provider }))
-        .await?;
+    let _ = request_web_worker_with_recovery(
+        &app,
+        &state,
+        "provider/cancel",
+        json!({ "provider": provider }),
+    )
+    .await?;
     Ok(())
 }
 
@@ -1330,8 +1387,7 @@ pub async fn web_bridge_status(
     app: AppHandle,
     state: State<'_, EngineManager>,
 ) -> Result<Value, String> {
-    let runtime = ensure_web_worker_started(&app, &state).await?;
-    runtime.request("bridge/status", json!({})).await
+    request_web_worker_with_recovery(&app, &state, "bridge/status", json!({})).await
 }
 
 #[tauri::command]
@@ -1339,8 +1395,7 @@ pub async fn web_bridge_rotate_token(
     app: AppHandle,
     state: State<'_, EngineManager>,
 ) -> Result<Value, String> {
-    let runtime = ensure_web_worker_started(&app, &state).await?;
-    runtime.request("bridge/tokenRotate", json!({})).await
+    request_web_worker_with_recovery(&app, &state, "bridge/tokenRotate", json!({})).await
 }
 
 #[tauri::command]
