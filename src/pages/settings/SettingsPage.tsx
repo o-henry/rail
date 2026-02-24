@@ -8,6 +8,8 @@ type SettingsPageProps = {
   cwd: string;
   model: string;
   modelOptions: readonly string[];
+  codexMultiAgentMode: string;
+  codexMultiAgentModeOptions: ReadonlyArray<{ value: string; label: string }>;
   status: string;
   usageInfoText: string;
   usageResultClosed: boolean;
@@ -16,6 +18,7 @@ type SettingsPageProps = {
   codexAuthBusy: boolean;
   onSelectCwdDirectory: () => void;
   onSetModel: (next: string) => void;
+  onSetCodexMultiAgentMode: (next: string) => void;
   onStartEngine: () => void;
   onStopEngine: () => void;
   onCheckUsage: () => void;
@@ -32,6 +35,8 @@ export default function SettingsPage({
   cwd,
   model,
   modelOptions,
+  codexMultiAgentMode,
+  codexMultiAgentModeOptions,
   status,
   usageInfoText,
   usageResultClosed,
@@ -40,6 +45,7 @@ export default function SettingsPage({
   codexAuthBusy,
   onSelectCwdDirectory,
   onSetModel,
+  onSetCodexMultiAgentMode,
   onStartEngine,
   onStopEngine,
   onCheckUsage,
@@ -78,6 +84,16 @@ export default function SettingsPage({
           onChange={onSetModel}
           options={modelOptions.map((option) => ({ value: option, label: option }))}
           value={model}
+        />
+      </label>
+      <label>
+        Codex 멀티에이전트 최적화
+        <FancySelect
+          ariaLabel="Codex 멀티에이전트 최적화"
+          className="modern-select"
+          onChange={onSetCodexMultiAgentMode}
+          options={[...codexMultiAgentModeOptions]}
+          value={codexMultiAgentMode}
         />
       </label>
       {!compact && (

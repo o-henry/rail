@@ -152,6 +152,7 @@ type PendingApproval = {
 };
 
 type WorkspaceTab = "workflow" | "feed" | "settings" | "bridge";
+type CodexMultiAgentMode = "off" | "balanced" | "max";
 
 type CanvasDisplayEdge = {
   edge: GraphEdge;
@@ -539,6 +540,12 @@ const KNOWLEDGE_MAX_CHARS_OPTIONS: FancySelectOption[] = [
 const WORKSPACE_CWD_STORAGE_KEY = "rail.settings.cwd";
 const LOGIN_COMPLETED_STORAGE_KEY = "rail.settings.login_completed";
 const AUTH_MODE_STORAGE_KEY = "rail.settings.auth_mode";
+const CODEX_MULTI_AGENT_MODE_STORAGE_KEY = "rail.settings.codex_multi_agent_mode";
+const CODEX_MULTI_AGENT_MODE_OPTIONS: ReadonlyArray<FancySelectOption> = [
+  { value: "off", label: "끄기" },
+  { value: "balanced", label: "균형 (권장)" },
+  { value: "max", label: "최고 품질" },
+];
 const COST_PRESET_OPTIONS: FancySelectOption[] = [
   { value: "conservative", label: "고사양 (품질 우선)" },
   { value: "balanced", label: "보통 (기본)" },
@@ -690,6 +697,36 @@ function loadPersistedAuthMode(): AuthMode {
   } catch {
     return "unknown";
   }
+}
+
+function normalizeCodexMultiAgentMode(value: unknown): CodexMultiAgentMode {
+  const raw = String(value ?? "").trim().toLowerCase();
+  if (raw === "off" || raw === "balanced" || raw === "max") {
+    return raw;
+  }
+  return "balanced";
+}
+
+function loadPersistedCodexMultiAgentMode(): CodexMultiAgentMode {
+  if (typeof window === "undefined") {
+    return "balanced";
+  }
+  try {
+    const raw = window.localStorage.getItem(CODEX_MULTI_AGENT_MODE_STORAGE_KEY);
+    return normalizeCodexMultiAgentMode(raw);
+  } catch {
+    return "balanced";
+  }
+}
+
+function codexMultiAgentModeLabel(mode: CodexMultiAgentMode): string {
+  if (mode === "off") {
+    return "끄기";
+  }
+  if (mode === "max") {
+    return "최고 품질";
+  }
+  return "균형";
 }
 
 function isAbsoluteFsPath(path: string): boolean {
@@ -2171,6 +2208,34 @@ function buildForcedAgentRuleBlock(docs: AgentRuleDoc[]): string {
   ].join("\n");
 }
 
+function buildCodexMultiAgentDirective(mode: CodexMultiAgentMode): string {
+  if (mode === "off") {
+    return "";
+  }
+
+  const qualityRules =
+    mode === "max"
+      ? [
+          "- 최소 3개 이상의 하위 에이전트를 병렬 사용해 서로 다른 관점(근거, 반례, 실행계획)으로 검토하라.",
+          "- 불확실하거나 충돌하는 항목은 누락하지 말고 명시적으로 분리 보고하라.",
+          "- 최종 답변 전 자기검증 단계(누락/모순/근거 부족)를 수행하라.",
+        ]
+      : [
+          "- 작업을 2~3개 하위 에이전트 단위로 분해하고 병렬 처리하라.",
+          "- 중간 로그 대신 핵심 요약만 수집해 컨텍스트 오염을 줄여라.",
+          "- 결과 통합 전 근거 일관성을 점검하라.",
+        ];
+
+  return [
+    "[CODEx MULTI-AGENT ORCHESTRATION]",
+    "복잡한 작업은 반드시 하위 에이전트(sub-agent) 병렬 실행으로 처리하라.",
+    "각 하위 에이전트는 역할을 분리하고, 산출물은 짧은 구조화 요약으로 제출하라.",
+    "모든 하위 에이전트 결과를 확인한 뒤 최종 통합 답변을 작성하라.",
+    ...qualityRules,
+    "[/CODEx MULTI-AGENT ORCHESTRATION]",
+  ].join("\n");
+}
+
 function defaultKnowledgeConfig(): KnowledgeConfig {
   return {
     files: [],
@@ -2701,6 +2766,7 @@ function App() {
   const defaultCwd = useMemo(() => loadPersistedCwd("."), []);
   const defaultLoginCompleted = useMemo(() => loadPersistedLoginCompleted(), []);
   const defaultAuthMode = useMemo(() => loadPersistedAuthMode(), []);
+  const defaultCodexMultiAgentMode = useMemo(() => loadPersistedCodexMultiAgentMode(), []);
 
   const [workspaceTab, setWorkspaceTab] = useState<WorkspaceTab>("workflow");
 
@@ -2720,6 +2786,7 @@ function App() {
   const [usageInfoText, setUsageInfoText] = useState("");
   const [usageResultClosed, setUsageResultClosed] = useState(false);
   const [authMode, setAuthMode] = useState<AuthMode>(defaultAuthMode);
+  const [codexMultiAgentMode, setCodexMultiAgentMode] = useState<CodexMultiAgentMode>(defaultCodexMultiAgentMode);
   const [loginCompleted, setLoginCompleted] = useState(defaultLoginCompleted);
   const [codexAuthBusy, setCodexAuthBusy] = useState(false);
   const [pendingApprovals, setPendingApprovals] = useState<PendingApproval[]>([]);
@@ -5991,6 +6058,14 @@ function buildFeedShareText(post: FeedViewPost, run: RunRecord | null): string {
   }, [authMode]);
 
   useEffect(() => {
+    try {
+      window.localStorage.setItem(CODEX_MULTI_AGENT_MODE_STORAGE_KEY, codexMultiAgentMode);
+    } catch {
+      // ignore persistence failures
+    }
+  }, [codexMultiAgentMode]);
+
+  useEffect(() => {
     syncQuestionInputHeight();
   }, [workflowQuestion]);
 
@@ -6584,10 +6659,17 @@ ${prompt}`;
     }
     const forcedRuleBlock = shouldForceAgentRules ? buildForcedAgentRuleBlock(agentRuleDocs) : "";
     const withKnowledge = await injectKnowledgeContext(node, promptWithRequests, config);
-    const textToSend = forcedRuleBlock
+    let textToSend = forcedRuleBlock
       ? `${forcedRuleBlock}\n\n${withKnowledge.prompt}`.trim()
       : withKnowledge.prompt;
     const knowledgeTrace = withKnowledge.trace;
+    if (executor === "codex") {
+      const multiAgentDirective = buildCodexMultiAgentDirective(codexMultiAgentMode);
+      if (multiAgentDirective) {
+        textToSend = `${multiAgentDirective}\n\n${textToSend}`.trim();
+        addNodeLog(node.id, `[멀티에이전트] Codex 최적화 모드 적용: ${codexMultiAgentModeLabel(codexMultiAgentMode)}`);
+      }
+    }
 
     if (executor === "ollama") {
       try {
@@ -9728,11 +9810,14 @@ ${prompt}`;
               loginCompleted={loginCompleted}
               model={model}
               modelOptions={TURN_MODEL_OPTIONS}
+              codexMultiAgentMode={codexMultiAgentMode}
+              codexMultiAgentModeOptions={[...CODEX_MULTI_AGENT_MODE_OPTIONS]}
               onCheckUsage={() => void onCheckUsage()}
               onCloseUsageResult={() => setUsageResultClosed(true)}
               onOpenRunsFolder={() => void onOpenRunsFolder()}
               onSelectCwdDirectory={() => void onSelectCwdDirectory()}
               onSetModel={setModel}
+              onSetCodexMultiAgentMode={(next) => setCodexMultiAgentMode(normalizeCodexMultiAgentMode(next))}
               onStartEngine={() => void onStartEngine()}
               onStopEngine={() => void onStopEngine()}
               onToggleCodexLogin={() => void onLoginCodex()}
