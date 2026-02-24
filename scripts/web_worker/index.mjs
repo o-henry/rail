@@ -388,11 +388,14 @@ function requestOrigin(req) {
 
 function isAllowedBridgeOrigin(origin) {
   if (!origin) {
-    return false;
+    return true;
   }
   if (origin.startsWith('chrome-extension://')) {
+    if (!/^chrome-extension:\/\/[a-p]{32}$/.test(origin)) {
+      return false;
+    }
     if (!BRIDGE_EXTENSION_ALLOWLIST_CONFIGURED) {
-      return /^chrome-extension:\/\/[a-p]{32}$/.test(origin);
+      return true;
     }
     return BRIDGE_ALLOWED_EXTENSION_ORIGINS.has(origin);
   }
@@ -459,7 +462,7 @@ function bridgeStatusPayload({ exposeToken = false } = {}) {
     allowedExtensionOriginCount: BRIDGE_ALLOWED_EXTENSION_ORIGINS.size,
     extensionOriginPolicy: BRIDGE_EXTENSION_ALLOWLIST_CONFIGURED
       ? 'allowlist'
-      : 'token_only_fallback',
+      : 'token_only',
     lastSeenAt: state.bridge.lastSeenAt,
     connectedProviders,
     queuedTasks,
@@ -1780,7 +1783,7 @@ async function bootstrap() {
   });
   if (!BRIDGE_EXTENSION_ALLOWLIST_CONFIGURED) {
     const message =
-      '확장 ID allowlist 미설정: 현재는 토큰 기반 폴백 허용 모드입니다. 배포 전 allowlist 설정을 권장합니다.';
+      '확장 ID allowlist 미설정: 토큰 기반 기본 모드로 동작합니다. 필요 시 allowlist를 추가하세요.';
     await logLine(`bridge security: ${message}`);
     notify('web/progress', {
       stage: 'bridge_extension_allowlist_missing',

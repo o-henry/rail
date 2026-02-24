@@ -124,7 +124,7 @@ async function testConnection() {
       const reason = String(payload?.error ?? `HTTP ${response.status}`);
       if (reason === "forbidden_origin") {
         throw new Error(
-          "허용되지 않은 확장 Origin입니다. 앱 실행 전에 RAIL_WEB_BRIDGE_ALLOWED_EXTENSION_IDS에 현재 확장 ID를 설정하세요.",
+          "확장 Origin이 거부되었습니다. 앱을 재시작한 뒤 연결 코드를 다시 복사/저장하세요.",
         );
       }
       if (reason === "unauthorized") {

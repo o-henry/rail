@@ -473,7 +473,7 @@ type WebBridgeStatus = {
   tokenStorage?: string;
   extensionOriginAllowlistConfigured?: boolean;
   allowedExtensionOriginCount?: number;
-  extensionOriginPolicy?: "allowlist" | "token_only_fallback";
+  extensionOriginPolicy?: "allowlist" | "token_only";
   lastSeenAt?: string | null;
   connectedProviders: WebBridgeProviderSeen[];
   queuedTasks: number;
@@ -2796,7 +2796,7 @@ function toWebBridgeStatus(raw: unknown): WebBridgeStatus {
     tokenMasked: "",
     extensionOriginAllowlistConfigured: false,
     allowedExtensionOriginCount: 0,
-    extensionOriginPolicy: "token_only_fallback",
+    extensionOriginPolicy: "token_only",
     connectedProviders: [],
     queuedTasks: 0,
     activeTasks: 0,
@@ -2838,9 +2838,9 @@ function toWebBridgeStatus(raw: unknown): WebBridgeStatus {
     extensionOriginAllowlistConfigured: row.extensionOriginAllowlistConfigured === true,
     allowedExtensionOriginCount: Math.max(0, Number(row.allowedExtensionOriginCount ?? 0) || 0),
     extensionOriginPolicy:
-      row.extensionOriginPolicy === "allowlist" || row.extensionOriginPolicy === "token_only_fallback"
+      row.extensionOriginPolicy === "allowlist" || row.extensionOriginPolicy === "token_only"
         ? row.extensionOriginPolicy
-        : "token_only_fallback",
+        : "token_only",
     lastSeenAt: typeof row.lastSeenAt === "string" ? row.lastSeenAt : row.lastSeenAt == null ? null : undefined,
     connectedProviders,
     queuedTasks: Math.max(0, Number(row.queuedTasks ?? 0) || 0),
@@ -9072,7 +9072,7 @@ ${prompt}`;
             >
               {webBridgeStatus.extensionOriginAllowlistConfigured
                 ? `확장 ID 허용 목록 ${webBridgeStatus.allowedExtensionOriginCount ?? 0}개`
-                : "확장 ID 허용 목록 미설정"}
+                : "토큰 보호 모드"}
             </span>
           </div>
           <div className="button-row bridge-action-row">
@@ -9102,12 +9102,9 @@ ${prompt}`;
           <div className="usage-method">
             실행 후 해당 웹 탭에서 전송 버튼을 1회 눌러야 답변 수집이 시작됩니다.
           </div>
-          {!webBridgeStatus.extensionOriginAllowlistConfigured && (
-            <div className="usage-method">
-              보안 경고: 현재는 토큰 기반 폴백 허용 모드입니다. 배포 전 `RAIL_WEB_BRIDGE_ALLOWED_EXTENSION_IDS`
-              (또는 `RAIL_WEB_BRIDGE_ALLOWED_EXTENSION_ID`) 설정을 권장합니다.
-            </div>
-          )}
+          <div className="usage-method">
+            고급 보안(선택): `RAIL_WEB_BRIDGE_ALLOWED_EXTENSION_IDS` 설정 시 등록한 확장 ID만 허용합니다.
+          </div>
           {webBridgeConnectCode && (
             <div className="bridge-code-card">
               <div className="bridge-code-head">
