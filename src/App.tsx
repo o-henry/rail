@@ -191,6 +191,15 @@ type FeedAttachment = {
 type FeedPostStatus = "draft" | "done" | "failed" | "cancelled";
 type FeedTerminalStatus = Exclude<FeedPostStatus, "draft">;
 
+type FeedInputSource = {
+  kind: "question" | "node";
+  nodeId?: string;
+  agentName: string;
+  roleLabel?: string;
+  summary?: string;
+  sourcePostId?: string;
+};
+
 type FeedPost = {
   id: string;
   runId: string;
@@ -203,6 +212,7 @@ type FeedPost = {
   createdAt: string;
   summary: string;
   steps: string[];
+  inputSources?: FeedInputSource[];
   evidence: {
     durationMs?: number;
     usage?: UsageStats;
@@ -290,6 +300,7 @@ type FeedBuildInput = {
   durationMs?: number;
   usage?: UsageStats;
   qualityReport?: QualityReport;
+  inputSources?: FeedInputSource[];
 };
 
 type TurnTerminal = {
@@ -1359,6 +1370,53 @@ function buildFeedSummary(status: FeedPostStatus, output: unknown, error?: strin
   return outputText.length > 360 ? `${outputText.slice(0, 360)}...` : outputText;
 }
 
+function normalizeFeedInputSources(input: unknown): FeedInputSource[] {
+  if (!Array.isArray(input)) {
+    return [];
+  }
+  const rows: FeedInputSource[] = [];
+  for (const row of input) {
+    if (!row || typeof row !== "object") {
+      continue;
+    }
+    const raw = row as Record<string, unknown>;
+    const kind = raw.kind === "question" ? "question" : raw.kind === "node" ? "node" : null;
+    const agentName = String(raw.agentName ?? "").trim();
+    if (!kind || !agentName) {
+      continue;
+    }
+    rows.push({
+      kind,
+      nodeId: typeof raw.nodeId === "string" ? raw.nodeId : undefined,
+      agentName,
+      roleLabel: typeof raw.roleLabel === "string" ? raw.roleLabel : undefined,
+      summary: typeof raw.summary === "string" ? raw.summary : undefined,
+      sourcePostId: typeof raw.sourcePostId === "string" ? raw.sourcePostId : undefined,
+    });
+  }
+  return rows;
+}
+
+function formatFeedInputSourceLabel(source: FeedInputSource): string {
+  if (source.kind === "question") {
+    return "사용자 입력 질문";
+  }
+  const pieces: string[] = [source.agentName];
+  if (source.roleLabel) {
+    pieces.push(source.roleLabel);
+  }
+  if (source.nodeId) {
+    pieces.push(source.nodeId);
+  }
+  const head = pieces.join(" · ");
+  const summary = (source.summary ?? "").trim();
+  if (!summary) {
+    return head;
+  }
+  const clipped = summary.length > 110 ? `${summary.slice(0, 110)}...` : summary;
+  return `${head} — ${clipped}`;
+}
+
 function buildFeedPost(input: FeedBuildInput): {
   post: FeedPost;
   rawAttachments: Record<FeedAttachmentKind, string>;
@@ -1374,6 +1432,7 @@ function buildFeedPost(input: FeedBuildInput): {
   const logs = input.logs ?? [];
   const steps = summarizeFeedSteps(logs);
   const summary = buildFeedSummary(input.status, input.output, input.error, input.summary);
+  const inputSources = normalizeFeedInputSources(input.inputSources);
   const outputText = extractFinalAnswer(input.output).trim() || stringifyInput(input.output).trim();
   const logsText = logs.length > 0 ? logs.join("\n") : "(로그 없음)";
   const markdownRaw = [
@@ -1383,6 +1442,9 @@ function buildFeedPost(input: FeedBuildInput): {
     "",
     "## 요약",
     summary || "(없음)",
+    ...(inputSources.length > 0
+      ? ["", "## 입력 출처", ...inputSources.map((source) => `- ${formatFeedInputSourceLabel(source)}`)]
+      : []),
     "",
     "## 단계 요약",
     ...steps.map((step) => `- ${step}`),
@@ -1404,6 +1466,7 @@ function buildFeedPost(input: FeedBuildInput): {
       status: input.status,
       summary,
       steps,
+      inputSources,
       output: input.output ?? null,
       logs,
       error: input.error ?? null,
@@ -1436,6 +1499,7 @@ function buildFeedPost(input: FeedBuildInput): {
     createdAt: input.createdAt,
     summary,
     steps,
+    inputSources,
     evidence: {
       durationMs: input.durationMs,
       usage: input.usage,
@@ -1475,7 +1539,10 @@ function buildFeedPost(input: FeedBuildInput): {
 
 function normalizeRunFeedPosts(run: RunRecord): FeedPost[] {
   if (Array.isArray(run.feedPosts)) {
-    return run.feedPosts;
+    return run.feedPosts.map((post) => ({
+      ...post,
+      inputSources: normalizeFeedInputSources((post as FeedPost).inputSources),
+    }));
   }
   const nodeMap = new Map(run.graphSnapshot.nodes.map((node) => [node.id, node]));
   const terminalMap = new Map<string, RunTransition>();
@@ -2406,7 +2473,7 @@ function App() {
     queuedTasks: 0,
     activeTasks: 0,
   });
-  const [webBridgeLogs, setWebBridgeLogs] = useState<string[]>([]);
+  const [, setWebBridgeLogs] = useState<string[]>([]);
   const [webBridgeConnectCode, setWebBridgeConnectCode] = useState("");
   const [providerChildViewOpen, setProviderChildViewOpen] = useState<Record<WebProvider, boolean>>({
     gemini: false,
@@ -3218,7 +3285,7 @@ function App() {
     };
   }
 
-  function buildFeedShareText(post: FeedViewPost, run: RunRecord | null): string {
+function buildFeedShareText(post: FeedViewPost, run: RunRecord | null): string {
     const markdownAttachment = post.attachments.find((attachment) => attachment.kind === "markdown");
     const rawContent = markdownAttachment?.content?.trim() ?? "";
     const visibleSteps = normalizeFeedSteps(post.steps);
@@ -3234,10 +3301,13 @@ function App() {
     if (post.sourceFile) {
       lines.push(`- 기록 파일: ${formatRunFileLabel(post.sourceFile)}`);
     }
-    if (post.question?.trim()) {
-      lines.push("", "## 질문", post.question.trim());
-    }
-    lines.push("", "## 요약", post.summary?.trim() || "(요약 없음)");
+  if (post.question?.trim()) {
+    lines.push("", "## 질문", post.question.trim());
+  }
+  if (Array.isArray(post.inputSources) && post.inputSources.length > 0) {
+    lines.push("", "## 입력 출처", ...post.inputSources.map((source) => `- ${formatFeedInputSourceLabel(source)}`));
+  }
+  lines.push("", "## 요약", post.summary?.trim() || "(요약 없음)");
     if (visibleSteps.length > 0) {
       lines.push("", "## 단계", ...visibleSteps.map((step) => `- ${step}`));
     }
@@ -6588,6 +6658,58 @@ ${prompt}`;
         adjacency.set(edge.from.nodeId, children);
       }
 
+      const latestFeedSourceByNodeId = new Map<string, FeedInputSource>();
+      const resolveFeedInputSources = (targetNodeId: string): FeedInputSource[] => {
+        const incomingEdges = graph.edges.filter((edge) => edge.to.nodeId === targetNodeId);
+        if (incomingEdges.length === 0) {
+          return [
+            {
+              kind: "question",
+              agentName: "사용자 입력 질문",
+              summary: workflowQuestion.trim() || undefined,
+            },
+          ];
+        }
+        const seenNodeIds = new Set<string>();
+        const sources: FeedInputSource[] = [];
+        for (const edge of incomingEdges) {
+          const sourceNodeId = edge.from.nodeId;
+          if (!sourceNodeId || seenNodeIds.has(sourceNodeId)) {
+            continue;
+          }
+          seenNodeIds.add(sourceNodeId);
+          const known = latestFeedSourceByNodeId.get(sourceNodeId);
+          const sourceNode = nodeMap.get(sourceNodeId);
+          const sourceRoleLabel =
+            sourceNode?.type === "turn"
+              ? turnRoleLabel(sourceNode)
+              : sourceNode
+                ? nodeTypeLabel(sourceNode.type)
+                : known?.roleLabel;
+          const sourceAgentName = known?.agentName ?? (sourceNode ? nodeSelectionLabel(sourceNode) : sourceNodeId);
+          sources.push({
+            kind: "node",
+            nodeId: sourceNodeId,
+            agentName: sourceAgentName,
+            roleLabel: sourceRoleLabel,
+            summary: known?.summary,
+            sourcePostId: known?.sourcePostId,
+          });
+        }
+        return sources;
+      };
+
+      const rememberFeedSource = (post: FeedPost) => {
+        latestFeedSourceByNodeId.set(post.nodeId, {
+          kind: "node",
+          nodeId: post.nodeId,
+          agentName: post.agentName,
+          roleLabel: post.roleLabel,
+          summary: post.summary,
+          sourcePostId: post.id,
+        });
+      };
+
       const queue: string[] = [];
       indegree.forEach((degree, nodeId) => {
         if (degree === 0) {
@@ -6607,6 +6729,7 @@ ${prompt}`;
         if (!node) {
           continue;
         }
+        const nodeInputSources = resolveFeedInputSources(nodeId);
 
         if (cancelRequestedRef.current) {
           setNodeStatus(nodeId, "cancelled", "취소 요청됨");
@@ -6619,8 +6742,10 @@ ${prompt}`;
             createdAt: cancelledAt,
             summary: "사용자 중지 요청으로 실행이 취소되었습니다.",
             logs: runLogCollectorRef.current[nodeId] ?? [],
+            inputSources: nodeInputSources,
           });
           runRecord.feedPosts?.push(cancelledFeed.post);
+          rememberFeedSource(cancelledFeed.post);
           feedRawAttachmentRef.current[feedAttachmentRawKey(cancelledFeed.post.id, "markdown")] =
             cancelledFeed.rawAttachments.markdown;
           feedRawAttachmentRef.current[feedAttachmentRawKey(cancelledFeed.post.id, "json")] =
@@ -6688,8 +6813,10 @@ ${prompt}`;
                 error: result.error,
                 durationMs: Date.now() - startedAtMs,
                 usage: result.usage,
+                inputSources: nodeInputSources,
               });
               runRecord.feedPosts?.push(failedFeed.post);
+              rememberFeedSource(failedFeed.post);
               feedRawAttachmentRef.current[feedAttachmentRawKey(failedFeed.post.id, "markdown")] =
                 failedFeed.rawAttachments.markdown;
               feedRawAttachmentRef.current[feedAttachmentRawKey(failedFeed.post.id, "json")] =
@@ -6772,8 +6899,10 @@ ${prompt}`;
                 durationMs: Date.now() - startedAtMs,
                 usage: result.usage,
                 qualityReport,
+                inputSources: nodeInputSources,
               });
               runRecord.feedPosts?.push(rejectedFeed.post);
+              rememberFeedSource(rejectedFeed.post);
               feedRawAttachmentRef.current[feedAttachmentRawKey(rejectedFeed.post.id, "markdown")] =
                 rejectedFeed.rawAttachments.markdown;
               feedRawAttachmentRef.current[feedAttachmentRawKey(rejectedFeed.post.id, "json")] =
@@ -6820,8 +6949,10 @@ ${prompt}`;
               durationMs: Date.now() - startedAtMs,
               usage: result.usage,
               qualityReport,
+              inputSources: nodeInputSources,
             });
             runRecord.feedPosts?.push(doneFeed.post);
+            rememberFeedSource(doneFeed.post);
             feedRawAttachmentRef.current[feedAttachmentRawKey(doneFeed.post.id, "markdown")] =
               doneFeed.rawAttachments.markdown;
             feedRawAttachmentRef.current[feedAttachmentRawKey(doneFeed.post.id, "json")] =
@@ -6849,8 +6980,10 @@ ${prompt}`;
                 output: result.output,
                 error: result.error ?? "변환 실패",
                 durationMs: Date.now() - startedAtMs,
+                inputSources: nodeInputSources,
               });
               runRecord.feedPosts?.push(transformFailedFeed.post);
+              rememberFeedSource(transformFailedFeed.post);
               feedRawAttachmentRef.current[
                 feedAttachmentRawKey(transformFailedFeed.post.id, "markdown")
               ] = transformFailedFeed.rawAttachments.markdown;
@@ -6878,8 +7011,10 @@ ${prompt}`;
               logs: runLogCollectorRef.current[nodeId] ?? [],
               output: result.output,
               durationMs: Date.now() - startedAtMs,
+              inputSources: nodeInputSources,
             });
             runRecord.feedPosts?.push(transformDoneFeed.post);
+            rememberFeedSource(transformDoneFeed.post);
             feedRawAttachmentRef.current[feedAttachmentRawKey(transformDoneFeed.post.id, "markdown")] =
               transformDoneFeed.rawAttachments.markdown;
             feedRawAttachmentRef.current[feedAttachmentRawKey(transformDoneFeed.post.id, "json")] =
@@ -6907,8 +7042,10 @@ ${prompt}`;
                 output: result.output,
                 error: result.error ?? "분기 실패",
                 durationMs: Date.now() - startedAtMs,
+                inputSources: nodeInputSources,
               });
               runRecord.feedPosts?.push(gateFailedFeed.post);
+              rememberFeedSource(gateFailedFeed.post);
               feedRawAttachmentRef.current[feedAttachmentRawKey(gateFailedFeed.post.id, "markdown")] =
                 gateFailedFeed.rawAttachments.markdown;
               feedRawAttachmentRef.current[feedAttachmentRawKey(gateFailedFeed.post.id, "json")] =
@@ -6935,8 +7072,10 @@ ${prompt}`;
               logs: runLogCollectorRef.current[nodeId] ?? [],
               output: result.output,
               durationMs: Date.now() - startedAtMs,
+              inputSources: nodeInputSources,
             });
             runRecord.feedPosts?.push(gateDoneFeed.post);
+            rememberFeedSource(gateDoneFeed.post);
             feedRawAttachmentRef.current[feedAttachmentRawKey(gateDoneFeed.post.id, "markdown")] =
               gateDoneFeed.rawAttachments.markdown;
             feedRawAttachmentRef.current[feedAttachmentRawKey(gateDoneFeed.post.id, "json")] =
@@ -7308,6 +7447,45 @@ ${prompt}`;
     if (!activeFeedRunMeta) {
       return [];
     }
+    const buildLiveInputSources = (targetNodeId: string): FeedInputSource[] => {
+      const incomingEdges = graph.edges.filter((edge) => edge.to.nodeId === targetNodeId);
+      if (incomingEdges.length === 0) {
+        return [
+          {
+            kind: "question",
+            agentName: "사용자 입력 질문",
+            summary: activeFeedRunMeta.question?.trim() || undefined,
+          },
+        ];
+      }
+      const seen = new Set<string>();
+      const rows: FeedInputSource[] = [];
+      for (const edge of incomingEdges) {
+        const sourceNodeId = edge.from.nodeId;
+        if (!sourceNodeId || seen.has(sourceNodeId)) {
+          continue;
+        }
+        seen.add(sourceNodeId);
+        const sourceNode = graph.nodes.find((row) => row.id === sourceNodeId);
+        const sourceRunState = nodeStates[sourceNodeId];
+        const sourceSummary =
+          sourceRunState?.logs?.[sourceRunState.logs.length - 1] ||
+          (sourceRunState?.status === "done" ? "완료" : sourceRunState?.status === "failed" ? "실패" : undefined);
+        rows.push({
+          kind: "node",
+          nodeId: sourceNodeId,
+          agentName: sourceNode ? nodeSelectionLabel(sourceNode) : sourceNodeId,
+          roleLabel:
+            sourceNode?.type === "turn"
+              ? turnRoleLabel(sourceNode)
+              : sourceNode
+                ? nodeTypeLabel(sourceNode.type)
+                : undefined,
+          summary: sourceSummary,
+        });
+      }
+      return rows;
+    };
     const now = Date.now();
     const posts: FeedViewPost[] = [];
     for (const node of graph.nodes) {
@@ -7353,6 +7531,7 @@ ${prompt}`;
         createdAt: runState.startedAt ?? activeFeedRunMeta.startedAt,
         summary,
         steps: summarizeFeedSteps(logs),
+        inputSources: buildLiveInputSources(node.id),
         evidence: {
           durationMs,
           usage: runState.usage,
@@ -7419,7 +7598,10 @@ ${prompt}`;
       if (!keyword) {
         return true;
       }
-      const haystack = `${post.question ?? ""} ${post.agentName} ${post.roleLabel} ${post.summary}`.toLowerCase();
+      const sourceText = (post.inputSources ?? [])
+        .map((source) => `${source.agentName} ${source.roleLabel ?? ""} ${source.summary ?? ""}`)
+        .join(" ");
+      const haystack = `${post.question ?? ""} ${post.agentName} ${post.roleLabel} ${post.summary} ${sourceText}`.toLowerCase();
       return haystack.includes(keyword);
     })
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
@@ -9165,6 +9347,8 @@ ${prompt}`;
                               const isExpanded = feedExpandedByPost[post.id] === true;
                               const isDraftPost = post.status === "draft";
                               const canRequest = post.nodeType === "turn";
+                              const nodeInputSources = post.inputSources ?? [];
+                              const upstreamSources = nodeInputSources.filter((source) => source.kind === "node");
                               return (
                                 <section
                                   className={`feed-card feed-card-sns ${
@@ -9243,7 +9427,20 @@ ${prompt}`;
                                     {isExpanded ? "접기" : "더보기"}
                                   </button>
                                   <div className={`feed-card-details ${isExpanded ? "is-expanded" : ""}`} aria-hidden={!isExpanded}>
-                                    {post.question && <div className="feed-card-question">Q: {post.question}</div>}
+                                    {upstreamSources.length > 0 ? (
+                                      <section className="feed-card-input-sources">
+                                        <div className="feed-card-input-sources-title">입력 출처</div>
+                                        <ul>
+                                          {upstreamSources.map((source, index) => (
+                                            <li key={`${post.id}:source:${source.nodeId ?? source.agentName}:${index}`}>
+                                              {formatFeedInputSourceLabel(source)}
+                                            </li>
+                                          ))}
+                                        </ul>
+                                      </section>
+                                    ) : post.question ? (
+                                      <div className="feed-card-question">Q: {post.question}</div>
+                                    ) : null}
                                     <pre className="feed-sns-content">{visibleContent}</pre>
                                     <div className="feed-evidence-row">
                                       <span>{formatRelativeFeedTime(post.createdAt)}</span>
@@ -9298,14 +9495,11 @@ ${prompt}`;
           <BridgePanel
             busy={webWorkerBusy}
             connectCode={webBridgeConnectCode}
-            formatRunDateTime={formatRunDateTime}
-            logs={webBridgeLogs}
             onCopyConnectCode={() => void onCopyWebBridgeConnectCode()}
             onRefreshStatus={() => void refreshWebBridgeStatus()}
             onRestartBridge={() => void onRestartWebBridge()}
             onRotateToken={() => void onRotateWebBridgeToken()}
             status={webBridgeStatus}
-            webProviderLabel={webProviderLabel}
           />
         )}
 

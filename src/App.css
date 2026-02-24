@@ -490,7 +490,8 @@ h3 {
   scrollbar-width: none;
 }
 .question-input textarea:disabled {
-  background: #f1f3f6;
+  /* background: #f1f3f6; */
+  background: white;
   color: #6f7b89;
   cursor: not-allowed;
 }
@@ -2671,6 +2672,36 @@ h3 {
   padding: 8px 0;
 }
 
+.feed-card-input-sources {
+  display: grid;
+  gap: 6px;
+  padding: 8px 0;
+  border-radius: 4px;
+  background: #ffffff;
+}
+
+.feed-card-input-sources-title {
+  color: #4b5768;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.feed-card-input-sources ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 4px;
+}
+
+.feed-card-input-sources li {
+  color: #0f1419;
+  font-size: 13px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .feed-card-summary {
   color: #0f1419;
   font-size: 13px;
@@ -3233,7 +3264,7 @@ pre {
   gap: 8px;
   background: #f6f6f6;
   border-radius: 12px;
-  padding: 8px;
+  /* padding: 8px; */
 }
 
 .bridge-code-head {

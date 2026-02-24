@@ -1,9 +1,5 @@
-const WEB_PROVIDER_OPTIONS = ["gemini", "gpt", "grok", "perplexity", "claude"] as const;
-
-type WebProvider = (typeof WEB_PROVIDER_OPTIONS)[number];
-
 type WebBridgeProviderSeen = {
-  provider: WebProvider;
+  provider: string;
   pageUrl?: string | null;
   lastSeenAt?: string | null;
 };
@@ -22,30 +18,23 @@ type WebBridgeStatus = {
 
 type BridgePanelProps = {
   status: WebBridgeStatus;
-  logs: string[];
   connectCode: string;
   busy: boolean;
   onRefreshStatus: () => void;
   onCopyConnectCode: () => void;
   onRestartBridge: () => void;
   onRotateToken: () => void;
-  formatRunDateTime: (input?: string | null) => string;
-  webProviderLabel: (provider: WebProvider) => string;
 };
 
 function BridgePanel({
   status,
-  logs,
   connectCode,
   busy,
   onRefreshStatus,
   onCopyConnectCode,
   onRestartBridge,
   onRotateToken,
-  formatRunDateTime,
-  webProviderLabel,
 }: BridgePanelProps) {
-  const providerSeenMap = new Map(status.connectedProviders.map((row) => [row.provider, row] as const));
   const bridgeUrl = `http://127.0.0.1:${status.port}`;
 
   return (
@@ -152,7 +141,7 @@ function BridgePanel({
         )}
       </section>
 
-      <section className="controls bridge-provider-panel">
+      {/* <section className="controls bridge-provider-panel">
         <h2>서비스 감지 상태</h2>
         <div className="provider-hub-list">
           {WEB_PROVIDER_OPTIONS.map((provider) => {
@@ -176,9 +165,9 @@ function BridgePanel({
         <div className="bridge-provider-queue-meta">
           큐: {status.queuedTasks} · 진행 중: {status.activeTasks}
         </div>
-      </section>
+      </section> */}
 
-      <section className="controls bridge-log-panel">
+      {/* <section className="controls bridge-log-panel">
         <h2>최근 수집 이벤트</h2>
         <div className="bridge-log-list">
           {logs.length === 0 && <div className="log-empty">최근 이벤트 없음</div>}
@@ -188,7 +177,7 @@ function BridgePanel({
             </div>
           ))}
         </div>
-      </section>
+      </section> */}
     </section>
   );
 }

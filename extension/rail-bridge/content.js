@@ -307,21 +307,31 @@ async function waitForInput(selectors, timeoutMs) {
   return null;
 }
 
-function extractLastResponseText(selectors, prompt) {
+function extractLastResponse(selectors, prompt, options = {}) {
   const rows = collectResponseRows(selectors);
   if (rows.length === 0) {
     return null;
   }
+  const minBottom = Number(options.minBottom ?? -Infinity);
   rows.sort((a, b) => a.bottom - b.bottom);
   const promptTrimmed = String(prompt ?? "").trim();
   const filtered = rows
-    .map((row) => row.text)
-    .filter((text) => text !== promptTrimmed)
-    .filter((text) => !promptTrimmed || !text.startsWith(promptTrimmed));
+    .filter((row) => Number.isFinite(minBottom) ? row.bottom > minBottom : true)
+    .map((row) => ({
+      text: row.text,
+      bottom: row.bottom,
+    }))
+    .filter((row) => row.text !== promptTrimmed)
+    .filter((row) => !promptTrimmed || !row.text.startsWith(promptTrimmed));
   if (filtered.length === 0) {
     return null;
   }
   return filtered[filtered.length - 1];
+}
+
+function extractLastResponseText(selectors, prompt, options = {}) {
+  const row = extractLastResponse(selectors, prompt, options);
+  return row?.text ?? null;
 }
 
 function collectResponseRows(selectors) {
@@ -378,11 +388,13 @@ async function waitForResponse(provider, prompt, timeoutMs, options = {}) {
   const baseline = normalizeComparableText(options.baselineText ?? "");
   const baselineSet =
     options.baselineSet instanceof Set ? options.baselineSet : new Set();
+  const minBottom = Number(options.baselineBottom ?? -Infinity);
   let last = "";
   let lastChangedAt = Date.now();
   while (Date.now() < deadline) {
-    const current = extractLastResponseText(selectors, prompt);
-    if (current) {
+    const responseRow = extractLastResponse(selectors, prompt, { minBottom });
+    if (responseRow?.text) {
+      const current = responseRow.text;
       const normalized = normalizeComparableText(current);
       if (!normalized) {
         await new Promise((resolve) => setTimeout(resolve, 450));
@@ -490,6 +502,10 @@ async function runTask(taskPayload) {
   const timeoutMs = Math.max(5000, Number(taskPayload.timeoutMs ?? 180000) || 180000);
   const baselineText = extractLastResponseText(providerConfig.responseSelectors, "");
   const baselineSet = collectResponseBaselineSet(providerConfig.responseSelectors);
+  const baselineBottom = collectResponseRows(providerConfig.responseSelectors).reduce(
+    (maxBottom, row) => Math.max(maxBottom, row.bottom),
+    -Infinity,
+  );
   activeTask = {
     id: taskPayload.id,
     provider,
@@ -497,6 +513,7 @@ async function runTask(taskPayload) {
     timeoutMs,
     baselineText,
     baselineSet,
+    baselineBottom,
   };
 
   try {
@@ -516,6 +533,7 @@ async function runTask(taskPayload) {
     const text = await waitForResponse(provider, activeTask.prompt, timeoutMs, {
       baselineText,
       baselineSet,
+      baselineBottom,
     });
     if (!text) {
       throw new Error("TIMEOUT");
@@ -581,6 +599,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       const text = extractLastResponseText(
         PROVIDER_CONFIG[activeTask.provider].responseSelectors,
         activeTask.prompt,
+        { minBottom: Number(activeTask.baselineBottom ?? -Infinity) },
       );
       if (!text) {
         throw new Error("응답을 찾지 못했습니다.");
