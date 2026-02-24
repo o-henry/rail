@@ -30,7 +30,7 @@ const PROVIDER_CONFIG = {
     ],
   },
   gpt: {
-    hostMatch: (host) => host === "chatgpt.com",
+    hostMatch: (host) => host === "chatgpt.com" || host.endsWith(".chatgpt.com"),
     inputSelectors: [
       "#prompt-textarea",
       'textarea[placeholder*="Message" i]',
@@ -92,7 +92,7 @@ const PROVIDER_CONFIG = {
     ],
   },
   claude: {
-    hostMatch: (host) => host === "claude.ai",
+    hostMatch: (host) => host === "claude.ai" || host.endsWith(".claude.ai"),
     inputSelectors: [
       'div[contenteditable="true"][role="textbox"]',
       'textarea[placeholder*="Message" i]',
@@ -338,14 +338,43 @@ function extractLastResponseText(selectors, prompt) {
   return filtered[filtered.length - 1];
 }
 
-async function waitForResponse(provider, prompt, timeoutMs) {
+function normalizeComparableText(input) {
+  return String(input ?? "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function isPromptEcho(text, prompt) {
+  const promptText = normalizeComparableText(prompt);
+  if (!promptText) {
+    return false;
+  }
+  const candidate = normalizeComparableText(text);
+  return candidate === promptText || candidate.startsWith(promptText);
+}
+
+async function waitForResponse(provider, prompt, timeoutMs, options = {}) {
   const selectors = PROVIDER_CONFIG[provider].responseSelectors;
   const deadline = Date.now() + timeoutMs;
+  const baseline = normalizeComparableText(options.baselineText ?? "");
   let last = "";
   let lastChangedAt = Date.now();
   while (Date.now() < deadline) {
     const current = extractLastResponseText(selectors, prompt);
     if (current) {
+      const normalized = normalizeComparableText(current);
+      if (!normalized) {
+        await new Promise((resolve) => setTimeout(resolve, 450));
+        continue;
+      }
+      if (baseline && normalized === baseline) {
+        await new Promise((resolve) => setTimeout(resolve, 450));
+        continue;
+      }
+      if (isPromptEcho(normalized, prompt)) {
+        await new Promise((resolve) => setTimeout(resolve, 450));
+        continue;
+      }
       if (current !== last) {
         last = current;
         lastChangedAt = Date.now();
@@ -434,11 +463,13 @@ async function runTask(taskPayload) {
   }
   const providerConfig = PROVIDER_CONFIG[provider];
   const timeoutMs = Math.max(5000, Number(taskPayload.timeoutMs ?? 90000) || 90000);
+  const baselineText = extractLastResponseText(providerConfig.responseSelectors, "");
   activeTask = {
     id: taskPayload.id,
     provider,
     prompt: String(taskPayload.prompt ?? ""),
     timeoutMs,
+    baselineText,
   };
 
   try {
@@ -455,7 +486,9 @@ async function runTask(taskPayload) {
     } else {
       await postTaskStage("waiting_user_send", "자동 전송 실패: 사용자 전송 클릭 대기");
     }
-    const text = await waitForResponse(provider, activeTask.prompt, timeoutMs);
+    const text = await waitForResponse(provider, activeTask.prompt, timeoutMs, {
+      baselineText,
+    });
     if (!text) {
       throw new Error("TIMEOUT");
     }
@@ -523,6 +556,11 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       );
       if (!text) {
         throw new Error("응답을 찾지 못했습니다.");
+      }
+      const baseline = normalizeComparableText(activeTask.baselineText ?? "");
+      const normalized = normalizeComparableText(text);
+      if (!normalized || (baseline && normalized === baseline) || isPromptEcho(normalized, activeTask.prompt)) {
+        throw new Error("새로운 모델 응답이 확인되지 않았습니다.");
       }
       await postTaskResult(text);
       activeTask = null;
