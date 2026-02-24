@@ -102,6 +102,10 @@ export default function FeedPage({ vm }: FeedPageProps) {
     setFeedReplyDraftByPost,
     onSubmitFeedAgentRequest,
   } = vm;
+  const replyDraftMap =
+    feedReplyDraftByPost && typeof feedReplyDraftByPost === "object" ? feedReplyDraftByPost : {};
+  const safeSetFeedReplyDraftByPost =
+    typeof setFeedReplyDraftByPost === "function" ? setFeedReplyDraftByPost : null;
 
   return (
     <section className="feed-layout workspace-tab-panel">
@@ -595,7 +599,7 @@ export default function FeedPage({ vm }: FeedPageProps) {
                                 Math.min(99, Number((evidence as any).qualityScore ?? (post.status === "done" ? 95 : 55))),
                               );
                               const pendingRequestCount = (pendingNodeRequests[post.nodeId] ?? []).length;
-                              const requestDraft = String(feedReplyDraftByPost[postId] ?? "");
+                              const requestDraft = String(replyDraftMap[postId] ?? "");
                               const isExpanded = feedExpandedByPost[postId] === true;
                               const isDraftPost = post.status === "draft";
                               const canRequest = post.nodeType === "turn";
@@ -717,12 +721,20 @@ export default function FeedPage({ vm }: FeedPageProps) {
                                         <input
                                           onClick={(event) => event.stopPropagation()}
                                           onFocus={(event) => event.stopPropagation()}
-                                          onChange={(event) =>
-                                            setFeedReplyDraftByPost((prev: any) => ({
-                                              ...(prev && typeof prev === "object" ? prev : {}),
-                                              [postId]: event.currentTarget.value ?? "",
-                                            }))
-                                          }
+                                          onChange={(event) => {
+                                            if (!safeSetFeedReplyDraftByPost || !postId) {
+                                              return;
+                                            }
+                                            try {
+                                              const nextValue = String(event.currentTarget?.value ?? "");
+                                              safeSetFeedReplyDraftByPost((prev: any) => ({
+                                                ...(prev && typeof prev === "object" ? prev : {}),
+                                                [postId]: nextValue,
+                                              }));
+                                            } catch (error) {
+                                              console.error("[feed-reply-input-change-error]", { postId, error });
+                                            }
+                                          }}
                                           placeholder="에이전트에게 추가 요청을 남기세요"
                                           value={requestDraft}
                                         />
