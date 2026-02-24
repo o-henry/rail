@@ -1952,9 +1952,9 @@ h3 {
 }
 
 .feed-agent-panel {
-  min-height: 0;
-  height: 100%;
-  overflow: auto;
+  min-height: 100%;
+  height: auto;
+  overflow: visible;
   display: grid;
   align-content: start;
   gap: 12px;
@@ -1995,7 +1995,7 @@ h3 {
   display: grid;
   gap: 6px;
   /* max-height: 180px; */
-  overflow: auto;
+  overflow: visible;
   /* padding-left: 2px; */
   padding-right: 2px;
   scrollbar-width: none;
@@ -2048,8 +2048,8 @@ h3 {
 .feed-agent-settings {
   display: grid;
   gap: 10px;
-  max-height: 520px;
-  overflow: auto;
+  max-height: none;
+  overflow: visible;
   scrollbar-width: none;
 }
 
@@ -2080,7 +2080,7 @@ h3 {
   height: 20px;
   min-height: 20px;
   padding: 0 8px;
-  border-radius: 6px;
+  border-radius: 3px;
   background: #f0f4fa;
   color: #4f5d72;
   font-size: 11px;
@@ -2112,6 +2112,13 @@ h3 {
   max-height: 36px;
   resize: none;
   overflow: hidden;
+}
+
+.feed-agent-settings-grid textarea.feed-agent-prompt-textarea {
+  min-height: 132px;
+  height: auto;
+  max-height: none;
+  overflow: visible;
 }
 
 .feed-agent-settings-grid .fancy-select,
@@ -3137,6 +3144,35 @@ pre {
 .web-turn-modal textarea {
   width: 100%;
   resize: vertical;
+  border: 1px solid #d7deea;
+  border-radius: 6px;
+  background: #ffffff;
+}
+
+.web-turn-modal textarea:focus,
+.web-turn-modal textarea:focus-visible,
+.web-turn-modal input:focus,
+.web-turn-modal input:focus-visible {
+  outline: none;
+  box-shadow: none;
+  border-color: #d7deea;
+}
+
+.canvas-runbar .canvas-web-turn-reopen {
+  width: auto !important;
+  min-width: 56px !important;
+  padding: 0 9px;
+  border-radius: 999px;
+  border: 1px solid #3574f0;
+  background: #f4f8ff;
+  color: #1f4da8;
+  font-family: "BasicallyAMono", "DialogNanumBody1984", "Noto Sans KR", sans-serif;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+}
+
+.canvas-runbar .canvas-web-turn-reopen:hover {
+  background: #eaf2ff;
 }
 
 .bridge-view {

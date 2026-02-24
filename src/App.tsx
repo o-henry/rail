@@ -2712,6 +2712,8 @@ function App() {
   const [pendingApprovals, setPendingApprovals] = useState<PendingApproval[]>([]);
   const [approvalSubmitting, setApprovalSubmitting] = useState(false);
   const [pendingWebTurn, setPendingWebTurn] = useState<PendingWebTurn | null>(null);
+  const [suspendedWebTurn, setSuspendedWebTurn] = useState<PendingWebTurn | null>(null);
+  const [suspendedWebResponseDraft, setSuspendedWebResponseDraft] = useState("");
   const [pendingWebLogin, setPendingWebLogin] = useState<PendingWebLogin | null>(null);
   const [webResponseDraft, setWebResponseDraft] = useState("");
   const [, setWebWorkerHealth] = useState<WebWorkerHealth>({
@@ -4493,6 +4495,27 @@ function buildFeedShareText(post: FeedViewPost, run: RunRecord | null): string {
       return;
     }
     resolvePendingWebTurn({ ok: true, output: normalized.output });
+  }
+
+  function onDismissPendingWebTurn() {
+    if (!pendingWebTurn) {
+      return;
+    }
+    setSuspendedWebTurn(pendingWebTurn);
+    setSuspendedWebResponseDraft(webResponseDraft);
+    setPendingWebTurn(null);
+    setStatus("웹 응답 입력 창을 닫았습니다. 하단 '웹 입력 다시 열기' 버튼으로 재개할 수 있습니다.");
+  }
+
+  function onReopenPendingWebTurn() {
+    if (!suspendedWebTurn) {
+      return;
+    }
+    setPendingWebTurn(suspendedWebTurn);
+    setWebResponseDraft(suspendedWebResponseDraft);
+    setSuspendedWebTurn(null);
+    setSuspendedWebResponseDraft("");
+    setStatus(`${webProviderLabel(suspendedWebTurn.provider)} 웹 응답 입력 창을 다시 열었습니다.`);
   }
 
   function onCancelPendingWebTurn() {
@@ -6371,6 +6394,8 @@ function buildFeedShareText(post: FeedViewPost, run: RunRecord | null): string {
     const resolver = webTurnResolverRef.current;
     webTurnResolverRef.current = null;
     setPendingWebTurn(null);
+    setSuspendedWebTurn(null);
+    setSuspendedWebResponseDraft("");
     setWebResponseDraft("");
     if (resolver) {
       resolver(result);
@@ -6384,6 +6409,8 @@ function buildFeedShareText(post: FeedViewPost, run: RunRecord | null): string {
     mode: WebResultMode,
   ): Promise<{ ok: boolean; output?: unknown; error?: string }> {
     setWebResponseDraft("");
+    setSuspendedWebTurn(null);
+    setSuspendedWebResponseDraft("");
     setPendingWebTurn({
       nodeId,
       provider,
@@ -6620,26 +6647,16 @@ ${prompt}`;
           try {
             result = await runBridgeAssisted();
 
-            if (result.ok && result.text) {
-              if (isLikelyWebPromptEcho(result.text, textToSend)) {
-                addNodeLog(
-                  node.id,
-                  `[WEB] 입력 에코로 보이는 응답을 감지해 폐기했습니다. (${webProviderLabel(webProvider)})`,
-                );
-                addNodeLog(node.id, "[WEB] 동일 프롬프트로 웹 연결 재수집을 1회 재시도합니다.");
-                const retryResult = await runBridgeAssisted(Math.max(60_000, webTimeoutMs));
-                if (retryResult.ok && retryResult.text && !isLikelyWebPromptEcho(retryResult.text, textToSend)) {
-                  result = retryResult;
-                } else {
-                  result = retryResult.ok
-                    ? ({
-                        ok: false,
-                        errorCode: "PROMPT_ECHO",
-                        error: "웹 응답이 입력 에코로 감지되어 폐기되었습니다.",
-                      } as WebProviderRunResult)
-                    : retryResult;
-                }
-              }
+            if (result.ok && result.text && isLikelyWebPromptEcho(result.text, textToSend)) {
+              addNodeLog(
+                node.id,
+                `[WEB] 입력 에코로 보이는 응답을 감지해 폐기했습니다. (${webProviderLabel(webProvider)})`,
+              );
+              result = {
+                ok: false,
+                errorCode: "PROMPT_ECHO",
+                error: "웹 응답이 입력 에코로 감지되어 폐기되었습니다.",
+              } as WebProviderRunResult;
             }
 
             if (result.ok && result.text) {
@@ -7458,6 +7475,8 @@ ${prompt}`;
       webTurnResolverRef.current = null;
       webLoginResolverRef.current = null;
       setPendingWebTurn(null);
+      setSuspendedWebTurn(null);
+      setSuspendedWebResponseDraft("");
       setPendingWebLogin(null);
       setWebResponseDraft("");
       activeTurnNodeIdRef.current = "";
@@ -7495,6 +7514,10 @@ ${prompt}`;
     }
 
     if (pendingWebTurn) {
+      resolvePendingWebTurn({ ok: false, error: "사용자 취소" });
+      return;
+    }
+    if (suspendedWebTurn) {
       resolvePendingWebTurn({ ok: false, error: "사용자 취소" });
       return;
     }
@@ -8529,6 +8552,17 @@ ${prompt}`;
                     >
                       <img alt="" aria-hidden="true" className="canvas-icon-image" src="/canvas-stop.svg" />
                     </button>
+                    {suspendedWebTurn && !pendingWebTurn && isGraphRunning && (
+                      <button
+                        aria-label="웹 입력 다시 열기"
+                        className="canvas-web-turn-reopen"
+                        onClick={onReopenPendingWebTurn}
+                        title="웹 응답 입력 창 다시 열기"
+                        type="button"
+                      >
+                        WEB
+                      </button>
+                    )}
                     <button
                       aria-label="되돌리기"
                       className="canvas-icon-btn"
@@ -9862,8 +9896,11 @@ ${prompt}`;
               <button onClick={onSubmitPendingWebTurn} type="button">
                 입력 완료
               </button>
-              <button onClick={onCancelPendingWebTurn} type="button">
+              <button onClick={onDismissPendingWebTurn} type="button">
                 취소
+              </button>
+              <button onClick={onCancelPendingWebTurn} type="button">
+                실행 취소
               </button>
             </div>
           </section>
