@@ -7026,7 +7026,7 @@ ${prompt}`;
         {!compact && (
           <section className="settings-run-history">
             <div className="settings-run-history-head">
-              <h3>실행 기록</h3>
+              <h3>LOG</h3>
               <button onClick={onOpenRunsFolder} type="button">
                 열기
               </button>
