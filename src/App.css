@@ -2807,6 +2807,11 @@ h3 {
   height: 16px;
   display: block;
   object-fit: contain;
+  filter: invert(21%) sepia(82%) saturate(3358%) hue-rotate(346deg) brightness(95%) contrast(92%);
+}
+
+.feed-delete-icon-button:disabled .feed-delete-icon {
+  filter: grayscale(1) brightness(0.78);
 }
 
 .feed-share-menu-wrap-head .feed-share-menu {

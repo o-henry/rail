@@ -3257,7 +3257,7 @@ function App() {
     return lines.join("\n");
   }
 
-  async function onShareFeedPost(post: FeedViewPost, mode: "clipboard" | "email" | "obsidian" | "json") {
+  async function onShareFeedPost(post: FeedViewPost, mode: "clipboard" | "obsidian" | "json") {
     setError("");
     setFeedShareMenuPostId(null);
     const run = await ensureFeedRunRecord(post.sourceFile);
@@ -3280,18 +3280,17 @@ function App() {
         setStatus("공유 JSON 복사 완료");
         return;
       }
-      if (mode === "email") {
-        const subject = `[RAIL] ${post.agentName} 실행 결과 공유`;
-        const body = shareText.slice(0, 1800);
-        await openUrl(`mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`);
-        setStatus("이메일 공유 창 열림");
-        return;
-      }
       const obsidianUri = `obsidian://new?name=${encodeURIComponent(title)}&content=${encodeURIComponent(
-        shareText.slice(0, 7000),
+        shareText.slice(0, 2400),
       )}`;
-      await openUrl(obsidianUri);
-      setStatus("옵시디언 공유 창 열림");
+      try {
+        await openUrl(obsidianUri);
+        setStatus("옵시디언 공유 창 열림");
+      } catch {
+        await navigator.clipboard.writeText(shareText);
+        setStatus("옵시디언 URI 공유에 실패해 텍스트를 클립보드에 복사했습니다.");
+      }
+      return;
     } catch (e) {
       setError(`공유 실패: ${String(e)}`);
     }
@@ -9233,9 +9232,6 @@ ${prompt}`;
                                           <div className="feed-share-menu">
                                             <button onClick={() => void onShareFeedPost(post, "clipboard")} type="button">
                                               <span>텍스트 복사</span>
-                                            </button>
-                                            <button onClick={() => void onShareFeedPost(post, "email")} type="button">
-                                              <span>이메일</span>
                                             </button>
                                             <button onClick={() => void onShareFeedPost(post, "obsidian")} type="button">
                                               <span>옵시디언</span>
