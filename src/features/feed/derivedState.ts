@@ -119,7 +119,7 @@ export function computeFeedDerivedState(params: {
         continue;
       }
 
-      const logs = runState.logs.slice(-60);
+      const logs = Array.isArray(runState.logs) ? runState.logs.slice(-60) : [];
       const lastLog = logs[logs.length - 1] ?? "";
       const roleLabel = node.type === "turn" ? turnRoleLabelFn(node) : nodeTypeLabelFn(node.type);
       const agentName =
@@ -222,7 +222,7 @@ export function computeFeedDerivedState(params: {
       if (!keyword) {
         return true;
       }
-      const sourceText = (post.inputSources ?? [])
+      const sourceText = (Array.isArray(post.inputSources) ? post.inputSources : [])
         .map((source: any) => `${source.agentName} ${source.roleLabel ?? ""} ${source.summary ?? ""}`)
         .join(" ");
       const haystack = `${post.question ?? ""} ${post.agentName} ${post.roleLabel} ${post.summary} ${
@@ -296,9 +296,14 @@ export function computeFeedDerivedState(params: {
     return Array.from(groups.values())
       .map((group) => ({
         ...group,
-        posts: group.posts.sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
+        posts: group.posts.sort(
+          (a: any, b: any) => new Date(String(b?.createdAt ?? "")).getTime() - new Date(String(a?.createdAt ?? "")).getTime(),
+        ),
       }))
-      .sort((a, b) => new Date(b.latestAt).getTime() - new Date(a.latestAt).getTime());
+      .sort(
+        (a, b) =>
+          new Date(String(b?.latestAt ?? "")).getTime() - new Date(String(a?.latestAt ?? "")).getTime(),
+      );
   })();
 
   const feedInspectorPost =

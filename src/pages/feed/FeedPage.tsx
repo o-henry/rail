@@ -595,12 +595,14 @@ export default function FeedPage({ vm }: FeedPageProps) {
                                 Math.min(99, Number((evidence as any).qualityScore ?? (post.status === "done" ? 95 : 55))),
                               );
                               const pendingRequestCount = (pendingNodeRequests[post.nodeId] ?? []).length;
-                              const requestDraft = feedReplyDraftByPost[postId] ?? "";
+                              const requestDraft = String(feedReplyDraftByPost[postId] ?? "");
                               const isExpanded = feedExpandedByPost[postId] === true;
                               const isDraftPost = post.status === "draft";
                               const canRequest = post.nodeType === "turn";
-                              const nodeInputSources = post.inputSources ?? [];
-                              const upstreamSources = nodeInputSources.filter((source: any) => source.kind === "node");
+                              const nodeInputSources = Array.isArray(post.inputSources) ? post.inputSources : [];
+                              const upstreamSources = nodeInputSources.filter(
+                                (source: any) => source && source.kind === "node",
+                              );
                               return (
                                 <FeedCardBoundary key={postId || `${post.nodeId}:${post.createdAt}`} postId={postId}>
                                 <section
