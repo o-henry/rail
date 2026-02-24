@@ -119,10 +119,19 @@ async function testConnection() {
         Authorization: `Bearer ${token}`,
       },
     });
+    const payload = await response.json().catch(() => ({}));
     if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
+      const reason = String(payload?.error ?? `HTTP ${response.status}`);
+      if (reason === "forbidden_origin") {
+        throw new Error(
+          "허용되지 않은 확장 Origin입니다. 앱 실행 전에 RAIL_WEB_BRIDGE_ALLOWED_EXTENSION_IDS에 현재 확장 ID를 설정하세요.",
+        );
+      }
+      if (reason === "unauthorized") {
+        throw new Error("토큰이 일치하지 않습니다. 앱에서 연결 코드 복사 후 토큰을 다시 저장하세요.");
+      }
+      throw new Error(reason);
     }
-    const payload = await response.json();
     if (payload?.ok !== true) {
       throw new Error("invalid payload");
     }
