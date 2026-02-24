@@ -209,6 +209,14 @@ async function writeSessionBridgeConfig(values) {
   }
 }
 
+async function removeLocalBridgeToken() {
+  try {
+    await chrome.storage.local.remove(TOKEN_KEY);
+  } catch {
+    // ignore
+  }
+}
+
 async function loadBridgeConfig() {
   const [sessionStored, localStored] = await Promise.all([
     readSessionBridgeConfig(),
@@ -217,12 +225,17 @@ async function loadBridgeConfig() {
   const nextUrl = validateBridgeUrl(sessionStored[URL_KEY] ?? localStored[URL_KEY]);
   bridgeUrl = nextUrl || DEFAULT_BRIDGE_URL;
 
+  const sessionAvailable = Boolean(chrome.storage.session);
   const sessionToken = String(sessionStored[TOKEN_KEY] ?? "").trim();
   const localToken = String(localStored[TOKEN_KEY] ?? "").trim();
-  bridgeToken = sessionToken || localToken;
+  bridgeToken = sessionToken || (sessionAvailable ? "" : localToken);
 
-  if (!sessionToken && localToken) {
+  if (sessionAvailable && !sessionToken && localToken) {
     await writeSessionBridgeConfig({ [TOKEN_KEY]: localToken });
+    bridgeToken = localToken;
+  }
+  if (sessionAvailable && localToken) {
+    await removeLocalBridgeToken();
   }
 }
 

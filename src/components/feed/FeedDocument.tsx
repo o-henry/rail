@@ -16,6 +16,25 @@ type TextBlock =
   | { kind: "rule" }
   | { kind: "code"; language: string; code: string };
 
+function sanitizeDocumentUrl(raw: string): string | null {
+  const candidate = String(raw ?? "").trim();
+  if (!candidate) {
+    return null;
+  }
+  if (!/^https?:\/\//i.test(candidate)) {
+    return null;
+  }
+  try {
+    const parsed = new URL(candidate);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      return null;
+    }
+    return parsed.href;
+  } catch {
+    return null;
+  }
+}
+
 function parseImageLine(input: string): { alt: string; src: string; title?: string } | null {
   const line = input.trim();
   const matched = line.match(/^!\[([^\]]*)\]\(([^)\s]+)(?:\s+"([^"]*)")?\)$/);
@@ -216,9 +235,15 @@ function renderInlineMarkdown(text: string): ReactNode[] {
     } else if (match[3]) {
       nodes.push(<em key={`inline-italic-${start}-${match[3].length}`}>{match[3]}</em>);
     } else if (match[4] && match[5]) {
+      const href = sanitizeDocumentUrl(match[5]);
+      if (!href) {
+        nodes.push(`${match[4]} (${match[5]})`);
+        cursor = start + match[0].length;
+        continue;
+      }
       nodes.push(
         <a
-          href={match[5]}
+          href={href}
           key={`inline-link-${start}-${match[4].length}`}
           rel="noreferrer noopener"
           target="_blank"
@@ -293,9 +318,13 @@ export default function FeedDocument({ text, className = "" }: FeedDocumentProps
         }
 
         if (block.kind === "image") {
+          const safeSrc = sanitizeDocumentUrl(block.src);
+          if (!safeSrc) {
+            return null;
+          }
           return (
             <figure className="feed-document-image" key={`block-${index}`}>
-              <img alt={block.alt || "문서 이미지"} loading="lazy" src={block.src} />
+              <img alt={block.alt || "문서 이미지"} loading="lazy" src={safeSrc} />
               {(block.title || block.alt) && (
                 <figcaption>{block.title || block.alt}</figcaption>
               )}

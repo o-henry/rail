@@ -87,6 +87,7 @@ import {
   formatUsageInfoForDisplay,
   hashStringToHue,
   normalizeFeedSteps,
+  redactSensitiveText,
 } from "../features/feed/displayUtils";
 import { computeFeedDerivedState } from "../features/feed/derivedState";
 import {
@@ -1504,7 +1505,7 @@ function buildFeedShareText(post: FeedViewPost, run: RunRecord | null): string {
         feedPosts: nextPosts,
       };
 
-      await invoke("run_save", { name: sourceFile, run: nextRun });
+      await persistRunRecordFile(sourceFile, nextRun);
       feedRunCacheRef.current[sourceFile] = nextRun;
       setFeedPosts((prev) => prev.filter((item) => !(item.sourceFile === sourceFile && item.id === post.id)));
       setStatus(`포스트 삭제 완료: ${post.agentName}`);
@@ -1535,7 +1536,7 @@ function buildFeedShareText(post: FeedViewPost, run: RunRecord | null): string {
         workflowGroupName: trimmed,
         workflowGroupKind: "custom",
       };
-      await invoke("run_save", { name: target, run: nextRun });
+      await persistRunRecordFile(target, nextRun);
       feedRunCacheRef.current[target] = nextRun;
       if (activeFeedRunMeta?.runId === runId) {
         setActiveFeedRunMeta((prev) => {
@@ -1724,7 +1725,7 @@ function buildFeedShareText(post: FeedViewPost, run: RunRecord | null): string {
           ],
           feedPosts: [failed.post],
         };
-        await invoke("run_save", { name: oneOffRunFileName, run: failedRunRecord });
+        await persistRunRecordFile(oneOffRunFileName, failedRunRecord);
         feedRunCacheRef.current[oneOffRunFileName] = normalizeRunRecord(failedRunRecord);
         setFeedPosts((prev) => [
           {
@@ -1810,7 +1811,7 @@ function buildFeedShareText(post: FeedViewPost, run: RunRecord | null): string {
         ],
         feedPosts: [done.post],
       };
-      await invoke("run_save", { name: oneOffRunFileName, run: doneRunRecord });
+      await persistRunRecordFile(oneOffRunFileName, doneRunRecord);
       feedRunCacheRef.current[oneOffRunFileName] = normalizeRunRecord(doneRunRecord);
       setFeedPosts((prev) => [
         {
@@ -4140,13 +4141,39 @@ function buildFeedShareText(post: FeedViewPost, run: RunRecord | null): string {
     };
   }, [isConnectingDrag, connectFromNodeId, canvasZoom]);
 
+  function sanitizeValueForRunSave(value: unknown): unknown {
+    if (typeof value === "string") {
+      return redactSensitiveText(value);
+    }
+    if (Array.isArray(value)) {
+      return value.map((entry) => sanitizeValueForRunSave(entry));
+    }
+    if (value && typeof value === "object") {
+      const rows = value as Record<string, unknown>;
+      const next: Record<string, unknown> = {};
+      for (const [key, entry] of Object.entries(rows)) {
+        next[key] = sanitizeValueForRunSave(entry);
+      }
+      return next;
+    }
+    return value;
+  }
+
+  function sanitizeRunRecordForSave(runRecord: RunRecord): RunRecord {
+    return sanitizeValueForRunSave(runRecord) as RunRecord;
+  }
+
+  async function persistRunRecordFile(name: string, runRecord: RunRecord) {
+    await invoke("run_save", {
+      name,
+      run: sanitizeRunRecordForSave(runRecord),
+    });
+  }
+
   async function saveRunRecord(runRecord: RunRecord) {
     const fileName = `run-${runRecord.runId}.json`;
     try {
-      await invoke("run_save", {
-        name: fileName,
-        run: runRecord,
-      });
+      await persistRunRecordFile(fileName, runRecord);
       setLastSavedRunFile(fileName);
       await refreshFeedTimeline();
     } catch (e) {

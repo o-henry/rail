@@ -80,6 +80,13 @@ async function loadConfig() {
   if (!sessionToken && localToken) {
     await writeSessionConfig({ [TOKEN_KEY]: localToken });
   }
+  if (chrome.storage.session && localToken) {
+    try {
+      await chrome.storage.local.remove(TOKEN_KEY);
+    } catch {
+      // ignore
+    }
+  }
 
   urlInput.value = nextUrl;
   tokenInput.value = nextToken;
@@ -96,11 +103,19 @@ async function saveConfig() {
     setStatus("토큰을 입력하세요.", true);
     return;
   }
+  const localPayload = chrome.storage.session ? { [URL_KEY]: nextUrl } : { [URL_KEY]: nextUrl, [TOKEN_KEY]: nextToken };
   await Promise.all([
-    chrome.storage.local.set({ [URL_KEY]: nextUrl, [TOKEN_KEY]: nextToken }),
+    chrome.storage.local.set(localPayload),
     writeSessionConfig({ [URL_KEY]: nextUrl, [TOKEN_KEY]: nextToken }),
   ]);
-  setStatus("저장 완료 (토큰은 세션/로컬 동시 저장)");
+  if (chrome.storage.session) {
+    try {
+      await chrome.storage.local.remove(TOKEN_KEY);
+    } catch {
+      // ignore
+    }
+  }
+  setStatus(chrome.storage.session ? "저장 완료 (토큰은 세션에만 저장)" : "저장 완료");
 }
 
 async function testConnection() {
