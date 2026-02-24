@@ -1561,9 +1561,40 @@ function buildFeedShareText(post: FeedViewPost, run: RunRecord | null): string {
     if (!draft) {
       return;
     }
-    const node = graph.nodes.find((row) => row.id === post.nodeId);
+    let node = graph.nodes.find((row) => row.id === post.nodeId);
+    const existsInCurrentGraph = !!node && node.type === "turn";
+
+    if ((!node || node.type !== "turn") && post.sourceFile) {
+      const runRecord = await ensureFeedRunRecord(post.sourceFile);
+      const snapshotNode = runRecord?.graphSnapshot?.nodes?.find((row: any) => row?.id === post.nodeId) ?? null;
+      if (snapshotNode && snapshotNode.type === "turn") {
+        node = {
+          ...snapshotNode,
+          position:
+            snapshotNode.position && typeof snapshotNode.position === "object"
+              ? { ...snapshotNode.position }
+              : { x: 0, y: 0 },
+          config: JSON.parse(JSON.stringify(snapshotNode.config ?? {})),
+        } as GraphNode;
+      }
+    }
+
     if (!node || node.type !== "turn") {
-      setError("이 포스트는 추가 요청을 받을 수 없는 노드입니다.");
+      setError("이 포스트의 원본 노드 정보를 찾을 수 없습니다.");
+      return;
+    }
+
+    if (isGraphRunning) {
+      if (!existsInCurrentGraph) {
+        setError("현재 실행 중인 그래프에 없는 포스트입니다. 실행 종료 후 추가 요청을 보내세요.");
+        return;
+      }
+      enqueueNodeRequest(node.id, draft);
+      setFeedReplyDraftByPost((prev) => ({
+        ...prev,
+        [post.id]: "",
+      }));
+      setStatus(`${turnModelLabel(node)} 에이전트 요청을 큐에 추가했습니다.`);
       return;
     }
 
@@ -1572,11 +1603,6 @@ function buildFeedShareText(post: FeedViewPost, run: RunRecord | null): string {
       ...prev,
       [post.id]: "",
     }));
-
-    if (isGraphRunning) {
-      setStatus(`${turnModelLabel(node)} 에이전트 요청을 큐에 추가했습니다.`);
-      return;
-    }
 
     const oneOffRunId = `manual-${Date.now()}`;
     const startedAt = new Date().toISOString();
