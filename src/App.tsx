@@ -1,7 +1,6 @@
 import {
   KeyboardEvent as ReactKeyboardEvent,
   MouseEvent as ReactMouseEvent,
-  PointerEvent as ReactPointerEvent,
   WheelEvent as ReactWheelEvent,
   useEffect,
   useMemo,
@@ -12,8 +11,16 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 import "./App.css";
-import BridgePanel from "./components/BridgePanel";
+import AppNav from "./components/AppNav";
 import FancySelect, { type FancySelectOption } from "./components/FancySelect";
+import ApprovalModal from "./components/modals/ApprovalModal";
+import PendingWebLoginModal from "./components/modals/PendingWebLoginModal";
+import PendingWebTurnModal from "./components/modals/PendingWebTurnModal";
+import BridgePage from "./pages/bridge/BridgePage";
+import FeedPage from "./pages/feed/FeedPage";
+import SettingsPage from "./pages/settings/SettingsPage";
+import WorkflowPage from "./pages/workflow/WorkflowPage";
+import { useFloatingPanel } from "./features/ui/useFloatingPanel";
 import {
   COST_PRESET_DEFAULT_MODEL,
   DEFAULT_TURN_MODEL,
@@ -2720,11 +2727,6 @@ function App() {
   const [pendingWebTurn, setPendingWebTurn] = useState<PendingWebTurn | null>(null);
   const [suspendedWebTurn, setSuspendedWebTurn] = useState<PendingWebTurn | null>(null);
   const [suspendedWebResponseDraft, setSuspendedWebResponseDraft] = useState("");
-  const [webTurnFloatingPosition, setWebTurnFloatingPosition] = useState({
-    x: WEB_TURN_FLOATING_DEFAULT_X,
-    y: WEB_TURN_FLOATING_DEFAULT_Y,
-  });
-  const [webTurnDragging, setWebTurnDragging] = useState(false);
   const [pendingWebLogin, setPendingWebLogin] = useState<PendingWebLogin | null>(null);
   const [webResponseDraft, setWebResponseDraft] = useState("");
   const [, setWebWorkerHealth] = useState<WebWorkerHealth>({
@@ -2852,13 +2854,6 @@ function App() {
   const runStartGuardRef = useRef(false);
   const pendingWebTurnAutoOpenKeyRef = useRef("");
   const webTurnFloatingRef = useRef<HTMLElement | null>(null);
-  const webTurnDragRef = useRef<{
-    pointerId: number;
-    startX: number;
-    startY: number;
-    originX: number;
-    originY: number;
-  } | null>(null);
   const pendingWebLoginAutoOpenKeyRef = useRef("");
   const authLoginRequiredProbeCountRef = useRef(0);
   const lastAuthenticatedAtRef = useRef<number>(defaultLoginCompleted ? Date.now() : 0);
@@ -2868,6 +2863,17 @@ function App() {
   const lastAppliedPresetRef = useRef<{ kind: PresetKind; graph: GraphData } | null>(null);
   const graphClipboardRef = useRef<GraphClipboardSnapshot | null>(null);
   const graphPasteSerialRef = useRef(0);
+  const webTurnPanel = useFloatingPanel({
+    enabled: Boolean(pendingWebTurn),
+    panelRef: webTurnFloatingRef,
+    defaultPosition: {
+      x: WEB_TURN_FLOATING_DEFAULT_X,
+      y: WEB_TURN_FLOATING_DEFAULT_Y,
+    },
+    margin: WEB_TURN_FLOATING_MARGIN,
+    minVisibleWidth: WEB_TURN_FLOATING_MIN_VISIBLE_WIDTH,
+    minVisibleHeight: WEB_TURN_FLOATING_MIN_VISIBLE_HEIGHT,
+  });
 
   const activeApproval = pendingApprovals[0];
   const canvasNodes = useMemo(() => {
@@ -4466,82 +4472,6 @@ function buildFeedShareText(post: FeedViewPost, run: RunRecord | null): string {
     return () => window.clearInterval(timer);
   }, [hasActiveNodeRuntime]);
 
-  function clampWebTurnFloatingPosition(nextX: number, nextY: number) {
-    const panel = webTurnFloatingRef.current;
-    const panelWidth = panel?.offsetWidth ?? 860;
-    const panelHeight = panel?.offsetHeight ?? 540;
-    const maxX = window.innerWidth - WEB_TURN_FLOATING_MARGIN - WEB_TURN_FLOATING_MIN_VISIBLE_WIDTH;
-    const maxY = window.innerHeight - WEB_TURN_FLOATING_MARGIN - WEB_TURN_FLOATING_MIN_VISIBLE_HEIGHT;
-    const minX = WEB_TURN_FLOATING_MARGIN - Math.max(0, panelWidth - WEB_TURN_FLOATING_MIN_VISIBLE_WIDTH);
-    const minY = WEB_TURN_FLOATING_MARGIN - Math.max(0, panelHeight - WEB_TURN_FLOATING_MIN_VISIBLE_HEIGHT);
-    return {
-      x: Math.min(Math.max(nextX, minX), Math.max(maxX, minX)),
-      y: Math.min(Math.max(nextY, minY), Math.max(maxY, minY)),
-    };
-  }
-
-  function onWebTurnDragStart(event: ReactPointerEvent<HTMLDivElement>) {
-    if (event.button !== 0) {
-      return;
-    }
-    webTurnDragRef.current = {
-      pointerId: event.pointerId,
-      startX: event.clientX,
-      startY: event.clientY,
-      originX: webTurnFloatingPosition.x,
-      originY: webTurnFloatingPosition.y,
-    };
-    setWebTurnDragging(true);
-    event.preventDefault();
-  }
-
-  useEffect(() => {
-    if (!webTurnDragging) {
-      return;
-    }
-    const onPointerMove = (event: PointerEvent) => {
-      const dragState = webTurnDragRef.current;
-      if (!dragState || event.pointerId !== dragState.pointerId) {
-        return;
-      }
-      const deltaX = event.clientX - dragState.startX;
-      const deltaY = event.clientY - dragState.startY;
-      const next = clampWebTurnFloatingPosition(dragState.originX + deltaX, dragState.originY + deltaY);
-      setWebTurnFloatingPosition(next);
-      event.preventDefault();
-    };
-    const onPointerEnd = (event: PointerEvent) => {
-      const dragState = webTurnDragRef.current;
-      if (!dragState || event.pointerId !== dragState.pointerId) {
-        return;
-      }
-      webTurnDragRef.current = null;
-      setWebTurnDragging(false);
-    };
-    window.addEventListener("pointermove", onPointerMove);
-    window.addEventListener("pointerup", onPointerEnd);
-    window.addEventListener("pointercancel", onPointerEnd);
-    return () => {
-      window.removeEventListener("pointermove", onPointerMove);
-      window.removeEventListener("pointerup", onPointerEnd);
-      window.removeEventListener("pointercancel", onPointerEnd);
-    };
-  }, [webTurnDragging]);
-
-  useEffect(() => {
-    if (!pendingWebTurn) {
-      return;
-    }
-    const snap = () => {
-      setWebTurnFloatingPosition((prev) => clampWebTurnFloatingPosition(prev.x, prev.y));
-    };
-    snap();
-    window.addEventListener("resize", snap);
-    return () => {
-      window.removeEventListener("resize", snap);
-    };
-  }, [pendingWebTurn]);
-
   async function ensureWebWorkerReady() {
     try {
       await invoke("web_worker_start");
@@ -4596,8 +4526,7 @@ function buildFeedShareText(post: FeedViewPost, run: RunRecord | null): string {
     if (!pendingWebTurn) {
       return;
     }
-    webTurnDragRef.current = null;
-    setWebTurnDragging(false);
+    webTurnPanel.clearDragging();
     setSuspendedWebTurn(pendingWebTurn);
     setSuspendedWebResponseDraft(webResponseDraft);
     setPendingWebTurn(null);
@@ -6490,8 +6419,7 @@ function buildFeedShareText(post: FeedViewPost, run: RunRecord | null): string {
   function resolvePendingWebTurn(result: { ok: boolean; output?: unknown; error?: string }) {
     const resolver = webTurnResolverRef.current;
     webTurnResolverRef.current = null;
-    webTurnDragRef.current = null;
-    setWebTurnDragging(false);
+    webTurnPanel.clearDragging();
     setPendingWebTurn(null);
     setSuspendedWebTurn(null);
     setSuspendedWebResponseDraft("");
@@ -7655,95 +7583,6 @@ ${prompt}`;
     }
   }
 
-  function renderSettingsPanel(compact = false) {
-    return (
-      <section className={`controls ${compact ? "settings-compact" : ""}`}>
-        <h3>엔진 및 계정</h3>
-        {!compact && (
-          <div className="settings-badges">
-            <span className={`status-tag ${engineStarted ? "on" : "off"}`}>
-              {engineStarted ? "엔진 연결됨" : "엔진 대기"}
-            </span>
-            <span className={`status-tag ${loginCompleted ? "on" : "off"}`}>
-              {loginCompleted ? "로그인 완료" : "로그인 필요"}
-            </span>
-            <span className="status-tag neutral">인증: {authModeLabel(authMode)}</span>
-          </div>
-        )}
-        <label>
-          작업 경로(CWD)
-          <div className="settings-cwd-row">
-            <input className="lowercase-path-input" readOnly value={cwd} />
-            <button className="settings-cwd-picker" onClick={onSelectCwdDirectory} type="button">
-              폴더 선택
-            </button>
-          </div>
-        </label>
-        <label>
-          기본 모델
-          <FancySelect
-            ariaLabel="기본 모델"
-            className="modern-select"
-            onChange={setModel}
-            options={TURN_MODEL_OPTIONS.map((option) => ({ value: option, label: option }))}
-            value={model}
-          />
-        </label>
-        {!compact && (
-          <div className="button-row">
-            <button
-              className="settings-engine-button settings-account-button"
-              onClick={engineStarted ? onStopEngine : onStartEngine}
-              disabled={running || isGraphRunning}
-              type="button"
-            >
-              <span className="settings-button-label">{engineStarted ? "엔진 중지" : "엔진 시작"}</span>
-            </button>
-            <button
-              className="settings-usage-button settings-account-button"
-              onClick={onCheckUsage}
-              disabled={running || isGraphRunning}
-              type="button"
-            >
-              <span className="settings-button-label">사용량 확인</span>
-            </button>
-            <button
-              className="settings-usage-button settings-account-button"
-              onClick={onLoginCodex}
-              disabled={running || isGraphRunning || codexAuthBusy}
-              type="button"
-            >
-              <span className="settings-button-label">
-                {codexAuthBusy ? "처리 중..." : loginCompleted ? "CODEX 로그아웃" : "CODEX 로그인"}
-              </span>
-            </button>
-          </div>
-        )}
-        <div className="usage-method usage-method-hidden">최근 상태: {status}</div>
-        {usageInfoText && !usageResultClosed && (
-          <div className="usage-result">
-            <div className="usage-result-head">
-              <button onClick={() => setUsageResultClosed(true)} type="button">
-                닫기
-              </button>
-            </div>
-            <pre>{usageInfoText}</pre>
-          </div>
-        )}
-        {!compact && (
-          <section className="settings-run-history settings-run-history-hidden">
-            <div className="settings-run-history-head">
-              <h3>LOG</h3>
-              <button onClick={onOpenRunsFolder} type="button">
-                열기
-              </button>
-            </div>
-          </section>
-        )}
-      </section>
-    );
-  }
-
   const edgeLines = canvasDisplayEdges
     .map((entry, index) => {
       const edge = entry.edge;
@@ -7878,7 +7717,6 @@ ${prompt}`;
       label: target ? nodeSelectionLabel(target) : "연결된 노드",
     };
   });
-  const isActiveTab = (tab: WorkspaceTab): boolean => workspaceTab === tab;
   const isWorkflowBusy = isGraphRunning || isRunStarting;
   const canRunGraphNow = !isWorkflowBusy && graph.nodes.length > 0 && workflowQuestion.trim().length > 0;
   const liveFeedPosts: FeedViewPost[] = (() => {
@@ -8273,57 +8111,11 @@ ${prompt}`;
   const boundedStageHeight = Math.min(stageHeight, MAX_STAGE_HEIGHT);
   return (
     <main className={`app-shell ${canvasFullscreen ? "canvas-fullscreen-mode" : ""}`}>
-      <aside className="left-nav">
-        <nav
-          className="nav-list"
-          style={{
-            // alignContent: "center",
-            height: "100%",
-            display: "grid",
-          }}
-        >
-          <button
-            className={isActiveTab("workflow") ? "is-active" : ""}
-            onClick={() => setWorkspaceTab("workflow")}
-            aria-label="워크플로우"
-            title="워크플로우"
-            type="button"
-          >
-            <span className="nav-icon"><NavIcon tab="workflow" active={isActiveTab("workflow")} /></span>
-            <span className="nav-label">워크</span>
-          </button>
-          <button
-            className={isActiveTab("feed") ? "is-active" : ""}
-            onClick={() => setWorkspaceTab("feed")}
-            aria-label="피드"
-            title="피드"
-            type="button"
-          >
-            <span className="nav-icon"><NavIcon tab="feed" active={isActiveTab("feed")} /></span>
-            <span className="nav-label">피드</span>
-          </button>
-          <button
-            className={isActiveTab("bridge") ? "is-active" : ""}
-            onClick={() => setWorkspaceTab("bridge")}
-            aria-label="웹 연결"
-            title="웹 연결"
-            type="button"
-          >
-            <span className="nav-icon"><NavIcon tab="bridge" active={isActiveTab("bridge")} /></span>
-            <span className="nav-label">웹 연결</span>
-          </button>
-          <button
-            className={isActiveTab("settings") ? "is-active" : ""}
-            onClick={() => setWorkspaceTab("settings")}
-            aria-label="설정"
-            title="설정"
-            type="button"
-          >
-            <span className="nav-icon"><NavIcon tab="settings" active={isActiveTab("settings")} /></span>
-            <span className="nav-label">설정</span>
-          </button>
-        </nav>
-      </aside>
+      <AppNav
+        activeTab={workspaceTab}
+        onSelectTab={setWorkspaceTab}
+        renderIcon={(tab, active) => <NavIcon active={active} tab={tab} />}
+      />
 
       <section className={`workspace ${canvasFullscreen ? "canvas-fullscreen-active" : ""}`}>
         {!canvasFullscreen && <header className="workspace-header workspace-header-spacer" />}
@@ -8343,7 +8135,7 @@ ${prompt}`;
         )}
 
         {workspaceTab === "workflow" && (
-          <div className={`workflow-layout workspace-tab-panel ${canvasFullscreen ? "canvas-only-layout" : ""}`}>
+          <WorkflowPage canvasFullscreen={canvasFullscreen}>
             <section className="canvas-pane">
               <div className="graph-canvas-shell">
                 <div
@@ -9301,11 +9093,11 @@ ${prompt}`;
                 </div>
               </div>
             </aside>}
-          </div>
+          </WorkflowPage>
         )}
 
         {workspaceTab === "feed" && (
-          <section className="feed-layout workspace-tab-panel">
+          <FeedPage>
             <article className="panel-card feed-agent-panel">
               {/* <div className="feed-agent-panel-head"> */}
                 {/* <h3>에이전트 상세설정</h3> */}
@@ -9921,18 +9713,40 @@ ${prompt}`;
                   })}
               </article>
             </article>
-          </section>
+          </FeedPage>
         )}
 
         {workspaceTab === "settings" && (
           <section className="panel-card settings-view workspace-tab-panel">
-            {renderSettingsPanel(false)}
+            <SettingsPage
+              authModeText={authModeLabel(authMode)}
+              codexAuthBusy={codexAuthBusy}
+              compact={false}
+              cwd={cwd}
+              engineStarted={engineStarted}
+              isGraphRunning={isGraphRunning}
+              loginCompleted={loginCompleted}
+              model={model}
+              modelOptions={TURN_MODEL_OPTIONS}
+              onCheckUsage={() => void onCheckUsage()}
+              onCloseUsageResult={() => setUsageResultClosed(true)}
+              onOpenRunsFolder={() => void onOpenRunsFolder()}
+              onSelectCwdDirectory={() => void onSelectCwdDirectory()}
+              onSetModel={setModel}
+              onStartEngine={() => void onStartEngine()}
+              onStopEngine={() => void onStopEngine()}
+              onToggleCodexLogin={() => void onLoginCodex()}
+              running={running}
+              status={status}
+              usageInfoText={usageInfoText}
+              usageResultClosed={usageResultClosed}
+            />
             {/* {lastSavedRunFile && <div>최근 실행 파일: {formatRunFileLabel(lastSavedRunFile)}</div>} */}
           </section>
         )}
 
         {workspaceTab === "bridge" && (
-          <BridgePanel
+          <BridgePage
             busy={webWorkerBusy}
             connectCode={webBridgeConnectCode}
             onCopyConnectCode={() => void onCopyWebBridgeConnectCode()}
@@ -9945,98 +9759,51 @@ ${prompt}`;
 
       </section>
 
-      {pendingWebLogin && (
-        <div className="modal-backdrop">
-          <section className="approval-modal web-turn-modal">
-            <h2>로그인이 필요합니다</h2>
-            <div>노드: {pendingWebLogin.nodeId}</div>
-            <div>서비스: {webProviderLabel(pendingWebLogin.provider)}</div>
-            <div>{pendingWebLogin.reason}</div>
-            <div className="button-row">
-              <button onClick={() => void onOpenProviderSession(pendingWebLogin.provider)} type="button">
-                로그인 세션 열기
-              </button>
-              <button onClick={() => resolvePendingWebLogin(true)} type="button">
-                로그인 완료 후 계속
-              </button>
-              <button onClick={() => resolvePendingWebLogin(false)} type="button">
-                취소
-              </button>
-            </div>
-          </section>
-        </div>
-      )}
+      <PendingWebLoginModal
+        nodeId={pendingWebLogin?.nodeId ?? ""}
+        onCancel={() => resolvePendingWebLogin(false)}
+        onContinueAfterLogin={() => resolvePendingWebLogin(true)}
+        onOpenProviderSession={() => {
+          if (!pendingWebLogin) {
+            return;
+          }
+          void onOpenProviderSession(pendingWebLogin.provider);
+        }}
+        open={Boolean(pendingWebLogin)}
+        providerLabel={pendingWebLogin ? webProviderLabel(pendingWebLogin.provider) : ""}
+        reason={pendingWebLogin?.reason ?? ""}
+      />
 
-      {pendingWebTurn && (
-        <section
-          className={`approval-modal web-turn-modal web-turn-floating${webTurnDragging ? " is-dragging" : ""}`}
-          ref={webTurnFloatingRef}
-          style={{
-            left: `${webTurnFloatingPosition.x}px`,
-            top: `${webTurnFloatingPosition.y}px`,
-          }}
-        >
-          <div className="web-turn-drag-handle" onPointerDown={onWebTurnDragStart}>
-            <h2>웹 응답 입력 필요</h2>
-            <span>드래그 이동</span>
-          </div>
-          <div>노드: {pendingWebTurn.nodeId}</div>
-          <div>서비스: {webProviderLabel(pendingWebTurn.provider)}</div>
-          <div>수집 모드: {pendingWebTurn.mode === "manualPasteJson" ? "JSON" : "텍스트"}</div>
-          <div className="button-row">
-            <button onClick={onOpenPendingProviderWindow} type="button">
-              서비스 창 열기
-            </button>
-            <button onClick={onCopyPendingWebPrompt} type="button">
-              프롬프트 복사
-            </button>
-          </div>
-          <div className="web-turn-prompt">{pendingWebTurn.prompt}</div>
-          <label>
-            응답 붙여넣기
-            <textarea
-              onChange={(e) => setWebResponseDraft(e.currentTarget.value)}
-              rows={8}
-              value={webResponseDraft}
-            />
-          </label>
-          <div className="button-row">
-            <button onClick={onSubmitPendingWebTurn} type="button">
-              입력 완료
-            </button>
-            <button onClick={onDismissPendingWebTurn} type="button">
-              취소
-            </button>
-            <button onClick={onCancelPendingWebTurn} type="button">
-              실행 취소
-            </button>
-          </div>
-        </section>
-      )}
+      <PendingWebTurnModal
+        dragging={webTurnPanel.dragging}
+        modeLabel={pendingWebTurn?.mode === "manualPasteJson" ? "JSON" : "텍스트"}
+        nodeId={pendingWebTurn?.nodeId ?? ""}
+        onCancelRun={onCancelPendingWebTurn}
+        onChangeResponseDraft={setWebResponseDraft}
+        onCopyPrompt={() => void onCopyPendingWebPrompt()}
+        onDismiss={onDismissPendingWebTurn}
+        onDragStart={webTurnPanel.onDragStart}
+        onOpenProviderWindow={() => void onOpenPendingProviderWindow()}
+        onSubmit={onSubmitPendingWebTurn}
+        open={Boolean(pendingWebTurn)}
+        panelRef={webTurnFloatingRef}
+        position={webTurnPanel.position}
+        prompt={pendingWebTurn?.prompt ?? ""}
+        providerLabel={pendingWebTurn ? webProviderLabel(pendingWebTurn.provider) : ""}
+        responseDraft={webResponseDraft}
+      />
 
-      {activeApproval && (
-        <div className="modal-backdrop">
-          <section className="approval-modal">
-            <h2>승인 필요</h2>
-            <div>요청 출처: {approvalSourceLabel(activeApproval.source)}</div>
-            <div>메서드: {activeApproval.method}</div>
-            <div>요청 ID: {activeApproval.requestId}</div>
-            <pre>{formatUnknown(activeApproval.params)}</pre>
-            <div className="button-row">
-              {APPROVAL_DECISIONS.map((decision) => (
-                <button
-                  disabled={approvalSubmitting}
-                  key={decision}
-                  onClick={() => onRespondApproval(decision)}
-                  type="button"
-                >
-                  {approvalDecisionLabel(decision)}
-                </button>
-              ))}
-            </div>
-          </section>
-        </div>
-      )}
+      <ApprovalModal
+        decisionLabel={approvalDecisionLabel}
+        decisions={APPROVAL_DECISIONS}
+        method={activeApproval?.method ?? ""}
+        onRespond={onRespondApproval}
+        open={Boolean(activeApproval)}
+        params={formatUnknown(activeApproval?.params)}
+        requestId={activeApproval?.requestId ?? 0}
+        sourceLabel={approvalSourceLabel(activeApproval?.source ?? "remote")}
+        submitting={approvalSubmitting}
+      />
     </main>
   );
 }
