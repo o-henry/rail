@@ -1909,6 +1909,63 @@ function stringifyInput(input: unknown): string {
   return formatUnknown(input);
 }
 
+function extractPromptInputText(input: unknown, depth = 0): string {
+  if (depth > 5 || input == null) {
+    return "";
+  }
+  if (typeof input === "string") {
+    return input.trim();
+  }
+  if (Array.isArray(input)) {
+    const parts = input
+      .map((item) => extractPromptInputText(item, depth + 1))
+      .map((item) => item.trim())
+      .filter(Boolean);
+    if (parts.length > 0) {
+      return parts.join("\n\n");
+    }
+    return stringifyInput(input).trim();
+  }
+  if (typeof input !== "object") {
+    return stringifyInput(input).trim();
+  }
+
+  const direct = extractStringByPaths(input, [
+    "text",
+    "output.text",
+    "result.text",
+    "completion.text",
+    "response.text",
+    "payload.text",
+    "artifact.payload.text",
+    "artifact.text",
+    "data.text",
+    "raw.text",
+  ]);
+  if (direct && direct.trim()) {
+    return direct.trim();
+  }
+
+  const record = input as Record<string, unknown>;
+  const nestedCandidates = [
+    record.output,
+    record.result,
+    record.response,
+    record.payload,
+    record.artifact,
+    record.data,
+    record.item,
+  ];
+  for (const candidate of nestedCandidates) {
+    const extracted = extractPromptInputText(candidate, depth + 1);
+    if (extracted) {
+      return extracted;
+    }
+  }
+
+  return stringifyInput(input).trim();
+}
+
 function decodeEscapedControlText(input: string): string {
   const source = String(input ?? "");
   if (!source) {
@@ -6453,7 +6510,7 @@ ${prompt}`;
     const promptTemplate = String(config.promptTemplate ?? "{{input}}");
     const nodeOllamaModel = String(config.ollamaModel ?? "llama3.1:8b").trim() || "llama3.1:8b";
 
-    const inputText = stringifyInput(input);
+    const inputText = extractPromptInputText(input);
     const queuedRequests = consumeNodeRequests(node.id);
     const queuedRequestBlock =
       queuedRequests.length > 0
