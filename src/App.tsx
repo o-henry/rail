@@ -213,6 +213,11 @@ type FeedPost = {
   summary: string;
   steps: string[];
   inputSources?: FeedInputSource[];
+  inputContext?: {
+    preview: string;
+    charCount: number;
+    truncated: boolean;
+  };
   evidence: {
     durationMs?: number;
     usage?: UsageStats;
@@ -301,6 +306,7 @@ type FeedBuildInput = {
   usage?: UsageStats;
   qualityReport?: QualityReport;
   inputSources?: FeedInputSource[];
+  inputData?: unknown;
 };
 
 type TurnTerminal = {
@@ -1433,6 +1439,9 @@ function buildFeedPost(input: FeedBuildInput): {
   const steps = summarizeFeedSteps(logs);
   const summary = buildFeedSummary(input.status, input.output, input.error, input.summary);
   const inputSources = normalizeFeedInputSources(input.inputSources);
+  const inputContextRaw = stringifyInput(input.inputData).trim();
+  const inputContextClip = inputContextRaw ? clipTextByChars(inputContextRaw, 1200) : null;
+  const inputContextMasked = inputContextClip ? redactSensitiveText(inputContextClip.text) : "";
   const outputText = extractFinalAnswer(input.output).trim() || stringifyInput(input.output).trim();
   const logsText = logs.length > 0 ? logs.join("\n") : "(로그 없음)";
   const markdownRaw = [
@@ -1444,6 +1453,9 @@ function buildFeedPost(input: FeedBuildInput): {
     summary || "(없음)",
     ...(inputSources.length > 0
       ? ["", "## 입력 출처", ...inputSources.map((source) => `- ${formatFeedInputSourceLabel(source)}`)]
+      : []),
+    ...(inputContextMasked
+      ? ["", "## 전달 입력 스냅샷", inputContextMasked]
       : []),
     "",
     "## 단계 요약",
@@ -1467,6 +1479,13 @@ function buildFeedPost(input: FeedBuildInput): {
       summary,
       steps,
       inputSources,
+      inputContext: inputContextClip
+        ? {
+            preview: inputContextMasked,
+            charCount: inputContextClip.charCount,
+            truncated: inputContextClip.truncated,
+          }
+        : undefined,
       output: input.output ?? null,
       logs,
       error: input.error ?? null,
@@ -1500,6 +1519,13 @@ function buildFeedPost(input: FeedBuildInput): {
     summary,
     steps,
     inputSources,
+    inputContext: inputContextClip
+      ? {
+          preview: inputContextMasked,
+          charCount: inputContextClip.charCount,
+          truncated: inputContextClip.truncated,
+        }
+      : undefined,
     evidence: {
       durationMs: input.durationMs,
       usage: input.usage,
@@ -2518,8 +2544,8 @@ function App() {
   const [feedReplyDraftByPost, setFeedReplyDraftByPost] = useState<Record<string, string>>({});
   const [feedInspectorPostId, setFeedInspectorPostId] = useState("");
   const [feedInspectorSnapshotNode, setFeedInspectorSnapshotNode] = useState<GraphNode | null>(null);
-  const [feedInspectorRuleDocs, setFeedInspectorRuleDocs] = useState<AgentRuleDoc[]>([]);
-  const [feedInspectorRuleLoading, setFeedInspectorRuleLoading] = useState(false);
+  const [, setFeedInspectorRuleDocs] = useState<AgentRuleDoc[]>([]);
+  const [, setFeedInspectorRuleLoading] = useState(false);
   const [pendingNodeRequests, setPendingNodeRequests] = useState<Record<string, string[]>>({});
   const [activeFeedRunMeta, setActiveFeedRunMeta] = useState<{
     runId: string;
@@ -3307,6 +3333,9 @@ function buildFeedShareText(post: FeedViewPost, run: RunRecord | null): string {
   if (Array.isArray(post.inputSources) && post.inputSources.length > 0) {
     lines.push("", "## 입력 출처", ...post.inputSources.map((source) => `- ${formatFeedInputSourceLabel(source)}`));
   }
+  if (post.inputContext?.preview) {
+    lines.push("", "## 전달 입력 스냅샷", post.inputContext.preview);
+  }
   lines.push("", "## 요약", post.summary?.trim() || "(요약 없음)");
     if (visibleSteps.length > 0) {
       lines.push("", "## 단계", ...visibleSteps.map((step) => `- ${step}`));
@@ -3490,6 +3519,8 @@ function buildFeedShareText(post: FeedViewPost, run: RunRecord | null): string {
           error: result.error,
           durationMs,
           usage: result.usage,
+          inputSources: post.inputSources ?? [],
+          inputData: followupInput,
         });
         feedRawAttachmentRef.current[feedAttachmentRawKey(failed.post.id, "markdown")] =
           failed.rawAttachments.markdown;
@@ -3526,6 +3557,8 @@ function buildFeedShareText(post: FeedViewPost, run: RunRecord | null): string {
         output: result.output,
         durationMs,
         usage: result.usage,
+        inputSources: post.inputSources ?? [],
+        inputData: followupInput,
       });
       feedRawAttachmentRef.current[feedAttachmentRawKey(done.post.id, "markdown")] = done.rawAttachments.markdown;
       feedRawAttachmentRef.current[feedAttachmentRawKey(done.post.id, "json")] = done.rawAttachments.json;
@@ -6730,6 +6763,7 @@ ${prompt}`;
           continue;
         }
         const nodeInputSources = resolveFeedInputSources(nodeId);
+        const nodeInput = nodeInputFor(nodeId, outputs, workflowQuestion);
 
         if (cancelRequestedRef.current) {
           setNodeStatus(nodeId, "cancelled", "취소 요청됨");
@@ -6743,6 +6777,7 @@ ${prompt}`;
             summary: "사용자 중지 요청으로 실행이 취소되었습니다.",
             logs: runLogCollectorRef.current[nodeId] ?? [],
             inputSources: nodeInputSources,
+            inputData: nodeInput,
           });
           runRecord.feedPosts?.push(cancelledFeed.post);
           rememberFeedSource(cancelledFeed.post);
@@ -6773,7 +6808,7 @@ ${prompt}`;
           });
           transition(runRecord, nodeId, "running");
 
-          const input = nodeInputFor(nodeId, outputs, workflowQuestion);
+          const input = nodeInput;
 
           if (node.type === "turn") {
             const result = await executeTurnNode(node, input);
@@ -6814,6 +6849,7 @@ ${prompt}`;
                 durationMs: Date.now() - startedAtMs,
                 usage: result.usage,
                 inputSources: nodeInputSources,
+                inputData: input,
               });
               runRecord.feedPosts?.push(failedFeed.post);
               rememberFeedSource(failedFeed.post);
@@ -6900,6 +6936,7 @@ ${prompt}`;
                 usage: result.usage,
                 qualityReport,
                 inputSources: nodeInputSources,
+                inputData: input,
               });
               runRecord.feedPosts?.push(rejectedFeed.post);
               rememberFeedSource(rejectedFeed.post);
@@ -6950,6 +6987,7 @@ ${prompt}`;
               usage: result.usage,
               qualityReport,
               inputSources: nodeInputSources,
+              inputData: input,
             });
             runRecord.feedPosts?.push(doneFeed.post);
             rememberFeedSource(doneFeed.post);
@@ -6981,6 +7019,7 @@ ${prompt}`;
                 error: result.error ?? "변환 실패",
                 durationMs: Date.now() - startedAtMs,
                 inputSources: nodeInputSources,
+                inputData: input,
               });
               runRecord.feedPosts?.push(transformFailedFeed.post);
               rememberFeedSource(transformFailedFeed.post);
@@ -7012,6 +7051,7 @@ ${prompt}`;
               output: result.output,
               durationMs: Date.now() - startedAtMs,
               inputSources: nodeInputSources,
+              inputData: input,
             });
             runRecord.feedPosts?.push(transformDoneFeed.post);
             rememberFeedSource(transformDoneFeed.post);
@@ -7043,6 +7083,7 @@ ${prompt}`;
                 error: result.error ?? "분기 실패",
                 durationMs: Date.now() - startedAtMs,
                 inputSources: nodeInputSources,
+                inputData: input,
               });
               runRecord.feedPosts?.push(gateFailedFeed.post);
               rememberFeedSource(gateFailedFeed.post);
@@ -7073,6 +7114,7 @@ ${prompt}`;
               output: result.output,
               durationMs: Date.now() - startedAtMs,
               inputSources: nodeInputSources,
+              inputData: input,
             });
             runRecord.feedPosts?.push(gateDoneFeed.post);
             rememberFeedSource(gateDoneFeed.post);
@@ -7118,8 +7160,30 @@ ${prompt}`;
       if (runRecord.nodeMetrics && Object.keys(runRecord.nodeMetrics).length > 0) {
         runRecord.qualitySummary = summarizeQualityMetrics(runRecord.nodeMetrics);
       }
-      if (lastDoneNodeId && lastDoneNodeId in outputs) {
-        runRecord.finalAnswer = extractFinalAnswer(outputs[lastDoneNodeId]);
+      const outgoingNodeIdSet = new Set(graph.edges.map((edge) => edge.from.nodeId));
+      const sinkNodeIds = graph.nodes
+        .map((node) => node.id)
+        .filter((nodeId) => !outgoingNodeIdSet.has(nodeId));
+      const doneSinkNodeIds = sinkNodeIds.filter((nodeId) => nodeId in outputs);
+      let finalNodeId = "";
+      if (doneSinkNodeIds.length === 1) {
+        finalNodeId = doneSinkNodeIds[0];
+      } else if (doneSinkNodeIds.length > 1) {
+        const doneSinkSet = new Set(doneSinkNodeIds);
+        for (let index = runRecord.transitions.length - 1; index >= 0; index -= 1) {
+          const row = runRecord.transitions[index];
+          if (row.status !== "done" || !doneSinkSet.has(row.nodeId)) {
+            continue;
+          }
+          finalNodeId = row.nodeId;
+          break;
+        }
+      }
+      if (!finalNodeId && lastDoneNodeId && lastDoneNodeId in outputs) {
+        finalNodeId = lastDoneNodeId;
+      }
+      if (finalNodeId && finalNodeId in outputs) {
+        runRecord.finalAnswer = extractFinalAnswer(outputs[finalNodeId]);
       }
       runRecord.finishedAt = new Date().toISOString();
       runRecord.regression = await buildRegressionSummary(runRecord);
@@ -7601,7 +7665,9 @@ ${prompt}`;
       const sourceText = (post.inputSources ?? [])
         .map((source) => `${source.agentName} ${source.roleLabel ?? ""} ${source.summary ?? ""}`)
         .join(" ");
-      const haystack = `${post.question ?? ""} ${post.agentName} ${post.roleLabel} ${post.summary} ${sourceText}`.toLowerCase();
+      const haystack = `${post.question ?? ""} ${post.agentName} ${post.roleLabel} ${post.summary} ${
+        post.inputContext?.preview ?? ""
+      } ${sourceText}`.toLowerCase();
       return haystack.includes(keyword);
     })
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
@@ -9136,29 +9202,6 @@ ${prompt}`;
                   </div>
                 </section>
               )}
-              <section className="feed-agent-rules">
-                <div className="feed-agent-rules-head">
-                  <h4>적용 규칙 문서</h4>
-                  {/* <span>{feedInspectorRuleDocs.length}개</span> */}
-                </div>
-                {!feedInspectorRuleCwd && (
-                  <div className="inspector-empty">작업 경로가 없어 agent.md / skill.md를 조회할 수 없습니다.</div>
-                )}
-                {feedInspectorRuleLoading && <div className="inspector-empty">규칙 문서 로딩 중...</div>}
-                {!feedInspectorRuleLoading && feedInspectorRuleCwd && feedInspectorRuleDocs.length === 0 && (
-                  <div className="inspector-empty">적용된 agent.md / skill.md 없음</div>
-                )}
-                {!feedInspectorRuleLoading && feedInspectorRuleDocs.length > 0 && (
-                  <div className="feed-agent-rule-list">
-                    {feedInspectorRuleDocs.map((doc) => (
-                      <article className="feed-agent-rule-doc" key={`${doc.path}:${doc.content.length}`}>
-                        <header>{doc.path}</header>
-                        <pre>{doc.content}</pre>
-                      </article>
-                    ))}
-                  </div>
-                )}
-              </section>
             </article>
             <article className="panel-card feed-main">
               <div className="feed-topbar">
@@ -9441,6 +9484,15 @@ ${prompt}`;
                                     ) : post.question ? (
                                       <div className="feed-card-question">Q: {post.question}</div>
                                     ) : null}
+                                    {post.inputContext?.preview && (
+                                      <section className="feed-card-input-sources">
+                                        <div className="feed-card-input-sources-title">
+                                          전달 입력 스냅샷
+                                          {post.inputContext.truncated ? " (일부)" : ""}
+                                        </div>
+                                        <pre className="feed-sns-content">{post.inputContext.preview}</pre>
+                                      </section>
+                                    )}
                                     <pre className="feed-sns-content">{visibleContent}</pre>
                                     <div className="feed-evidence-row">
                                       <span>{formatRelativeFeedTime(post.createdAt)}</span>

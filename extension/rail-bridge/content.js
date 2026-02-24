@@ -2,6 +2,8 @@ const DEFAULT_BRIDGE_URL = "http://127.0.0.1:38961";
 const CLAIM_INTERVAL_MS = 1400;
 const INPUT_WAIT_TIMEOUT_MS = 15000;
 const RESPONSE_STABLE_MS = 1600;
+const BASELINE_CAPTURE_MS = 1400;
+const BASELINE_CAPTURE_POLL_MS = 220;
 const URL_KEY = "railBridgeUrl";
 const TOKEN_KEY = "railBridgeToken";
 
@@ -259,6 +261,10 @@ function isElementVisible(element) {
   return rect.width > 0 && rect.height > 0;
 }
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 function setNativeValue(input, value) {
   const descriptor = Object.getOwnPropertyDescriptor(
     Object.getPrototypeOf(input),
@@ -320,6 +326,7 @@ function extractLastResponse(selectors, prompt, options = {}) {
     .map((row) => ({
       text: row.text,
       bottom: row.bottom,
+      element: row.element,
     }))
     .filter((row) => row.text !== promptTrimmed)
     .filter((row) => !promptTrimmed || !row.text.startsWith(promptTrimmed));
@@ -347,11 +354,87 @@ function collectResponseRows(selectors) {
       rows.push({
         text,
         bottom: rect.bottom,
+        element: node,
       });
     }
   }
   rows.sort((a, b) => a.bottom - b.bottom);
   return rows;
+}
+
+async function captureBaselineSnapshot(selectors, durationMs = BASELINE_CAPTURE_MS) {
+  const normalizedSet = new Set();
+  const deadline = Date.now() + Math.max(300, Number(durationMs) || BASELINE_CAPTURE_MS);
+  let baselineBottom = -Infinity;
+  let baselineText = "";
+
+  while (Date.now() < deadline) {
+    const rows = collectResponseRows(selectors);
+    for (const row of rows) {
+      const normalized = normalizeComparableText(row.text);
+      if (!normalized) {
+        continue;
+      }
+      normalizedSet.add(normalized);
+      if (row.bottom > baselineBottom) {
+        baselineBottom = row.bottom;
+        baselineText = row.text;
+      }
+    }
+    await sleep(BASELINE_CAPTURE_POLL_MS);
+  }
+
+  return {
+    baselineSet: normalizedSet,
+    baselineBottom,
+    baselineText,
+  };
+}
+
+function markNodeAndAncestors(map, node, timestamp) {
+  if (!node) {
+    return;
+  }
+  let element = node instanceof Element ? node : node.parentElement;
+  let depth = 0;
+  while (element && depth < 10) {
+    map.set(element, timestamp);
+    element = element.parentElement;
+    depth += 1;
+  }
+}
+
+function createMutationTracker(root) {
+  const map = new WeakMap();
+  const observer = new MutationObserver((mutations) => {
+    const stamp = Date.now();
+    for (const mutation of mutations) {
+      markNodeAndAncestors(map, mutation.target, stamp);
+      if (mutation.type === "childList") {
+        for (const row of mutation.addedNodes) {
+          markNodeAndAncestors(map, row, stamp);
+        }
+      }
+    }
+  });
+
+  observer.observe(root, {
+    subtree: true,
+    childList: true,
+    characterData: true,
+  });
+
+  return {
+    getMutationAt(element) {
+      if (!(element instanceof Element)) {
+        return 0;
+      }
+      return Number(map.get(element) ?? 0) || 0;
+    },
+    stop() {
+      observer.disconnect();
+    },
+  };
 }
 
 function collectResponseBaselineSet(selectors) {
@@ -389,6 +472,8 @@ async function waitForResponse(provider, prompt, timeoutMs, options = {}) {
   const baselineSet =
     options.baselineSet instanceof Set ? options.baselineSet : new Set();
   const minBottom = Number(options.baselineBottom ?? -Infinity);
+  const mutationCutoffMs = Number(options.requireMutationAfter ?? 0);
+  const getMutationAt = typeof options.getMutationAt === "function" ? options.getMutationAt : null;
   let last = "";
   let lastChangedAt = Date.now();
   while (Date.now() < deadline) {
@@ -411,6 +496,13 @@ async function waitForResponse(provider, prompt, timeoutMs, options = {}) {
       if (isPromptEcho(normalized, prompt)) {
         await new Promise((resolve) => setTimeout(resolve, 450));
         continue;
+      }
+      if (mutationCutoffMs > 0 && getMutationAt) {
+        const mutationAt = getMutationAt(responseRow.element);
+        if (!mutationAt || mutationAt < mutationCutoffMs) {
+          await new Promise((resolve) => setTimeout(resolve, 450));
+          continue;
+        }
       }
       if (current !== last) {
         last = current;
@@ -500,20 +592,16 @@ async function runTask(taskPayload) {
   }
   const providerConfig = PROVIDER_CONFIG[provider];
   const timeoutMs = Math.max(5000, Number(taskPayload.timeoutMs ?? 180000) || 180000);
-  const baselineText = extractLastResponseText(providerConfig.responseSelectors, "");
-  const baselineSet = collectResponseBaselineSet(providerConfig.responseSelectors);
-  const baselineBottom = collectResponseRows(providerConfig.responseSelectors).reduce(
-    (maxBottom, row) => Math.max(maxBottom, row.bottom),
-    -Infinity,
-  );
+  let mutationTracker = null;
   activeTask = {
     id: taskPayload.id,
     provider,
     prompt: String(taskPayload.prompt ?? ""),
     timeoutMs,
-    baselineText,
-    baselineSet,
-    baselineBottom,
+    baselineText: "",
+    baselineSet: new Set(),
+    baselineBottom: -Infinity,
+    mutationCutoffMs: 0,
   };
 
   try {
@@ -522,6 +610,16 @@ async function runTask(taskPayload) {
     if (!input) {
       throw new Error("INPUT_NOT_FOUND");
     }
+
+    const baselineSnapshot = await captureBaselineSnapshot(providerConfig.responseSelectors, BASELINE_CAPTURE_MS);
+    activeTask.baselineText = baselineSnapshot.baselineText;
+    activeTask.baselineSet = baselineSnapshot.baselineSet;
+    activeTask.baselineBottom = baselineSnapshot.baselineBottom;
+
+    mutationTracker = createMutationTracker(document.body);
+    activeTask.mutationCutoffMs = Date.now();
+    activeTask.mutationTracker = mutationTracker;
+
     writePromptToInput(input, activeTask.prompt);
     await postTaskStage("prompt_filled", "프롬프트 자동 주입 완료");
     const autoSent = clickSendButton(provider) || trySendWithEnter(input);
@@ -531,9 +629,11 @@ async function runTask(taskPayload) {
       await postTaskStage("waiting_user_send", "자동 전송 실패: 사용자 전송 클릭 대기");
     }
     const text = await waitForResponse(provider, activeTask.prompt, timeoutMs, {
-      baselineText,
-      baselineSet,
-      baselineBottom,
+      baselineText: activeTask.baselineText,
+      baselineSet: activeTask.baselineSet,
+      baselineBottom: activeTask.baselineBottom,
+      requireMutationAfter: activeTask.mutationCutoffMs,
+      getMutationAt: mutationTracker ? (element) => mutationTracker.getMutationAt(element) : null,
     });
     if (!text) {
       throw new Error("TIMEOUT");
@@ -550,6 +650,9 @@ async function runTask(taskPayload) {
           : "BRIDGE_CAPTURE_FAILED";
     await postTaskError(code, message);
   } finally {
+    if (mutationTracker) {
+      mutationTracker.stop();
+    }
     activeTask = null;
   }
 }
@@ -596,11 +699,12 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         sendResponse({ ok: false, error: "활성 작업이 없습니다." });
         return;
       }
-      const text = extractLastResponseText(
+      const responseRow = extractLastResponse(
         PROVIDER_CONFIG[activeTask.provider].responseSelectors,
         activeTask.prompt,
         { minBottom: Number(activeTask.baselineBottom ?? -Infinity) },
       );
+      const text = responseRow?.text ?? "";
       if (!text) {
         throw new Error("응답을 찾지 못했습니다.");
       }
@@ -608,10 +712,17 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       const baselineSet =
         activeTask.baselineSet instanceof Set ? activeTask.baselineSet : new Set();
       const normalized = normalizeComparableText(text);
+      const mutationAt =
+        activeTask.mutationTracker && typeof activeTask.mutationTracker.getMutationAt === "function"
+          ? Number(activeTask.mutationTracker.getMutationAt(responseRow?.element))
+          : 0;
       if (
         !normalized ||
         (baseline && normalized === baseline) ||
         (baselineSet.size > 0 && baselineSet.has(normalized)) ||
+        (typeof activeTask.mutationCutoffMs === "number" &&
+          activeTask.mutationCutoffMs > 0 &&
+          mutationAt < activeTask.mutationCutoffMs) ||
         isPromptEcho(normalized, activeTask.prompt)
       ) {
         throw new Error("새로운 모델 응답이 확인되지 않았습니다.");
