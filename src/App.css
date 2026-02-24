@@ -463,21 +463,21 @@ h3 {
   display: grid;
   grid-template-rows: auto auto;
   border-radius: 8px;
-  background: #fbfcfe;
+  background: #ffffff;
   overflow: hidden;
 }
 
 .question-input textarea {
   width: 100%;
-  min-height: 48px;
-  max-height: 132px;
-  padding: 10px 12px;
+  min-height: 56px;
+  max-height: 164px;
+  padding: 14px 12px 16px;
   border-radius: 0;
   border: 0;
   background: transparent;
   resize: none;
   overflow-y: auto;
-  line-height: 1.45;
+  line-height: 1.5;
   scrollbar-width: none;
 }
 .question-input textarea:disabled {
