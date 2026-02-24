@@ -8,6 +8,8 @@ const MIN_RESPONSE_AFTER_SUBMIT_MS = 2500;
 const BASELINE_EXISTING_ELEMENT_MIN_GROWTH = 16;
 const MAX_RESPONSE_TEXT_LENGTH = 12000;
 const STRICT_ASSISTANT_ROLE_PROVIDERS = new Set(["gpt", "grok", "perplexity", "claude"]);
+const RESPONSE_SETTLE_AFTER_GENERATION_MS = 1600;
+const RESPONSE_SETTLE_WITHOUT_GENERATION_MS = 6000;
 const URL_KEY = "railBridgeUrl";
 const TOKEN_KEY = "railBridgeToken";
 
@@ -34,6 +36,11 @@ const PROVIDER_CONFIG = {
       'button[aria-label*="전송" i]',
       'button[type="submit"]',
     ],
+    generationSelectors: [
+      'button[aria-label*="Stop" i]',
+      'button[aria-label*="중지" i]',
+      'button[data-testid*="stop" i]',
+    ],
   },
   gpt: {
     hostMatch: (host) => host === "chatgpt.com" || host.endsWith(".chatgpt.com"),
@@ -56,6 +63,11 @@ const PROVIDER_CONFIG = {
       'button[aria-label*="Send" i]',
       'button[type="submit"]',
     ],
+    generationSelectors: [
+      'button[data-testid*="stop" i]',
+      'button[aria-label*="Stop" i]',
+      'button[aria-label*="생성 중지" i]',
+    ],
   },
   grok: {
     hostMatch: (host) => host === "grok.com",
@@ -75,6 +87,11 @@ const PROVIDER_CONFIG = {
       'button[aria-label*="Send" i]',
       'button[data-testid*="send" i]',
       'button[type="submit"]',
+    ],
+    generationSelectors: [
+      'button[data-testid*="stop" i]',
+      'button[aria-label*="Stop" i]',
+      'button[aria-label*="중지" i]',
     ],
   },
   perplexity: {
@@ -96,6 +113,11 @@ const PROVIDER_CONFIG = {
       'button[aria-label*="Send" i]',
       'button[type="submit"]',
     ],
+    generationSelectors: [
+      'button[aria-label*="Stop" i]',
+      'button[data-testid*="stop" i]',
+      '[data-testid*="stop" i]',
+    ],
   },
   claude: {
     hostMatch: (host) => host === "claude.ai" || host.endsWith(".claude.ai"),
@@ -114,6 +136,10 @@ const PROVIDER_CONFIG = {
     submitSelectors: [
       'button[aria-label*="Send" i]',
       'button[type="submit"]',
+    ],
+    generationSelectors: [
+      'button[aria-label*="Stop" i]',
+      'button[data-testid*="stop" i]',
     ],
   },
 };
@@ -263,6 +289,20 @@ function isElementVisible(element) {
   }
   const rect = element.getBoundingClientRect();
   return rect.width > 0 && rect.height > 0;
+}
+
+function hasVisibleSelector(selectors = []) {
+  for (const selector of selectors) {
+    try {
+      const element = document.querySelector(selector);
+      if (element && isElementVisible(element)) {
+        return true;
+      }
+    } catch {
+      // continue
+    }
+  }
+  return false;
 }
 
 function sleep(ms) {
@@ -503,7 +543,7 @@ function collectResponseRows(selectors, options = {}) {
   return rows;
 }
 
-async function captureBaselineSnapshot(selectors, durationMs = BASELINE_CAPTURE_MS) {
+async function captureBaselineSnapshot(selectors, durationMs = BASELINE_CAPTURE_MS, options = {}) {
   const normalizedSet = new Set();
   const baselineElementText = new WeakMap();
   const deadline = Date.now() + Math.max(300, Number(durationMs) || BASELINE_CAPTURE_MS);
@@ -511,7 +551,7 @@ async function captureBaselineSnapshot(selectors, durationMs = BASELINE_CAPTURE_
   let baselineText = "";
 
   while (Date.now() < deadline) {
-    const rows = collectResponseRows(selectors);
+    const rows = collectResponseRows(selectors, options);
     for (const row of rows) {
       const normalized = normalizeComparableText(row.text);
       if (!normalized) {
@@ -632,12 +672,19 @@ async function waitForResponse(provider, prompt, timeoutMs, options = {}) {
   const getBaselineElementText =
     typeof options.getBaselineElementText === "function" ? options.getBaselineElementText : null;
   const acceptAfterMs = Number(options.acceptAfterMs ?? 0);
+  const generationSelectors = PROVIDER_CONFIG[provider]?.generationSelectors ?? [];
   let last = "";
   let lastChangedAt = Date.now();
+  let responseSeenAt = 0;
+  let generationSeenAt = 0;
   while (Date.now() < deadline) {
     if (acceptAfterMs > 0 && Date.now() < acceptAfterMs) {
       await new Promise((resolve) => setTimeout(resolve, 220));
       continue;
+    }
+    const isGenerating = hasVisibleSelector(generationSelectors);
+    if (isGenerating) {
+      generationSeenAt = Date.now();
     }
     const responseRow = extractLastResponse(selectors, prompt, {
       minBottom,
@@ -684,10 +731,27 @@ async function waitForResponse(provider, prompt, timeoutMs, options = {}) {
           continue;
         }
       }
+      if (!responseSeenAt) {
+        responseSeenAt = Date.now();
+      }
       if (current !== last) {
         last = current;
         lastChangedAt = Date.now();
       } else if (Date.now() - lastChangedAt >= RESPONSE_STABLE_MS) {
+        if (isGenerating) {
+          await new Promise((resolve) => setTimeout(resolve, 450));
+          continue;
+        }
+        const now = Date.now();
+        if (generationSeenAt > 0) {
+          if (now - generationSeenAt < RESPONSE_SETTLE_AFTER_GENERATION_MS) {
+            await new Promise((resolve) => setTimeout(resolve, 450));
+            continue;
+          }
+        } else if (responseSeenAt > 0 && now - responseSeenAt < RESPONSE_SETTLE_WITHOUT_GENERATION_MS) {
+          await new Promise((resolve) => setTimeout(resolve, 450));
+          continue;
+        }
         return responseRow;
       }
     }
@@ -794,7 +858,14 @@ async function runTask(taskPayload) {
       throw new Error("INPUT_NOT_FOUND");
     }
 
-    const baselineSnapshot = await captureBaselineSnapshot(providerConfig.responseSelectors, BASELINE_CAPTURE_MS);
+    const baselineSnapshot = await captureBaselineSnapshot(
+      providerConfig.responseSelectors,
+      BASELINE_CAPTURE_MS,
+      {
+        provider,
+        requireAssistantRole: STRICT_ASSISTANT_ROLE_PROVIDERS.has(provider),
+      },
+    );
     activeTask.baselineText = baselineSnapshot.baselineText;
     activeTask.baselineSet = baselineSnapshot.baselineSet;
     activeTask.baselineElementText = baselineSnapshot.baselineElementText;
