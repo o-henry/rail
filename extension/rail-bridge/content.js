@@ -9,7 +9,7 @@ const BASELINE_EXISTING_ELEMENT_MIN_GROWTH = 16;
 const MAX_RESPONSE_TEXT_LENGTH = 12000;
 const STRICT_ASSISTANT_ROLE_PROVIDERS = new Set(["gpt", "grok", "perplexity", "claude"]);
 const RESPONSE_SETTLE_AFTER_GENERATION_MS = 1600;
-const RESPONSE_SETTLE_WITHOUT_GENERATION_MS = 6000;
+const RESPONSE_SETTLE_WITHOUT_GENERATION_MS = 15000;
 const URL_KEY = "railBridgeUrl";
 const TOKEN_KEY = "railBridgeToken";
 
@@ -53,10 +53,8 @@ const PROVIDER_CONFIG = {
     ],
     responseSelectors: [
       '[data-message-author-role="assistant"]',
-      'article[data-testid*="conversation-turn"]',
-      "main article",
-      "main .markdown",
-      "main .prose",
+      'article[data-testid*="assistant" i]',
+      '[data-testid*="assistant" i]',
     ],
     submitSelectors: [
       'button[data-testid*="send" i]',
@@ -78,10 +76,9 @@ const PROVIDER_CONFIG = {
       "textarea",
     ],
     responseSelectors: [
-      "[data-testid*='message']",
-      "main article",
-      "main .markdown",
-      "main .prose",
+      "[data-message-author-role='assistant']",
+      "[data-testid*='assistant' i]",
+      "[data-testid*='answer' i]",
     ],
     submitSelectors: [
       'button[aria-label*="Send" i]',
@@ -104,9 +101,7 @@ const PROVIDER_CONFIG = {
     ],
     responseSelectors: [
       "[data-testid*='answer' i]",
-      "main article",
-      "main .markdown",
-      "main .prose",
+      "[data-message-author-role='assistant']",
     ],
     submitSelectors: [
       'button[aria-label*="Submit" i]',
@@ -128,10 +123,9 @@ const PROVIDER_CONFIG = {
       "textarea",
     ],
     responseSelectors: [
-      "[data-testid*='message' i]",
-      "main article",
-      "main .markdown",
-      "main .prose",
+      "[data-message-author-role='assistant']",
+      "[data-testid*='assistant' i]",
+      "[data-testid*='answer' i]",
     ],
     submitSelectors: [
       'button[aria-label*="Send" i]',
@@ -720,10 +714,12 @@ async function waitForResponse(provider, prompt, timeoutMs, options = {}) {
     typeof options.getBaselineElementText === "function" ? options.getBaselineElementText : null;
   const acceptAfterMs = Number(options.acceptAfterMs ?? 0);
   const generationSelectors = PROVIDER_CONFIG[provider]?.generationSelectors ?? [];
+  const strictEvidence = STRICT_ASSISTANT_ROLE_PROVIDERS.has(provider);
   let last = "";
   let lastChangedAt = Date.now();
   let responseSeenAt = 0;
   let generationSeenAt = 0;
+  let changeCount = 0;
   while (Date.now() < deadline) {
     if (acceptAfterMs > 0 && Date.now() < acceptAfterMs) {
       await new Promise((resolve) => setTimeout(resolve, 220));
@@ -784,6 +780,7 @@ async function waitForResponse(provider, prompt, timeoutMs, options = {}) {
       if (current !== last) {
         last = current;
         lastChangedAt = Date.now();
+        changeCount += 1;
       } else if (Date.now() - lastChangedAt >= RESPONSE_STABLE_MS) {
         if (isGenerating) {
           await new Promise((resolve) => setTimeout(resolve, 450));
@@ -795,9 +792,15 @@ async function waitForResponse(provider, prompt, timeoutMs, options = {}) {
             await new Promise((resolve) => setTimeout(resolve, 450));
             continue;
           }
-        } else if (responseSeenAt > 0 && now - responseSeenAt < RESPONSE_SETTLE_WITHOUT_GENERATION_MS) {
-          await new Promise((resolve) => setTimeout(resolve, 450));
-          continue;
+        } else {
+          if (responseSeenAt > 0 && now - responseSeenAt < RESPONSE_SETTLE_WITHOUT_GENERATION_MS) {
+            await new Promise((resolve) => setTimeout(resolve, 450));
+            continue;
+          }
+          if (strictEvidence && changeCount < 2) {
+            await new Promise((resolve) => setTimeout(resolve, 450));
+            continue;
+          }
         }
         return responseRow;
       }

@@ -1909,6 +1909,79 @@ function replaceInputPlaceholder(template: string, value: string): string {
   return template.split("{{input}}").join(value);
 }
 
+function normalizeWebComparableText(input: string): string {
+  return String(input ?? "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function collectWebPromptNeedles(promptText: string): string[] {
+  const normalized = normalizeWebComparableText(promptText);
+  if (!normalized) {
+    return [];
+  }
+  const len = normalized.length;
+  const needleLen = len >= 512 ? 96 : len >= 220 ? 72 : 48;
+  if (len <= needleLen) {
+    return [normalized];
+  }
+  const offsets = [
+    0,
+    Math.max(0, Math.floor(len * 0.2) - Math.floor(needleLen / 2)),
+    Math.max(0, Math.floor(len * 0.45) - Math.floor(needleLen / 2)),
+    Math.max(0, Math.floor(len * 0.7) - Math.floor(needleLen / 2)),
+    Math.max(0, len - needleLen),
+  ];
+  const unique = new Set<string>();
+  for (const start of offsets) {
+    const needle = normalized.slice(start, start + needleLen).trim();
+    if (needle.length >= 32) {
+      unique.add(needle);
+    }
+  }
+  return Array.from(unique);
+}
+
+function isLikelyWebPromptEcho(outputText: string, promptText: string): boolean {
+  const candidate = normalizeWebComparableText(outputText);
+  const prompt = normalizeWebComparableText(promptText);
+  if (!candidate || !prompt) {
+    return false;
+  }
+  if (
+    /^나의 말[:：]/i.test(candidate) ||
+    /^you said[:：]/i.test(candidate) ||
+    /^your message[:：]/i.test(candidate) ||
+    /^user[:：]/i.test(candidate)
+  ) {
+    return true;
+  }
+  if (candidate === prompt || candidate.startsWith(prompt)) {
+    return true;
+  }
+  const start = prompt.slice(0, 120);
+  const end = prompt.slice(-120);
+  if (start.length >= 40 && candidate.includes(start)) {
+    return true;
+  }
+  if (end.length >= 40 && candidate.includes(end)) {
+    return true;
+  }
+  const needles = collectWebPromptNeedles(prompt);
+  if (needles.length > 0) {
+    let hits = 0;
+    for (const needle of needles) {
+      if (candidate.includes(needle)) {
+        hits += 1;
+      }
+      if (hits >= 2) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 function buildForcedAgentRuleBlock(docs: AgentRuleDoc[]): string {
   if (docs.length === 0) {
     return "";
@@ -6378,17 +6451,39 @@ ${prompt}`;
             knowledgeTrace,
           }));
         } else {
-          const runBridgeAssisted = async () =>
+          const runBridgeAssisted = async (timeoutMs = webTimeoutMs) =>
             invoke<WebProviderRunResult>("web_provider_run", {
               provider: webProvider,
               prompt: textToSend,
-              timeoutMs: webTimeoutMs,
+              timeoutMs,
               mode: "bridgeAssisted",
             });
 
           let result: WebProviderRunResult | null = null;
           try {
             result = await runBridgeAssisted();
+
+            if (result.ok && result.text) {
+              if (isLikelyWebPromptEcho(result.text, textToSend)) {
+                addNodeLog(
+                  node.id,
+                  `[WEB] 입력 에코로 보이는 응답을 감지해 폐기했습니다. (${webProviderLabel(webProvider)})`,
+                );
+                addNodeLog(node.id, "[WEB] 동일 프롬프트로 웹 연결 재수집을 1회 재시도합니다.");
+                const retryResult = await runBridgeAssisted(Math.max(60_000, webTimeoutMs));
+                if (retryResult.ok && retryResult.text && !isLikelyWebPromptEcho(retryResult.text, textToSend)) {
+                  result = retryResult;
+                } else {
+                  result = retryResult.ok
+                    ? ({
+                        ok: false,
+                        errorCode: "PROMPT_ECHO",
+                        error: "웹 응답이 입력 에코로 감지되어 폐기되었습니다.",
+                      } as WebProviderRunResult)
+                    : retryResult;
+                }
+              }
+            }
 
             if (result.ok && result.text) {
               addNodeLog(node.id, `[WEB] ${webProviderLabel(webProvider)} 웹 연결 응답 수집 완료`);
@@ -9183,7 +9278,7 @@ ${prompt}`;
                     <label>
                       프롬프트 템플릿
                       <textarea
-                        className="prompt-template-textarea"
+                        className="prompt-template-textarea feed-agent-prompt-textarea"
                         disabled={!feedInspectorEditable}
                         onChange={(event) => {
                           if (!feedInspectorEditableNodeId) {
