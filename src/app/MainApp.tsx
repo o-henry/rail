@@ -1632,6 +1632,7 @@ function buildFeedShareText(post: FeedViewPost, run: RunRecord | null): string {
       ]
         .filter(Boolean)
         .join("\n\n");
+      const oneOffRunFileName = `run-${oneOffRunId}.json`;
 
       setNodeStatus(node.id, "running", "피드 추가 요청 실행 시작");
       setNodeRuntimeFields(node.id, {
@@ -1678,10 +1679,57 @@ function buildFeedShareText(post: FeedViewPost, run: RunRecord | null): string {
         feedRawAttachmentRef.current[feedAttachmentRawKey(failed.post.id, "markdown")] =
           failed.rawAttachments.markdown;
         feedRawAttachmentRef.current[feedAttachmentRawKey(failed.post.id, "json")] = failed.rawAttachments.json;
+        const failedRunRecord: RunRecord = {
+          runId: oneOffRunId,
+          question: post.question ?? workflowQuestion,
+          startedAt,
+          finishedAt,
+          workflowGroupName: "사용자 추가 요청",
+          workflowGroupKind: "custom",
+          graphSnapshot: {
+            version: GRAPH_SCHEMA_VERSION,
+            nodes: [node],
+            edges: [],
+            knowledge: defaultKnowledgeConfig(),
+          },
+          transitions: [
+            { at: startedAt, nodeId: node.id, status: "running" },
+            {
+              at: finishedAt,
+              nodeId: node.id,
+              status: "failed",
+              message: result.error ?? "피드 추가 요청 실행 실패",
+            },
+          ],
+          summaryLogs: [`[${node.id}] running`, `[${node.id}] failed: ${result.error ?? "실행 실패"}`],
+          nodeLogs: {
+            [node.id]: nodeStates[node.id]?.logs ?? [],
+          },
+          threadTurnMap: {
+            [node.id]: {
+              threadId: result.threadId,
+              turnId: result.turnId,
+            },
+          },
+          providerTrace: [
+            {
+              nodeId: node.id,
+              executor: result.executor,
+              provider: result.provider,
+              status: "failed",
+              startedAt,
+              finishedAt,
+              summary: result.error ?? "피드 추가 요청 실행 실패",
+            },
+          ],
+          feedPosts: [failed.post],
+        };
+        await invoke("run_save", { name: oneOffRunFileName, run: failedRunRecord });
+        feedRunCacheRef.current[oneOffRunFileName] = normalizeRunRecord(failedRunRecord);
         setFeedPosts((prev) => [
           {
             ...failed.post,
-            sourceFile: "",
+            sourceFile: oneOffRunFileName,
             question: post.question,
           },
           ...prev,
@@ -1716,10 +1764,58 @@ function buildFeedShareText(post: FeedViewPost, run: RunRecord | null): string {
       });
       feedRawAttachmentRef.current[feedAttachmentRawKey(done.post.id, "markdown")] = done.rawAttachments.markdown;
       feedRawAttachmentRef.current[feedAttachmentRawKey(done.post.id, "json")] = done.rawAttachments.json;
+      const doneRunRecord: RunRecord = {
+        runId: oneOffRunId,
+        question: post.question ?? workflowQuestion,
+        startedAt,
+        finishedAt,
+        workflowGroupName: "사용자 추가 요청",
+        workflowGroupKind: "custom",
+        finalAnswer: extractFinalAnswer(effectiveOutput),
+        graphSnapshot: {
+          version: GRAPH_SCHEMA_VERSION,
+          nodes: [node],
+          edges: [],
+          knowledge: defaultKnowledgeConfig(),
+        },
+        transitions: [
+          { at: startedAt, nodeId: node.id, status: "running" },
+          {
+            at: finishedAt,
+            nodeId: node.id,
+            status: "done",
+            message: "피드 추가 요청 실행 완료",
+          },
+        ],
+        summaryLogs: [`[${node.id}] running`, `[${node.id}] done`],
+        nodeLogs: {
+          [node.id]: nodeStates[node.id]?.logs ?? [],
+        },
+        threadTurnMap: {
+          [node.id]: {
+            threadId: result.threadId,
+            turnId: result.turnId,
+          },
+        },
+        providerTrace: [
+          {
+            nodeId: node.id,
+            executor: result.executor,
+            provider: result.provider,
+            status: "done",
+            startedAt,
+            finishedAt,
+            summary: "피드 추가 요청 실행 완료",
+          },
+        ],
+        feedPosts: [done.post],
+      };
+      await invoke("run_save", { name: oneOffRunFileName, run: doneRunRecord });
+      feedRunCacheRef.current[oneOffRunFileName] = normalizeRunRecord(doneRunRecord);
       setFeedPosts((prev) => [
         {
           ...done.post,
-          sourceFile: "",
+          sourceFile: oneOffRunFileName,
           question: post.question,
         },
         ...prev,
