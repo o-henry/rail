@@ -325,6 +325,44 @@ function resolvePresetTurnPolicy(kind: PresetKind, nodeId: string): PresetTurnPo
     }
   }
 
+  if (kind === "stock") {
+    if (key.includes("intake")) {
+      return { ...DEFAULT_PRESET_TURN_POLICY, profile: "design_planning", threshold: 74 };
+    }
+    if (key.includes("macro")) {
+      return {
+        ...DEFAULT_PRESET_TURN_POLICY,
+        profile: "research_evidence",
+        threshold: 82,
+        artifactType: "EvidenceArtifact",
+      };
+    }
+    if (key.includes("company")) {
+      return {
+        ...DEFAULT_PRESET_TURN_POLICY,
+        profile: "research_evidence",
+        threshold: 84,
+        artifactType: "EvidenceArtifact",
+      };
+    }
+    if (key.includes("risk")) {
+      return {
+        ...DEFAULT_PRESET_TURN_POLICY,
+        profile: "research_evidence",
+        threshold: 90,
+        artifactType: "EvidenceArtifact",
+      };
+    }
+    if (key.includes("final")) {
+      return {
+        ...DEFAULT_PRESET_TURN_POLICY,
+        profile: "synthesis_final",
+        threshold: 86,
+        artifactType: "EvidenceArtifact",
+      };
+    }
+  }
+
   return DEFAULT_PRESET_TURN_POLICY;
 }
 
@@ -424,6 +462,7 @@ function presetIntentByKind(kind: PresetKind): string {
   if (kind === "unityGame") return "유니티 게임 개발 실행";
   if (kind === "fullstack") return "풀스택 제품 구현";
   if (kind === "creative") return "창의 아이디어를 실행 가능한 제안으로 전환";
+  if (kind === "stock") return "주식/시장 분석 기반 투자 판단 지원";
   return "뉴스/트렌드 기반 판단";
 }
 
@@ -1113,6 +1152,95 @@ function buildNewsTrendPreset(): GraphData {
   return { version: GRAPH_SCHEMA_VERSION, nodes, edges, knowledge: defaultKnowledgeConfig() };
 }
 
+function buildStockPreset(): GraphData {
+  const nodes: GraphNode[] = [
+    makePresetNode("turn-stock-intake", "turn", 120, 120, {
+      model: "GPT-5.1-Codex-Mini",
+      role: "STOCK INTAKE AGENT",
+      cwd: ".",
+      promptTemplate:
+        "사용자 질문을 주식 분석 실행 브리프로 구조화하라.\n" +
+        "출력 형식(JSON):\n" +
+        '{ "target":"지수/종목", "timeHorizon":"단기/중기/장기", "market":"KR/US", "mustAnswer":["..."], "constraints":["..."] }\n' +
+        "입력: {{input}}",
+    }),
+    makePresetNode("turn-stock-macro", "turn", 420, 20, {
+      executor: "web_perplexity",
+      webResultMode: "bridgeAssisted",
+      webTimeoutMs: 120000,
+      model: "GPT-5.2",
+      role: "MARKET MACRO AGENT",
+      cwd: ".",
+      promptTemplate:
+        "거시 변수(금리, 환율, 유가, 정책, 경기지표)가 목표 자산에 주는 영향을 최신 정보 중심으로 요약하라.\n" +
+        "핵심: 상승/하락 요인을 분리하고, 근거 날짜를 함께 제시.\n" +
+        "입력: {{input}}",
+    }),
+    makePresetNode("turn-stock-company", "turn", 420, 220, {
+      executor: "web_gpt",
+      webResultMode: "bridgeAssisted",
+      webTimeoutMs: 120000,
+      model: "GPT-5.2-Codex",
+      role: "COMPANY & VALUATION AGENT",
+      cwd: ".",
+      promptTemplate:
+        "목표 종목/지수의 펀더멘털/밸류에이션/실적 모멘텀 관점 요약을 작성하라.\n" +
+        "필수: 강점, 약점, 밸류 부담, 관찰 포인트.\n" +
+        "입력: {{input}}",
+    }),
+    makePresetNode("turn-stock-risk", "turn", 720, 120, {
+      model: "GPT-5.2-Codex",
+      role: "RISK & ACCURACY AGENT",
+      cwd: ".",
+      promptTemplate:
+        "입력을 바탕으로 리스크와 예측 신뢰도를 평가해 JSON으로 출력하라.\n" +
+        "출력 형식:\n" +
+        '{ "DECISION":"PASS|REJECT", "upsideFactors":["..."], "downsideRisks":["..."], "accuracyNotes":["과거 예측 오차 관련 한계/근거"], "finalDraft":"..." }\n' +
+        "주의: 투자 조언 단정 금지, 불확실성 명시.\n" +
+        "입력: {{input}}",
+    }),
+    makePresetNode("gate-stock", "gate", 1020, 120, {
+      decisionPath: "DECISION",
+      passNodeId: "turn-stock-final",
+      rejectNodeId: "transform-stock-rework",
+      schemaJson: "{\"type\":\"object\",\"required\":[\"DECISION\"]}",
+    }),
+    makePresetNode("turn-stock-final", "turn", 1320, 40, {
+      model: "GPT-5.3-Codex",
+      role: "STOCK SYNTHESIS AGENT",
+      cwd: ".",
+      promptTemplate:
+        "최종 주식 분석 리포트를 작성하라.\n" +
+        "구성:\n" +
+        "1) 결론 요약(상방/하방 시나리오)\n" +
+        "2) 상승 요인 3~5개\n" +
+        "3) 주요 위험 3~5개\n" +
+        "4) 정확도/신뢰도 해석(근거 한계 포함)\n" +
+        "5) 다음 체크포인트(데이터 업데이트 조건)\n" +
+        "입력: {{input}}",
+    }),
+    makePresetNode("transform-stock-rework", "transform", 1320, 220, {
+      mode: "template",
+      template:
+        "REJECT. 주식 분석 근거가 부족하거나 불확실성 표기가 부족합니다.\n" +
+        "보완 항목(최신 데이터/리스크/근거 날짜)을 먼저 채운 뒤 재분석하세요.\n" +
+        "원문: {{input}}",
+    }),
+  ];
+
+  const edges: GraphEdge[] = [
+    { from: { nodeId: "turn-stock-intake", port: "out" }, to: { nodeId: "turn-stock-macro", port: "in" } },
+    { from: { nodeId: "turn-stock-intake", port: "out" }, to: { nodeId: "turn-stock-company", port: "in" } },
+    { from: { nodeId: "turn-stock-macro", port: "out" }, to: { nodeId: "turn-stock-risk", port: "in" } },
+    { from: { nodeId: "turn-stock-company", port: "out" }, to: { nodeId: "turn-stock-risk", port: "in" } },
+    { from: { nodeId: "turn-stock-risk", port: "out" }, to: { nodeId: "gate-stock", port: "in" } },
+    { from: { nodeId: "gate-stock", port: "out" }, to: { nodeId: "turn-stock-final", port: "in" } },
+    { from: { nodeId: "gate-stock", port: "out" }, to: { nodeId: "transform-stock-rework", port: "in" } },
+  ];
+
+  return { version: GRAPH_SCHEMA_VERSION, nodes, edges, knowledge: defaultKnowledgeConfig() };
+}
+
 export function buildPresetGraphByKind(kind: PresetKind): GraphData {
   let base: GraphData;
   if (kind === "validation") {
@@ -1129,6 +1257,8 @@ export function buildPresetGraphByKind(kind: PresetKind): GraphData {
     base = buildCreativePreset();
   } else if (kind === "newsTrend") {
     base = buildNewsTrendPreset();
+  } else if (kind === "stock") {
+    base = buildStockPreset();
   } else {
     base = buildExpertPreset();
   }

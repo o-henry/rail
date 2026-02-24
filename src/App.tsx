@@ -563,6 +563,7 @@ const PRESET_TEMPLATE_META: ReadonlyArray<{ key: PresetKind; label: string; stat
   { key: "fullstack", label: "풀스택 구현 템플릿", statusLabel: "풀스택 구현 템플릿" },
   { key: "creative", label: "창의 제작 템플릿", statusLabel: "창의 제작 템플릿" },
   { key: "newsTrend", label: "뉴스 트렌드 템플릿", statusLabel: "뉴스 트렌드 템플릿" },
+  { key: "stock", label: "주식 분석 템플릿", statusLabel: "주식 분석 템플릿" },
 ];
 const PRESET_TEMPLATE_OPTIONS: FancySelectOption[] = PRESET_TEMPLATE_META.map((row) => ({
   value: row.key,
