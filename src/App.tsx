@@ -11,6 +11,8 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 import "./App.css";
+import BridgePanel from "./components/BridgePanel";
+import FancySelect, { type FancySelectOption } from "./components/FancySelect";
 
 type EngineNotificationEvent = {
   method: string;
@@ -320,11 +322,6 @@ type MarqueeSelection = {
 };
 
 type NodeAnchorSide = "top" | "right" | "bottom" | "left";
-type FancySelectOption = {
-  value: string;
-  label: string;
-  disabled?: boolean;
-};
 
 type TurnExecutor =
   | "codex"
@@ -3036,161 +3033,6 @@ function NavIcon({ tab, active = false }: { tab: WorkspaceTab; active?: boolean 
   );
 }
 
-function FancySelect({
-  ariaLabel,
-  className,
-  disabled = false,
-  emptyMessage = "항목이 없습니다.",
-  onChange,
-  options,
-  placeholder = "선택",
-  value,
-}: {
-  ariaLabel?: string;
-  className?: string;
-  disabled?: boolean;
-  emptyMessage?: string;
-  onChange: (nextValue: string) => void;
-  options: FancySelectOption[];
-  placeholder?: string;
-  value: string;
-}) {
-  const [isOpen, setIsOpen] = useState(false);
-  const rootRef = useRef<HTMLDivElement | null>(null);
-  const menuRef = useRef<HTMLDivElement | null>(null);
-  const selected = options.find((option) => option.value === value) ?? null;
-  const isGraphFileSelect = (className ?? "").includes("graph-file-select");
-
-  useEffect(() => {
-    const onWindowMouseDown = (event: MouseEvent) => {
-      if (!rootRef.current) {
-        return;
-      }
-      if (!rootRef.current.contains(event.target as Node)) {
-        setIsOpen(false);
-      }
-    };
-    const onWindowKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setIsOpen(false);
-      }
-    };
-    window.addEventListener("mousedown", onWindowMouseDown);
-    window.addEventListener("keydown", onWindowKeyDown);
-    return () => {
-      window.removeEventListener("mousedown", onWindowMouseDown);
-      window.removeEventListener("keydown", onWindowKeyDown);
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!isOpen) {
-      return;
-    }
-
-    const root = rootRef.current;
-    const menu = menuRef.current;
-    if (!root || !menu) {
-      return;
-    }
-
-    const container = root.closest(".inspector-content, .childview-view");
-    if (!(container instanceof HTMLElement)) {
-      return;
-    }
-
-    const minBottomGap = 16;
-    const previousGap = container.style.getPropertyValue("--dropdown-open-gap");
-    const requiredGap = 160;
-    container.style.setProperty("--dropdown-open-gap", `${requiredGap}px`);
-
-    const frame = window.requestAnimationFrame(() => {
-      const menuRect = menu.getBoundingClientRect();
-      const containerRect = container.getBoundingClientRect();
-      const overflow = menuRect.bottom + minBottomGap - containerRect.bottom;
-      if (overflow <= 0) {
-        return;
-      }
-      const maxScrollTop = Math.max(0, container.scrollHeight - container.clientHeight);
-      container.scrollTop = Math.min(maxScrollTop, container.scrollTop + overflow);
-    });
-
-    return () => {
-      window.cancelAnimationFrame(frame);
-      if (previousGap) {
-        container.style.setProperty("--dropdown-open-gap", previousGap);
-      } else {
-        container.style.removeProperty("--dropdown-open-gap");
-      }
-    };
-  }, [isOpen]);
-
-  return (
-    <div className={`fancy-select ${className ?? ""} ${isOpen ? "is-open" : ""}`} ref={rootRef}>
-      <button
-        aria-expanded={isOpen}
-        aria-haspopup="listbox"
-        aria-label={ariaLabel}
-        className="fancy-select-trigger"
-        disabled={disabled}
-        onClick={() => {
-          if (disabled) {
-            return;
-          }
-          setIsOpen((prev) => !prev);
-        }}
-        type="button"
-      >
-        <span className={`fancy-select-value ${selected ? "" : "is-placeholder"}`}>
-          {selected ? selected.label : placeholder}
-        </span>
-        <span aria-hidden="true" className="fancy-select-chevron">
-          <img
-            alt=""
-            className="fancy-select-chevron-icon"
-            src={isOpen ? "/up-arrow.svg" : "/down-arrow.svg"}
-          />
-        </span>
-      </button>
-      {isOpen && (
-        <div className="fancy-select-menu" ref={menuRef} role="listbox">
-          {options.length === 0 && (
-            <div
-              className="fancy-select-empty"
-              style={
-                isGraphFileSelect
-                  ? { minHeight: "36px", height: "36px", display: "flex", alignItems: "center", padding: "0 11px" }
-                  : undefined
-              }
-            >
-              {emptyMessage}
-            </div>
-          )}
-          {options.map((option) => (
-            <button
-              aria-selected={option.value === value}
-              className={`fancy-select-option ${option.value === value ? "is-selected" : ""}`}
-              disabled={option.disabled}
-              key={option.value}
-              onClick={() => {
-                if (option.disabled) {
-                  return;
-                }
-                onChange(option.value);
-                setIsOpen(false);
-              }}
-              role="option"
-              type="button"
-            >
-              <span>{option.label}</span>
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
 function authModeLabel(mode: AuthMode): string {
   if (mode === "chatgpt") {
     return "챗지피티";
@@ -5268,26 +5110,6 @@ function App() {
       setSelectedRunDetail(normalizeRunRecord(run));
     } catch (e) {
       setError(String(e));
-    }
-  }
-
-  async function onDeleteSelectedRun() {
-    const target = selectedRunFile.trim();
-    if (!target) {
-      return;
-    }
-
-    setError("");
-    try {
-      await invoke("run_delete", { name: target });
-      const files = await invoke<string[]>("run_list");
-      setRunFiles(files);
-      setSelectedRunFile("");
-      setSelectedRunDetail(null);
-      setStatus(`실행 기록 삭제: ${target}`);
-      await refreshFeedTimeline();
-    } catch (e) {
-      setError(`실행 기록 삭제 실패: ${String(e)}`);
     }
   }
 
@@ -9163,156 +8985,6 @@ ${prompt}`;
     );
   }
 
-  function renderBridgePanel() {
-    const providerSeenMap = new Map(
-      webBridgeStatus.connectedProviders.map((row) => [row.provider, row] as const),
-    );
-    const bridgeUrl = `http://127.0.0.1:${webBridgeStatus.port}`;
-    return (
-      <section className="panel-card settings-view bridge-view workspace-tab-panel">
-        <section className="controls bridge-head-panel">
-          <div className="web-automation-head">
-            <div className="bridge-head-title-row">
-              <h2>웹 연결</h2>
-              <div className="bridge-help-wrap">
-                <button
-                  aria-label="웹 연결 안내"
-                  className="bridge-help-trigger"
-                  type="button"
-                >
-                  ?
-                </button>
-                <div className="bridge-help-panel">
-                  <div>확장과의 통신은 127.0.0.1 로컬 루프백 + Bearer 토큰으로만 허용됩니다.</div>
-                  <div>
-                    토큰 저장 위치:{" "}
-                    {webBridgeStatus.tokenStorage === "memory" ? "메모리 세션(앱 종료 시 폐기)" : "확인 필요"}
-                  </div>
-                  <div>
-                    실행 시 프롬프트 자동 주입/전송을 먼저 시도하며, 자동 전송 실패 시에만 웹 탭에서 전송 1회가
-                    필요합니다.
-                  </div>
-                  <div>고급 보안(선택): `RAIL_WEB_BRIDGE_ALLOWED_EXTENSION_IDS` 설정 시 등록한 확장 ID만 허용합니다.</div>
-                </div>
-              </div>
-            </div>
-            <button
-              aria-label="웹 연결 상태 동기화"
-              className="settings-refresh-button settings-refresh-icon-button"
-              disabled={webWorkerBusy}
-              onClick={() => void refreshWebBridgeStatus()}
-              title="웹 연결 상태 동기화"
-              type="button"
-            >
-              <img alt="" aria-hidden="true" className="settings-refresh-icon" src="/reload.svg" />
-            </button>
-          </div>
-          <div className="settings-badges">
-            <span className={`status-tag ${webBridgeStatus.running ? "on" : "off"}`}>
-              {webBridgeStatus.running ? "웹 연결 준비됨" : "웹 연결 중지됨"}
-            </span>
-            <span className="status-tag neutral">엔드포인트: {bridgeUrl}</span>
-            <span
-              className={`status-tag ${
-                webBridgeStatus.extensionOriginAllowlistConfigured ? "on" : "off"
-              }`}
-            >
-              {webBridgeStatus.extensionOriginAllowlistConfigured
-                ? `확장 ID 허용 목록 ${webBridgeStatus.allowedExtensionOriginCount ?? 0}개`
-                : "토큰 보호 모드"}
-            </span>
-          </div>
-          <div className="button-row bridge-action-row">
-            <button
-              className="settings-account-button"
-              disabled={webWorkerBusy}
-              onClick={() => void onCopyWebBridgeConnectCode()}
-              type="button"
-            >
-              <span className="settings-button-label">연결 코드 복사</span>
-            </button>
-            <button
-              className="settings-account-button"
-              disabled={webWorkerBusy}
-              onClick={() => void onRestartWebBridge()}
-              type="button"
-            >
-              <span className="settings-button-label">웹 연결 재시작</span>
-            </button>
-            <button
-              className="settings-account-button"
-              disabled={webWorkerBusy}
-              onClick={() => void onRotateWebBridgeToken()}
-              type="button"
-            >
-              <span className="settings-button-label">토큰 재발급</span>
-            </button>
-          </div>
-          {webBridgeConnectCode && (
-            <div className="bridge-code-card">
-              <div className="bridge-code-head">
-                <span>연결 코드</span>
-                <button
-                  className="settings-account-button"
-                  disabled={webWorkerBusy}
-                  onClick={() => void onCopyWebBridgeConnectCode()}
-                  type="button"
-                >
-                  <span className="settings-button-label">다시 복사</span>
-                </button>
-              </div>
-              <textarea
-                className="bridge-code-textarea"
-                onFocus={(event) => event.currentTarget.select()}
-                readOnly
-                rows={6}
-                value={webBridgeConnectCode}
-              />
-            </div>
-          )}
-        </section>
-
-        <section className="controls bridge-provider-panel">
-          <h2>서비스 감지 상태</h2>
-          <div className="provider-hub-list">
-            {WEB_PROVIDER_OPTIONS.map((provider) => {
-              const row = providerSeenMap.get(provider);
-              const seenLabel = row?.lastSeenAt ? formatRunDateTime(row.lastSeenAt) : "미감지";
-              return (
-                <div className="provider-hub-row" key={`bridge-provider-${provider}`}>
-                  <div className="provider-hub-meta">
-                    <span className={`provider-session-pill ${row ? "connected" : "unknown"}`}>
-                      <span className="provider-session-label">{row ? "연결됨" : "대기"}</span>
-                    </span>
-                    <span className="provider-hub-name">{webProviderLabel(provider)}</span>
-                  </div>
-                  <div className="bridge-provider-meta">
-                    <span>{seenLabel}</span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-          <div className="bridge-provider-queue-meta">
-            큐: {webBridgeStatus.queuedTasks} · 진행 중: {webBridgeStatus.activeTasks}
-          </div>
-        </section>
-
-        <section className="controls bridge-log-panel">
-          <h2>최근 수집 이벤트</h2>
-          <div className="bridge-log-list">
-            {webBridgeLogs.length === 0 && <div className="log-empty">최근 이벤트 없음</div>}
-            {webBridgeLogs.map((line, index) => (
-              <div className="bridge-log-line" key={`bridge-log-${index}`}>
-                {line}
-              </div>
-            ))}
-          </div>
-        </section>
-      </section>
-    );
-  }
-
   const edgeLines = canvasDisplayEdges
     .map((entry, index) => {
       const edge = entry.edge;
@@ -9640,9 +9312,6 @@ ${prompt}`;
     { key: "web_posts", label: "웹 리서치" },
     { key: "error_posts", label: "오류/취소" },
   ];
-  const feedInspectorAgentPosts = currentFeedPosts
-    .filter((post) => post.nodeType === "turn")
-    .filter((post, index, rows) => rows.findIndex((row) => row.nodeId === post.nodeId) === index);
   const feedInspectorPost =
     currentFeedPosts.find((post) => post.id === feedInspectorPostId) ?? currentFeedPosts[0] ?? null;
   const feedInspectorPostKey = feedInspectorPost?.id ?? "";
@@ -10833,11 +10502,11 @@ ${prompt}`;
         {workspaceTab === "feed" && (
           <section className="feed-layout workspace-tab-panel">
             <article className="panel-card feed-agent-panel">
-              <div className="feed-agent-panel-head">
-                <h3>에이전트 상세설정</h3>
+              {/* <div className="feed-agent-panel-head"> */}
+                {/* <h3>에이전트 상세설정</h3> */}
                 {/* <span>{feedInspectorAgentPosts.length}개</span> */}
-              </div>
-              {feedInspectorAgentPosts.length === 0 && (
+              {/* </div> */}
+              {/* {feedInspectorAgentPosts.length === 0 && (
                 <div className="inspector-empty">표시할 에이전트 포스트가 없습니다.</div>
               )}
               {feedInspectorAgentPosts.length > 0 && (
@@ -10854,7 +10523,7 @@ ${prompt}`;
                     </button>
                   ))}
                 </div>
-              )}
+              )} */}
               {feedInspectorTurnNode && (
                 <section className="feed-agent-settings">
                   <div className="feed-agent-settings-header">
@@ -11455,7 +11124,7 @@ ${prompt}`;
         {workspaceTab === "history" && (
           <section className="history-layout workspace-tab-panel">
             <article className="panel-card history-list">
-              <h2>실행 기록</h2>
+              {/* <h4>실행 기록</h4> */}
               <div className="button-row history-list-actions">
                 <button aria-label="새로고침" onClick={refreshRunFiles} title="새로고침" type="button">
                   <img alt="" aria-hidden="true" className="history-list-action-icon" src="/reload.svg" />
@@ -11482,15 +11151,16 @@ ${prompt}`;
               {selectedRunDetail && (
                 <>
                   <div className="history-detail-head">
-                    <h2>실행 상세</h2>
-                    <button
+                    {/* <h4>실행 상세</h4> */}
+                    <h5></h5>
+                    {/* <button
                       aria-label="실행 기록 삭제"
                       className="history-delete-button"
                       onClick={onDeleteSelectedRun}
                       type="button"
                     >
                       x
-                    </button>
+                    </button> */}
                   </div>
                   <div>실행 ID: {selectedRunDetail.runId}</div>
                   <div>시작 시간: {formatRunDateTime(selectedRunDetail.startedAt)}</div>
@@ -11521,11 +11191,11 @@ ${prompt}`;
                       <pre>{formatUnknown(selectedRunDetail.transitions)}</pre>
                     </div>
                     <div className="history-detail-group">
-                      <h3>Provider Trace</h3>
+                      <h3>프로바이더 추적</h3>
                       <pre>{formatUnknown(selectedRunDetail.providerTrace ?? [])}</pre>
                     </div>
                     <div className="history-detail-group">
-                      <h3>첨부 참조 Trace</h3>
+                      <h3>첨부 참조 추적</h3>
                       <pre>{formatUnknown(selectedRunDetail.knowledgeTrace ?? [])}</pre>
                     </div>
                     <div className="history-detail-group">
@@ -11550,7 +11220,20 @@ ${prompt}`;
           </section>
         )}
 
-        {workspaceTab === "bridge" && renderBridgePanel()}
+        {workspaceTab === "bridge" && (
+          <BridgePanel
+            busy={webWorkerBusy}
+            connectCode={webBridgeConnectCode}
+            formatRunDateTime={formatRunDateTime}
+            logs={webBridgeLogs}
+            onCopyConnectCode={() => void onCopyWebBridgeConnectCode()}
+            onRefreshStatus={() => void refreshWebBridgeStatus()}
+            onRestartBridge={() => void onRestartWebBridge()}
+            onRotateToken={() => void onRotateWebBridgeToken()}
+            status={webBridgeStatus}
+            webProviderLabel={webProviderLabel}
+          />
+        )}
 
       </section>
 

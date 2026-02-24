@@ -3058,6 +3058,10 @@ pre {
   overflow: auto;
 }
 
+.bridge-view h2 {
+  font-size: 16px;
+}
+
 .bridge-head-panel,
 .bridge-provider-panel,
 .bridge-log-panel {
