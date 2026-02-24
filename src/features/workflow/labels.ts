@@ -1,4 +1,5 @@
 import { extractStringByPaths, formatUnknown } from "../../app/mainAppUtils";
+import { t } from "../../i18n";
 import { turnModelLabel } from "./graph-utils";
 import type { GraphNode, KnowledgeFileStatus, NodeExecutionStatus, NodeType } from "./types";
 import type { TurnConfig } from "./domain";
@@ -36,15 +37,15 @@ export function turnRoleLabel(node: GraphNode): string {
 
 export function nodeTypeLabel(type: NodeType, simpleWorkflowUI = true): string {
   if (type === "turn") {
-    return "응답 에이전트";
+    return t("label.node.turn");
   }
   if (simpleWorkflowUI) {
-    return "내부 처리";
+    return t("label.node.internal");
   }
   if (type === "transform") {
-    return "데이터 변환";
+    return t("label.node.transform");
   }
-  return "결정 분기";
+  return t("label.node.gate");
 }
 
 export function nodeSelectionLabel(node: GraphNode): string {
@@ -52,63 +53,63 @@ export function nodeSelectionLabel(node: GraphNode): string {
     return turnModelLabel(node);
   }
   if (node.type === "transform") {
-    return "데이터 변환";
+    return t("label.node.transform");
   }
-  return "결정 분기";
+  return t("label.node.gate");
 }
 
 export function nodeStatusLabel(status: NodeExecutionStatus): string {
   if (status === "idle") {
-    return "대기";
+    return t("label.status.idle");
   }
   if (status === "queued") {
-    return "대기열";
+    return t("label.status.queued");
   }
   if (status === "running") {
-    return "실행 중";
+    return t("label.status.running");
   }
   if (status === "waiting_user") {
-    return "사용자 입력 대기";
+    return t("label.status.waiting_user");
   }
   if (status === "done") {
-    return "완료";
+    return t("label.status.done");
   }
   if (status === "failed") {
-    return "오류";
+    return t("label.status.failed");
   }
   if (status === "skipped") {
-    return "건너뜀";
+    return t("label.status.skipped");
   }
-  return "정지";
+  return t("label.status.cancelled");
 }
 
 export function knowledgeStatusMeta(status?: KnowledgeFileStatus): { label: string; tone: string } {
   if (status === "ready") {
-    return { label: "준비됨", tone: "ready" };
+    return { label: t("label.knowledge.ready"), tone: "ready" };
   }
   if (status === "missing") {
-    return { label: "파일 없음", tone: "missing" };
+    return { label: t("label.knowledge.missing"), tone: "missing" };
   }
   if (status === "unsupported") {
-    return { label: "미지원", tone: "unsupported" };
+    return { label: t("label.knowledge.unsupported"), tone: "unsupported" };
   }
   if (status === "error") {
-    return { label: "오류", tone: "error" };
+    return { label: t("label.knowledge.error"), tone: "error" };
   }
-  return { label: "미확인", tone: "unknown" };
+  return { label: t("label.knowledge.unknown"), tone: "unknown" };
 }
 
 export function approvalDecisionLabel(decision: "accept" | "acceptForSession" | "decline" | "cancel"): string {
   if (decision === "accept") {
-    return "허용";
+    return t("label.approval.accept");
   }
   if (decision === "acceptForSession") {
-    return "세션 동안 허용";
+    return t("label.approval.acceptForSession");
   }
   if (decision === "decline") {
-    return "거절";
+    return t("label.approval.decline");
   }
-  return "취소";
+  return t("label.approval.cancel");
 }
 
 export function approvalSourceLabel(source: "remote"): string {
@@ -138,28 +139,28 @@ export function formatRelativeFeedTime(iso: string): string {
   }
   const diffMs = Date.now() - at;
   if (diffMs < 60_000) {
-    return "방금";
+    return t("time.justNow");
   }
   const minutes = Math.floor(diffMs / 60_000);
   if (minutes < 60) {
-    return `${minutes}분 전`;
+    return t("time.minutesAgo", { value: minutes });
   }
   const hours = Math.floor(minutes / 60);
   if (hours < 24) {
-    return `${hours}시간 전`;
+    return t("time.hoursAgo", { value: hours });
   }
   const days = Math.floor(hours / 24);
-  return `${days}일 전`;
+  return t("time.daysAgo", { value: days });
 }
 
 export function authModeLabel(mode: "chatgpt" | "apikey" | "unknown"): string {
   if (mode === "chatgpt") {
-    return "챗지피티";
+    return t("label.auth.chatgpt");
   }
   if (mode === "apikey") {
-    return "API 키";
+    return t("label.auth.apikey");
   }
-  return "미확인";
+  return t("label.auth.unknown");
 }
 
 export function extractFinalAnswer(output: unknown): string {

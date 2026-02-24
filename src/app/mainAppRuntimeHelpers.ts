@@ -7,6 +7,7 @@ import { graphEquals, turnModelLabel } from "../features/workflow/graph-utils";
 import type { GraphData, GraphNode, KnowledgeConfig, NodeAnchorSide, NodeExecutionStatus } from "../features/workflow/types";
 import type { FancySelectOption } from "../components/FancySelect";
 import { KNOWLEDGE_DEFAULT_MAX_CHARS, KNOWLEDGE_DEFAULT_TOP_K, QUALITY_DEFAULT_THRESHOLD } from "./mainAppGraphHelpers";
+import { t, tp } from "../i18n";
 
 export const FEED_REDACTION_RULE_VERSION = "feed-v1";
 
@@ -84,7 +85,8 @@ export const PRESET_TEMPLATE_OPTIONS: FancySelectOption[] = PRESET_TEMPLATE_META
 }));
 
 export function presetTemplateLabel(kind: PresetKind): string {
-  return PRESET_TEMPLATE_META.find((row) => row.key === kind)?.label ?? "템플릿";
+  const row = PRESET_TEMPLATE_META.find((meta) => meta.key === kind);
+  return row ? tp(row.label) : "Template";
 }
 
 export function inferRunGroupMeta(
@@ -99,7 +101,7 @@ export function inferRunGroupMeta(
     };
   }
   return {
-    name: "사용자 정의",
+    name: t("group.custom"),
     kind: "custom",
   };
 }
@@ -119,16 +121,16 @@ export function buildFeedSummary(status: string, output: unknown, error?: string
     return trimmedSummary;
   }
   if (status === "draft") {
-    return "에이전트가 현재 작업 중입니다.";
+    return t("feed.summary.running");
   }
   if (status !== "done") {
-    return error?.trim() || "실행 실패로 상세 로그 확인이 필요합니다.";
+    return error?.trim() || t("feed.summary.failed");
   }
   const outputText = toHumanReadableFeedText(
     extractFinalAnswer(output).trim() || stringifyInput(output).trim(),
   );
   if (!outputText) {
-    return "실행은 완료되었지만 표시할 결과 텍스트가 없습니다.";
+    return t("feed.summary.noText");
   }
   return outputText.length > 360 ? `${outputText.slice(0, 360)}...` : outputText;
 }

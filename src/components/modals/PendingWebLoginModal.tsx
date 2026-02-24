@@ -1,3 +1,5 @@
+import { useI18n } from "../../i18n";
+
 type PendingWebLoginModalProps = {
   open: boolean;
   nodeId: string;
@@ -17,6 +19,7 @@ export default function PendingWebLoginModal({
   onContinueAfterLogin,
   onCancel,
 }: PendingWebLoginModalProps) {
+  const { t } = useI18n();
   if (!open) {
     return null;
   }
@@ -24,19 +27,19 @@ export default function PendingWebLoginModal({
   return (
     <div className="modal-backdrop">
       <section className="approval-modal web-turn-modal">
-        <h2>로그인이 필요합니다</h2>
-        <div>노드: {nodeId}</div>
-        <div>서비스: {providerLabel}</div>
+        <h2>{t("modal.loginRequired")}</h2>
+        <div>{t("modal.node")}: {nodeId}</div>
+        <div>{t("modal.service")}: {providerLabel}</div>
         <div>{reason}</div>
         <div className="button-row">
           <button onClick={onOpenProviderSession} type="button">
-            로그인 세션 열기
+            {t("modal.openLoginSession")}
           </button>
           <button onClick={onContinueAfterLogin} type="button">
-            로그인 완료 후 계속
+            {t("modal.continueAfterLogin")}
           </button>
           <button onClick={onCancel} type="button">
-            취소
+            {t("common.cancel")}
           </button>
         </div>
       </section>

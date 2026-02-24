@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useI18n } from "../i18n";
 
 export type FancySelectOption = {
   value: string;
@@ -27,10 +28,12 @@ function FancySelect({
   placeholder = "선택",
   value,
 }: FancySelectProps) {
+  const { tp } = useI18n();
   const [isOpen, setIsOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const selected = options.find((option) => option.value === value) ?? null;
+  const selectedLabel = selected ? tp(selected.label) : tp(placeholder);
   const isGraphFileSelect = (className ?? "").includes("graph-file-select");
 
   useEffect(() => {
@@ -114,7 +117,7 @@ function FancySelect({
         type="button"
       >
         <span className={`fancy-select-value ${selected ? "" : "is-placeholder"}`}>
-          {selected ? selected.label : placeholder}
+          {selectedLabel}
         </span>
         <span aria-hidden="true" className="fancy-select-chevron">
           <img
@@ -135,7 +138,7 @@ function FancySelect({
                   : undefined
               }
             >
-              {emptyMessage}
+              {tp(emptyMessage)}
             </div>
           )}
           {options.map((option) => (
@@ -154,7 +157,7 @@ function FancySelect({
               role="option"
               type="button"
             >
-              <span>{option.label}</span>
+              <span>{tp(option.label)}</span>
             </button>
           ))}
         </div>

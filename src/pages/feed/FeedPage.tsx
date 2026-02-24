@@ -1,6 +1,7 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
 import FancySelect from "../../components/FancySelect";
 import FeedDocument from "../../components/feed/FeedDocument";
+import { useI18n } from "../../i18n";
 
 type FeedPageProps = {
   vm: any;
@@ -25,13 +26,14 @@ class FeedCardBoundary extends Component<
 
   render() {
     if (this.state.hasError) {
-      return <div className="feed-card-render-error">이 포스트 렌더링 중 오류가 발생했습니다.</div>;
+      return <div className="feed-card-render-error">This post failed to render.</div>;
     }
     return this.props.children;
   }
 }
 
 export default function FeedPage({ vm }: FeedPageProps) {
+  const { t, tp } = useI18n();
   const {
     feedInspectorTurnNode,
     feedInspectorPost,
@@ -144,13 +146,13 @@ export default function FeedPage({ vm }: FeedPageProps) {
                 <section className="feed-agent-settings">
                   <div className="feed-agent-settings-header">
                     <strong>{feedInspectorPost?.agentName ?? turnModelLabel(feedInspectorTurnNode)}</strong>
-                    {!feedInspectorEditable && <span className="feed-agent-readonly-badge">기록 스냅샷</span>}
+                    {!feedInspectorEditable && <span className="feed-agent-readonly-badge">{tp("기록 스냅샷")}</span>}
                   </div>
                   <div className="feed-agent-settings-grid">
                     <label>
-                      에이전트
+                      {t("feed.agent")}
                       <FancySelect
-                        ariaLabel="피드 에이전트 실행기"
+                        ariaLabel={t("feed.agent")}
                         className="modern-select"
                         disabled={!feedInspectorEditable}
                         onChange={(next) => {
@@ -168,9 +170,9 @@ export default function FeedPage({ vm }: FeedPageProps) {
                     </label>
                     {feedInspectorTurnExecutor === "codex" && (
                       <label>
-                        모델
+                        {t("feed.model")}
                         <FancySelect
-                          ariaLabel="피드 에이전트 모델"
+                          ariaLabel={t("feed.model")}
                           className="modern-select"
                           disabled={!feedInspectorEditable}
                           onChange={(next) => {
@@ -188,7 +190,7 @@ export default function FeedPage({ vm }: FeedPageProps) {
                     )}
                     {feedInspectorTurnExecutor === "ollama" && (
                       <label>
-                        Ollama 모델
+                        {t("feed.ollamaModel")}
                         <input
                           disabled={!feedInspectorEditable}
                           onChange={(event) => {
@@ -201,7 +203,7 @@ export default function FeedPage({ vm }: FeedPageProps) {
                               event.currentTarget.value,
                             );
                           }}
-                          placeholder="예: llama3.1:8b"
+                          placeholder={t("feed.ollamaPlaceholder")}
                           value={String(feedInspectorTurnConfig?.ollamaModel ?? "llama3.1:8b")}
                         />
                       </label>
@@ -209,9 +211,9 @@ export default function FeedPage({ vm }: FeedPageProps) {
                     {getWebProviderFromExecutor(feedInspectorTurnExecutor) && (
                       <>
                         <label>
-                          웹 결과 모드
+                          {t("feed.webResultMode")}
                           <FancySelect
-                            ariaLabel="피드 에이전트 웹 결과 모드"
+                            ariaLabel={t("feed.webResultMode")}
                             className="modern-select"
                             disabled={!feedInspectorEditable}
                             onChange={(next) => {
@@ -221,9 +223,9 @@ export default function FeedPage({ vm }: FeedPageProps) {
                               updateNodeConfigById(feedInspectorEditableNodeId, "webResultMode", next);
                             }}
                             options={[
-                              { value: "bridgeAssisted", label: "웹 연결 반자동 (권장)" },
-                              { value: "manualPasteText", label: "텍스트 붙여넣기" },
-                              { value: "manualPasteJson", label: "JSON 붙여넣기" },
+                              { value: "bridgeAssisted", label: t("feed.webMode.bridge") },
+                              { value: "manualPasteText", label: t("feed.webMode.text") },
+                              { value: "manualPasteJson", label: t("feed.webMode.json") },
                             ]}
                             value={String(
                               normalizeWebResultMode(feedInspectorTurnConfig?.webResultMode),
@@ -231,7 +233,7 @@ export default function FeedPage({ vm }: FeedPageProps) {
                           />
                         </label>
                         <label>
-                          자동화 타임아웃(ms)
+                          {t("feed.webTimeoutMs")}
                           <input
                             disabled={!feedInspectorEditable}
                             onChange={(event) => {
@@ -251,7 +253,7 @@ export default function FeedPage({ vm }: FeedPageProps) {
                       </>
                     )}
                     <label>
-                      역할
+                      {t("feed.role")}
                       <input
                         disabled={!feedInspectorEditable}
                         onChange={(event) => {
@@ -265,7 +267,7 @@ export default function FeedPage({ vm }: FeedPageProps) {
                       />
                     </label>
                     <label>
-                      작업 경로
+                      {t("feed.cwd")}
                       <input
                         className="lowercase-path-input"
                         disabled={!feedInspectorEditable}
@@ -279,9 +281,9 @@ export default function FeedPage({ vm }: FeedPageProps) {
                       />
                     </label>
                     <label>
-                      품질 프로필
+                      {t("feed.qualityProfile")}
                       <FancySelect
-                        ariaLabel="피드 에이전트 품질 프로필"
+                        ariaLabel={t("feed.qualityProfile")}
                         className="modern-select"
                         disabled={!feedInspectorEditable}
                         onChange={(next) => {
@@ -295,9 +297,9 @@ export default function FeedPage({ vm }: FeedPageProps) {
                       />
                     </label>
                     <label>
-                      통과 기준 점수
+                      {t("feed.qualityThreshold")}
                       <FancySelect
-                        ariaLabel="피드 에이전트 품질 통과 기준 점수"
+                        ariaLabel={t("feed.qualityThreshold")}
                         className="modern-select"
                         disabled={!feedInspectorEditable}
                         onChange={(next) => {
@@ -315,9 +317,9 @@ export default function FeedPage({ vm }: FeedPageProps) {
                       />
                     </label>
                     <label>
-                      출력 아티팩트
+                      {t("feed.artifactType")}
                       <FancySelect
-                        ariaLabel="피드 에이전트 출력 아티팩트"
+                        ariaLabel={t("feed.artifactType")}
                         className="modern-select"
                         disabled={!feedInspectorEditable}
                         onChange={(next) => {
@@ -331,7 +333,7 @@ export default function FeedPage({ vm }: FeedPageProps) {
                       />
                     </label>
                     <label>
-                      출력 스키마(JSON)
+                      {t("feed.outputSchema")}
                       <textarea
                         className="prompt-template-textarea"
                         disabled={!feedInspectorEditable}
@@ -352,9 +354,9 @@ export default function FeedPage({ vm }: FeedPageProps) {
                     {feedInspectorQualityProfile === "code_implementation" && (
                       <>
                         <label>
-                          로컬 품질 명령 실행
+                          {t("feed.qualityCommand.enabled")}
                           <FancySelect
-                            ariaLabel="피드 에이전트 로컬 품질 명령 실행"
+                            ariaLabel={t("feed.qualityCommand.enabled")}
                             className="modern-select"
                             disabled={!feedInspectorEditable}
                             onChange={(next) => {
@@ -375,7 +377,7 @@ export default function FeedPage({ vm }: FeedPageProps) {
                           />
                         </label>
                         <label>
-                          품질 명령 목록
+                          {t("feed.qualityCommand.list")}
                           <textarea
                             className="prompt-template-textarea"
                             disabled={!feedInspectorEditable}
@@ -396,7 +398,7 @@ export default function FeedPage({ vm }: FeedPageProps) {
                       </>
                     )}
                     <label>
-                      프롬프트 템플릿
+                      {t("feed.promptTemplate")}
                       <textarea
                         className="prompt-template-textarea feed-agent-prompt-textarea"
                         disabled={!feedInspectorEditable}
@@ -420,41 +422,41 @@ export default function FeedPage({ vm }: FeedPageProps) {
             </article>
             <article className="panel-card feed-main">
               <div className="feed-topbar">
-                <h2>피드</h2>
+                <h2>{t("feed.title")}</h2>
                 <button
                   className={`feed-filter-toggle ${feedFilterOpen ? "is-open" : ""}`}
                   onClick={() => setFeedFilterOpen((prev: any) => !prev)}
                   type="button"
                 >
-                  <span className="feed-filter-toggle-label">필터</span>
+                  <span className="feed-filter-toggle-label">{t("feed.filter")}</span>
                 </button>
               </div>
               <div className={`feed-filter-inline-wrap ${feedFilterOpen ? "is-open" : ""}`}>
                 <div className="feed-filter-inline">
                   <label>
-                    상태
+                    {t("feed.filter.status")}
                     <FancySelect
-                      ariaLabel="피드 상태 필터"
+                      ariaLabel={t("feed.filter.status")}
                       className="modern-select"
                       onChange={(next) => setFeedStatusFilter(next)}
                       options={[
-                        { value: "all", label: "전체" },
-                        { value: "draft", label: "작업중" },
-                        { value: "done", label: "완료" },
-                        { value: "failed", label: "오류" },
-                        { value: "cancelled", label: "취소" },
+                        { value: "all", label: t("feed.status.all") },
+                        { value: "draft", label: t("feed.status.draft") },
+                        { value: "done", label: t("feed.status.done") },
+                        { value: "failed", label: t("feed.status.failed") },
+                        { value: "cancelled", label: t("feed.status.cancelled") },
                       ]}
                       value={feedStatusFilter}
                     />
                   </label>
                   <label>
-                    실행기
+                    {t("feed.filter.executor")}
                     <FancySelect
-                      ariaLabel="피드 실행기 필터"
+                      ariaLabel={t("feed.filter.executor")}
                       className="modern-select"
                       onChange={(next) => setFeedExecutorFilter(next)}
                       options={[
-                        { value: "all", label: "전체" },
+                        { value: "all", label: t("feed.executor.all") },
                         { value: "codex", label: "Codex" },
                         { value: "web", label: "WEB" },
                         { value: "ollama", label: "Ollama" },
@@ -463,24 +465,24 @@ export default function FeedPage({ vm }: FeedPageProps) {
                     />
                   </label>
                   <label>
-                    기간
+                    {t("feed.filter.period")}
                     <FancySelect
-                      ariaLabel="피드 기간 필터"
+                      ariaLabel={t("feed.filter.period")}
                       className="modern-select"
                       onChange={(next) => setFeedPeriodFilter(next)}
                       options={[
-                        { value: "all", label: "전체" },
-                        { value: "today", label: "오늘" },
-                        { value: "7d", label: "최근 7일" },
+                        { value: "all", label: t("feed.period.all") },
+                        { value: "today", label: t("feed.period.today") },
+                        { value: "7d", label: t("feed.period.7d") },
                       ]}
                       value={feedPeriodFilter}
                     />
                   </label>
                   <label className="feed-filter-keyword-field">
-                    키워드
+                    {t("feed.filter.keyword")}
                     <input
                       onChange={(e) => setFeedKeyword(e.currentTarget.value)}
-                      placeholder="질문/역할/모델 검색"
+                      placeholder={t("feed.filter.keyword.placeholder")}
                       value={feedKeyword}
                     />
                   </label>
@@ -512,9 +514,9 @@ export default function FeedPage({ vm }: FeedPageProps) {
                   }
                 }}
               >
-                {feedLoading && <div className="log-empty">피드 로딩 중...</div>}
+                {feedLoading && <div className="log-empty">{t("feed.loading")}</div>}
                 {!feedLoading && currentFeedPosts.length === 0 && (
-                  <div className="log-empty">표시할 포스트가 없습니다.</div>
+                  <div className="log-empty">{t("feed.empty")}</div>
                 )}
                 {!feedLoading &&
                   groupedFeedRuns.map((group: any) => {
@@ -529,8 +531,11 @@ export default function FeedPage({ vm }: FeedPageProps) {
                           <div className="feed-run-group-meta">
                             <strong>{group.name}</strong>
                             <span>
-                              {group.posts.length}개 · {formatRunDateTime(group.latestAt)}
-                              {group.isLive ? " · 실행 중" : ""}
+                              {t("feed.countAndDate", {
+                                count: group.posts.length,
+                                date: formatRunDateTime(group.latestAt),
+                              })}
+                              {group.isLive ? t("feed.liveTag") : ""}
                             </span>
                           </div>
                           <div className="feed-run-group-actions">
@@ -543,7 +548,7 @@ export default function FeedPage({ vm }: FeedPageProps) {
                                 }}
                                 type="button"
                               >
-                                이름 변경
+                                {t("feed.rename")}
                               </button>
                             )}
                             <button
@@ -556,7 +561,7 @@ export default function FeedPage({ vm }: FeedPageProps) {
                               }
                               type="button"
                             >
-                              {isGroupExpanded ? "닫기" : "열기"}
+                              {isGroupExpanded ? t("feed.collapse") : t("feed.expand")}
                             </button>
                           </div>
                         </header>
@@ -564,14 +569,14 @@ export default function FeedPage({ vm }: FeedPageProps) {
                           <div className="feed-run-group-rename-row">
                             <input
                               onChange={(event) => setFeedGroupRenameDraft(event.currentTarget.value)}
-                              placeholder="세트 이름 입력"
+                              placeholder={t("feed.groupName.placeholder")}
                               value={feedGroupRenameDraft}
                             />
                             <button
                               onClick={() => void onSubmitFeedRunGroupRename(group.runId, group.sourceFile)}
                               type="button"
                             >
-                              저장
+                              {t("common.save")}
                             </button>
                             <button
                               onClick={() => {
@@ -580,7 +585,7 @@ export default function FeedPage({ vm }: FeedPageProps) {
                               }}
                               type="button"
                             >
-                              취소
+                              {t("common.cancel")}
                             </button>
                           </div>
                         )}
@@ -591,7 +596,8 @@ export default function FeedPage({ vm }: FeedPageProps) {
                               const attachments = Array.isArray(post.attachments) ? post.attachments : [];
                               const evidence = post.evidence && typeof post.evidence === "object" ? post.evidence : {};
                               const markdownAttachment = attachments.find((attachment: any) => attachment?.kind === "markdown");
-                              const visibleContentRaw = markdownAttachment?.content ?? post.summary ?? "(첨부 없음)";
+                              const visibleContentRaw =
+                                markdownAttachment?.content ?? post.summary ?? t("feed.attachment.empty");
                               const visibleContent = toHumanReadableFeedText(visibleContentRaw);
                               const readableQuestion = toHumanReadableFeedText(post.question ?? "");
                               const readableInputPreview = toHumanReadableFeedText(post.inputContext?.preview ?? "");
@@ -640,7 +646,7 @@ export default function FeedPage({ vm }: FeedPageProps) {
                                     </div>
                                     <div className="feed-card-head-actions">
                                       <button
-                                        aria-label="포스트 삭제"
+                                        aria-label={t("feed.post.delete")}
                                         className="feed-delete-icon-button"
                                         disabled={!post.sourceFile}
                                         onClick={() => void onDeleteFeedPost(post)}
@@ -652,7 +658,11 @@ export default function FeedPage({ vm }: FeedPageProps) {
                                         className={`feed-score-badge ${
                                           isDraftPost ? "live" : post.status === "done" ? "good" : "warn"
                                         }`}
-                                        title={isDraftPost ? "에이전트 작업 중" : `품질 점수 ${score}`}
+                                        title={
+                                          isDraftPost
+                                            ? t("feed.agent.working")
+                                            : t("feed.qualityScore", { score })
+                                        }
                                       >
                                         {isDraftPost ? "LIVE" : score}
                                       </span>
@@ -663,7 +673,7 @@ export default function FeedPage({ vm }: FeedPageProps) {
                                         }}
                                       >
                                         <button
-                                          aria-label="공유하기"
+                                          aria-label={t("feed.post.share")}
                                           className="feed-share-icon-button"
                                           onClick={() => setFeedShareMenuPostId((prev: any) => (prev === postId ? null : postId))}
                                           type="button"
@@ -673,17 +683,17 @@ export default function FeedPage({ vm }: FeedPageProps) {
                                         {feedShareMenuPostId === postId && (
                                           <div className="feed-share-menu">
                                             <button onClick={() => void onShareFeedPost(post, "clipboard")} type="button">
-                                              <span>텍스트 복사</span>
+                                              <span>{t("feed.copyText")}</span>
                                             </button>
                                             <button onClick={() => void onShareFeedPost(post, "json")} type="button">
-                                              <span>JSON 복사</span>
+                                              <span>{t("feed.copyJson")}</span>
                                             </button>
                                           </div>
                                         )}
                                       </div>
                                     </div>
                                   </div>
-                                  <div className="feed-card-summary">{post.summary || "(요약 없음)"}</div>
+                                  <div className="feed-card-summary">{post.summary || t("feed.summary.empty")}</div>
                                   <button
                                     className="feed-more-button"
                                     aria-expanded={isExpanded}
@@ -695,12 +705,12 @@ export default function FeedPage({ vm }: FeedPageProps) {
                                     }
                                     type="button"
                                   >
-                                    {isExpanded ? "접기" : "더보기"}
+                                    {isExpanded ? t("feed.less") : t("feed.more")}
                                   </button>
                                   <div className={`feed-card-details ${isExpanded ? "is-expanded" : ""}`} aria-hidden={!isExpanded}>
                                     {upstreamSources.length > 0 ? (
                                       <section className="feed-card-input-sources">
-                                        <div className="feed-card-input-sources-title">입력 출처</div>
+                                        <div className="feed-card-input-sources-title">{t("feed.inputSources")}</div>
                                         <ul>
                                           {upstreamSources.map((source: any, index: any) => (
                                             <li key={`${postId}:source:${source.nodeId ?? source.agentName}:${index}`}>
@@ -715,8 +725,8 @@ export default function FeedPage({ vm }: FeedPageProps) {
                                     {readableInputPreview && (
                                       <section className="feed-card-input-sources">
                                         <div className="feed-card-input-sources-title">
-                                          전달 입력 스냅샷
-                                          {post.inputContext?.truncated ? " (일부)" : ""}
+                                          {t("feed.inputSnapshot")}
+                                          {post.inputContext?.truncated ? t("feed.partial") : ""}
                                         </div>
                                         <pre className="feed-sns-content">{readableInputPreview}</pre>
                                       </section>
@@ -724,9 +734,13 @@ export default function FeedPage({ vm }: FeedPageProps) {
                                     <FeedDocument className="feed-sns-content" text={visibleContent} />
                                     <div className="feed-evidence-row">
                                       <span>{formatRelativeFeedTime(post.createdAt)}</span>
-                                      <span>생성 시간 {formatDuration((evidence as any).durationMs)}</span>
-                                      <span>사용량 {formatUsage((evidence as any).usage)}</span>
-                                      {pendingRequestCount > 0 && <span>추가 요청 대기 {pendingRequestCount}건</span>}
+                                      <span>
+                                        {t("feed.time.generated")} {formatDuration((evidence as any).durationMs)}
+                                      </span>
+                                      <span>{t("feed.usage")} {formatUsage((evidence as any).usage)}</span>
+                                      {pendingRequestCount > 0 && (
+                                        <span>{t("feed.pendingRequests", { count: pendingRequestCount })}</span>
+                                      )}
                                     </div>
                                     {canRequest && (
                                       <div className="feed-reply-row">
@@ -747,12 +761,14 @@ export default function FeedPage({ vm }: FeedPageProps) {
                                               console.error("[feed-reply-input-change-error]", { postId, error });
                                             }
                                           }}
-                                          placeholder="에이전트에게 추가 요청을 남기세요"
+                                          placeholder={t("feed.followup.placeholder")}
                                           disabled={requestSubmitting}
                                           value={requestDraft}
                                         />
                                         <button
-                                          aria-label={requestSubmitting ? "요청 전송 중" : "요청 보내기"}
+                                          aria-label={
+                                            requestSubmitting ? t("feed.followup.sending") : t("feed.followup.send")
+                                          }
                                           className="primary-action question-create-button feed-reply-send-button"
                                           disabled={requestSubmitting || !requestDraft.trim()}
                                           onClick={() => onSubmitFeedAgentRequest(post)}

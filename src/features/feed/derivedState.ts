@@ -4,6 +4,7 @@ import { nodeSelectionLabel, nodeTypeLabel, turnRoleLabel } from "../workflow/la
 import { clipTextByChars, redactSensitiveText, summarizeFeedSteps } from "./displayUtils";
 import { FEED_REDACTION_RULE_VERSION, normalizeQualityThreshold } from "../../app/mainAppRuntimeHelpers";
 import { QUALITY_DEFAULT_THRESHOLD } from "../../app/mainAppGraphHelpers";
+import { t } from "../../i18n";
 
 type FeedCategory = "all_posts" | "completed_posts" | "web_posts" | "error_posts";
 
@@ -75,7 +76,7 @@ export function computeFeedDerivedState(params: {
         return [
           {
             kind: "question",
-            agentName: "사용자 입력 질문",
+            agentName: t("feed.source.userQuestion"),
             summary: activeFeedRunMeta.question?.trim() || undefined,
           },
         ];
@@ -92,7 +93,11 @@ export function computeFeedDerivedState(params: {
         const sourceRunState = nodeStates[sourceNodeId];
         const sourceSummary =
           sourceRunState?.logs?.[sourceRunState.logs.length - 1] ||
-          (sourceRunState?.status === "done" ? "완료" : sourceRunState?.status === "failed" ? "실패" : undefined);
+          (sourceRunState?.status === "done"
+            ? t("feed.status.done")
+            : sourceRunState?.status === "failed"
+              ? t("feed.status.failed")
+              : undefined);
         rows.push({
           kind: "node",
           nodeId: sourceNodeId,
@@ -126,14 +131,14 @@ export function computeFeedDerivedState(params: {
         node.type === "turn"
           ? turnModelLabelFn(node)
           : node.type === "transform"
-            ? "데이터 변환"
-            : "결정 분기";
+            ? t("label.node.transform")
+            : t("label.node.gate");
       const summary =
         runState.status === "queued"
-          ? "실행 대기 중입니다."
+          ? t("feed.live.waitingQueue")
           : runState.status === "running"
-            ? (lastLog || "에이전트가 작업 중입니다.")
-            : "사용자 입력 또는 후속 작업을 기다리는 중입니다.";
+            ? (lastLog || t("feed.agent.working"))
+            : t("feed.live.waitingInput");
       const liveText = logs.join("\n").trim() || summary;
       const clip = clipTextByChars(liveText);
       const masked = redactSensitiveText(clip.text);
@@ -163,7 +168,7 @@ export function computeFeedDerivedState(params: {
         attachments: [
           {
             kind: "markdown",
-            title: "실시간 작업 로그",
+            title: t("feed.liveLogs"),
             content: masked,
             truncated: clip.truncated,
             charCount: clip.charCount,
@@ -262,7 +267,7 @@ export function computeFeedDerivedState(params: {
       const runRecord = feedRunCache[post.sourceFile] ?? null;
       const meta = isLive
         ? {
-            name: activeFeedRunMeta?.groupName ?? "사용자 정의",
+            name: activeFeedRunMeta?.groupName ?? t("group.custom"),
             kind: activeFeedRunMeta?.groupKind ?? "custom",
             presetKind: activeFeedRunMeta?.presetKind,
           }
@@ -279,7 +284,7 @@ export function computeFeedDerivedState(params: {
                 presetKind: runRecord.workflowPresetKind,
               }
             : {
-                name: "사용자 정의",
+                name: t("group.custom"),
                 kind: "custom",
               };
       groups.set(post.runId, {

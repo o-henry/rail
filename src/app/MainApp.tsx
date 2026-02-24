@@ -167,6 +167,7 @@ import {
   toWebBridgeStatus,
   validateSimpleSchema,
 } from "./mainAppGraphHelpers";
+import { useI18n } from "../i18n";
 import {
   ARTIFACT_TYPE_OPTIONS,
   CODEX_MULTI_AGENT_MODE_OPTIONS,
@@ -574,6 +575,7 @@ const KNOWLEDGE_MAX_CHARS_OPTIONS: FancySelectOption[] = [
   { value: "5600", label: "아주 길게 (최대)" },
 ];
 function App() {
+  const { t } = useI18n();
   const defaultCwd = useMemo(() => loadPersistedCwd("."), []);
   const defaultLoginCompleted = useMemo(() => loadPersistedLoginCompleted(), []);
   const defaultAuthMode = useMemo(() => loadPersistedAuthMode(), []);
@@ -6140,10 +6142,10 @@ ${prompt}`;
 
   const groupedFeedRunIdsKey = groupedFeedRuns.map((group) => group.runId).join("|");
   const feedCategoryMeta: Array<{ key: FeedCategory; label: string }> = [
-    { key: "all_posts", label: "전체포스트" },
-    { key: "completed_posts", label: "완료 답변" },
-    { key: "web_posts", label: "웹 리서치" },
-    { key: "error_posts", label: "오류/취소" },
+    { key: "all_posts", label: t("feed.category.all_posts") },
+    { key: "completed_posts", label: t("feed.category.completed_posts") },
+    { key: "web_posts", label: t("feed.category.web_posts") },
+    { key: "error_posts", label: t("feed.category.error_posts") },
   ];
 
   useEffect(() => {
@@ -7407,7 +7409,7 @@ ${prompt}`;
 
       <PendingWebTurnModal
         dragging={webTurnPanel.dragging}
-        modeLabel={pendingWebTurn?.mode === "manualPasteJson" ? "JSON" : "텍스트"}
+        modeLabel={pendingWebTurn?.mode === "manualPasteJson" ? "JSON" : t("feed.webMode.text")}
         nodeId={pendingWebTurn?.nodeId ?? ""}
         onCancelRun={onCancelPendingWebTurn}
         onChangeResponseDraft={setWebResponseDraft}

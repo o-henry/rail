@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { localeShortLabel, useI18n } from "../i18n";
 
 type WorkspaceTab = "workflow" | "feed" | "bridge" | "settings";
 
@@ -16,13 +17,14 @@ type AppNavProps = {
 };
 
 const NAV_ITEMS: NavItem[] = [
-  { tab: "workflow", label: "워크", ariaLabel: "워크플로우", title: "워크플로우" },
-  { tab: "feed", label: "피드", ariaLabel: "피드", title: "피드" },
-  { tab: "bridge", label: "웹 연결", ariaLabel: "웹 연결", title: "웹 연결" },
-  { tab: "settings", label: "설정", ariaLabel: "설정", title: "설정" },
+  { tab: "workflow", label: "nav.workflow.short", ariaLabel: "nav.workflow.title", title: "nav.workflow.title" },
+  { tab: "feed", label: "nav.feed", ariaLabel: "nav.feed", title: "nav.feed" },
+  { tab: "bridge", label: "nav.bridge", ariaLabel: "nav.bridge", title: "nav.bridge" },
+  { tab: "settings", label: "nav.settings", ariaLabel: "nav.settings", title: "nav.settings" },
 ];
 
 export default function AppNav({ activeTab, onSelectTab, renderIcon }: AppNavProps) {
+  const { locale, cycleLocale, t } = useI18n();
   return (
     <aside className="left-nav">
       <nav
@@ -36,19 +38,30 @@ export default function AppNav({ activeTab, onSelectTab, renderIcon }: AppNavPro
           const active = activeTab === item.tab;
           return (
             <button
-              aria-label={item.ariaLabel}
+              aria-label={t(item.ariaLabel)}
               className={active ? "is-active" : ""}
               key={item.tab}
               onClick={() => onSelectTab(item.tab)}
-              title={item.title}
+              title={t(item.title)}
               type="button"
             >
               <span className="nav-icon">{renderIcon(item.tab, active)}</span>
-              <span className="nav-label">{item.label}</span>
+              <span className="nav-label">{t(item.label)}</span>
             </button>
           );
         })}
       </nav>
+      <div className="nav-footer">
+        <button
+          aria-label={t("nav.language")}
+          className="nav-lang-button"
+          onClick={cycleLocale}
+          title={`${t("nav.language")} · ${t(`lang.${locale}`)}`}
+          type="button"
+        >
+          <span className="nav-lang-code">{localeShortLabel(locale)}</span>
+        </button>
+      </div>
     </aside>
   );
 }

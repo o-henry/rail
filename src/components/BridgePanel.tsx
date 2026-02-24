@@ -1,3 +1,5 @@
+import { useI18n } from "../i18n";
+
 type WebBridgeProviderSeen = {
   provider: string;
   pageUrl?: string | null;
@@ -35,6 +37,7 @@ function BridgePanel({
   onRestartBridge,
   onRotateToken,
 }: BridgePanelProps) {
+  const { t } = useI18n();
   const bridgeUrl = `http://127.0.0.1:${status.port}`;
 
   return (
@@ -42,35 +45,32 @@ function BridgePanel({
       <section className="controls bridge-head-panel">
         <div className="web-automation-head">
           <div className="bridge-head-title-row">
-            <h2>웹 연결</h2>
+            <h2>{t("bridge.title")}</h2>
             <div className="bridge-help-wrap">
               <button
-                aria-label="웹 연결 안내"
+                aria-label={t("bridge.help.aria")}
                 className="bridge-help-trigger"
                 type="button"
               >
                 ?
               </button>
               <div className="bridge-help-panel">
-                <div>확장과의 통신은 127.0.0.1 로컬 루프백 + Bearer 토큰으로만 허용됩니다.</div>
+                <div>{t("bridge.help.1")}</div>
                 <div>
-                  토큰 저장 위치: {" "}
-                  {status.tokenStorage === "memory" ? "메모리 세션(앱 종료 시 폐기)" : "확인 필요"}
+                  {t("bridge.help.2.prefix")}{" "}
+                  {status.tokenStorage === "memory" ? t("bridge.help.2.memory") : t("bridge.help.2.unknown")}
                 </div>
-                <div>
-                  실행 시 프롬프트 자동 주입/전송을 먼저 시도하며, 자동 전송 실패 시에만 웹 탭에서 전송 1회가
-                  필요합니다.
-                </div>
-                <div>고급 보안(선택): `RAIL_WEB_BRIDGE_ALLOWED_EXTENSION_IDS` 설정 시 등록한 확장 ID만 허용합니다.</div>
+                <div>{t("bridge.help.3")}</div>
+                <div>{t("bridge.help.4")}</div>
               </div>
             </div>
           </div>
           <button
-            aria-label="웹 연결 상태 동기화"
+            aria-label={t("bridge.refresh.aria")}
             className="settings-refresh-button settings-refresh-icon-button"
             disabled={busy}
             onClick={onRefreshStatus}
-            title="웹 연결 상태 동기화"
+            title={t("bridge.refresh.title")}
             type="button"
           >
             <img alt="" aria-hidden="true" className="settings-refresh-icon" src="/reload.svg" />
@@ -78,17 +78,17 @@ function BridgePanel({
         </div>
         <div className="settings-badges">
           <span className={`status-tag ${status.running ? "on" : "off"}`}>
-            {status.running ? "웹 연결 준비됨" : "웹 연결 중지됨"}
+            {status.running ? t("bridge.ready") : t("bridge.stopped")}
           </span>
-          <span className="status-tag neutral">엔드포인트: {bridgeUrl}</span>
+          <span className="status-tag neutral">{t("bridge.endpoint")}: {bridgeUrl}</span>
           <span
             className={`status-tag ${
               status.extensionOriginAllowlistConfigured ? "on" : "off"
             }`}
           >
             {status.extensionOriginAllowlistConfigured
-              ? `확장 ID 허용 목록 ${status.allowedExtensionOriginCount ?? 0}개`
-              : "토큰 보호 모드"}
+              ? t("bridge.allowlist.count", { count: status.allowedExtensionOriginCount ?? 0 })
+              : t("bridge.tokenMode")}
           </span>
         </div>
         <div className="button-row bridge-action-row">
@@ -98,7 +98,7 @@ function BridgePanel({
             onClick={onCopyConnectCode}
             type="button"
           >
-            <span className="settings-button-label">연결 코드 복사</span>
+            <span className="settings-button-label">{t("bridge.copyCode")}</span>
           </button>
           <button
             className="settings-account-button"
@@ -106,7 +106,7 @@ function BridgePanel({
             onClick={onRestartBridge}
             type="button"
           >
-            <span className="settings-button-label">웹 연결 재시작</span>
+            <span className="settings-button-label">{t("bridge.restart")}</span>
           </button>
           <button
             className="settings-account-button"
@@ -114,20 +114,20 @@ function BridgePanel({
             onClick={onRotateToken}
             type="button"
           >
-            <span className="settings-button-label">토큰 재발급</span>
+            <span className="settings-button-label">{t("bridge.rotateToken")}</span>
           </button>
         </div>
         {connectCode && (
           <div className="bridge-code-card">
             <div className="bridge-code-head">
-              <span>연결 코드</span>
+              <span>{t("bridge.connectCode")}</span>
               <button
                 className="settings-account-button"
                 disabled={busy}
                 onClick={onCopyConnectCode}
                 type="button"
               >
-                <span className="settings-button-label">다시 복사</span>
+                <span className="settings-button-label">{t("bridge.copyAgain")}</span>
               </button>
             </div>
             <textarea

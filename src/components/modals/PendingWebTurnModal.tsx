@@ -1,4 +1,5 @@
 import type { PointerEvent as ReactPointerEvent, RefObject } from "react";
+import { useI18n } from "../../i18n";
 
 type PendingWebTurnModalProps = {
   open: boolean;
@@ -37,6 +38,7 @@ export default function PendingWebTurnModal({
   onDismiss,
   onCancelRun,
 }: PendingWebTurnModalProps) {
+  const { t } = useI18n();
   if (!open) {
     return null;
   }
@@ -51,34 +53,34 @@ export default function PendingWebTurnModal({
       }}
     >
       <div className="web-turn-drag-handle" onPointerDown={onDragStart}>
-        <h4>웹 응답 입력 필요</h4>
+        <h4>{t("modal.webInput.title")}</h4>
         <span>➠</span>
       </div>
-      <div>노드: {nodeId}</div>
-      <div>서비스: {providerLabel}</div>
-      <div>수집 모드: {modeLabel}</div>
+      <div>{t("modal.node")}: {nodeId}</div>
+      <div>{t("modal.service")}: {providerLabel}</div>
+      <div>{t("modal.collectMode")}: {modeLabel}</div>
       <div className="button-row">
         <button onClick={onOpenProviderWindow} type="button">
-          서비스 창 열기
+          {t("modal.openServiceWindow")}
         </button>
         <button onClick={onCopyPrompt} type="button">
-          프롬프트 복사
+          {t("modal.copyPrompt")}
         </button>
       </div>
       <div className="web-turn-prompt">{prompt}</div>
       <label>
-        붙여넣기
+        {t("modal.paste")}
         <textarea onChange={(e) => onChangeResponseDraft(e.currentTarget.value)} rows={8} value={responseDraft} />
       </label>
       <div className="button-row">
         <button onClick={onSubmit} type="button">
-          입력 완료
+          {t("modal.inputDone")}
         </button>
         <button onClick={onDismiss} type="button">
-          취소
+          {t("common.cancel")}
         </button>
         <button onClick={onCancelRun} type="button">
-          실행 취소
+          {t("modal.cancelRun")}
         </button>
       </div>
     </section>

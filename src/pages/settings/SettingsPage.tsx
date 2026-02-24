@@ -1,4 +1,5 @@
 import FancySelect from "../../components/FancySelect";
+import { useI18n } from "../../i18n";
 
 type SettingsPageProps = {
   compact?: boolean;
@@ -53,33 +54,34 @@ export default function SettingsPage({
   onCloseUsageResult,
   onOpenRunsFolder,
 }: SettingsPageProps) {
+  const { t } = useI18n();
   return (
     <section className={`controls ${compact ? "settings-compact" : ""}`}>
-      <h3>엔진 및 계정</h3>
+      <h3>{t("settings.title")}</h3>
       {!compact && (
         <div className="settings-badges">
           <span className={`status-tag ${engineStarted ? "on" : "off"}`}>
-            {engineStarted ? "엔진 연결됨" : "엔진 대기"}
+            {engineStarted ? t("settings.engine.connected") : t("settings.engine.waiting")}
           </span>
           <span className={`status-tag ${loginCompleted ? "on" : "off"}`}>
-            {loginCompleted ? "로그인 완료" : "로그인 필요"}
+            {loginCompleted ? t("settings.login.done") : t("settings.login.required")}
           </span>
-          <span className="status-tag neutral">인증: {authModeText}</span>
+          <span className="status-tag neutral">{t("settings.auth.prefix")}: {authModeText}</span>
         </div>
       )}
       <label>
-        작업 경로(CWD)
+        {t("settings.cwd")}
         <div className="settings-cwd-row">
           <input className="lowercase-path-input" readOnly value={cwd} />
           <button className="settings-cwd-picker" onClick={onSelectCwdDirectory} type="button">
-            폴더 선택
+            {t("settings.pickFolder")}
           </button>
         </div>
       </label>
       <label>
-        기본 모델
+        {t("settings.defaultModel")}
         <FancySelect
-          ariaLabel="기본 모델"
+          ariaLabel={t("settings.defaultModel")}
           className="modern-select"
           onChange={onSetModel}
           options={modelOptions.map((option) => ({ value: option, label: option }))}
@@ -87,9 +89,9 @@ export default function SettingsPage({
         />
       </label>
       <label>
-        Codex 멀티에이전트 최적화
+        {t("settings.multiAgentMode")}
         <FancySelect
-          ariaLabel="Codex 멀티에이전트 최적화"
+          ariaLabel={t("settings.multiAgentMode")}
           className="modern-select"
           onChange={onSetCodexMultiAgentMode}
           options={[...codexMultiAgentModeOptions]}
@@ -104,7 +106,9 @@ export default function SettingsPage({
             onClick={engineStarted ? onStopEngine : onStartEngine}
             type="button"
           >
-            <span className="settings-button-label">{engineStarted ? "엔진 중지" : "엔진 시작"}</span>
+            <span className="settings-button-label">
+              {engineStarted ? t("settings.engine.stop") : t("settings.engine.start")}
+            </span>
           </button>
           <button
             className="settings-usage-button settings-account-button"
@@ -112,7 +116,7 @@ export default function SettingsPage({
             onClick={onCheckUsage}
             type="button"
           >
-            <span className="settings-button-label">사용량 확인</span>
+            <span className="settings-button-label">{t("settings.usage.check")}</span>
           </button>
           <button
             className="settings-usage-button settings-account-button"
@@ -121,17 +125,21 @@ export default function SettingsPage({
             type="button"
           >
             <span className="settings-button-label">
-              {codexAuthBusy ? "처리 중..." : loginCompleted ? "CODEX 로그아웃" : "CODEX 로그인"}
+              {codexAuthBusy
+                ? t("settings.processing")
+                : loginCompleted
+                  ? t("settings.codex.logout")
+                  : t("settings.codex.login")}
             </span>
           </button>
         </div>
       )}
-      <div className="usage-method usage-method-hidden">최근 상태: {status}</div>
+      <div className="usage-method usage-method-hidden">{t("settings.recentStatus")}: {status}</div>
       {usageInfoText && !usageResultClosed && (
         <div className="usage-result">
           <div className="usage-result-head">
             <button onClick={onCloseUsageResult} type="button">
-              닫기
+              {t("common.close")}
             </button>
           </div>
           <pre>{usageInfoText}</pre>
@@ -142,7 +150,7 @@ export default function SettingsPage({
           <div className="settings-run-history-head">
             <h3>LOG</h3>
             <button onClick={onOpenRunsFolder} type="button">
-              열기
+              {t("common.open")}
             </button>
           </div>
         </section>

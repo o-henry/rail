@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { useI18n } from "../../i18n";
 
 type ApprovalDecision = "accept" | "acceptForSession" | "decline" | "cancel";
 
@@ -25,6 +26,7 @@ export default function ApprovalModal({
   decisionLabel,
   onRespond,
 }: ApprovalModalProps) {
+  const { t } = useI18n();
   if (!open) {
     return null;
   }
@@ -32,10 +34,10 @@ export default function ApprovalModal({
   return (
     <div className="modal-backdrop">
       <section className="approval-modal">
-        <h2>승인 필요</h2>
-        <div>요청 출처: {sourceLabel}</div>
-        <div>메서드: {method}</div>
-        <div>요청 ID: {requestId}</div>
+        <h2>{t("modal.approvalRequired")}</h2>
+        <div>{t("modal.requestSource")}: {sourceLabel}</div>
+        <div>{t("modal.method")}: {method}</div>
+        <div>{t("modal.requestId")}: {requestId}</div>
         <pre>{params}</pre>
         <div className="button-row">
           {decisions.map((decision) => (
