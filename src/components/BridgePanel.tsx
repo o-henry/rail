@@ -157,7 +157,7 @@ function BridgePanel({
         <div className="provider-hub-list">
           {WEB_PROVIDER_OPTIONS.map((provider) => {
             const row = providerSeenMap.get(provider);
-            const seenLabel = row?.lastSeenAt ? formatRunDateTime(row.lastSeenAt) : "미감지";
+            const seenLabel = row?.lastSeenAt ? formatRunDateTime(row.lastSeenAt) : "";
             return (
               <div className="provider-hub-row" key={`bridge-provider-${provider}`}>
                 <div className="provider-hub-meta">
@@ -167,7 +167,7 @@ function BridgePanel({
                   <span className="provider-hub-name">{webProviderLabel(provider)}</span>
                 </div>
                 <div className="bridge-provider-meta">
-                  <span>{seenLabel}</span>
+                  {seenLabel ? <span>{seenLabel}</span> : null}
                 </div>
               </div>
             );
