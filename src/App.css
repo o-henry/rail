@@ -2938,8 +2938,9 @@ h3 {
 
 .settings-view {
   margin: 0 10px 10px;
-  height: 100%;
-  border-radius: 12px;
+  display: grid;
+  gap: 36px;
+  align-content: start;
   overflow: auto;
   -ms-overflow-style: none;
   scrollbar-width: none;
