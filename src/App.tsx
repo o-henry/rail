@@ -451,6 +451,12 @@ type PendingWebLogin = {
   reason: string;
 };
 
+type GraphClipboardSnapshot = {
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+  copiedAt: number;
+};
+
 const APPROVAL_DECISIONS: ApprovalDecision[] = ["accept", "acceptForSession", "decline", "cancel"];
 const NODE_WIDTH = 240;
 const NODE_HEIGHT = 136;
@@ -2526,6 +2532,8 @@ function App() {
   const webBridgeStageWarnTimerRef = useRef<Record<string, number>>({});
   const activeWebPromptRef = useRef<Partial<Record<WebProvider, string>>>({});
   const lastAppliedPresetRef = useRef<{ kind: PresetKind; graph: GraphData } | null>(null);
+  const graphClipboardRef = useRef<GraphClipboardSnapshot | null>(null);
+  const graphPasteSerialRef = useRef(0);
 
   const activeApproval = pendingApprovals[0];
   const canvasNodes = useMemo(() => {
@@ -4367,6 +4375,99 @@ function App() {
     deleteNodes([nodeId]);
   }
 
+  function hasUserTextSelection(): boolean {
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0) {
+      return false;
+    }
+    return !selection.isCollapsed && selection.toString().trim().length > 0;
+  }
+
+  function copySelectedNodesToClipboard(): boolean {
+    const targetIds = selectedNodeIds.filter((id) => canvasNodeIdSet.has(id));
+    if (targetIds.length === 0) {
+      return false;
+    }
+    const targetSet = new Set(targetIds);
+    const nodes = graph.nodes
+      .filter((node) => targetSet.has(node.id))
+      .map((node) => ({
+        ...node,
+        position: { ...node.position },
+        config: JSON.parse(JSON.stringify(node.config ?? {})),
+      }));
+    const edges = graph.edges
+      .filter((edge) => targetSet.has(edge.from.nodeId) && targetSet.has(edge.to.nodeId))
+      .map((edge) => ({
+        from: { ...edge.from },
+        to: { ...edge.to },
+        control: edge.control ? { ...edge.control } : undefined,
+      }));
+
+    graphClipboardRef.current = {
+      nodes,
+      edges,
+      copiedAt: Date.now(),
+    };
+    setStatus(nodes.length > 1 ? `노드 ${nodes.length}개 복사됨` : "노드 복사됨");
+    return true;
+  }
+
+  function pasteNodesFromClipboard(): boolean {
+    const snapshot = graphClipboardRef.current;
+    if (!snapshot || snapshot.nodes.length === 0) {
+      return false;
+    }
+
+    const minPos = -NODE_DRAG_MARGIN;
+    const offsetStep = 48;
+    graphPasteSerialRef.current += 1;
+    const offset = graphPasteSerialRef.current * offsetStep;
+
+    const idMap = new Map<string, string>();
+    const pastedNodes: GraphNode[] = snapshot.nodes.map((node) => {
+      const nextId = makeNodeId(node.type);
+      idMap.set(node.id, nextId);
+      return {
+        ...node,
+        id: nextId,
+        position: {
+          x: Math.max(minPos, Math.round(node.position.x + offset)),
+          y: Math.max(minPos, Math.round(node.position.y + offset)),
+        },
+        config: JSON.parse(JSON.stringify(node.config ?? {})),
+      };
+    });
+
+    const pastedEdges = snapshot.edges.reduce<GraphEdge[]>((acc, edge) => {
+        const fromId = idMap.get(edge.from.nodeId);
+        const toId = idMap.get(edge.to.nodeId);
+        if (!fromId || !toId || fromId === toId) {
+          return acc;
+        }
+        acc.push({
+          from: { ...edge.from, nodeId: fromId },
+          to: { ...edge.to, nodeId: toId },
+          ...(edge.control
+            ? { control: { ...edge.control, x: edge.control.x + offset, y: edge.control.y + offset } }
+            : {}),
+        });
+        return acc;
+      }, []);
+
+    applyGraphChange((prev) => ({
+      ...prev,
+      nodes: [...prev.nodes, ...pastedNodes],
+      edges: [...prev.edges, ...pastedEdges],
+    }));
+
+    const nextSelection = pastedNodes.map((node) => node.id);
+    setNodeSelection(nextSelection, nextSelection[0]);
+    setSelectedEdgeKey("");
+    setStatus(pastedNodes.length > 1 ? `노드 ${pastedNodes.length}개 붙여넣기됨` : "노드 붙여넣기됨");
+    return true;
+  }
+
   function createEdgeConnection(
     fromNodeId: string,
     toNodeId: string,
@@ -5405,6 +5506,44 @@ function App() {
     window.addEventListener("keydown", onSelectAll);
     return () => window.removeEventListener("keydown", onSelectAll);
   }, [workspaceTab, canvasNodes]);
+
+  useEffect(() => {
+    if (workspaceTab !== "workflow") {
+      return;
+    }
+
+    const onCopyPasteNodes = (event: KeyboardEvent) => {
+      if (!(event.metaKey || event.ctrlKey) || event.altKey || event.shiftKey) {
+        return;
+      }
+      if (isEditableTarget(event.target) || hasUserTextSelection()) {
+        return;
+      }
+      const key = event.key.toLowerCase();
+      if (key === "c") {
+        const copied = copySelectedNodesToClipboard();
+        if (copied) {
+          event.preventDefault();
+        }
+        return;
+      }
+      if (key === "v") {
+        const pasted = pasteNodesFromClipboard();
+        if (pasted) {
+          event.preventDefault();
+        }
+      }
+    };
+
+    window.addEventListener("keydown", onCopyPasteNodes);
+    return () => window.removeEventListener("keydown", onCopyPasteNodes);
+  }, [
+    workspaceTab,
+    selectedNodeIds,
+    canvasNodeIdSet,
+    graph.nodes,
+    graph.edges,
+  ]);
 
   useEffect(() => {
     if (workspaceTab !== "workflow") {
