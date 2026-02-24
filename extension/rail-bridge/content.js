@@ -308,6 +308,23 @@ async function waitForInput(selectors, timeoutMs) {
 }
 
 function extractLastResponseText(selectors, prompt) {
+  const rows = collectResponseRows(selectors);
+  if (rows.length === 0) {
+    return null;
+  }
+  rows.sort((a, b) => a.bottom - b.bottom);
+  const promptTrimmed = String(prompt ?? "").trim();
+  const filtered = rows
+    .map((row) => row.text)
+    .filter((text) => text !== promptTrimmed)
+    .filter((text) => !promptTrimmed || !text.startsWith(promptTrimmed));
+  if (filtered.length === 0) {
+    return null;
+  }
+  return filtered[filtered.length - 1];
+}
+
+function collectResponseRows(selectors) {
   const rows = [];
   for (const selector of selectors) {
     const nodes = Array.from(document.querySelectorAll(selector));
@@ -323,19 +340,21 @@ function extractLastResponseText(selectors, prompt) {
       });
     }
   }
-  if (rows.length === 0) {
-    return null;
-  }
   rows.sort((a, b) => a.bottom - b.bottom);
-  const promptTrimmed = String(prompt ?? "").trim();
-  const filtered = rows
-    .map((row) => row.text)
-    .filter((text) => text !== promptTrimmed)
-    .filter((text) => !promptTrimmed || !text.startsWith(promptTrimmed));
-  if (filtered.length === 0) {
-    return null;
+  return rows;
+}
+
+function collectResponseBaselineSet(selectors) {
+  const baselineSet = new Set();
+  const rows = collectResponseRows(selectors);
+  for (const row of rows) {
+    const normalized = normalizeComparableText(row.text);
+    if (!normalized) {
+      continue;
+    }
+    baselineSet.add(normalized);
   }
-  return filtered[filtered.length - 1];
+  return baselineSet;
 }
 
 function normalizeComparableText(input) {
@@ -357,6 +376,8 @@ async function waitForResponse(provider, prompt, timeoutMs, options = {}) {
   const selectors = PROVIDER_CONFIG[provider].responseSelectors;
   const deadline = Date.now() + timeoutMs;
   const baseline = normalizeComparableText(options.baselineText ?? "");
+  const baselineSet =
+    options.baselineSet instanceof Set ? options.baselineSet : new Set();
   let last = "";
   let lastChangedAt = Date.now();
   while (Date.now() < deadline) {
@@ -368,6 +389,10 @@ async function waitForResponse(provider, prompt, timeoutMs, options = {}) {
         continue;
       }
       if (baseline && normalized === baseline) {
+        await new Promise((resolve) => setTimeout(resolve, 450));
+        continue;
+      }
+      if (baselineSet.size > 0 && baselineSet.has(normalized)) {
         await new Promise((resolve) => setTimeout(resolve, 450));
         continue;
       }
@@ -464,12 +489,14 @@ async function runTask(taskPayload) {
   const providerConfig = PROVIDER_CONFIG[provider];
   const timeoutMs = Math.max(5000, Number(taskPayload.timeoutMs ?? 180000) || 180000);
   const baselineText = extractLastResponseText(providerConfig.responseSelectors, "");
+  const baselineSet = collectResponseBaselineSet(providerConfig.responseSelectors);
   activeTask = {
     id: taskPayload.id,
     provider,
     prompt: String(taskPayload.prompt ?? ""),
     timeoutMs,
     baselineText,
+    baselineSet,
   };
 
   try {
@@ -488,6 +515,7 @@ async function runTask(taskPayload) {
     }
     const text = await waitForResponse(provider, activeTask.prompt, timeoutMs, {
       baselineText,
+      baselineSet,
     });
     if (!text) {
       throw new Error("TIMEOUT");
@@ -558,8 +586,15 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         throw new Error("응답을 찾지 못했습니다.");
       }
       const baseline = normalizeComparableText(activeTask.baselineText ?? "");
+      const baselineSet =
+        activeTask.baselineSet instanceof Set ? activeTask.baselineSet : new Set();
       const normalized = normalizeComparableText(text);
-      if (!normalized || (baseline && normalized === baseline) || isPromptEcho(normalized, activeTask.prompt)) {
+      if (
+        !normalized ||
+        (baseline && normalized === baseline) ||
+        (baselineSet.size > 0 && baselineSet.has(normalized)) ||
+        isPromptEcho(normalized, activeTask.prompt)
+      ) {
         throw new Error("새로운 모델 응답이 확인되지 않았습니다.");
       }
       await postTaskResult(text);
