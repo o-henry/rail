@@ -640,12 +640,47 @@ function normalizeComparableText(input) {
     .trim();
 }
 
+function collectPromptNeedles(promptText) {
+  const normalized = normalizeComparableText(promptText);
+  if (!normalized) {
+    return [];
+  }
+  const len = normalized.length;
+  const needleLen = len >= 512 ? 96 : len >= 220 ? 72 : 48;
+  if (len <= needleLen) {
+    return [normalized];
+  }
+  const offsets = [
+    0,
+    Math.max(0, Math.floor(len * 0.2) - Math.floor(needleLen / 2)),
+    Math.max(0, Math.floor(len * 0.45) - Math.floor(needleLen / 2)),
+    Math.max(0, Math.floor(len * 0.7) - Math.floor(needleLen / 2)),
+    Math.max(0, len - needleLen),
+  ];
+  const unique = new Set();
+  for (const start of offsets) {
+    const needle = normalized.slice(start, start + needleLen).trim();
+    if (needle.length >= 32) {
+      unique.add(needle);
+    }
+  }
+  return Array.from(unique);
+}
+
 function isPromptEcho(text, prompt) {
   const promptText = normalizeComparableText(prompt);
   if (!promptText) {
     return false;
   }
   const candidate = normalizeComparableText(text);
+  if (
+    /^나의 말[:：]/i.test(candidate) ||
+    /^you said[:：]/i.test(candidate) ||
+    /^your message[:：]/i.test(candidate) ||
+    /^user[:：]/i.test(candidate)
+  ) {
+    return true;
+  }
   if (candidate === promptText || candidate.startsWith(promptText)) {
     return true;
   }
@@ -656,6 +691,18 @@ function isPromptEcho(text, prompt) {
   }
   if (end.length >= 40 && candidate.includes(end)) {
     return true;
+  }
+  const needles = collectPromptNeedles(promptText);
+  if (needles.length > 0) {
+    let hitCount = 0;
+    for (const needle of needles) {
+      if (candidate.includes(needle)) {
+        hitCount += 1;
+      }
+      if (hitCount >= 2) {
+        return true;
+      }
+    }
   }
   return false;
 }
