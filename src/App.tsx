@@ -7020,7 +7020,6 @@ ${prompt}`;
         <div className="usage-method">최근 상태: {status}</div>
         {usageInfoText && (
           <div className="usage-result">
-            <h3>사용량 조회 결과</h3>
             <pre>{usageInfoText}</pre>
           </div>
         )}

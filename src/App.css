@@ -3097,6 +3097,11 @@ pre {
   font-family: "DialogNanumBody1984";
 }
 
+.controls > h3 {
+  font-size: 14px;
+  font-family: "DialogNanumBody1984", "Noto Sans KR", sans-serif;
+}
+
 .bridge-head-panel,
 .bridge-provider-panel,
 .bridge-log-panel {
