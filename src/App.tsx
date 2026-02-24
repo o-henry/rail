@@ -1252,81 +1252,6 @@ function formatUsageInfoForDisplay(raw: unknown): string {
   return lines.join("\n");
 }
 
-type UsageDisplaySection = {
-  title: string;
-  rows: string[];
-};
-
-function buildRateLimitRows(source: Record<string, unknown>): string[] {
-  const rows: string[] = [];
-  const planType = typeof source.planType === "string" && source.planType.trim() ? source.planType : "-";
-  const limitId = typeof source.limitId === "string" && source.limitId.trim() ? source.limitId : "-";
-  rows.push(`요금제: ${planType}`);
-  rows.push(`한도 ID: ${limitId}`);
-  rows.push(`크레딧: ${formatCreditSummary(source.credits)}`);
-
-  const primary = asRecord(source.primary);
-  if (primary) {
-    rows.push(`기본 윈도우 (5시간): 사용량 ${formatUsedPercent(primary.usedPercent)} / 리셋 ${formatResetAt(primary.resetsAt)}`);
-  }
-  const secondary = asRecord(source.secondary);
-  if (secondary) {
-    rows.push(`보조 윈도우 (1주일): 사용량 ${formatUsedPercent(secondary.usedPercent)} / 리셋 ${formatResetAt(secondary.resetsAt)}`);
-  }
-  return rows;
-}
-
-function buildUsageInfoSections(raw: unknown): UsageDisplaySection[] {
-  const root = asRecord(raw);
-  if (!root) {
-    return [];
-  }
-
-  const sections: UsageDisplaySection[] = [];
-  const tokenUsage = extractUsageStats(raw);
-  if (tokenUsage) {
-    sections.push({
-      title: "토큰 사용량",
-      rows: [formatUsage(tokenUsage)],
-    });
-  }
-
-  const rateLimits = asRecord(root.rateLimits);
-  if (rateLimits) {
-    sections.push({
-      title: "현재 한도",
-      rows: buildRateLimitRows(rateLimits),
-    });
-  }
-
-  const byLimitId = asRecord(root.rateLimitsByLimitId);
-  if (byLimitId) {
-    const entries = Object.entries(byLimitId)
-      .map(([limitKey, value]) => {
-        const item = asRecord(value);
-        if (!item) {
-          return null;
-        }
-        const rawName = typeof item.limitName === "string" ? item.limitName.trim() : "";
-        const rawId =
-          typeof item.limitId === "string" && item.limitId.trim() ? item.limitId.trim() : limitKey.trim();
-        const name = rawName || rawId || limitKey;
-        const header = rawId && rawId !== name ? `${name} (${rawId})` : name;
-        return { header, item };
-      })
-      .filter((entry): entry is { header: string; item: Record<string, unknown> } => entry != null);
-
-    for (const entry of entries) {
-      sections.push({
-        title: `모델별 한도 · ${entry.header}`,
-        rows: buildRateLimitRows(entry.item),
-      });
-    }
-  }
-
-  return sections;
-}
-
 function redactSensitiveText(input: string): string {
   let next = input;
   next = next.replace(/(sk-[A-Za-z0-9_-]{8,})/g, "sk-***");
@@ -2461,7 +2386,7 @@ function App() {
   const [, setErrorLogs] = useState<string[]>([]);
 
   const [usageInfoText, setUsageInfoText] = useState("");
-  const [usageInfoRaw, setUsageInfoRaw] = useState<unknown | null>(null);
+  const [usageResultClosed, setUsageResultClosed] = useState(false);
   const [authMode, setAuthMode] = useState<AuthMode>(defaultAuthMode);
   const [loginCompleted, setLoginCompleted] = useState(defaultLoginCompleted);
   const [codexAuthBusy, setCodexAuthBusy] = useState(false);
@@ -2493,8 +2418,6 @@ function App() {
     perplexity: false,
     claude: false,
   });
-  const usageSections = useMemo(() => buildUsageInfoSections(usageInfoRaw), [usageInfoRaw]);
-
   const [graph, setGraph] = useState<GraphData>({
     version: GRAPH_SCHEMA_VERSION,
     nodes: [],
@@ -3715,7 +3638,7 @@ function App() {
       if (beforeProbe?.state === "login_required" && !loginCompleted) {
         setLoginCompleted(false);
         setUsageInfoText("");
-        setUsageInfoRaw(null);
+        setUsageResultClosed(false);
         throw new Error("로그인이 완료되지 않아 사용량을 조회할 수 없습니다. 설정에서 로그인 후 다시 시도해주세요.");
       }
       const result = await invoke<UsageCheckResult>("usage_check");
@@ -3731,8 +3654,8 @@ function App() {
       } else if (mode) {
         setLoginCompleted(true);
       }
-      setUsageInfoRaw(result.raw);
       setUsageInfoText(formatUsageInfoForDisplay(result.raw));
+      setUsageResultClosed(false);
       setStatus("사용량 조회 완료");
     } catch (e) {
       setError(toUsageCheckErrorMessage(e));
@@ -7096,35 +7019,19 @@ ${prompt}`;
             </button>
           </div>
         )}
-        <div className="usage-method">최근 상태: {status}</div>
-        {usageInfoText && (
+        <div className="usage-method usage-method-hidden">최근 상태: {status}</div>
+        {usageInfoText && !usageResultClosed && (
           <div className="usage-result">
-            {usageSections.length > 0 ? (
-              <>
-                <div className="usage-cards">
-                  {usageSections.map((section) => (
-                    <section className="usage-card" key={`${section.title}:${section.rows[0] ?? ""}`}>
-                      <h4>{section.title}</h4>
-                      <ul>
-                        {section.rows.map((row) => (
-                          <li key={`${section.title}:${row}`}>{row}</li>
-                        ))}
-                      </ul>
-                    </section>
-                  ))}
-                </div>
-                <details className="usage-raw-details">
-                  <summary>원문 보기</summary>
-                  <pre>{usageInfoText}</pre>
-                </details>
-              </>
-            ) : (
-              <pre>{usageInfoText}</pre>
-            )}
+            <div className="usage-result-head">
+              <button onClick={() => setUsageResultClosed(true)} type="button">
+                닫기
+              </button>
+            </div>
+            <pre>{usageInfoText}</pre>
           </div>
         )}
         {!compact && (
-          <section className="settings-run-history">
+          <section className="settings-run-history settings-run-history-hidden">
             <div className="settings-run-history-head">
               <h3>LOG</h3>
               <button onClick={onOpenRunsFolder} type="button">
