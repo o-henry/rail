@@ -1642,7 +1642,7 @@ h3 {
 }
 
 .usage-result pre {
-  max-height: 280px;
+  max-height: 500px;
   overflow: auto;
   white-space: pre-wrap;
   word-break: break-word;
@@ -1963,6 +1963,13 @@ h3 {
   color: #253246;
 }
 
+.feed-agent-list button:focus,
+.feed-agent-list button:focus-visible {
+  outline: none;
+  box-shadow: none;
+  border-color: transparent;
+}
+
 .feed-agent-list-name {
   font-size: 13px;
   line-height: 1.2;
@@ -2032,15 +2039,45 @@ h3 {
 }
 
 .feed-agent-settings-grid .fancy-select,
-.feed-agent-settings-grid .fancy-select-trigger,
+.feed-agent-settings-grid .fancy-select *,
 .feed-agent-settings-grid input,
 .feed-agent-settings-grid textarea {
-  pointer-events: none;
-  cursor: default;
+  pointer-events: none !important;
+  cursor: default !important;
 }
 
 .feed-agent-settings-grid .fancy-select-menu {
   display: none !important;
+}
+
+.feed-agent-settings-grid .fancy-select-trigger,
+.feed-agent-settings-grid input,
+.feed-agent-settings-grid textarea {
+  border: 0 !important;
+  box-shadow: none !important;
+  outline: none !important;
+  background: #f6f6f6 !important;
+  color: #2a3340 !important;
+}
+
+.feed-agent-settings-grid .fancy-select-chevron,
+.feed-agent-settings-grid .fancy-select-chevron-icon {
+  display: none !important;
+}
+
+.feed-agent-settings-grid .fancy-select-trigger {
+  justify-content: flex-start;
+}
+
+.feed-agent-settings-grid input:focus,
+.feed-agent-settings-grid input:focus-visible,
+.feed-agent-settings-grid textarea:focus,
+.feed-agent-settings-grid textarea:focus-visible,
+.feed-agent-settings-grid .fancy-select-trigger:focus,
+.feed-agent-settings-grid .fancy-select-trigger:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+  border-color: transparent !important;
 }
 
 .feed-agent-rules {
