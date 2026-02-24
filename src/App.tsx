@@ -11184,7 +11184,7 @@ ${prompt}`;
                       value={feedPeriodFilter}
                     />
                   </label>
-                  <label>
+                  <label className="feed-filter-keyword-field">
                     키워드
                     <input
                       onChange={(e) => setFeedKeyword(e.currentTarget.value)}
@@ -11264,7 +11264,7 @@ ${prompt}`;
                               }
                               type="button"
                             >
-                              {isGroupExpanded ? "접기" : "펼치기"}
+                              {isGroupExpanded ? "CLOSE" : "OPEN"}
                             </button>
                           </div>
                         </header>
