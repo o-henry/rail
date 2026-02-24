@@ -4,6 +4,10 @@ const INPUT_WAIT_TIMEOUT_MS = 15000;
 const RESPONSE_STABLE_MS = 1600;
 const BASELINE_CAPTURE_MS = 1400;
 const BASELINE_CAPTURE_POLL_MS = 220;
+const MIN_RESPONSE_AFTER_SUBMIT_MS = 2500;
+const BASELINE_EXISTING_ELEMENT_MIN_GROWTH = 16;
+const MAX_RESPONSE_TEXT_LENGTH = 12000;
+const STRICT_ASSISTANT_ROLE_PROVIDERS = new Set(["gpt", "grok", "perplexity", "claude"]);
 const URL_KEY = "railBridgeUrl";
 const TOKEN_KEY = "railBridgeToken";
 
@@ -314,7 +318,10 @@ async function waitForInput(selectors, timeoutMs) {
 }
 
 function extractLastResponse(selectors, prompt, options = {}) {
-  const rows = collectResponseRows(selectors);
+  const rows = collectResponseRows(selectors, {
+    provider: options.provider,
+    requireAssistantRole: Boolean(options.requireAssistantRole),
+  });
   if (rows.length === 0) {
     return null;
   }
@@ -341,13 +348,146 @@ function extractLastResponseText(selectors, prompt, options = {}) {
   return row?.text ?? null;
 }
 
-function collectResponseRows(selectors) {
+function hasAttributeFragment(element, fragments = []) {
+  if (!(element instanceof Element)) {
+    return false;
+  }
+  const haystack = [
+    element.getAttribute("data-message-author-role"),
+    element.getAttribute("data-testid"),
+    element.getAttribute("aria-label"),
+    element.getAttribute("id"),
+    element.getAttribute("class"),
+    element.getAttribute("role"),
+    element.tagName,
+  ]
+    .map((value) => String(value ?? "").toLowerCase())
+    .join(" ");
+  return fragments.some((fragment) => haystack.includes(String(fragment).toLowerCase()));
+}
+
+function isLikelyUserMessageElement(element) {
+  if (!(element instanceof Element)) {
+    return false;
+  }
+  if (element.closest('[data-message-author-role="user"]')) {
+    return true;
+  }
+  if (
+    hasAttributeFragment(element, [
+      'data-message-author-role="user"',
+      " author-user",
+      "from-user",
+      "user-message",
+      "prompt",
+      "query",
+      "question",
+    ])
+  ) {
+    return true;
+  }
+  const testId = String(element.getAttribute("data-testid") ?? "").toLowerCase();
+  if (testId.includes("user") || testId.includes("query") || testId.includes("prompt")) {
+    return true;
+  }
+  return false;
+}
+
+function isLikelyAssistantMessageElement(provider, element) {
+  if (!(element instanceof Element)) {
+    return false;
+  }
+  if (isLikelyUserMessageElement(element)) {
+    return false;
+  }
+  if (element.closest('[data-message-author-role="assistant"], [data-message-author-role="model"]')) {
+    return true;
+  }
+  const testId = String(element.getAttribute("data-testid") ?? "").toLowerCase();
+  const role = String(element.getAttribute("data-message-author-role") ?? "").toLowerCase();
+  const klass = String(element.getAttribute("class") ?? "").toLowerCase();
+  if (role === "assistant" || role === "model") {
+    return true;
+  }
+  if (
+    testId.includes("assistant") ||
+    testId.includes("answer") ||
+    testId.includes("response") ||
+    testId.includes("model")
+  ) {
+    return true;
+  }
+  if (
+    klass.includes("assistant") ||
+    klass.includes("answer") ||
+    klass.includes("response") ||
+    klass.includes("model")
+  ) {
+    return true;
+  }
+
+  if (provider === "perplexity") {
+    return (
+      element.matches("[data-testid*='answer' i]") ||
+      Boolean(element.closest("[data-testid*='answer' i]"))
+    );
+  }
+  if (provider === "gpt") {
+    return (
+      element.matches('[data-message-author-role="assistant"]') ||
+      Boolean(element.closest('[data-message-author-role="assistant"]'))
+    );
+  }
+  if (provider === "claude" || provider === "grok") {
+    return (
+      testId.includes("assistant") ||
+      testId.includes("answer") ||
+      testId.includes("response")
+    );
+  }
+  if (provider === "gemini") {
+    return (
+      element.matches('[data-message-author-role="model"], model-response') ||
+      Boolean(element.closest('[data-message-author-role="model"], model-response'))
+    );
+  }
+  return false;
+}
+
+function isLikelyConversationContainer(element) {
+  if (!(element instanceof Element)) {
+    return false;
+  }
+  const conversationChildren = element.querySelectorAll(
+    "[data-message-author-role], [data-testid*='message' i], [data-testid*='answer' i]",
+  ).length;
+  return conversationChildren >= 4;
+}
+
+function collectResponseRows(selectors, options = {}) {
+  const provider = String(options.provider ?? "").trim().toLowerCase();
+  const requireAssistantRole = Boolean(options.requireAssistantRole);
   const rows = [];
   for (const selector of selectors) {
     const nodes = Array.from(document.querySelectorAll(selector));
     for (const node of nodes) {
+      if (!(node instanceof Element)) {
+        continue;
+      }
+      if (!isElementVisible(node)) {
+        continue;
+      }
+      if (isLikelyUserMessageElement(node)) {
+        continue;
+      }
+      if (requireAssistantRole && !isLikelyAssistantMessageElement(provider, node)) {
+        continue;
+      }
+      if (isLikelyConversationContainer(node) && !isLikelyAssistantMessageElement(provider, node)) {
+        continue;
+      }
       const text = String(node.innerText ?? "").trim();
-      if (!text || text.length < 24) {
+      if (!text || text.length < 24 || text.length > MAX_RESPONSE_TEXT_LENGTH) {
         continue;
       }
       const rect = node.getBoundingClientRect();
@@ -355,6 +495,7 @@ function collectResponseRows(selectors) {
         text,
         bottom: rect.bottom,
         element: node,
+        selector,
       });
     }
   }
@@ -364,6 +505,7 @@ function collectResponseRows(selectors) {
 
 async function captureBaselineSnapshot(selectors, durationMs = BASELINE_CAPTURE_MS) {
   const normalizedSet = new Set();
+  const baselineElementText = new WeakMap();
   const deadline = Date.now() + Math.max(300, Number(durationMs) || BASELINE_CAPTURE_MS);
   let baselineBottom = -Infinity;
   let baselineText = "";
@@ -376,6 +518,7 @@ async function captureBaselineSnapshot(selectors, durationMs = BASELINE_CAPTURE_
         continue;
       }
       normalizedSet.add(normalized);
+      baselineElementText.set(row.element, normalized);
       if (row.bottom > baselineBottom) {
         baselineBottom = row.bottom;
         baselineText = row.text;
@@ -386,6 +529,7 @@ async function captureBaselineSnapshot(selectors, durationMs = BASELINE_CAPTURE_
 
   return {
     baselineSet: normalizedSet,
+    baselineElementText,
     baselineBottom,
     baselineText,
   };
@@ -462,7 +606,18 @@ function isPromptEcho(text, prompt) {
     return false;
   }
   const candidate = normalizeComparableText(text);
-  return candidate === promptText || candidate.startsWith(promptText);
+  if (candidate === promptText || candidate.startsWith(promptText)) {
+    return true;
+  }
+  const start = promptText.slice(0, 120);
+  const end = promptText.slice(-120);
+  if (start.length >= 40 && candidate.includes(start)) {
+    return true;
+  }
+  if (end.length >= 40 && candidate.includes(end)) {
+    return true;
+  }
+  return false;
 }
 
 async function waitForResponse(provider, prompt, timeoutMs, options = {}) {
@@ -474,10 +629,21 @@ async function waitForResponse(provider, prompt, timeoutMs, options = {}) {
   const minBottom = Number(options.baselineBottom ?? -Infinity);
   const mutationCutoffMs = Number(options.requireMutationAfter ?? 0);
   const getMutationAt = typeof options.getMutationAt === "function" ? options.getMutationAt : null;
+  const getBaselineElementText =
+    typeof options.getBaselineElementText === "function" ? options.getBaselineElementText : null;
+  const acceptAfterMs = Number(options.acceptAfterMs ?? 0);
   let last = "";
   let lastChangedAt = Date.now();
   while (Date.now() < deadline) {
-    const responseRow = extractLastResponse(selectors, prompt, { minBottom });
+    if (acceptAfterMs > 0 && Date.now() < acceptAfterMs) {
+      await new Promise((resolve) => setTimeout(resolve, 220));
+      continue;
+    }
+    const responseRow = extractLastResponse(selectors, prompt, {
+      minBottom,
+      provider,
+      requireAssistantRole: STRICT_ASSISTANT_ROLE_PROVIDERS.has(provider),
+    });
     if (responseRow?.text) {
       const current = responseRow.text;
       const normalized = normalizeComparableText(current);
@@ -492,6 +658,20 @@ async function waitForResponse(provider, prompt, timeoutMs, options = {}) {
       if (baselineSet.size > 0 && baselineSet.has(normalized)) {
         await new Promise((resolve) => setTimeout(resolve, 450));
         continue;
+      }
+      if (getBaselineElementText) {
+        const baseOnSameElement = normalizeComparableText(getBaselineElementText(responseRow.element) ?? "");
+        if (baseOnSameElement) {
+          if (normalized === baseOnSameElement) {
+            await new Promise((resolve) => setTimeout(resolve, 450));
+            continue;
+          }
+          const growth = normalized.length - baseOnSameElement.length;
+          if (growth < BASELINE_EXISTING_ELEMENT_MIN_GROWTH) {
+            await new Promise((resolve) => setTimeout(resolve, 450));
+            continue;
+          }
+        }
       }
       if (isPromptEcho(normalized, prompt)) {
         await new Promise((resolve) => setTimeout(resolve, 450));
@@ -508,7 +688,7 @@ async function waitForResponse(provider, prompt, timeoutMs, options = {}) {
         last = current;
         lastChangedAt = Date.now();
       } else if (Date.now() - lastChangedAt >= RESPONSE_STABLE_MS) {
-        return current;
+        return responseRow;
       }
     }
     await new Promise((resolve) => setTimeout(resolve, 450));
@@ -558,7 +738,7 @@ async function postTaskError(code, message) {
   });
 }
 
-async function postTaskResult(text) {
+async function postTaskResult(text, evidence = null) {
   if (!activeTask) {
     return;
   }
@@ -570,6 +750,7 @@ async function postTaskResult(text) {
       url: window.location.href,
       capturedAt: new Date().toISOString(),
       extractionStrategy: "extension-dom-latest-stable",
+      extractionEvidence: evidence,
     },
     pageUrl: window.location.href,
   });
@@ -600,8 +781,10 @@ async function runTask(taskPayload) {
     timeoutMs,
     baselineText: "",
     baselineSet: new Set(),
+    baselineElementText: new WeakMap(),
     baselineBottom: -Infinity,
     mutationCutoffMs: 0,
+    submitAtMs: 0,
   };
 
   try {
@@ -614,6 +797,7 @@ async function runTask(taskPayload) {
     const baselineSnapshot = await captureBaselineSnapshot(providerConfig.responseSelectors, BASELINE_CAPTURE_MS);
     activeTask.baselineText = baselineSnapshot.baselineText;
     activeTask.baselineSet = baselineSnapshot.baselineSet;
+    activeTask.baselineElementText = baselineSnapshot.baselineElementText;
     activeTask.baselineBottom = baselineSnapshot.baselineBottom;
 
     mutationTracker = createMutationTracker(document.body);
@@ -623,23 +807,31 @@ async function runTask(taskPayload) {
     writePromptToInput(input, activeTask.prompt);
     await postTaskStage("prompt_filled", "프롬프트 자동 주입 완료");
     const autoSent = clickSendButton(provider) || trySendWithEnter(input);
+    activeTask.submitAtMs = Date.now();
     if (autoSent) {
       await postTaskStage("responding", "전송 자동 클릭 완료");
     } else {
       await postTaskStage("waiting_user_send", "자동 전송 실패: 사용자 전송 클릭 대기");
     }
-    const text = await waitForResponse(provider, activeTask.prompt, timeoutMs, {
+    const responseRow = await waitForResponse(provider, activeTask.prompt, timeoutMs, {
       baselineText: activeTask.baselineText,
       baselineSet: activeTask.baselineSet,
       baselineBottom: activeTask.baselineBottom,
       requireMutationAfter: activeTask.mutationCutoffMs,
+      getBaselineElementText: (element) =>
+        activeTask.baselineElementText?.get ? activeTask.baselineElementText.get(element) : "",
+      acceptAfterMs: Number(activeTask.submitAtMs ?? 0) + MIN_RESPONSE_AFTER_SUBMIT_MS,
       getMutationAt: mutationTracker ? (element) => mutationTracker.getMutationAt(element) : null,
     });
-    if (!text) {
+    if (!responseRow?.text) {
       throw new Error("TIMEOUT");
     }
     await postTaskStage("responding", "응답 안정화 확인");
-    await postTaskResult(text);
+    await postTaskResult(responseRow.text, {
+      selector: responseRow.selector ?? null,
+      bottom: responseRow.bottom ?? null,
+      length: responseRow.text.length,
+    });
   } catch (error) {
     const message = String(error);
     const code =
@@ -702,7 +894,11 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       const responseRow = extractLastResponse(
         PROVIDER_CONFIG[activeTask.provider].responseSelectors,
         activeTask.prompt,
-        { minBottom: Number(activeTask.baselineBottom ?? -Infinity) },
+        {
+          minBottom: Number(activeTask.baselineBottom ?? -Infinity),
+          provider: activeTask.provider,
+          requireAssistantRole: STRICT_ASSISTANT_ROLE_PROVIDERS.has(activeTask.provider),
+        },
       );
       const text = responseRow?.text ?? "";
       if (!text) {
@@ -716,10 +912,19 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         activeTask.mutationTracker && typeof activeTask.mutationTracker.getMutationAt === "function"
           ? Number(activeTask.mutationTracker.getMutationAt(responseRow?.element))
           : 0;
+      const baselineOnSameElement =
+        activeTask.baselineElementText?.get && responseRow?.element
+          ? normalizeComparableText(activeTask.baselineElementText.get(responseRow.element) ?? "")
+          : "";
+      const baselineElementGrowth = baselineOnSameElement ? normalized.length - baselineOnSameElement.length : 0;
       if (
         !normalized ||
         (baseline && normalized === baseline) ||
         (baselineSet.size > 0 && baselineSet.has(normalized)) ||
+        (Number(activeTask.submitAtMs ?? 0) > 0 &&
+          Date.now() < Number(activeTask.submitAtMs) + MIN_RESPONSE_AFTER_SUBMIT_MS) ||
+        (baselineOnSameElement &&
+          (normalized === baselineOnSameElement || baselineElementGrowth < BASELINE_EXISTING_ELEMENT_MIN_GROWTH)) ||
         (typeof activeTask.mutationCutoffMs === "number" &&
           activeTask.mutationCutoffMs > 0 &&
           mutationAt < activeTask.mutationCutoffMs) ||
@@ -727,7 +932,12 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       ) {
         throw new Error("새로운 모델 응답이 확인되지 않았습니다.");
       }
-      await postTaskResult(text);
+      await postTaskResult(text, {
+        selector: responseRow?.selector ?? null,
+        bottom: responseRow?.bottom ?? null,
+        length: normalized.length,
+        forced: true,
+      });
       activeTask = null;
       sendResponse({ ok: true });
     } catch (error) {
