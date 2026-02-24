@@ -7,12 +7,10 @@ import {
   useRef,
   useState,
 } from "react";
-import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
-import { openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 import "../App.css";
+import { invoke, listen, openUrl, revealItemInDir } from "../shared/tauri";
 import AppNav from "../components/AppNav";
-import FancySelect, { type FancySelectOption } from "../components/FancySelect";
+import FancySelect from "../components/FancySelect";
 import ApprovalModal from "../components/modals/ApprovalModal";
 import PendingWebLoginModal from "../components/modals/PendingWebLoginModal";
 import PendingWebTurnModal from "../components/modals/PendingWebTurnModal";
@@ -68,6 +66,7 @@ import {
   nodeTypeLabel,
   turnRoleLabel,
 } from "../features/workflow/labels";
+import { QUALITY_DEFAULT_THRESHOLD } from "../features/workflow/quality";
 import {
   buildFinalVisualizationDirective,
   buildCodexMultiAgentDirective,
@@ -82,11 +81,9 @@ import {
 } from "../features/workflow/promptUtils";
 import {
   buildFeedAvatarLabel,
-  feedPostStatusLabel,
   formatFeedInputSourceLabel,
   formatUsageInfoForDisplay,
   hashStringToHue,
-  normalizeFeedSteps,
   redactSensitiveText,
 } from "../features/feed/displayUtils";
 import { computeFeedDerivedState } from "../features/feed/derivedState";
@@ -135,7 +132,6 @@ import {
   formatDuration,
   formatNodeElapsedTime,
   formatRunDateTime,
-  formatRunFileLabel,
   formatUnknown,
   formatUsage,
   isEditableTarget,
@@ -157,7 +153,6 @@ import {
   KNOWLEDGE_DEFAULT_MAX_CHARS,
   KNOWLEDGE_DEFAULT_TOP_K,
   NavIcon,
-  QUALITY_DEFAULT_THRESHOLD,
   type TurnTerminal,
   type WebBridgeStatus,
   type WorkspaceTab,
@@ -188,392 +183,88 @@ import {
   normalizeRunRecord,
   summarizeQualityMetrics,
 } from "./mainAppRuntimeHelpers";
+import {
+  AGENT_RULE_CACHE_TTL_MS,
+  AGENT_RULE_MAX_DOC_CHARS,
+  AGENT_RULE_MAX_DOCS,
+  APPROVAL_DECISIONS,
+  AUTH_LOGIN_REQUIRED_CONFIRM_COUNT,
+  AUTH_LOGIN_REQUIRED_GRACE_MS,
+  AUTO_LAYOUT_DRAG_SNAP_THRESHOLD,
+  AUTO_LAYOUT_NODE_AXIS_SNAP_THRESHOLD,
+  AUTO_LAYOUT_SNAP_THRESHOLD,
+  CODEX_LOGIN_COOLDOWN_MS,
+  DEFAULT_STAGE_HEIGHT,
+  DEFAULT_STAGE_WIDTH,
+  GRAPH_STAGE_INSET_X,
+  GRAPH_STAGE_INSET_Y,
+  KNOWLEDGE_MAX_CHARS_OPTIONS,
+  KNOWLEDGE_TOP_K_OPTIONS,
+  MAX_CANVAS_ZOOM,
+  MAX_STAGE_HEIGHT,
+  MAX_STAGE_WIDTH,
+  MIN_CANVAS_ZOOM,
+  NODE_DRAG_MARGIN,
+  NODE_HEIGHT,
+  NODE_WIDTH,
+  QUESTION_INPUT_MAX_HEIGHT,
+  SIMPLE_WORKFLOW_UI,
+  STAGE_GROW_LIMIT,
+  STAGE_GROW_MARGIN,
+  TURN_OUTPUT_SCHEMA_MAX_RETRY,
+  WEB_BRIDGE_CLAIM_WARN_MS,
+  WEB_BRIDGE_PROMPT_FILLED_WARN_MS,
+  WEB_TURN_FLOATING_DEFAULT_X,
+  WEB_TURN_FLOATING_DEFAULT_Y,
+  WEB_TURN_FLOATING_MARGIN,
+  WEB_TURN_FLOATING_MIN_VISIBLE_HEIGHT,
+  WEB_TURN_FLOATING_MIN_VISIBLE_WIDTH,
+  buildFeedShareText,
+} from "./main";
+import type {
+  AgentRuleDoc,
+  AgentRulesReadResult,
+  ApprovalDecision,
+  AuthMode,
+  AuthProbeResult,
+  CanvasDisplayEdge,
+  CodexMultiAgentMode,
+  DragState,
+  EdgeDragState,
+  EngineApprovalRequestEvent,
+  EngineLifecycleEvent,
+  EngineNotificationEvent,
+  FeedCategory,
+  FeedExecutorFilter,
+  FeedInputSource,
+  FeedPeriodFilter,
+  FeedPost,
+  FeedStatusFilter,
+  FeedViewPost,
+  GraphClipboardSnapshot,
+  KnowledgeRetrieveResult,
+  KnowledgeTraceEntry,
+  LoginChatgptResult,
+  LogicalPoint,
+  MarqueeSelection,
+  NodeMetric,
+  NodeRunState,
+  NodeVisualSize,
+  PanState,
+  PendingApproval,
+  PendingWebLogin,
+  PendingWebTurn,
+  PointerState,
+  RegressionSummary,
+  RunGroupKind,
+  RunRecord,
+  ThreadStartResult,
+  UsageCheckResult,
+  UsageStats,
+  WebProviderRunResult,
+  WebWorkerHealth,
+} from "./main";
 
-type EngineNotificationEvent = {
-  method: string;
-  params: unknown;
-};
-
-type EngineLifecycleEvent = {
-  state: string;
-  message?: string | null;
-};
-
-type ThreadStartResult = {
-  threadId: string;
-  raw: unknown;
-};
-
-type UsageCheckResult = {
-  sourceMethod: string;
-  raw: unknown;
-};
-
-type AuthProbeState = "authenticated" | "login_required" | "unknown";
-
-type AuthProbeResult = {
-  state: AuthProbeState;
-  sourceMethod?: string | null;
-  authMode?: string | null;
-  raw?: unknown;
-  detail?: string | null;
-};
-
-type AgentRuleDoc = {
-  path: string;
-  content: string;
-};
-
-type AgentRulesReadResult = {
-  docs?: AgentRuleDoc[];
-};
-
-type LoginChatgptResult = {
-  authUrl: string;
-  raw?: unknown;
-};
-
-type AuthMode = "chatgpt" | "apikey" | "unknown";
-type ApprovalDecision = "accept" | "acceptForSession" | "decline" | "cancel";
-
-type EngineApprovalRequestEvent = {
-  requestId: number;
-  method: string;
-  params: unknown;
-};
-
-type PendingApproval = {
-  requestId: number;
-  source: "remote";
-  method: string;
-  params: unknown;
-};
-
-type CodexMultiAgentMode = "off" | "balanced" | "max";
-
-type CanvasDisplayEdge = {
-  edge: GraphEdge;
-  edgeKey: string;
-  readOnly: boolean;
-};
-
-type KnowledgeSnippet = {
-  fileId: string;
-  fileName: string;
-  chunkIndex: number;
-  text: string;
-  score: number;
-};
-
-type KnowledgeRetrieveResult = {
-  snippets: KnowledgeSnippet[];
-  warnings: string[];
-};
-
-type KnowledgeTraceEntry = {
-  nodeId: string;
-  fileId: string;
-  fileName: string;
-  chunkIndex: number;
-  score: number;
-};
-
-type UsageStats = {
-  inputTokens?: number;
-  outputTokens?: number;
-  totalTokens?: number;
-};
-
-type FeedAttachmentKind = "markdown" | "json";
-
-type FeedAttachment = {
-  kind: FeedAttachmentKind;
-  title: string;
-  content: string;
-  truncated: boolean;
-  charCount: number;
-};
-
-type FeedPostStatus = "draft" | "done" | "failed" | "cancelled";
-type FeedInputSource = {
-  kind: "question" | "node";
-  nodeId?: string;
-  agentName: string;
-  roleLabel?: string;
-  summary?: string;
-  sourcePostId?: string;
-};
-
-type FeedPost = {
-  id: string;
-  runId: string;
-  nodeId: string;
-  nodeType: NodeType;
-  executor?: TurnExecutor;
-  agentName: string;
-  roleLabel: string;
-  status: FeedPostStatus;
-  createdAt: string;
-  summary: string;
-  steps: string[];
-  inputSources?: FeedInputSource[];
-  inputContext?: {
-    preview: string;
-    charCount: number;
-    truncated: boolean;
-  };
-  evidence: {
-    durationMs?: number;
-    usage?: UsageStats;
-    qualityScore?: number;
-    qualityDecision?: string;
-  };
-  attachments: FeedAttachment[];
-  redaction: {
-    masked: boolean;
-    ruleVersion: string;
-  };
-};
-
-type FeedStatusFilter = "all" | FeedPostStatus;
-type FeedExecutorFilter = "all" | "codex" | "web" | "ollama";
-type FeedPeriodFilter = "all" | "today" | "7d";
-type FeedCategory = "all_posts" | "completed_posts" | "web_posts" | "error_posts";
-type RunGroupKind = "template" | "custom";
-
-type NodeRunState = {
-  status: NodeExecutionStatus;
-  logs: string[];
-  output?: unknown;
-  error?: string;
-  threadId?: string;
-  turnId?: string;
-  startedAt?: string;
-  finishedAt?: string;
-  durationMs?: number;
-  usage?: UsageStats;
-  qualityReport?: QualityReport;
-};
-
-type RunTransition = {
-  at: string;
-  nodeId: string;
-  status: NodeExecutionStatus;
-  message?: string;
-};
-
-type RunRecord = {
-  runId: string;
-  question?: string;
-  startedAt: string;
-  finishedAt?: string;
-  workflowGroupName?: string;
-  workflowGroupKind?: RunGroupKind;
-  workflowPresetKind?: PresetKind;
-  finalAnswer?: string;
-  graphSnapshot: GraphData;
-  transitions: RunTransition[];
-  summaryLogs: string[];
-  nodeLogs?: Record<string, string[]>;
-  threadTurnMap: Record<string, { threadId?: string; turnId?: string }>;
-  providerTrace?: Array<{
-    nodeId: string;
-    executor: TurnExecutor;
-    provider: string;
-    status: "done" | "failed" | "cancelled";
-    startedAt: string;
-    finishedAt: string;
-    summary?: string;
-  }>;
-  knowledgeTrace?: KnowledgeTraceEntry[];
-  nodeMetrics?: Record<string, NodeMetric>;
-  qualitySummary?: QualitySummary;
-  regression?: RegressionSummary;
-  feedPosts?: FeedPost[];
-};
-
-type FeedViewPost = FeedPost & {
-  sourceFile: string;
-  question?: string;
-};
-
-type DragState = {
-  nodeIds: string[];
-  pointerStart: LogicalPoint;
-  startPositions: Record<string, { x: number; y: number }>;
-};
-
-type EdgeDragState = {
-  edgeKey: string;
-  pointerStart: LogicalPoint;
-  startControl: LogicalPoint;
-};
-
-type PanState = {
-  startX: number;
-  startY: number;
-  scrollLeft: number;
-  scrollTop: number;
-};
-
-type PointerState = {
-  clientX: number;
-  clientY: number;
-};
-
-type LogicalPoint = {
-  x: number;
-  y: number;
-};
-
-type NodeVisualSize = {
-  width: number;
-  height: number;
-};
-
-type MarqueeSelection = {
-  start: LogicalPoint;
-  current: LogicalPoint;
-  append: boolean;
-};
-
-type QualityCheck = {
-  id: string;
-  label: string;
-  kind: string;
-  required: boolean;
-  passed: boolean;
-  scoreDelta: number;
-  detail?: string;
-};
-
-type QualityReport = {
-  profile: QualityProfileId;
-  threshold: number;
-  score: number;
-  decision: "PASS" | "REJECT";
-  checks: QualityCheck[];
-  failures: string[];
-  warnings: string[];
-};
-
-type NodeMetric = {
-  nodeId: string;
-  profile: QualityProfileId;
-  score: number;
-  decision: "PASS" | "REJECT";
-  threshold: number;
-  failedChecks: number;
-  warningCount: number;
-};
-
-type QualitySummary = {
-  avgScore: number;
-  passRate: number;
-  totalNodes: number;
-  passNodes: number;
-};
-
-type RegressionSummary = {
-  baselineRunId?: string;
-  avgScoreDelta?: number;
-  passRateDelta?: number;
-  status: "improved" | "stable" | "degraded" | "unknown";
-  note?: string;
-};
-
-type WebProviderRunResult = {
-  ok: boolean;
-  text?: string;
-  raw?: unknown;
-  meta?: {
-    provider: string;
-    url?: string | null;
-    startedAt?: string | null;
-    finishedAt?: string | null;
-    elapsedMs?: number | null;
-    extractionStrategy?: string | null;
-  };
-  error?: string;
-  errorCode?: string;
-};
-
-type WebWorkerHealth = {
-  running: boolean;
-  lastError?: string | null;
-  providers?: unknown;
-  logPath?: string | null;
-  profileRoot?: string | null;
-  activeProvider?: string | null;
-  bridge?: unknown;
-};
-
-type PendingWebTurn = {
-  nodeId: string;
-  provider: WebProvider;
-  prompt: string;
-  mode: WebResultMode;
-};
-
-type PendingWebLogin = {
-  nodeId: string;
-  provider: WebProvider;
-  reason: string;
-};
-
-type GraphClipboardSnapshot = {
-  nodes: GraphNode[];
-  edges: GraphEdge[];
-  copiedAt: number;
-};
-
-const APPROVAL_DECISIONS: ApprovalDecision[] = ["accept", "acceptForSession", "decline", "cancel"];
-const NODE_WIDTH = 240;
-const NODE_HEIGHT = 136;
-const DEFAULT_STAGE_WIDTH = 1400;
-const DEFAULT_STAGE_HEIGHT = 900;
-const STAGE_GROW_MARGIN = 120;
-const STAGE_GROW_LIMIT = 720;
-const MAX_STAGE_WIDTH = 4200;
-const MAX_STAGE_HEIGHT = 3200;
-const GRAPH_STAGE_INSET_X = 90;
-const GRAPH_STAGE_INSET_Y = 150;
-const MIN_CANVAS_ZOOM = 0.6;
-const MAX_CANVAS_ZOOM = 1.8;
-const QUESTION_INPUT_MAX_HEIGHT = 132;
-const NODE_DRAG_MARGIN = 60;
-const AUTO_LAYOUT_SNAP_THRESHOLD = 44;
-const AUTO_LAYOUT_DRAG_SNAP_THRESHOLD = 36;
-const AUTO_LAYOUT_NODE_AXIS_SNAP_THRESHOLD = 38;
-const AGENT_RULE_CACHE_TTL_MS = 12_000;
-const AGENT_RULE_MAX_DOCS = 16;
-const AGENT_RULE_MAX_DOC_CHARS = 6_000;
-const AUTH_LOGIN_REQUIRED_CONFIRM_COUNT = 3;
-const AUTH_LOGIN_REQUIRED_GRACE_MS = 120_000;
-const CODEX_LOGIN_COOLDOWN_MS = 45_000;
-const WEB_BRIDGE_CLAIM_WARN_MS = 8_000;
-const WEB_BRIDGE_PROMPT_FILLED_WARN_MS = 8_000;
-const WEB_TURN_FLOATING_DEFAULT_X = 24;
-const WEB_TURN_FLOATING_DEFAULT_Y = 92;
-const WEB_TURN_FLOATING_MARGIN = 12;
-const WEB_TURN_FLOATING_MIN_VISIBLE_WIDTH = 120;
-const WEB_TURN_FLOATING_MIN_VISIBLE_HEIGHT = 72;
-const TURN_OUTPUT_SCHEMA_MAX_RETRY = 1;
-const SIMPLE_WORKFLOW_UI = true;
-const KNOWLEDGE_TOP_K_OPTIONS: FancySelectOption[] = [
-  { value: "0", label: "0개" },
-  { value: "1", label: "1개" },
-  { value: "2", label: "2개" },
-  { value: "3", label: "3개" },
-  { value: "4", label: "4개" },
-  { value: "5", label: "5개" },
-];
-const KNOWLEDGE_MAX_CHARS_OPTIONS: FancySelectOption[] = [
-  { value: "1600", label: "짧게 (빠름)" },
-  { value: "2800", label: "보통 (균형)" },
-  { value: "4000", label: "길게 (정밀)" },
-  { value: "5600", label: "아주 길게 (최대)" },
-];
 function App() {
   const { t } = useI18n();
   const defaultCwd = useMemo(() => loadPersistedCwd("."), []);
@@ -1418,42 +1109,6 @@ function App() {
     } catch {
       return null;
     }
-  }
-
-function buildFeedShareText(post: FeedViewPost, run: RunRecord | null): string {
-    const markdownAttachment = post.attachments.find((attachment) => attachment.kind === "markdown");
-    const rawContent = toHumanReadableFeedText(markdownAttachment?.content?.trim() ?? "");
-    const visibleSteps = normalizeFeedSteps(post.steps);
-    const lines: string[] = [
-      `# ${post.agentName}`,
-      `- 상태: ${feedPostStatusLabel(post.status)}`,
-      `- 역할: ${post.roleLabel}`,
-      `- 생성 시간: ${formatRunDateTime(post.createdAt)}`,
-    ];
-    if (run?.runId) {
-      lines.push(`- 실행 ID: ${run.runId}`);
-    }
-    if (post.sourceFile) {
-      lines.push(`- 기록 파일: ${formatRunFileLabel(post.sourceFile)}`);
-    }
-  const normalizedQuestion = toHumanReadableFeedText(post.question?.trim() ?? "");
-  if (normalizedQuestion) {
-    lines.push("", "## 질문", normalizedQuestion);
-  }
-  if (Array.isArray(post.inputSources) && post.inputSources.length > 0) {
-    lines.push("", "## 입력 출처", ...post.inputSources.map((source) => `- ${formatFeedInputSourceLabel(source)}`));
-  }
-  if (post.inputContext?.preview) {
-    lines.push("", "## 전달 입력 스냅샷", toHumanReadableFeedText(post.inputContext.preview));
-  }
-  lines.push("", "## 요약", post.summary?.trim() || "(요약 없음)");
-    if (visibleSteps.length > 0) {
-      lines.push("", "## 단계", ...visibleSteps.map((step) => `- ${step}`));
-    }
-    if (rawContent) {
-      lines.push("", "## 상세", rawContent);
-    }
-    return lines.join("\n");
   }
 
   async function onShareFeedPost(post: FeedViewPost, mode: "clipboard" | "json") {

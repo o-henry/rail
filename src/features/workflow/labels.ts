@@ -1,4 +1,4 @@
-import { extractStringByPaths, formatUnknown } from "../../app/mainAppUtils";
+import { extractStringByPaths, formatUnknown } from "../../shared/lib/valueUtils";
 import { t } from "../../i18n";
 import { turnModelLabel } from "./graph-utils";
 import type { GraphNode, KnowledgeFileStatus, NodeExecutionStatus, NodeType } from "./types";

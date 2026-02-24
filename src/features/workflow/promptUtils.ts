@@ -1,4 +1,4 @@
-import { extractStringByPaths, formatUnknown } from "../../app/mainAppUtils";
+import { extractStringByPaths, formatUnknown } from "../../shared/lib/valueUtils";
 
 export function getByPath(input: unknown, path: string): unknown {
   if (!path.trim()) {

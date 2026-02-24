@@ -3,7 +3,7 @@ import {
   extractUsageStats,
   formatResetAt,
   formatUsage,
-} from "../../app/mainAppUtils";
+} from "../../shared/lib/valueUtils";
 
 type FeedPostStatusValue = "draft" | "done" | "failed" | "cancelled";
 type FeedViewPostLike = {

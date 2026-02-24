@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "check:arch": "node scripts/check-architecture.mjs",
+    "check": "npm run check:arch && npm run build",
     "preview": "vite preview",
     "tauri": "tauri"
   },

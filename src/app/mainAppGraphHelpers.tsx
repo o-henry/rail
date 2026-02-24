@@ -9,6 +9,7 @@ import {
   type TurnExecutor,
   type WebProvider,
 } from "../features/workflow/domain";
+import { QUALITY_DEFAULT_THRESHOLD } from "../features/workflow/quality";
 import type {
   GraphData,
   GraphEdge,
@@ -57,7 +58,6 @@ export type WebBridgeStatus = {
 export const GRAPH_SCHEMA_VERSION = 3;
 export const KNOWLEDGE_DEFAULT_TOP_K = 0;
 export const KNOWLEDGE_DEFAULT_MAX_CHARS = 2800;
-export const QUALITY_DEFAULT_THRESHOLD = 70;
 
 function normalizeKnowledgeStatus(input: unknown): KnowledgeFileStatus | undefined {
   if (input === "ready" || input === "missing" || input === "unsupported" || input === "error") {

@@ -2,8 +2,8 @@ import { getTurnExecutor, type TurnConfig, type TurnExecutor } from "../workflow
 import { inferQualityProfile, type QualityProfileId } from "../workflow/domain";
 import { nodeSelectionLabel, nodeTypeLabel, turnRoleLabel } from "../workflow/labels";
 import { clipTextByChars, redactSensitiveText, summarizeFeedSteps } from "./displayUtils";
-import { FEED_REDACTION_RULE_VERSION, normalizeQualityThreshold } from "../../app/mainAppRuntimeHelpers";
-import { QUALITY_DEFAULT_THRESHOLD } from "../../app/mainAppGraphHelpers";
+import { FEED_REDACTION_RULE_VERSION } from "./constants";
+import { QUALITY_DEFAULT_THRESHOLD, normalizeQualityThreshold } from "../workflow/quality";
 import { t } from "../../i18n";
 
 type FeedCategory = "all_posts" | "completed_posts" | "web_posts" | "error_posts";

@@ -1,15 +1,22 @@
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "../shared/tauri";
 import { getTurnExecutor, inferQualityProfile, type ArtifactType, type PresetKind, type TurnConfig } from "../features/workflow/domain";
 import { extractFinalAnswer, nodeStatusLabel, nodeTypeLabel, turnRoleLabel } from "../features/workflow/labels";
 import { stringifyInput, toHumanReadableFeedText } from "../features/workflow/promptUtils";
 import { clipTextByChars, formatFeedInputSourceLabel, normalizeFeedInputSources, redactSensitiveText, summarizeFeedSteps } from "../features/feed/displayUtils";
+import { FEED_REDACTION_RULE_VERSION } from "../features/feed/constants";
 import { graphEquals, turnModelLabel } from "../features/workflow/graph-utils";
+import {
+  QUALITY_DEFAULT_THRESHOLD,
+  QUALITY_THRESHOLD_MAX,
+  QUALITY_THRESHOLD_MIN,
+  QUALITY_THRESHOLD_STEP,
+  normalizeQualityScore,
+  normalizeQualityThreshold,
+} from "../features/workflow/quality";
 import type { GraphData, GraphNode, KnowledgeConfig, NodeAnchorSide, NodeExecutionStatus } from "../features/workflow/types";
 import type { FancySelectOption } from "../components/FancySelect";
-import { KNOWLEDGE_DEFAULT_MAX_CHARS, KNOWLEDGE_DEFAULT_TOP_K, QUALITY_DEFAULT_THRESHOLD } from "./mainAppGraphHelpers";
+import { KNOWLEDGE_DEFAULT_MAX_CHARS, KNOWLEDGE_DEFAULT_TOP_K } from "./mainAppGraphHelpers";
 import { t, tp } from "../i18n";
-
-export const FEED_REDACTION_RULE_VERSION = "feed-v1";
 
 export const CODEX_MULTI_AGENT_MODE_OPTIONS: ReadonlyArray<FancySelectOption> = [
   { value: "off", label: "끄기" },
@@ -33,10 +40,6 @@ export const QUALITY_PROFILE_OPTIONS: FancySelectOption[] = [
   { value: "generic", label: "일반" },
 ];
 
-const QUALITY_THRESHOLD_MIN = 10;
-const QUALITY_THRESHOLD_MAX = 100;
-const QUALITY_THRESHOLD_STEP = 10;
-
 export const QUALITY_THRESHOLD_OPTIONS: FancySelectOption[] = Array.from(
   { length: (QUALITY_THRESHOLD_MAX - QUALITY_THRESHOLD_MIN) / QUALITY_THRESHOLD_STEP + 1 },
   (_, index) => {
@@ -45,18 +48,7 @@ export const QUALITY_THRESHOLD_OPTIONS: FancySelectOption[] = Array.from(
   },
 );
 
-export function normalizeQualityThreshold(value: unknown): number {
-  const parsed = Number(value);
-  const fallback = QUALITY_DEFAULT_THRESHOLD;
-  const safe = Number.isFinite(parsed) ? parsed : fallback;
-  const clamped = Math.max(QUALITY_THRESHOLD_MIN, Math.min(QUALITY_THRESHOLD_MAX, safe));
-  return Math.round(clamped / QUALITY_THRESHOLD_STEP) * QUALITY_THRESHOLD_STEP;
-}
-
-export function normalizeQualityScore(value: number): number {
-  const clamped = Math.max(0, Math.min(100, value));
-  return Math.round(clamped / QUALITY_THRESHOLD_STEP) * QUALITY_THRESHOLD_STEP;
-}
+export { normalizeQualityScore, normalizeQualityThreshold };
 
 export const ARTIFACT_TYPE_OPTIONS: FancySelectOption[] = [
   { value: "none", label: "사용 안 함" },
