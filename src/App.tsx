@@ -547,6 +547,8 @@ const AGENT_RULE_MAX_DOC_CHARS = 6_000;
 const AUTH_LOGIN_REQUIRED_CONFIRM_COUNT = 3;
 const AUTH_LOGIN_REQUIRED_GRACE_MS = 120_000;
 const CODEX_LOGIN_COOLDOWN_MS = 45_000;
+const WEB_BRIDGE_CLAIM_WARN_MS = 8_000;
+const WEB_BRIDGE_PROMPT_FILLED_WARN_MS = 8_000;
 const SIMPLE_WORKFLOW_UI = true;
 const KNOWLEDGE_TOP_K_OPTIONS: FancySelectOption[] = [
   { value: "0", label: "0개" },
@@ -4594,6 +4596,7 @@ function App() {
   const authLoginRequiredProbeCountRef = useRef(0);
   const lastAuthenticatedAtRef = useRef<number>(defaultLoginCompleted ? Date.now() : 0);
   const codexLoginLastAttemptAtRef = useRef(0);
+  const webBridgeStageWarnTimerRef = useRef<Record<string, number>>({});
   const lastAppliedPresetRef = useRef<{ kind: PresetKind; graph: GraphData } | null>(null);
 
   const activeApproval = pendingApprovals[0];
@@ -4858,6 +4861,41 @@ function App() {
     setError(message);
   }
 
+  function clearWebBridgeStageWarnTimer(providerKey: string) {
+    const current = webBridgeStageWarnTimerRef.current[providerKey];
+    if (typeof current === "number") {
+      window.clearTimeout(current);
+      delete webBridgeStageWarnTimerRef.current[providerKey];
+    }
+  }
+
+  function scheduleWebBridgeStageWarn(
+    providerKey: string,
+    timeoutMs: number,
+    statusMessage: string,
+    nodeLogMessage: string,
+  ) {
+    clearWebBridgeStageWarnTimer(providerKey);
+    webBridgeStageWarnTimerRef.current[providerKey] = window.setTimeout(() => {
+      setStatus(statusMessage);
+      const activeWebNodeId = activeWebNodeIdRef.current;
+      const activeProvider = activeWebProviderRef.current;
+      if (activeWebNodeId && activeProvider && activeProvider === providerKey) {
+        addNodeLog(activeWebNodeId, nodeLogMessage);
+      }
+      delete webBridgeStageWarnTimerRef.current[providerKey];
+    }, timeoutMs);
+  }
+
+  useEffect(() => {
+    return () => {
+      for (const timerId of Object.values(webBridgeStageWarnTimerRef.current)) {
+        window.clearTimeout(timerId);
+      }
+      webBridgeStageWarnTimerRef.current = {};
+    };
+  }, []);
+
   useEffect(() => {
     const onUnhandledRejection = (event: PromiseRejectionEvent) => {
       event.preventDefault();
@@ -4959,18 +4997,48 @@ function App() {
               }
               const stage = extractStringByPaths(payload.params, ["stage"]);
               const provider = extractStringByPaths(payload.params, ["provider"])?.toLowerCase() ?? "";
+              const providerKey = provider && WEB_PROVIDER_OPTIONS.includes(provider as WebProvider)
+                ? (provider as WebProvider)
+                : null;
               if (stage?.startsWith("bridge_")) {
-                const prefix = provider && WEB_PROVIDER_OPTIONS.includes(provider as WebProvider)
-                  ? `[${provider.toUpperCase()}] `
+                const prefix = providerKey
+                  ? `[${providerKey.toUpperCase()}] `
                   : "";
                 const line = `${prefix}${message ?? stage}`;
                 setWebBridgeLogs((prev) => [`${new Date().toLocaleTimeString()} ${line}`, ...prev].slice(0, 120));
-                if (stage === "bridge_waiting_user_send" && provider) {
-                  setStatus(`${webProviderLabel(provider as WebProvider)} 탭에서 전송 1회가 필요합니다.`);
-                } else if (stage === "bridge_claimed" && provider) {
-                  setStatus(`${webProviderLabel(provider as WebProvider)} 탭 연결됨, 프롬프트 주입 중`);
-                } else if (stage === "bridge_done" && provider) {
-                  setStatus(`${webProviderLabel(provider as WebProvider)} 응답 수집 완료`);
+                if (providerKey && stage === "bridge_queued") {
+                  setStatus(`${webProviderLabel(providerKey)} 작업 대기열 등록됨`);
+                  scheduleWebBridgeStageWarn(
+                    providerKey,
+                    WEB_BRIDGE_CLAIM_WARN_MS,
+                    `${webProviderLabel(providerKey)} 탭에서 작업 수신이 지연되고 있습니다.`,
+                    "[WEB] 작업 수신 지연: 해당 서비스 탭이 열려 있고 확장이 활성화되어 있는지 확인하세요.",
+                  );
+                } else if (providerKey && stage === "bridge_claimed") {
+                  setStatus(`${webProviderLabel(providerKey)} 탭 연결됨, 프롬프트 주입 중`);
+                  scheduleWebBridgeStageWarn(
+                    providerKey,
+                    WEB_BRIDGE_PROMPT_FILLED_WARN_MS,
+                    `${webProviderLabel(providerKey)} 프롬프트 자동 주입이 지연되고 있습니다.`,
+                    "[WEB] 프롬프트 자동 주입 지연: 입력창 탐지 실패 가능성이 있습니다. 웹 탭을 새로고침 후 다시 실행하세요.",
+                  );
+                } else if (providerKey && stage === "bridge_prompt_filled") {
+                  clearWebBridgeStageWarnTimer(providerKey);
+                  setStatus(`${webProviderLabel(providerKey)} 프롬프트 자동 주입 완료`);
+                } else if (providerKey && stage === "bridge_waiting_user_send") {
+                  clearWebBridgeStageWarnTimer(providerKey);
+                  setStatus(`${webProviderLabel(providerKey)} 탭에서 전송 1회가 필요합니다.`);
+                } else if (providerKey && stage === "bridge_done") {
+                  clearWebBridgeStageWarnTimer(providerKey);
+                  setStatus(`${webProviderLabel(providerKey)} 응답 수집 완료`);
+                } else if (
+                  providerKey &&
+                  (stage === "bridge_failed" ||
+                    stage === "bridge_timeout" ||
+                    stage === "bridge_cancelled" ||
+                    stage === "bridge_error")
+                ) {
+                  clearWebBridgeStageWarnTimer(providerKey);
                 }
                 void refreshWebBridgeStatus(true);
               }
@@ -8170,6 +8238,7 @@ ${prompt}`;
         const workerReady = await ensureWebWorkerReady();
         if (!workerReady) {
           addNodeLog(node.id, `[WEB] 웹 연결 워커 준비 실패, 수동 입력으로 전환`);
+          clearWebBridgeStageWarnTimer(webProvider);
           activeWebNodeIdRef.current = "";
           activeWebProviderRef.current = null;
           setNodeStatus(node.id, "waiting_user", `${webProvider} 응답 입력 대기`);
@@ -8275,6 +8344,7 @@ ${prompt}`;
               knowledgeTrace,
             }));
           } finally {
+            clearWebBridgeStageWarnTimer(webProvider);
             activeWebNodeIdRef.current = "";
             activeWebProviderRef.current = null;
           }
@@ -8907,6 +8977,10 @@ ${prompt}`;
       setError(String(e));
       setStatus("그래프 실행 실패");
     } finally {
+      for (const timerId of Object.values(webBridgeStageWarnTimerRef.current)) {
+        window.clearTimeout(timerId);
+      }
+      webBridgeStageWarnTimerRef.current = {};
       turnTerminalResolverRef.current = null;
       webTurnResolverRef.current = null;
       webLoginResolverRef.current = null;
@@ -8940,6 +9014,7 @@ ${prompt}`;
       try {
         await invoke("web_provider_cancel", { provider: activeWebProvider });
         addNodeLog(activeWebNodeId, "[WEB] 취소 요청 전송");
+        clearWebBridgeStageWarnTimer(activeWebProvider);
       } catch (e) {
         setError(String(e));
       }
