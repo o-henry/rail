@@ -462,7 +462,7 @@ async function runTask(taskPayload) {
     throw new Error("provider mismatch");
   }
   const providerConfig = PROVIDER_CONFIG[provider];
-  const timeoutMs = Math.max(5000, Number(taskPayload.timeoutMs ?? 90000) || 90000);
+  const timeoutMs = Math.max(5000, Number(taskPayload.timeoutMs ?? 180000) || 180000);
   const baselineText = extractLastResponseText(providerConfig.responseSelectors, "");
   activeTask = {
     id: taskPayload.id,

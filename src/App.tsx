@@ -6259,7 +6259,7 @@ ${prompt}`;
     const webProvider = getWebProviderFromExecutor(executor);
     if (webProvider) {
       const webResultMode = normalizeWebResultMode(config.webResultMode);
-      const webTimeoutMs = Math.max(5_000, Number(config.webTimeoutMs ?? 90_000) || 90_000);
+      const webTimeoutMs = Math.max(5_000, Number(config.webTimeoutMs ?? 180_000) || 180_000);
 
       if (webResultMode === "bridgeAssisted") {
         activeWebNodeIdRef.current = node.id;
@@ -8435,11 +8435,11 @@ ${prompt}`;
                                   onChange={(e) =>
                                     updateSelectedNodeConfig(
                                       "webTimeoutMs",
-                                      Number(e.currentTarget.value) || 90_000,
+                                      Number(e.currentTarget.value) || 180_000,
                                     )
                                   }
                                   type="number"
-                                  value={String((selectedNode.config as TurnConfig).webTimeoutMs ?? 90_000)}
+                                  value={String((selectedNode.config as TurnConfig).webTimeoutMs ?? 180_000)}
                                 />
                               </label>
                               <div className="inspector-empty">
@@ -8819,11 +8819,11 @@ ${prompt}`;
                               updateNodeConfigById(
                                 feedInspectorEditableNodeId,
                                 "webTimeoutMs",
-                                Number(event.currentTarget.value) || 90_000,
+                                Number(event.currentTarget.value) || 180_000,
                               );
                             }}
                             type="number"
-                            value={String(feedInspectorTurnConfig?.webTimeoutMs ?? 90_000)}
+                            value={String(feedInspectorTurnConfig?.webTimeoutMs ?? 180_000)}
                           />
                         </label>
                       </>

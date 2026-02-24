@@ -20,7 +20,7 @@ const SYSTEM_CHROME_PROFILE_DIR =
 const USE_SYSTEM_CHROME_PROFILE =
   (process.env.RAIL_WEB_USE_SYSTEM_CHROME_PROFILE ?? '0') === '1' &&
   Boolean(SYSTEM_CHROME_PROFILE_DIR);
-const DEFAULT_TIMEOUT_MS = 90_000;
+const DEFAULT_TIMEOUT_MS = 180_000;
 const BRIDGE_HOST = '127.0.0.1';
 const BRIDGE_PORT = Number(process.env.RAIL_WEB_BRIDGE_PORT ?? 38961) || 38961;
 const WORKER_LOCK_PATH = path.join(PROFILE_ROOT, 'worker.lock.json');
