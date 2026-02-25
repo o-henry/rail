@@ -804,38 +804,6 @@ function App() {
 
   useEffect(() => {
     let cancelled = false;
-    const bootstrapWorker = async () => {
-      try {
-        await invoke("web_worker_start");
-      } catch {
-        // non-fatal: fallback path handles worker unavailable
-      }
-      try {
-        const health = await invoke<WebWorkerHealth>("web_provider_health");
-        if (!cancelled) {
-          setWebWorkerHealth(health);
-          if (health.bridge) {
-            setWebBridgeStatus(toWebBridgeStatus(health.bridge));
-          }
-        }
-      } catch {
-        // silent: settings panel refresh button shows latest state on demand
-      }
-      if (!cancelled) {
-        void refreshWebBridgeStatus(true);
-      }
-    };
-    void bootstrapWorker();
-    return () => {
-      cancelled = true;
-      void invoke("web_worker_stop").catch(() => {
-        // noop: app shutdown/unmount path
-      });
-    };
-  }, []);
-
-  useEffect(() => {
-    let cancelled = false;
     if (!hasTauriRuntime) {
       return () => {
         cancelled = true;
@@ -951,7 +919,6 @@ function App() {
                 ) {
                   clearWebBridgeStageWarnTimer(providerKey);
                 }
-                void refreshWebBridgeStatus(true);
               }
             }
 
@@ -1559,33 +1526,8 @@ function App() {
   }, []);
 
   useEffect(() => {
-    let cancelled = false;
-
-    const boot = async () => {
-      try {
-        await ensureEngineStarted();
-        await refreshAuthStateFromEngine(true);
-        if (!cancelled) {
-          setStatus("준비됨");
-        }
-      } catch (e) {
-        if (isEngineAlreadyStartedError(e)) {
-          if (!cancelled) {
-            setEngineStarted(true);
-            setStatus("준비됨");
-          }
-          return;
-        }
-        const message = toErrorText(e);
-        if (!cancelled) {
-          setStatus(`자동 시작 실패 (${message})`);
-        }
-      }
-    };
-
-    boot();
+    setStatus("대기 중");
     return () => {
-      cancelled = true;
       for (const timerId of Object.values(feedReplyFeedbackClearTimerRef.current)) {
         window.clearTimeout(timerId);
       }
@@ -1961,7 +1903,16 @@ function App() {
     }
   }
 
-  async function refreshWebBridgeStatus(silent = false) {
+  async function refreshWebBridgeStatus(silent = false, forceRpc = false) {
+    if (!forceRpc) {
+      const health = await refreshWebWorkerHealth(true);
+      if (health?.bridge) {
+        const next = toWebBridgeStatus(health.bridge);
+        setWebBridgeStatus(next);
+        return next;
+      }
+      return null;
+    }
     try {
       const raw = await invokeBridgeRpcWithRecovery("web_bridge_status");
       const next = toWebBridgeStatus(raw);
@@ -2000,7 +1951,7 @@ function App() {
     try {
       await invoke("web_worker_start");
       setStatus("웹 연결 워커 재시작 완료");
-      await refreshWebBridgeStatus(true);
+      await refreshWebBridgeStatus(true, true);
       await onCopyWebBridgeConnectCode();
     } catch (error) {
       setError(`웹 연결 재시작 실패: ${String(error)}`);
@@ -2011,7 +1962,7 @@ function App() {
 
   async function onCopyWebBridgeConnectCode() {
     try {
-      const status = await refreshWebBridgeStatus(true);
+      const status = await refreshWebBridgeStatus(true, true);
       if (!status?.token) {
         throw new Error("연결 토큰을 읽을 수 없습니다.");
       }
@@ -2142,28 +2093,15 @@ function App() {
     }
 
     void refreshWebWorkerHealth(true);
-    void refreshWebBridgeStatus(true);
-    const intervalId = window.setInterval(() => {
-      void refreshWebWorkerHealth(true);
-      void refreshWebBridgeStatus(true);
-    }, 1800);
-
-    return () => {
-      window.clearInterval(intervalId);
-    };
+    return;
   }, [workspaceTab]);
 
   useEffect(() => {
     if (workspaceTab !== "bridge") {
       return;
     }
-    void refreshWebBridgeStatus(true);
-    const intervalId = window.setInterval(() => {
-      void refreshWebBridgeStatus(true);
-    }, 1400);
-    return () => {
-      window.clearInterval(intervalId);
-    };
+    void refreshWebWorkerHealth(true);
+    return undefined;
   }, [workspaceTab]);
 
   useEffect(() => {
