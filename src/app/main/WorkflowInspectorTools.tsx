@@ -235,7 +235,7 @@ export default function WorkflowInspectorTools({
             );
           })}
         </div>
-        <label>
+        <label className="knowledge-config-label">
           {t("workflow.knowledge.topK")}
           <FancySelect
             ariaLabel={t("workflow.knowledge.topK")}
@@ -255,7 +255,7 @@ export default function WorkflowInspectorTools({
           />
         </label>
         <div className="inspector-empty">{tp("질문과 가장 관련 있는 참고 자료를 몇 개까지 붙일지 정합니다.")}</div>
-        <label>
+        <label className="knowledge-config-label">
           {t("workflow.knowledge.length")}
           <FancySelect
             ariaLabel={t("workflow.knowledge.length")}
@@ -279,4 +279,3 @@ export default function WorkflowInspectorTools({
     </section>
   );
 }
-

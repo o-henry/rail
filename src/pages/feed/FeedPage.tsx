@@ -642,10 +642,11 @@ export default function FeedPage({ vm }: FeedPageProps) {
                                             ? t("feed.agent.working")
                                             : isFailedPost
                                               ? t("label.status.failed")
-                                              : t("label.status.done")
+                                            : t("label.status.done")
                                         }
                                       >
-                                        {badgeText}
+                                        <span aria-hidden="true" className="feed-score-badge-icon" />
+                                        <span className="feed-score-badge-text">{badgeText}</span>
                                       </span>
                                       <div
                                         className="feed-share-menu-wrap feed-share-menu-wrap-head"
@@ -660,6 +661,7 @@ export default function FeedPage({ vm }: FeedPageProps) {
                                           type="button"
                                         >
                                           <img alt="" aria-hidden="true" className="feed-share-icon" src="/share-svgrepo-com.svg" />
+                                          <span>{t("feed.post.share")}</span>
                                         </button>
                                         {feedShareMenuPostId === postId && (
                                           <div className="feed-share-menu">
