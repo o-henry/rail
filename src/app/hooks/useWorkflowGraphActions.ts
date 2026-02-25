@@ -100,9 +100,10 @@ export function useWorkflowGraphActions(params: UseWorkflowGraphActionsParams) {
       const center = getCanvasViewportCenterLogical();
       const fallbackIndex = graph.nodes.length;
       const boundedStage = getBoundedStageSize();
-      const minPos = -NODE_DRAG_MARGIN;
-      const maxX = Math.max(minPos, boundedStage.width - NODE_WIDTH + NODE_DRAG_MARGIN);
-      const maxY = Math.max(minPos, boundedStage.height - NODE_HEIGHT + NODE_DRAG_MARGIN);
+      const minX = -NODE_DRAG_MARGIN;
+      const minY = (24 - GRAPH_STAGE_INSET_Y) / canvasZoom;
+      const maxX = Math.max(minX, boundedStage.width - NODE_WIDTH + NODE_DRAG_MARGIN);
+      const maxY = Math.max(minY, boundedStage.height - NODE_HEIGHT + NODE_DRAG_MARGIN);
       const baseX = center
         ? Math.round(center.x - NODE_WIDTH / 2)
         : 40 + (fallbackIndex % 4) * 280;
@@ -113,8 +114,8 @@ export function useWorkflowGraphActions(params: UseWorkflowGraphActionsParams) {
         id: makeNodeId(type),
         type,
         position: {
-          x: Math.min(maxX, Math.max(minPos, baseX)),
-          y: Math.min(maxY, Math.max(minPos, baseY)),
+          x: Math.min(maxX, Math.max(minX, baseX)),
+          y: Math.min(maxY, Math.max(minY, baseY)),
         },
         config: defaultNodeConfig(type),
       };
@@ -236,7 +237,8 @@ export function useWorkflowGraphActions(params: UseWorkflowGraphActionsParams) {
       return false;
     }
 
-    const minPos = -NODE_DRAG_MARGIN;
+    const minX = -NODE_DRAG_MARGIN;
+    const minY = (24 - GRAPH_STAGE_INSET_Y) / canvasZoom;
     const offsetStep = 48;
     graphPasteSerialRef.current += 1;
     const offset = graphPasteSerialRef.current * offsetStep;
@@ -249,8 +251,8 @@ export function useWorkflowGraphActions(params: UseWorkflowGraphActionsParams) {
         ...node,
         id: nextId,
         position: {
-          x: Math.max(minPos, Math.round(node.position.x + offset)),
-          y: Math.max(minPos, Math.round(node.position.y + offset)),
+          x: Math.max(minX, Math.round(node.position.x + offset)),
+          y: Math.max(minY, Math.round(node.position.y + offset)),
         },
         config: JSON.parse(JSON.stringify(node.config ?? {})),
       };

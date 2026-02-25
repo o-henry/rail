@@ -2886,7 +2886,8 @@ function App() {
     }
     const dx = logicalPoint.x - pointerStart.x;
     const dy = logicalPoint.y - pointerStart.y;
-    const minPos = -NODE_DRAG_MARGIN;
+    const minX = -NODE_DRAG_MARGIN;
+    const minY = (24 - GRAPH_STAGE_INSET_Y) / canvasZoom;
     const nodeIdSet = new Set(nodeIds);
     const dragSingleNode = nodeIds.length === 1;
 
@@ -2903,8 +2904,8 @@ function App() {
           return node;
         }
         const size = getNodeVisualSize(node.id);
-        const maxX = Math.max(minPos, boundedStageWidth - size.width + NODE_DRAG_MARGIN);
-        const maxY = Math.max(minPos, boundedStageHeight - size.height + NODE_DRAG_MARGIN);
+        const maxX = Math.max(minX, boundedStageWidth - size.width + NODE_DRAG_MARGIN);
+        const maxY = Math.max(minY, boundedStageHeight - size.height + NODE_DRAG_MARGIN);
         const nextX = start.x + dx;
         const nextY = start.y + dy;
         let snappedX = snapToLayoutGrid(nextX, "x", AUTO_LAYOUT_DRAG_SNAP_THRESHOLD);
@@ -2916,8 +2917,8 @@ function App() {
         return {
           ...node,
           position: {
-            x: Math.min(maxX, Math.max(minPos, snappedX)),
-            y: Math.min(maxY, Math.max(minPos, snappedY)),
+            x: Math.min(maxX, Math.max(minX, snappedX)),
+            y: Math.min(maxY, Math.max(minY, snappedY)),
           },
         };
       });
@@ -3149,9 +3150,10 @@ function App() {
             return node;
           }
           const size = getNodeVisualSize(node.id);
-          const minPos = -NODE_DRAG_MARGIN;
-          const maxX = Math.max(minPos, boundedStageWidth - size.width + NODE_DRAG_MARGIN);
-          const maxY = Math.max(minPos, boundedStageHeight - size.height + NODE_DRAG_MARGIN);
+          const minX = -NODE_DRAG_MARGIN;
+          const minY = (24 - GRAPH_STAGE_INSET_Y) / canvasZoom;
+          const maxX = Math.max(minX, boundedStageWidth - size.width + NODE_DRAG_MARGIN);
+          const maxY = Math.max(minY, boundedStageHeight - size.height + NODE_DRAG_MARGIN);
           let snappedX = snapToLayoutGrid(node.position.x, "x", AUTO_LAYOUT_SNAP_THRESHOLD);
           let snappedY = snapToLayoutGrid(node.position.y, "y", AUTO_LAYOUT_SNAP_THRESHOLD);
           if (dragSingleNode) {
@@ -3161,8 +3163,8 @@ function App() {
           return {
             ...node,
             position: {
-              x: Math.min(maxX, Math.max(minPos, snappedX)),
-              y: Math.min(maxY, Math.max(minPos, snappedY)),
+              x: Math.min(maxX, Math.max(minX, snappedX)),
+              y: Math.min(maxY, Math.max(minY, snappedY)),
             },
           };
         });
