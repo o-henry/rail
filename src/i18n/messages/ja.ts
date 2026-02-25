@@ -230,6 +230,7 @@ export const JA_MESSAGES: Dictionary = {
     "group.custom": "カスタム",
     "group.followup": "ユーザー追加リクエスト",
     "run.turnCompleted": "ターン実行完了",
+    "run.graphCompletedLowQuality": "グラフ実行完了（品質不足）",
     "run.cancelledByUser": "ユーザーの停止要求により実行がキャンセルされました。",
     "run.cancelledByUserShort": "ユーザーによりキャンセル",
     "run.qualityLowSummary": "品質不足 ({score}/{threshold})",

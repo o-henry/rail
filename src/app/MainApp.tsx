@@ -705,7 +705,7 @@ function App() {
     const nodeById = new Map(graph.nodes.map((node) => [node.id, node]));
 
     const isTerminal = (status: NodeExecutionStatus) =>
-      status === "done" || status === "failed" || status === "skipped" || status === "cancelled";
+      status === "done" || status === "low_quality" || status === "failed" || status === "skipped" || status === "cancelled";
 
     setNodeStates((prev) => {
       const next: Record<string, NodeRunState> = { ...prev };
@@ -4591,9 +4591,9 @@ ${prompt}`;
                 }),
               );
               outputs[nodeId] = normalizedOutput;
-              setNodeStatus(nodeId, "done", lowQualitySummary);
+              setNodeStatus(nodeId, "low_quality", lowQualitySummary);
               setNodeRuntimeFields(nodeId, {
-                status: "done",
+                status: "low_quality",
                 output: normalizedOutput,
                 qualityReport: finalQualityReport,
                 threadId: result.threadId,
@@ -4615,7 +4615,7 @@ ${prompt}`;
                 finishedAt: finishedAtIso,
                 summary: lowQualitySummary,
               });
-              transition(runRecord, nodeId, "done", lowQualitySummary);
+              transition(runRecord, nodeId, "low_quality", lowQualitySummary);
               const lowQualityFeed = buildFeedPost({
                 runId: runRecord.runId,
                 node,
@@ -4637,7 +4637,7 @@ ${prompt}`;
               feedRawAttachmentRef.current[feedAttachmentRawKey(lowQualityFeed.post.id, "json")] =
                 lowQualityFeed.rawAttachments.json;
               lastDoneNodeId = nodeId;
-              terminalStateByNodeId[nodeId] = "done";
+              terminalStateByNodeId[nodeId] = "low_quality";
               scheduleChildren(nodeId);
               return;
             }
@@ -4928,7 +4928,7 @@ ${prompt}`;
         graph.nodes.forEach((node) => {
           setNodeStates((prev) => {
             const current = prev[node.id];
-            if (!current || ["done", "failed", "skipped", "cancelled"].includes(current.status)) {
+            if (!current || ["done", "low_quality", "failed", "skipped", "cancelled"].includes(current.status)) {
               return prev;
             }
             return {
@@ -4968,9 +4968,9 @@ ${prompt}`;
         finalNodeId = lastDoneNodeId;
       }
       const finalNodeState = finalNodeId ? terminalStateByNodeId[finalNodeId] : undefined;
-      if (finalNodeId && finalNodeState === "done" && finalNodeId in outputs) {
+      if (finalNodeId && (finalNodeState === "done" || finalNodeState === "low_quality") && finalNodeId in outputs) {
         runRecord.finalAnswer = extractFinalAnswer(outputs[finalNodeId]);
-        setStatus("그래프 실행 완료");
+        setStatus(finalNodeState === "low_quality" ? t("run.graphCompletedLowQuality") : "그래프 실행 완료");
       } else {
         const reason =
           finalNodeId && finalNodeState

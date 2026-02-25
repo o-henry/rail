@@ -64,6 +64,7 @@ export type NodeExecutionStatus =
   | "running"
   | "waiting_user"
   | "done"
+  | "low_quality"
   | "failed"
   | "skipped"
   | "cancelled";

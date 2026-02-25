@@ -230,6 +230,7 @@ export const ZH_MESSAGES: Dictionary = {
     "group.custom": "自定义",
     "group.followup": "用户追加请求",
     "run.turnCompleted": "轮次执行完成",
+    "run.graphCompletedLowQuality": "图谱执行完成（质量不足）",
     "run.cancelledByUser": "执行已因用户停止请求而取消。",
     "run.cancelledByUserShort": "用户取消",
     "run.qualityLowSummary": "质量不足 ({score}/{threshold})",

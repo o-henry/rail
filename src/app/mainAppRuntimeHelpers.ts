@@ -310,7 +310,12 @@ export function normalizeRunFeedPosts(run: any): any[] {
   const nodeMap = new Map(run.graphSnapshot.nodes.map((node: any) => [node.id, node]));
   const terminalMap = new Map<string, any>();
   for (const transition of run.transitions) {
-    if (transition.status !== "done" && transition.status !== "failed" && transition.status !== "cancelled") {
+    if (
+      transition.status !== "done" &&
+      transition.status !== "low_quality" &&
+      transition.status !== "failed" &&
+      transition.status !== "cancelled"
+    ) {
       continue;
     }
     const prev = terminalMap.get(transition.nodeId);

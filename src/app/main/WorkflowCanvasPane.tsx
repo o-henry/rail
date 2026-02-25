@@ -291,7 +291,18 @@ export default function WorkflowCanvasPane({
                     <div className="node-body">
                       {nodeSummary ? <div className="node-summary-row"><div>{nodeSummary}</div></div> : null}
                       <div className="node-runtime-meta">
-                        <div>{t("workflow.node.completion")}: {nodeStatus === "done" ? t("label.status.done") : nodeStatus === "failed" ? t("label.status.failed") : nodeStatus === "cancelled" ? t("label.status.cancelled") : t("label.status.idle")}</div>
+                        <div>
+                          {t("workflow.node.completion")}:{" "}
+                          {nodeStatus === "done"
+                            ? t("label.status.done")
+                            : nodeStatus === "low_quality"
+                              ? t("label.status.low_quality")
+                              : nodeStatus === "failed"
+                                ? t("label.status.failed")
+                                : nodeStatus === "cancelled"
+                                  ? t("label.status.cancelled")
+                                  : t("label.status.idle")}
+                        </div>
                         <div>{t("workflow.node.elapsed")}: {formatNodeElapsedTime(runState, runtimeNowMs)}</div>
                       </div>
                       <button className="node-feed-link" onClick={() => onOpenFeedFromNode(node.id)} type="button">{t("workflow.node.outputInFeed")}</button>

@@ -230,6 +230,7 @@ export const KO_MESSAGES: Dictionary = {
     "group.custom": "사용자 정의",
     "group.followup": "사용자 추가 요청",
     "run.turnCompleted": "턴 실행 완료",
+    "run.graphCompletedLowQuality": "그래프 실행 완료 (품질 미달)",
     "run.cancelledByUser": "사용자 중지 요청으로 실행이 취소되었습니다.",
     "run.cancelledByUserShort": "사용자 취소",
     "run.qualityLowSummary": "품질 미달 ({score}/{threshold})",

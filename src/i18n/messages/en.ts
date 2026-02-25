@@ -230,6 +230,7 @@ export const EN_MESSAGES: Dictionary = {
     "group.custom": "Custom",
     "group.followup": "User Follow-up",
     "run.turnCompleted": "Turn completed",
+    "run.graphCompletedLowQuality": "Graph run completed (Low quality)",
     "run.cancelledByUser": "Execution was cancelled by user stop request.",
     "run.cancelledByUserShort": "Cancelled by user",
     "run.qualityLowSummary": "Low quality ({score}/{threshold})",

@@ -1158,6 +1158,11 @@ h3 {
   border-color: #9ad4b2;
 }
 
+.status-low_quality {
+  background: #fff4dc;
+  border-color: #e4c88a;
+}
+
 .status-failed {
   background: #ffe2e2;
   border-color: #e6a8a8;

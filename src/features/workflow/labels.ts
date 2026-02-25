@@ -74,6 +74,9 @@ export function nodeStatusLabel(status: NodeExecutionStatus): string {
   if (status === "done") {
     return t("label.status.done");
   }
+  if (status === "low_quality") {
+    return t("label.status.low_quality");
+  }
   if (status === "failed") {
     return t("label.status.failed");
   }
