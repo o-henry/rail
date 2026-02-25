@@ -18,9 +18,13 @@ import SettingsPage from "../pages/settings/SettingsPage";
 import WorkflowPage from "../pages/workflow/WorkflowPage";
 import { useFloatingPanel } from "../features/ui/useFloatingPanel";
 import { useExecutionState } from "./hooks/useExecutionState";
+import { useFeedRunActions } from "./hooks/useFeedRunActions";
 import { useFeedState } from "./hooks/useFeedState";
+import { useGraphFileActions } from "./hooks/useGraphFileActions";
 import { useGraphState } from "./hooks/useGraphState";
 import { useWebConnectState } from "./hooks/useWebConnectState";
+import { useWorkflowGraphActions } from "./hooks/useWorkflowGraphActions";
+import { useWorkflowShortcuts } from "./hooks/useWorkflowShortcuts";
 import {
   COST_PRESET_DEFAULT_MODEL,
   DEFAULT_TURN_MODEL,
@@ -88,19 +92,14 @@ import {
 } from "../features/feed/displayUtils";
 import { computeFeedDerivedState } from "../features/feed/derivedState";
 import {
-  alignAutoEdgePoints,
   autoArrangeGraphLayout,
-  buildManualEdgePath,
+  buildCanvasEdgeLines,
   buildRoundedEdgePath,
   buildSimpleReadonlyTurnEdges,
   cloneGraph,
-  defaultNodeConfig,
-  edgeMidPoint,
-  getAutoConnectionSides,
   getGraphEdgeKey,
   getNodeAnchorPoint,
   graphEquals,
-  makeNodeId,
   nodeCardSummary,
   snapToLayoutGrid,
   snapToNearbyNodeAxis,
@@ -108,12 +107,10 @@ import {
 } from "../features/workflow/graph-utils";
 import type {
   GraphData,
-  GraphEdge,
   GraphNode,
   KnowledgeFileRef,
   NodeAnchorSide,
   NodeExecutionStatus,
-  NodeType,
 } from "../features/workflow/types";
 import {
   AUTH_MODE_STORAGE_KEY,
@@ -131,7 +128,6 @@ import {
   formatRunDateTime,
   formatUnknown,
   formatUsage,
-  isEditableTarget,
   isEngineAlreadyStartedError,
   isNodeDragAllowedTarget,
   loadPersistedAuthMode,
@@ -152,7 +148,6 @@ import {
   type TurnTerminal,
   type WorkspaceTab,
   isTurnTerminalEvent,
-  normalizeGraph,
   normalizeKnowledgeConfig,
   toWebBridgeStatus,
   validateSimpleSchema,
@@ -226,7 +221,6 @@ import {
   WEB_TURN_FLOATING_MARGIN,
   WEB_TURN_FLOATING_MIN_VISIBLE_HEIGHT,
   WEB_TURN_FLOATING_MIN_VISIBLE_WIDTH,
-  buildFeedShareText,
 } from "./main";
 import WorkflowCanvasPane from "./main/WorkflowCanvasPane";
 import WorkflowInspectorPane from "./main/WorkflowInspectorPane";
@@ -562,6 +556,28 @@ function App() {
     const at = new Date().toISOString();
     setErrorLogs((prev) => [`[${at}] ${trimmed}`, ...prev].slice(0, 600));
   }
+
+  const {
+    onShareFeedPost,
+    onDeleteFeedRunGroup,
+    onSubmitFeedRunGroupRename,
+  } = useFeedRunActions({
+    setError,
+    setStatus,
+    setFeedShareMenuPostId,
+    setFeedPosts,
+    setFeedInspectorPostId,
+    setFeedGroupExpandedByRunId,
+    feedGroupRenameRunId,
+    setFeedGroupRenameRunId,
+    feedGroupRenameDraft,
+    setFeedGroupRenameDraft,
+    activeFeedRunMeta,
+    setActiveFeedRunMeta,
+    feedRunCacheRef,
+    ensureFeedRunRecord,
+    persistRunRecordFile,
+  });
 
   function getNodeVisualSize(nodeId: string): NodeVisualSize {
     return nodeSizeMapRef.current[nodeId] ?? { width: NODE_WIDTH, height: NODE_HEIGHT };
@@ -1122,140 +1138,6 @@ function App() {
       return normalized;
     } catch {
       return null;
-    }
-  }
-
-  async function onShareFeedPost(post: FeedViewPost, mode: "clipboard" | "json") {
-    setError("");
-    setFeedShareMenuPostId(null);
-    const run = await ensureFeedRunRecord(post.sourceFile);
-    const shareText = buildFeedShareText(post, run);
-    try {
-      if (mode === "clipboard") {
-        await navigator.clipboard.writeText(shareText);
-        setStatus("공유 텍스트 복사 완료");
-        return;
-      }
-      if (mode === "json") {
-        const payload = {
-          post,
-          runId: run?.runId ?? null,
-          sourceFile: post.sourceFile || null,
-          exportedAt: new Date().toISOString(),
-        };
-        await navigator.clipboard.writeText(JSON.stringify(payload, null, 2));
-        setStatus("공유 JSON 복사 완료");
-        return;
-      }
-    } catch (e) {
-      setError(`공유 실패: ${String(e)}`);
-    }
-  }
-
-  async function onDeleteFeedPost(post: FeedViewPost) {
-    setError("");
-    setFeedShareMenuPostId(null);
-    const sourceFile = post.sourceFile.trim();
-    if (!sourceFile) {
-      return;
-    }
-    try {
-      const run = await ensureFeedRunRecord(sourceFile);
-      if (!run) {
-        throw new Error("실행 기록을 불러오지 못했습니다.");
-      }
-      const beforePosts = run.feedPosts ?? [];
-      const nextPosts = beforePosts.filter((item) => item.id !== post.id);
-      if (nextPosts.length === beforePosts.length) {
-        setStatus("삭제할 포스트를 찾지 못했습니다.");
-        return;
-      }
-
-      const nextRun: RunRecord = {
-        ...run,
-        feedPosts: nextPosts,
-      };
-
-      await persistRunRecordFile(sourceFile, nextRun);
-      feedRunCacheRef.current[sourceFile] = nextRun;
-      setFeedPosts((prev) => prev.filter((item) => !(item.sourceFile === sourceFile && item.id === post.id)));
-      setStatus(`포스트 삭제 완료: ${post.agentName}`);
-    } catch (e) {
-      setError(`포스트 삭제 실패: ${String(e)}`);
-    }
-  }
-
-  async function onDeleteFeedRunGroup(runId: string, sourceFile: string, groupName: string) {
-    setError("");
-    setFeedShareMenuPostId(null);
-    const target = String(sourceFile ?? "").trim();
-    if (!target) {
-      setError("삭제할 실행 파일을 찾을 수 없습니다.");
-      return;
-    }
-    try {
-      await invoke("run_delete", { name: target });
-      delete feedRunCacheRef.current[target];
-      setFeedPosts((prev) => prev.filter((item) => item.sourceFile !== target));
-      setFeedInspectorPostId("");
-      setFeedGroupExpandedByRunId((prev) => {
-        const next = { ...prev };
-        delete next[runId];
-        return next;
-      });
-      if (feedGroupRenameRunId === runId) {
-        setFeedGroupRenameRunId(null);
-        setFeedGroupRenameDraft("");
-      }
-      setStatus(`피드 세트 삭제 완료: ${groupName}`);
-    } catch (error) {
-      setError(`피드 세트 삭제 실패: ${String(error)}`);
-    }
-  }
-
-  async function onSubmitFeedRunGroupRename(runId: string, sourceFile: string) {
-    const trimmed = feedGroupRenameDraft.trim();
-    if (!trimmed) {
-      setError("세트 이름을 입력하세요.");
-      return;
-    }
-    const target = sourceFile.trim();
-    if (!target) {
-      setError("세트 원본 실행 파일을 찾을 수 없습니다.");
-      return;
-    }
-    setError("");
-    try {
-      const run = await ensureFeedRunRecord(target);
-      if (!run) {
-        throw new Error("실행 기록을 불러오지 못했습니다.");
-      }
-      const nextRun: RunRecord = {
-        ...run,
-        workflowGroupName: trimmed,
-        workflowGroupKind: "custom",
-      };
-      await persistRunRecordFile(target, nextRun);
-      feedRunCacheRef.current[target] = nextRun;
-      if (activeFeedRunMeta?.runId === runId) {
-        setActiveFeedRunMeta((prev) => {
-          if (!prev || prev.runId !== runId) {
-            return prev;
-          }
-          return {
-            ...prev,
-            groupName: trimmed,
-            groupKind: "custom",
-            presetKind: undefined,
-          };
-        });
-      }
-      setFeedPosts((prev) => [...prev]);
-      setFeedGroupRenameRunId(null);
-      setFeedGroupRenameDraft("");
-      setStatus(`피드 세트 이름 변경 완료: ${trimmed}`);
-    } catch (error) {
-      setError(`피드 세트 이름 변경 실패: ${String(error)}`);
     }
   }
 
@@ -2329,17 +2211,6 @@ function App() {
     }
   }
 
-  function getCanvasViewportCenterLogical(): { x: number; y: number } | null {
-    const canvas = graphCanvasRef.current;
-    if (!canvas) {
-      return null;
-    }
-    return {
-      x: (canvas.scrollLeft + canvas.clientWidth / 2 - GRAPH_STAGE_INSET_X) / canvasZoom,
-      y: (canvas.scrollTop + canvas.clientHeight / 2 - GRAPH_STAGE_INSET_Y) / canvasZoom,
-    };
-  }
-
   function pickDefaultCanvasNodeId(nodes: GraphNode[]): string {
     if (!SIMPLE_WORKFLOW_UI) {
       return nodes[0]?.id ?? "";
@@ -2347,38 +2218,40 @@ function App() {
     return nodes.find((node) => node.type === "turn")?.id ?? "";
   }
 
-  function addNode(type: NodeType) {
-    const center = getCanvasViewportCenterLogical();
-    const fallbackIndex = graph.nodes.length;
-    const minPos = -NODE_DRAG_MARGIN;
-    const maxX = Math.max(minPos, boundedStageWidth - NODE_WIDTH + NODE_DRAG_MARGIN);
-    const maxY = Math.max(minPos, boundedStageHeight - NODE_HEIGHT + NODE_DRAG_MARGIN);
-    const baseX = center
-      ? Math.round(center.x - NODE_WIDTH / 2)
-      : 40 + (fallbackIndex % 4) * 280;
-    const baseY = center
-      ? Math.round(center.y - NODE_HEIGHT / 2)
-      : 40 + Math.floor(fallbackIndex / 4) * 180;
-    const node: GraphNode = {
-      id: makeNodeId(type),
-      type,
-      position: {
-        x: Math.min(maxX, Math.max(minPos, baseX)),
-        y: Math.min(maxY, Math.max(minPos, baseY)),
-      },
-      config: defaultNodeConfig(type),
-    };
-
-    applyGraphChange((prev) => {
-      return {
-        ...prev,
-        nodes: [...prev.nodes, node],
-      };
-    }, { autoLayout: true });
-
-    setNodeSelection([node.id], node.id);
-    setSelectedEdgeKey("");
-  }
+  const {
+    addNode,
+    deleteNodes,
+    deleteNode,
+    hasUserTextSelection,
+    copySelectedNodesToClipboard,
+    pasteNodesFromClipboard,
+    onNodeAnchorDragStart,
+    onNodeAnchorDrop,
+    onNodeConnectDrop,
+  } = useWorkflowGraphActions({
+    graph,
+    canvasNodeIdSet,
+    selectedNodeIds,
+    getBoundedStageSize: () => ({ width: boundedStageWidth, height: boundedStageHeight }),
+    canvasZoom,
+    graphCanvasRef,
+    graphClipboardRef,
+    graphPasteSerialRef,
+    connectFromNodeId,
+    connectFromSide,
+    setConnectFromNodeId,
+    setConnectFromSide,
+    setConnectPreviewStartPoint,
+    setConnectPreviewPoint,
+    setIsConnectingDrag,
+    setMarqueeSelection,
+    setNodeSelection,
+    setSelectedEdgeKey,
+    setNodeStates,
+    setStatus,
+    applyGraphChange,
+    getNodeVisualSize,
+  });
 
   function applyPreset(kind: PresetKind) {
     const builtPreset = buildPresetGraphByKind(kind);
@@ -2457,231 +2330,6 @@ function App() {
 
     applyGraphChange((prev) => ({ ...prev, nodes: nextNodes }));
     setStatus(`비용 프리셋(${costPresetLabel(preset)}) 적용: ${changed}/${codexTurnNodes.length}개 노드`);
-  }
-
-  function deleteNodes(nodeIds: string[]) {
-    const targets = nodeIds.filter((id, index, arr) => arr.indexOf(id) === index);
-    if (targets.length === 0) {
-      return;
-    }
-    const targetSet = new Set(targets);
-    applyGraphChange((prev) => ({
-      ...prev,
-      nodes: prev.nodes.filter((n) => !targetSet.has(n.id)),
-      edges: prev.edges.filter((e) => !targetSet.has(e.from.nodeId) && !targetSet.has(e.to.nodeId)),
-    }), { autoLayout: true });
-    setNodeSelection(selectedNodeIds.filter((id) => !targetSet.has(id)));
-    setSelectedEdgeKey("");
-    setNodeStates((prev) => {
-      const next = { ...prev };
-      for (const nodeId of targetSet) {
-        delete next[nodeId];
-      }
-      return next;
-    });
-    if (connectFromNodeId && targetSet.has(connectFromNodeId)) {
-      setConnectFromNodeId("");
-      setConnectFromSide(null);
-      setConnectPreviewStartPoint(null);
-      setConnectPreviewPoint(null);
-      setIsConnectingDrag(false);
-      setMarqueeSelection(null);
-    }
-  }
-
-  function deleteNode(nodeId: string) {
-    deleteNodes([nodeId]);
-  }
-
-  function hasUserTextSelection(): boolean {
-    const selection = window.getSelection();
-    if (!selection || selection.rangeCount === 0) {
-      return false;
-    }
-    return !selection.isCollapsed && selection.toString().trim().length > 0;
-  }
-
-  function copySelectedNodesToClipboard(): boolean {
-    const targetIds = selectedNodeIds.filter((id) => canvasNodeIdSet.has(id));
-    if (targetIds.length === 0) {
-      return false;
-    }
-    const targetSet = new Set(targetIds);
-    const nodes = graph.nodes
-      .filter((node) => targetSet.has(node.id))
-      .map((node) => ({
-        ...node,
-        position: { ...node.position },
-        config: JSON.parse(JSON.stringify(node.config ?? {})),
-      }));
-    const edges = graph.edges
-      .filter((edge) => targetSet.has(edge.from.nodeId) && targetSet.has(edge.to.nodeId))
-      .map((edge) => ({
-        from: { ...edge.from },
-        to: { ...edge.to },
-        control: edge.control ? { ...edge.control } : undefined,
-      }));
-
-    graphClipboardRef.current = {
-      nodes,
-      edges,
-      copiedAt: Date.now(),
-    };
-    setStatus(nodes.length > 1 ? `노드 ${nodes.length}개 복사됨` : "노드 복사됨");
-    return true;
-  }
-
-  function pasteNodesFromClipboard(): boolean {
-    const snapshot = graphClipboardRef.current;
-    if (!snapshot || snapshot.nodes.length === 0) {
-      return false;
-    }
-
-    const minPos = -NODE_DRAG_MARGIN;
-    const offsetStep = 48;
-    graphPasteSerialRef.current += 1;
-    const offset = graphPasteSerialRef.current * offsetStep;
-
-    const idMap = new Map<string, string>();
-    const pastedNodes: GraphNode[] = snapshot.nodes.map((node) => {
-      const nextId = makeNodeId(node.type);
-      idMap.set(node.id, nextId);
-      return {
-        ...node,
-        id: nextId,
-        position: {
-          x: Math.max(minPos, Math.round(node.position.x + offset)),
-          y: Math.max(minPos, Math.round(node.position.y + offset)),
-        },
-        config: JSON.parse(JSON.stringify(node.config ?? {})),
-      };
-    });
-
-    const pastedEdges = snapshot.edges.reduce<GraphEdge[]>((acc, edge) => {
-        const fromId = idMap.get(edge.from.nodeId);
-        const toId = idMap.get(edge.to.nodeId);
-        if (!fromId || !toId || fromId === toId) {
-          return acc;
-        }
-        acc.push({
-          from: { ...edge.from, nodeId: fromId },
-          to: { ...edge.to, nodeId: toId },
-          ...(edge.control
-            ? { control: { ...edge.control, x: edge.control.x + offset, y: edge.control.y + offset } }
-            : {}),
-        });
-        return acc;
-      }, []);
-
-    applyGraphChange((prev) => ({
-      ...prev,
-      nodes: [...prev.nodes, ...pastedNodes],
-      edges: [...prev.edges, ...pastedEdges],
-    }));
-
-    const nextSelection = pastedNodes.map((node) => node.id);
-    setNodeSelection(nextSelection, nextSelection[0]);
-    setSelectedEdgeKey("");
-    setStatus(pastedNodes.length > 1 ? `노드 ${pastedNodes.length}개 붙여넣기됨` : "노드 붙여넣기됨");
-    return true;
-  }
-
-  function createEdgeConnection(
-    fromNodeId: string,
-    toNodeId: string,
-    fromSide?: NodeAnchorSide,
-    toSide?: NodeAnchorSide,
-  ) {
-    if (!fromNodeId || !toNodeId || fromNodeId === toNodeId) {
-      return;
-    }
-
-    const reverseExistsNow = graph.edges.some(
-      (edge) => edge.from.nodeId === toNodeId && edge.to.nodeId === fromNodeId,
-    );
-    if (reverseExistsNow) {
-      setStatus("양방향 연결은 허용되지 않습니다.");
-      return;
-    }
-
-    const fromNode = graph.nodes.find((node) => node.id === fromNodeId);
-    const toNode = graph.nodes.find((node) => node.id === toNodeId);
-    if (!fromNode || !toNode) {
-      return;
-    }
-
-    const auto = getAutoConnectionSides(fromNode, toNode);
-    const resolvedFromSide = fromSide ?? auto.fromSide;
-    const resolvedToSide = toSide ?? auto.toSide;
-
-    applyGraphChange((prev) => {
-      const exists = prev.edges.some(
-        (edge) => edge.from.nodeId === fromNodeId && edge.to.nodeId === toNodeId,
-      );
-      if (exists) {
-        return prev;
-      }
-      const reverseExists = prev.edges.some(
-        (edge) => edge.from.nodeId === toNodeId && edge.to.nodeId === fromNodeId,
-      );
-      if (reverseExists) {
-        return prev;
-      }
-      const edge: GraphEdge = {
-        from: { nodeId: fromNodeId, port: "out", side: resolvedFromSide },
-        to: { nodeId: toNodeId, port: "in", side: resolvedToSide },
-      };
-      return { ...prev, edges: [...prev.edges, edge] };
-    }, { autoLayout: true });
-  }
-
-  function onNodeAnchorDragStart(
-    e: ReactMouseEvent<HTMLButtonElement>,
-    nodeId: string,
-    side: NodeAnchorSide,
-  ) {
-    e.preventDefault();
-    e.stopPropagation();
-    const sourceNode = graph.nodes.find((node) => node.id === nodeId);
-    if (!sourceNode) {
-      return;
-    }
-    const point = getNodeAnchorPoint(sourceNode, side, getNodeVisualSize(sourceNode.id));
-    setConnectFromNodeId(nodeId);
-    setConnectFromSide(side);
-    setConnectPreviewStartPoint(point);
-    setConnectPreviewPoint(point);
-    setIsConnectingDrag(true);
-  }
-
-  function onNodeAnchorDrop(
-    e: ReactMouseEvent<HTMLButtonElement>,
-    targetNodeId: string,
-    targetSide: NodeAnchorSide,
-  ) {
-    if (!connectFromNodeId) {
-      return;
-    }
-    e.preventDefault();
-    e.stopPropagation();
-    createEdgeConnection(connectFromNodeId, targetNodeId, connectFromSide ?? undefined, targetSide);
-    setConnectFromNodeId("");
-    setConnectFromSide(null);
-    setConnectPreviewStartPoint(null);
-    setConnectPreviewPoint(null);
-    setIsConnectingDrag(false);
-  }
-
-  function onNodeConnectDrop(targetNodeId: string) {
-    if (!connectFromNodeId || connectFromNodeId === targetNodeId) {
-      return;
-    }
-    createEdgeConnection(connectFromNodeId, targetNodeId, connectFromSide ?? undefined);
-    setConnectFromNodeId("");
-    setConnectFromSide(null);
-    setConnectPreviewStartPoint(null);
-    setConnectPreviewPoint(null);
-    setIsConnectingDrag(false);
   }
 
   function clampCanvasZoom(nextZoom: number): number {
@@ -3275,143 +2923,44 @@ function App() {
     }
   }
 
-  function updateNodeConfigById(nodeId: string, key: string, value: unknown) {
-    setGraph((prev) => ({
-      ...prev,
-      nodes: prev.nodes.map((node) =>
-        node.id === nodeId
-          ? {
-              ...node,
-              config: {
-                ...node.config,
-                [key]: value,
-              },
-            }
-          : node,
-      ),
-    }));
-  }
-
-  function updateSelectedNodeConfig(key: string, value: unknown) {
-    if (!selectedNode) {
-      return;
-    }
-    updateNodeConfigById(selectedNode.id, key, value);
-  }
-
-  async function saveGraph() {
-    setError("");
-    try {
-      const saveTarget = graphFileName.trim() || "sample.json";
-      await invoke("graph_save", {
-        name: saveTarget,
-        graph,
-      });
-      await refreshGraphFiles();
-      setGraphFileName(saveTarget);
-      setSelectedGraphFileName(saveTarget);
-      setStatus(`그래프 저장 완료 (${saveTarget})`);
-    } catch (e) {
-      setError(String(e));
-    }
-  }
-
-  async function renameGraph() {
-    const current = selectedGraphFileName.trim();
-    if (!current) {
-      setError("이름을 변경할 그래프 파일을 먼저 선택하세요.");
-      return;
-    }
-    const nextName = graphRenameDraft.trim();
-    if (!nextName) {
-      setError("새 그래프 파일 이름을 입력하세요.");
-      return;
-    }
-
-    setError("");
-    try {
-      const renamed = await invoke<string>("graph_rename", {
-        fromName: current,
-        toName: nextName,
-      });
-      await refreshGraphFiles();
-      setGraphFileName(renamed);
-      setSelectedGraphFileName(renamed);
-      setGraphRenameDraft("");
-      setGraphRenameOpen(false);
-      setStatus(`그래프 이름 변경 완료 (${current} → ${renamed})`);
-    } catch (e) {
-      setError(`그래프 이름 변경 실패: ${String(e)}`);
-    }
-  }
-
-  function onOpenRenameGraph() {
-    const current = selectedGraphFileName.trim();
-    if (!current) {
-      setError("이름을 변경할 그래프 파일을 먼저 선택하세요.");
-      return;
-    }
-    setError("");
-    setGraphRenameDraft(current);
-    setGraphRenameOpen(true);
-  }
-
-  function onCloseRenameGraph() {
-    setGraphRenameOpen(false);
-    setGraphRenameDraft("");
-  }
-
-  async function deleteGraph() {
-    const target = selectedGraphFileName.trim();
-    if (!target) {
-      setError("삭제할 그래프 파일을 먼저 선택하세요.");
-      return;
-    }
-
-    setError("");
-    try {
-      await invoke("graph_delete", { name: target });
-      await refreshGraphFiles();
-      setGraphFileName("");
-      setSelectedGraphFileName("");
-      onCloseRenameGraph();
-      setStatus(`그래프 삭제 완료 (${target})`);
-    } catch (e) {
-      setError(`그래프 삭제 실패: ${String(e)}`);
-    }
-  }
-
-  async function loadGraph(name?: string) {
-    const target = (name ?? graphFileName).trim();
-    if (!target) {
-      return;
-    }
-
-    setError("");
-    try {
-      const loaded = await invoke<unknown>("graph_load", { name: target });
-      const normalized = autoArrangeGraphLayout(normalizeGraph(loaded));
-      setGraph(cloneGraph(normalized));
-      lastAppliedPresetRef.current = null;
-      setUndoStack([]);
-      setRedoStack([]);
-      const initialNodeId = pickDefaultCanvasNodeId(normalized.nodes);
-      setNodeSelection(initialNodeId ? [initialNodeId] : [], initialNodeId || undefined);
-      setSelectedEdgeKey("");
-      setNodeStates({});
-      setConnectFromNodeId("");
-      setConnectFromSide(null);
-      setConnectPreviewStartPoint(null);
-      setConnectPreviewPoint(null);
-      setIsConnectingDrag(false);
-      setStatus(`그래프 불러오기 완료 (${target})`);
-      setGraphFileName(target);
-      setSelectedGraphFileName(target);
-      onCloseRenameGraph();
-    } catch (e) {
-      setError(String(e));
-    }
-  }
+  const {
+    updateNodeConfigById,
+    updateSelectedNodeConfig,
+    saveGraph,
+    renameGraph,
+    onOpenRenameGraph,
+    onCloseRenameGraph,
+    deleteGraph,
+    loadGraph,
+  } = useGraphFileActions({
+    graph,
+    graphFileName,
+    selectedGraphFileName,
+    graphRenameDraft,
+    selectedNode,
+    setError,
+    refreshGraphFiles,
+    setGraphFileName,
+    setSelectedGraphFileName,
+    setStatus,
+    setGraphRenameDraft,
+    setGraphRenameOpen,
+    setGraph,
+    setUndoStack,
+    setRedoStack,
+    setNodeSelection,
+    setSelectedEdgeKey,
+    setNodeStates,
+    setConnectFromNodeId,
+    setConnectFromSide,
+    setConnectPreviewStartPoint,
+    setConnectPreviewPoint,
+    setIsConnectingDrag,
+    setMarqueeSelection,
+    lastAppliedPresetRef,
+    pickDefaultCanvasNodeId,
+    extractSelectedNodeId: (node) => node.id,
+  });
 
   useEffect(() => {
     const nodeIdSet = new Set(canvasNodes.map((node) => node.id));
@@ -3445,279 +2994,28 @@ function App() {
     }
   }, [canvasDisplayEdges, selectedEdgeKey]);
 
-  useEffect(() => {
-    if (workspaceTab !== "workflow" && canvasFullscreen) {
-      setCanvasFullscreen(false);
-    }
-  }, [workspaceTab, canvasFullscreen]);
-
-  useEffect(() => {
-    const onTabHotkey = (event: KeyboardEvent) => {
-      if (!(event.metaKey || event.ctrlKey) || event.altKey || event.shiftKey) {
-        return;
-      }
-      if (isEditableTarget(event.target)) {
-        return;
-      }
-
-      const key = event.key;
-      let nextTab: WorkspaceTab | null = null;
-      if (key === "1") {
-        nextTab = "workflow";
-      } else if (key === "2") {
-        nextTab = "feed";
-      } else if (key === "3") {
-        nextTab = "bridge";
-      } else if (key === "4") {
-        nextTab = "settings";
-      }
-
-      if (!nextTab) {
-        return;
-      }
-
-      event.preventDefault();
-      setWorkspaceTab(nextTab);
-      setStatus(
-        nextTab === "workflow"
-          ? "워크플로우 탭으로 이동"
-          : nextTab === "feed"
-            ? "피드 탭으로 이동"
-            : nextTab === "bridge"
-              ? "웹 연결 탭으로 이동"
-              : "설정 탭으로 이동",
-      );
-    };
-
-    window.addEventListener("keydown", onTabHotkey);
-    return () => window.removeEventListener("keydown", onTabHotkey);
-  }, []);
-
-  useEffect(() => {
-    if (!canvasFullscreen) {
-      return;
-    }
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setCanvasFullscreen(false);
-      }
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [canvasFullscreen]);
-
-  useEffect(() => {
-    if (workspaceTab !== "workflow") {
-      return;
-    }
-    const onWindowKeyDown = (event: KeyboardEvent) => {
-      if (event.repeat || event.metaKey || event.ctrlKey || event.altKey) {
-        return;
-      }
-      const keyLower = event.key.toLowerCase();
-      const isPanToggleKey = keyLower === "h" || event.key === "ㅗ" || event.code === "KeyH";
-      if (!isPanToggleKey) {
-        return;
-      }
-      if (isEditableTarget(event.target)) {
-        return;
-      }
-      event.preventDefault();
-      setPanMode((prev) => {
-        const next = !prev;
-        setStatus(next ? "캔버스 이동 모드 켜짐 (H/ㅗ)" : "캔버스 이동 모드 꺼짐 (H/ㅗ)");
-        return next;
-      });
-    };
-    window.addEventListener("keydown", onWindowKeyDown);
-    return () => window.removeEventListener("keydown", onWindowKeyDown);
-  }, [workspaceTab]);
-
-  useEffect(() => {
-    if (workspaceTab !== "workflow") {
-      return;
-    }
-
-    const onShiftAlign = (event: KeyboardEvent) => {
-      if (event.repeat || event.metaKey || event.ctrlKey || event.altKey) {
-        return;
-      }
-      if (event.key !== "Shift") {
-        return;
-      }
-      if (isEditableTarget(event.target)) {
-        return;
-      }
-      if (!selectedNodeId) {
-        return;
-      }
-      const current = canvasNodes.find((node) => node.id === selectedNodeId);
-      if (!current) {
-        return;
-      }
-      const others = canvasNodes.filter((node) => node.id !== selectedNodeId);
-      if (others.length === 0) {
-        return;
-      }
-
-      let nearest: GraphNode | null = null;
-      let nearestDistance = Number.POSITIVE_INFINITY;
-      for (const candidate of others) {
-        const dx = candidate.position.x - current.position.x;
-        const dy = candidate.position.y - current.position.y;
-        const distance = Math.hypot(dx, dy);
-        if (distance < nearestDistance) {
-          nearestDistance = distance;
-          nearest = candidate;
-        }
-      }
-
-      if (!nearest) {
-        return;
-      }
-
-      event.preventDefault();
-      const alignByX =
-        Math.abs(nearest.position.x - current.position.x) <= Math.abs(nearest.position.y - current.position.y);
-      applyGraphChange((prev) => ({
-        ...prev,
-        nodes: prev.nodes.map((node) => {
-          if (node.id !== selectedNodeId) {
-            return node;
-          }
-          return {
-            ...node,
-            position: {
-              x: alignByX ? nearest.position.x : node.position.x,
-              y: alignByX ? node.position.y : nearest.position.y,
-            },
-          };
-        }),
-      }));
-      setStatus(alignByX ? "노드 X축 자동 정렬됨 (Shift)" : "노드 Y축 자동 정렬됨 (Shift)");
-    };
-
-    window.addEventListener("keydown", onShiftAlign);
-    return () => window.removeEventListener("keydown", onShiftAlign);
-  }, [workspaceTab, selectedNodeId, canvasNodes]);
-
-  useEffect(() => {
-    if (workspaceTab !== "workflow") {
-      return;
-    }
-    const onSelectAll = (event: KeyboardEvent) => {
-      if (!(event.metaKey || event.ctrlKey) || event.altKey) {
-        return;
-      }
-      if (event.key.toLowerCase() !== "a") {
-        return;
-      }
-      if (isEditableTarget(event.target)) {
-        return;
-      }
-      event.preventDefault();
-      const allNodeIds = canvasNodes.map((node) => node.id);
-      setNodeSelection(allNodeIds, allNodeIds[0]);
-      setSelectedEdgeKey("");
-      setStatus(allNodeIds.length > 0 ? `노드 ${allNodeIds.length}개 선택됨` : "선택할 노드가 없습니다");
-    };
-    window.addEventListener("keydown", onSelectAll);
-    return () => window.removeEventListener("keydown", onSelectAll);
-  }, [workspaceTab, canvasNodes]);
-
-  useEffect(() => {
-    if (workspaceTab !== "workflow") {
-      return;
-    }
-
-    const onCopyPasteNodes = (event: KeyboardEvent) => {
-      if (!(event.metaKey || event.ctrlKey) || event.altKey || event.shiftKey) {
-        return;
-      }
-      if (isEditableTarget(event.target)) {
-        return;
-      }
-      const key = event.key.toLowerCase();
-      const isCopy = key === "c" || key === "ㅊ" || event.code === "KeyC";
-      const isPaste = key === "v" || key === "ㅍ" || event.code === "KeyV";
-
-      if (isCopy) {
-        if (selectedNodeIds.length === 0 && hasUserTextSelection()) {
-          return;
-        }
-        const copied = copySelectedNodesToClipboard();
-        if (copied) {
-          event.preventDefault();
-        }
-        return;
-      }
-      if (isPaste) {
-        const pasted = pasteNodesFromClipboard();
-        if (pasted) {
-          event.preventDefault();
-        }
-      }
-    };
-
-    window.addEventListener("keydown", onCopyPasteNodes);
-    return () => window.removeEventListener("keydown", onCopyPasteNodes);
-  }, [
+  useWorkflowShortcuts({
     workspaceTab,
+    setWorkspaceTab,
+    setStatus,
+    canvasFullscreen,
+    setCanvasFullscreen,
+    selectedNodeId,
     selectedNodeIds,
+    canvasNodes,
     canvasNodeIdSet,
-    graph.nodes,
-    graph.edges,
-  ]);
-
-  useEffect(() => {
-    if (workspaceTab !== "workflow") {
-      return;
-    }
-
-    const onDeleteSelection = (event: KeyboardEvent) => {
-      if (event.repeat || event.metaKey || event.ctrlKey || event.altKey) {
-        return;
-      }
-      if (isEditableTarget(event.target)) {
-        return;
-      }
-      if (event.key !== "Backspace" && event.key !== "Delete") {
-        return;
-      }
-
-      if (selectedEdgeKey) {
-        const hasEdge = canvasDisplayEdges.some(
-          (row) => !row.readOnly && row.edgeKey === selectedEdgeKey,
-        );
-        if (!hasEdge) {
-          setSelectedEdgeKey("");
-          return;
-        }
-        event.preventDefault();
-        applyGraphChange((prev) => ({
-          ...prev,
-          edges: prev.edges.filter((edge) => getGraphEdgeKey(edge) !== selectedEdgeKey),
-        }));
-        setSelectedEdgeKey("");
-        setStatus("연결선 삭제됨");
-        return;
-      }
-
-      if (selectedNodeIds.length > 0) {
-        const targets = selectedNodeIds.filter((id) => canvasNodeIdSet.has(id));
-        if (targets.length === 0) {
-          setNodeSelection([]);
-          return;
-        }
-        event.preventDefault();
-        deleteNodes(targets);
-        setStatus(targets.length > 1 ? "선택 노드 삭제됨" : "노드 삭제됨");
-      }
-    };
-
-    window.addEventListener("keydown", onDeleteSelection);
-    return () => window.removeEventListener("keydown", onDeleteSelection);
-  }, [workspaceTab, selectedEdgeKey, selectedNodeIds, canvasDisplayEdges, canvasNodeIdSet]);
+    canvasDisplayEdges,
+    selectedEdgeKey,
+    setSelectedEdgeKey,
+    setNodeSelection,
+    applyGraphChange,
+    deleteNodes,
+    copySelectedNodesToClipboard,
+    pasteNodesFromClipboard,
+    hasUserTextSelection,
+    setPanMode,
+    graph,
+  });
 
   useEffect(() => {
     try {
@@ -5501,201 +4799,11 @@ ${prompt}`;
     }
   }
 
-  const bundledFromSideByNodeId = (() => {
-    const grouped = new Map<string, typeof canvasDisplayEdges>();
-    for (const entry of canvasDisplayEdges) {
-      const fromId = entry.edge.from.nodeId;
-      const list = grouped.get(fromId) ?? [];
-      list.push(entry);
-      grouped.set(fromId, list);
-    }
-    const result = new Map<string, NodeAnchorSide>();
-    grouped.forEach((entries, fromId) => {
-      if (entries.length < 2) {
-        return;
-      }
-      const fromNode = canvasNodeMap.get(fromId);
-      if (!fromNode) {
-        return;
-      }
-      const fromSize = getNodeVisualSize(fromNode.id);
-      const fromCenterX = fromNode.position.x + fromSize.width / 2;
-      const fromCenterY = fromNode.position.y + fromSize.height / 2;
-      let sumDx = 0;
-      let sumDy = 0;
-      let targetCount = 0;
-      for (const entry of entries) {
-        const toNode = canvasNodeMap.get(entry.edge.to.nodeId);
-        if (!toNode) {
-          continue;
-        }
-        const toSize = getNodeVisualSize(toNode.id);
-        const toCenterX = toNode.position.x + toSize.width / 2;
-        const toCenterY = toNode.position.y + toSize.height / 2;
-        sumDx += toCenterX - fromCenterX;
-        sumDy += toCenterY - fromCenterY;
-        targetCount += 1;
-      }
-      if (targetCount === 0) {
-        return;
-      }
-      const avgDx = sumDx / targetCount;
-      const avgDy = sumDy / targetCount;
-      const side: NodeAnchorSide =
-        Math.abs(avgDx) >= Math.abs(avgDy) ? (avgDx >= 0 ? "right" : "left") : avgDy >= 0 ? "bottom" : "top";
-      result.set(fromId, side);
-    });
-    return result;
-  })();
-  const bundledToSideByNodeId = (() => {
-    const grouped = new Map<string, typeof canvasDisplayEdges>();
-    for (const entry of canvasDisplayEdges) {
-      const toId = entry.edge.to.nodeId;
-      const list = grouped.get(toId) ?? [];
-      list.push(entry);
-      grouped.set(toId, list);
-    }
-    const result = new Map<string, NodeAnchorSide>();
-    grouped.forEach((entries, toId) => {
-      if (entries.length < 2) {
-        return;
-      }
-      const toNode = canvasNodeMap.get(toId);
-      if (!toNode) {
-        return;
-      }
-      const toSize = getNodeVisualSize(toNode.id);
-      const toCenterX = toNode.position.x + toSize.width / 2;
-      const toCenterY = toNode.position.y + toSize.height / 2;
-      let sumDx = 0;
-      let sumDy = 0;
-      let sourceCount = 0;
-      for (const entry of entries) {
-        const fromNode = canvasNodeMap.get(entry.edge.from.nodeId);
-        if (!fromNode) {
-          continue;
-        }
-        const fromSize = getNodeVisualSize(fromNode.id);
-        const fromCenterX = fromNode.position.x + fromSize.width / 2;
-        const fromCenterY = fromNode.position.y + fromSize.height / 2;
-        sumDx += toCenterX - fromCenterX;
-        sumDy += toCenterY - fromCenterY;
-        sourceCount += 1;
-      }
-      if (sourceCount === 0) {
-        return;
-      }
-      const avgDx = sumDx / sourceCount;
-      const avgDy = sumDy / sourceCount;
-      const side: NodeAnchorSide =
-        Math.abs(avgDx) >= Math.abs(avgDy) ? (avgDx >= 0 ? "left" : "right") : avgDy >= 0 ? "top" : "bottom";
-      result.set(toId, side);
-    });
-    return result;
-  })();
-  const snapPoint = (point: LogicalPoint): LogicalPoint => ({
-    x: Math.round(point.x),
-    y: Math.round(point.y),
+  const edgeLines = buildCanvasEdgeLines({
+    entries: canvasDisplayEdges,
+    nodeMap: canvasNodeMap,
+    getNodeVisualSize,
   });
-  const bundledFromAnchorByNodeId = (() => {
-    const map = new Map<string, LogicalPoint>();
-    bundledFromSideByNodeId.forEach((side, nodeId) => {
-      const node = canvasNodeMap.get(nodeId);
-      if (!node) {
-        return;
-      }
-      const size = getNodeVisualSize(node.id);
-      map.set(nodeId, snapPoint(getNodeAnchorPoint(node, side, size)));
-    });
-    return map;
-  })();
-  const bundledToAnchorByNodeId = (() => {
-    const map = new Map<string, LogicalPoint>();
-    bundledToSideByNodeId.forEach((side, nodeId) => {
-      const node = canvasNodeMap.get(nodeId);
-      if (!node) {
-        return;
-      }
-      const size = getNodeVisualSize(node.id);
-      map.set(nodeId, snapPoint(getNodeAnchorPoint(node, side, size)));
-    });
-    return map;
-  })();
-
-  const edgeLines = canvasDisplayEdges
-    .map((entry, index) => {
-      const edge = entry.edge;
-      const fromNode = canvasNodeMap.get(edge.from.nodeId);
-      const toNode = canvasNodeMap.get(edge.to.nodeId);
-      if (!fromNode || !toNode) {
-        return null;
-      }
-
-      const fromSize = getNodeVisualSize(fromNode.id);
-      const toSize = getNodeVisualSize(toNode.id);
-      const auto = getAutoConnectionSides(fromNode, toNode, fromSize, toSize);
-      const hasManualControl =
-        !entry.readOnly && typeof edge.control?.x === "number" && typeof edge.control?.y === "number";
-      const bundledFromSide = hasManualControl ? null : bundledFromSideByNodeId.get(fromNode.id);
-      const bundledToSide = hasManualControl ? null : bundledToSideByNodeId.get(toNode.id);
-      const resolvedFromSide = hasManualControl ? (edge.from.side ?? auto.fromSide) : bundledFromSide ?? auto.fromSide;
-      const resolvedToSide = hasManualControl ? (edge.to.side ?? auto.toSide) : bundledToSide ?? auto.toSide;
-      let fromPoint = bundledFromSide
-        ? (bundledFromAnchorByNodeId.get(fromNode.id) ?? snapPoint(getNodeAnchorPoint(fromNode, resolvedFromSide, fromSize)))
-        : snapPoint(getNodeAnchorPoint(fromNode, resolvedFromSide, fromSize));
-      let toPoint = bundledToSide
-        ? (bundledToAnchorByNodeId.get(toNode.id) ?? snapPoint(getNodeAnchorPoint(toNode, resolvedToSide, toSize)))
-        : snapPoint(getNodeAnchorPoint(toNode, resolvedToSide, toSize));
-      if (!hasManualControl && !bundledFromSide && !bundledToSide) {
-        const aligned = alignAutoEdgePoints(
-          fromNode,
-          toNode,
-          fromPoint,
-          toPoint,
-          resolvedFromSide,
-          resolvedToSide,
-          fromSize,
-          toSize,
-        );
-        fromPoint = snapPoint(aligned.fromPoint);
-        toPoint = snapPoint(aligned.toPoint);
-      }
-      const edgeKey = entry.edgeKey;
-      const defaultControl = edgeMidPoint(fromPoint, toPoint);
-      const control = edge.control ?? defaultControl;
-
-      return {
-        key: `${edgeKey}-${index}`,
-        edgeKey,
-        startPoint: fromPoint,
-        endPoint: toPoint,
-        controlPoint: control,
-        hasManualControl,
-        readOnly: entry.readOnly,
-        path: hasManualControl
-          ? buildManualEdgePath(fromPoint.x, fromPoint.y, control.x, control.y, toPoint.x, toPoint.y)
-          : buildRoundedEdgePath(
-              fromPoint.x,
-              fromPoint.y,
-              toPoint.x,
-              toPoint.y,
-              true,
-              resolvedFromSide,
-              resolvedToSide,
-              bundledFromSide || bundledToSide ? 0 : 8,
-            ),
-      };
-    })
-    .filter(Boolean) as Array<{
-      key: string;
-      edgeKey: string;
-      path: string;
-      startPoint: LogicalPoint;
-      endPoint: LogicalPoint;
-      controlPoint: LogicalPoint;
-      hasManualControl: boolean;
-      readOnly: boolean;
-    }>;
   const connectPreviewLine = (() => {
     if (!connectFromNodeId || !connectPreviewPoint) {
       return null;
@@ -6151,7 +5259,6 @@ ${prompt}`;
               feedExpandedByPost,
               onSelectFeedInspectorPost,
               onShareFeedPost,
-              onDeleteFeedPost,
               onDeleteFeedRunGroup,
               setFeedExpandedByPost,
               formatFeedInputSourceLabel,
