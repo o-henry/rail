@@ -1379,6 +1379,10 @@ pub async fn engine_start(
 
 #[tauri::command]
 pub async fn engine_stop(state: State<'_, EngineManager>) -> Result<(), String> {
+    shutdown_all_runtimes(state.inner()).await
+}
+
+pub async fn shutdown_all_runtimes(state: &EngineManager) -> Result<(), String> {
     let runtime = state.runtime.lock().await.take();
     if let Some(runtime) = runtime {
         runtime.stop().await?;

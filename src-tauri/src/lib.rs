@@ -2,10 +2,11 @@ mod engine;
 mod knowledge;
 mod quality;
 mod storage;
+use tauri::Manager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let app = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .manage(engine::EngineManager::default())
@@ -52,6 +53,24 @@ pub fn run() {
             storage::dialog_pick_directory,
             storage::dialog_pick_knowledge_files,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application");
+
+    app.run(|app_handle, event| match event {
+        tauri::RunEvent::WindowEvent { label, event, .. } => {
+            if label == "main" {
+                if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                    api.prevent_close();
+                    app_handle.exit(0);
+                }
+            }
+        }
+        tauri::RunEvent::ExitRequested { .. } | tauri::RunEvent::Exit => {
+            let state = app_handle.state::<engine::EngineManager>();
+            tauri::async_runtime::block_on(async {
+                let _ = engine::shutdown_all_runtimes(state.inner()).await;
+            });
+        }
+        _ => {}
+    });
 }
