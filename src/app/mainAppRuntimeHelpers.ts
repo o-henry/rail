@@ -204,6 +204,33 @@ function extractFeedOutputText(output: unknown): string {
   return "";
 }
 
+function buildFinalTurnNodeIdSet(graphSnapshot: { nodes?: any[]; edges?: any[] } | null | undefined): Set<string> {
+  const nodes = Array.isArray(graphSnapshot?.nodes) ? graphSnapshot.nodes : [];
+  const edges = Array.isArray(graphSnapshot?.edges) ? graphSnapshot.edges : [];
+  if (nodes.length === 0) {
+    return new Set();
+  }
+  const outgoingCountByNodeId = new Map<string, number>();
+  for (const edge of edges) {
+    const sourceNodeId = String(edge?.from?.nodeId ?? "").trim();
+    if (!sourceNodeId) {
+      continue;
+    }
+    outgoingCountByNodeId.set(sourceNodeId, (outgoingCountByNodeId.get(sourceNodeId) ?? 0) + 1);
+  }
+  const finalTurnNodeIds = new Set<string>();
+  for (const node of nodes) {
+    const nodeId = String(node?.id ?? "").trim();
+    if (!nodeId || node?.type !== "turn") {
+      continue;
+    }
+    if ((outgoingCountByNodeId.get(nodeId) ?? 0) === 0) {
+      finalTurnNodeIds.add(nodeId);
+    }
+  }
+  return finalTurnNodeIds;
+}
+
 export function buildFeedPost(input: any): {
   post: any;
   rawAttachments: Record<"markdown" | "json", string>;
@@ -299,6 +326,7 @@ export function buildFeedPost(input: any): {
     runId: input.runId,
     nodeId: input.node.id,
     nodeType: input.node.type,
+    isFinalDocument: Boolean(input.isFinalDocument),
     executor: input.node.type === "turn" ? getTurnExecutor(config) : undefined,
     agentName,
     roleLabel,
@@ -352,10 +380,15 @@ export function buildFeedPost(input: any): {
 }
 
 export function normalizeRunFeedPosts(run: any): any[] {
+  const finalTurnNodeIds = buildFinalTurnNodeIdSet(run?.graphSnapshot);
   if (Array.isArray(run.feedPosts)) {
     return run.feedPosts.map((post: any) => ({
       ...post,
       inputSources: normalizeFeedInputSources(post.inputSources),
+      isFinalDocument:
+        typeof post?.isFinalDocument === "boolean"
+          ? post.isFinalDocument
+          : finalTurnNodeIds.has(String(post?.nodeId ?? "")),
     }));
   }
   const nodeMap = new Map(run.graphSnapshot.nodes.map((node: any) => [node.id, node]));
@@ -386,6 +419,7 @@ export function normalizeRunFeedPosts(run: any): any[] {
     const built = buildFeedPost({
       runId: run.runId,
       node,
+      isFinalDocument: finalTurnNodeIds.has(String(nodeId)),
       status: transition.status,
       createdAt: transition.at,
       summary: transition.message,

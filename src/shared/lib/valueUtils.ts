@@ -1,3 +1,5 @@
+import { getCurrentLocale, type AppLocale } from "../../i18n";
+
 export type UsageStats = {
   inputTokens?: number;
   outputTokens?: number;
@@ -137,7 +139,20 @@ export function formatRunDateTime(input?: string | null): string {
   if (!Number.isFinite(date.getTime())) {
     return input;
   }
-  return date.toLocaleString("ko-KR");
+  return date.toLocaleString(toDateLocaleTag(getCurrentLocale()));
+}
+
+function toDateLocaleTag(locale: AppLocale): string {
+  if (locale === "ko") {
+    return "ko-KR";
+  }
+  if (locale === "jp") {
+    return "ja-JP";
+  }
+  if (locale === "zh") {
+    return "zh-CN";
+  }
+  return "en-US";
 }
 
 export function formatResetAt(input: unknown): string {

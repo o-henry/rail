@@ -122,6 +122,7 @@ export type FeedPost = {
   runId: string;
   nodeId: string;
   nodeType: NodeType;
+  isFinalDocument?: boolean;
   executor?: TurnExecutor;
   agentName: string;
   roleLabel: string;

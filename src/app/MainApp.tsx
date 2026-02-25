@@ -1193,10 +1193,17 @@ function App() {
       return;
     }
     try {
-      await revealItemInDir(filePath);
+      const normalizedUrl =
+        filePath.startsWith("file://") ? filePath : `file://${encodeURI(filePath).replace(/#/g, "%23")}`;
+      await openUrl(normalizedUrl);
       setStatus("문서 파일 열림");
     } catch (error) {
-      setError(`문서 파일 열기 실패: ${String(error)}`);
+      try {
+        await revealItemInDir(filePath);
+        setStatus("문서 파일 위치 열림");
+      } catch {
+        setError(`문서 파일 열기 실패: ${String(error)}`);
+      }
     }
   }
 
@@ -1326,6 +1333,7 @@ function App() {
         const failed = buildFeedPost({
           runId: oneOffRunId,
           node,
+          isFinalDocument: true,
           status: "failed",
           createdAt: finishedAt,
           summary: result.error ?? t("feed.followup.run.failed"),
@@ -1414,6 +1422,7 @@ function App() {
       const done = buildFeedPost({
         runId: oneOffRunId,
         node,
+        isFinalDocument: true,
         status: "done",
         createdAt: finishedAt,
         summary: t("feed.followup.run.done"),
@@ -3374,7 +3383,21 @@ function App() {
       return;
     }
     const nodeMap = new Map(runRecord.graphSnapshot.nodes.map((node) => [node.id, node]));
+    const outgoingCountByNodeId = new Map<string, number>();
+    for (const edge of runRecord.graphSnapshot.edges ?? []) {
+      const sourceNodeId = String(edge?.from?.nodeId ?? "").trim();
+      if (!sourceNodeId) {
+        continue;
+      }
+      outgoingCountByNodeId.set(sourceNodeId, (outgoingCountByNodeId.get(sourceNodeId) ?? 0) + 1);
+    }
+    const finalTurnNodeIds = new Set(
+      runRecord.graphSnapshot.nodes
+        .filter((node) => node.type === "turn" && (outgoingCountByNodeId.get(node.id) ?? 0) === 0)
+        .map((node) => node.id),
+    );
     const failures: string[] = [];
+    const finalDocNameCountByCwd = new Map<string, number>();
 
     for (let index = 0; index < posts.length; index += 1) {
       const post = posts[index];
@@ -3400,7 +3423,13 @@ function App() {
         String(post.createdAt || runRecord.startedAt || new Date().toISOString()).replace(/[:]/g, "-"),
         `time-${index + 1}`,
       );
-      const fileName = `rail-${runRecord.runId}-${String(index + 1).padStart(2, "0")}-${nodeToken}-${roleToken}-${statusToken}-${createdAtToken}.md`;
+      const isFinalDocument = Boolean((post as any).isFinalDocument) || finalTurnNodeIds.has(String(post.nodeId ?? ""));
+      let fileName = `rail-${runRecord.runId}-${String(index + 1).padStart(2, "0")}-${nodeToken}-${roleToken}-${statusToken}-${createdAtToken}.md`;
+      if (isFinalDocument) {
+        const nextCount = (finalDocNameCountByCwd.get(targetCwd) ?? 0) + 1;
+        finalDocNameCountByCwd.set(targetCwd, nextCount);
+        fileName = nextCount === 1 ? "최종 문서.md" : `최종 문서-${nextCount}.md`;
+      }
 
       try {
         const writtenPath = await invoke<string>("workspace_write_markdown", {
@@ -4648,6 +4677,7 @@ ${prompt}`;
 
         const nodeInputSources = resolveFeedInputSources(nodeId);
         const nodeInput = nodeInputFor(nodeId, outputs, workflowQuestion);
+        const isFinalTurnNode = node.type === "turn" && (adjacency.get(nodeId)?.length ?? 0) === 0;
 
         if (pauseRequestedRef.current) {
           const pauseMessage = "사용자 일시정지 요청으로 대기열로 복귀";
@@ -4671,6 +4701,7 @@ ${prompt}`;
           const cancelledFeed = buildFeedPost({
             runId: runRecord.runId,
             node,
+            isFinalDocument: isFinalTurnNode,
             status: "cancelled",
             createdAt: cancelledAt,
             summary: t("run.cancelledByUser"),
@@ -4715,6 +4746,7 @@ ${prompt}`;
           const blockedFeed = buildFeedPost({
             runId: runRecord.runId,
             node,
+            isFinalDocument: isFinalTurnNode,
             status: "cancelled",
             createdAt: blockedAtIso,
             summary: blockedReason,
@@ -4745,13 +4777,11 @@ ${prompt}`;
         });
         transition(runRecord, nodeId, "running");
 
-        const input =
-          node.type === "turn" && (adjacency.get(nodeId)?.length ?? 0) === 0
-            ? buildFinalTurnInput(nodeId, nodeInput, outputs, workflowQuestion)
-            : nodeInput;
+        const input = isFinalTurnNode
+          ? buildFinalTurnInput(nodeId, nodeInput, outputs, workflowQuestion)
+          : nodeInput;
 
         if (node.type === "turn") {
-          const isFinalTurnNode = (adjacency.get(nodeId)?.length ?? 0) === 0;
           const hasOutputSchema = String((node.config as TurnConfig).outputSchemaJson ?? "").trim().length > 0;
           const turnExecution = await executeTurnNodeWithOutputSchemaRetry(node, input, {
             maxRetry: isFinalTurnNode || hasOutputSchema ? 1 : 0,
@@ -4800,6 +4830,7 @@ ${prompt}`;
             const failedFeed = buildFeedPost({
               runId: runRecord.runId,
               node,
+              isFinalDocument: isFinalTurnNode,
               status: "failed",
               createdAt: finishedAtIso,
               summary: result.error ?? "턴 실행 실패",
@@ -4894,6 +4925,7 @@ ${prompt}`;
               const lowQualityFeed = buildFeedPost({
                 runId: runRecord.runId,
                 node,
+                isFinalDocument: isFinalTurnNode,
                 status: "low_quality",
                 createdAt: finishedAtIso,
                 summary: lowQualitySummary,
@@ -4959,6 +4991,7 @@ ${prompt}`;
           const doneFeed = buildFeedPost({
             runId: runRecord.runId,
             node,
+            isFinalDocument: isFinalTurnNode,
             status: "done",
             createdAt: finishedAtIso,
             summary: t("run.turnCompleted"),

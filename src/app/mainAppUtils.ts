@@ -1,4 +1,4 @@
-import { t } from "../i18n";
+import { getCurrentLocale, t, type AppLocale } from "../i18n";
 
 export const WORKSPACE_CWD_STORAGE_KEY = "rail.settings.cwd";
 export const LOGIN_COMPLETED_STORAGE_KEY = "rail.settings.login_completed";
@@ -523,7 +523,22 @@ export function formatRunDateTime(input?: string | null): string {
   if (!Number.isFinite(date.getTime())) {
     return input;
   }
-  return date.toLocaleString("ko-KR");
+  const locale = getCurrentLocale();
+  const localeTag = toDateLocaleTag(locale);
+  return date.toLocaleString(localeTag);
+}
+
+function toDateLocaleTag(locale: AppLocale): string {
+  if (locale === "ko") {
+    return "ko-KR";
+  }
+  if (locale === "jp") {
+    return "ja-JP";
+  }
+  if (locale === "zh") {
+    return "zh-CN";
+  }
+  return "en-US";
 }
 
 export function formatRunFileLabel(fileName?: string | null): string {

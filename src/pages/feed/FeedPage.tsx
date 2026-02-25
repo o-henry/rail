@@ -639,10 +639,12 @@ export default function FeedPage({ vm }: FeedPageProps) {
                               const upstreamSources = nodeInputSources.filter(
                                 (source: any) => source && source.kind === "node",
                               );
-                              const inputSourcesSectionKey = `${postId}:inputSources`;
-                              const inputSnapshotSectionKey = `${postId}:inputSnapshot`;
-                              const isInputSourcesExpanded = feedSectionExpandedByKey[inputSourcesSectionKey] !== false;
-                              const isInputSnapshotExpanded = feedSectionExpandedByKey[inputSnapshotSectionKey] !== false;
+                              const inputBundleSectionKey = `${postId}:inputBundle`;
+                              const isInputBundleExpanded = feedSectionExpandedByKey[inputBundleSectionKey] !== false;
+                              const hasInputBundle = Boolean(readableQuestion || readableInputPreview || upstreamSources.length > 0);
+                              const documentSectionTitle = post.isFinalDocument
+                                ? t("feed.document.final")
+                                : t("feed.document.generated");
                               return (
                                 <FeedCardBoundary
                                   fallbackText={t("feed.renderError")}
@@ -729,18 +731,18 @@ export default function FeedPage({ vm }: FeedPageProps) {
                                     {isExpanded ? t("feed.less") : t("feed.more")}
                                   </button>
                                   <div className={`feed-card-details ${isExpanded ? "is-expanded" : ""}`} aria-hidden={!isExpanded}>
-                                    {upstreamSources.length > 0 ? (
+                                    {hasInputBundle && (
                                       <section className="feed-card-input-sources">
                                         <div className="feed-card-input-sources-head">
-                                          <div className="feed-card-input-sources-title">{t("feed.inputSources")}</div>
+                                          <div className="feed-card-input-sources-title">{t("feed.inputBundle")}</div>
                                           <button
-                                            aria-expanded={isInputSourcesExpanded}
-                                            className={`feed-card-input-toggle ${isInputSourcesExpanded ? "is-expanded" : ""}`}
+                                            aria-expanded={isInputBundleExpanded}
+                                            className={`feed-card-input-toggle ${isInputBundleExpanded ? "is-expanded" : ""}`}
                                             onClick={(event) => {
                                               event.stopPropagation();
                                               setFeedSectionExpandedByKey((prev) => ({
                                                 ...prev,
-                                                [inputSourcesSectionKey]: !(prev[inputSourcesSectionKey] !== false),
+                                                [inputBundleSectionKey]: !(prev[inputBundleSectionKey] !== false),
                                               }));
                                             }}
                                             type="button"
@@ -748,65 +750,58 @@ export default function FeedPage({ vm }: FeedPageProps) {
                                             <img alt="" aria-hidden="true" src="/down-arrow.svg" />
                                           </button>
                                         </div>
-                                        {isInputSourcesExpanded && (
-                                          <ul>
-                                            {upstreamSources.map((source: any, index: any) => (
-                                              <li key={`${postId}:source:${source.nodeId ?? source.agentName}:${index}`}>
-                                                {formatFeedInputSourceLabel(source)}
-                                              </li>
-                                            ))}
-                                          </ul>
-                                        )}
-                                      </section>
-                                    ) : readableQuestion ? (
-                                      <div className="feed-card-question">Q: {readableQuestion}</div>
-                                    ) : null}
-                                    {readableInputPreview && (
-                                      <section className="feed-card-input-sources">
-                                        <div className="feed-card-input-sources-head">
-                                          <div className="feed-card-input-sources-title">
-                                            {t("feed.inputSnapshot")}
-                                            {post.inputContext?.truncated ? t("feed.partial") : ""}
+                                        {isInputBundleExpanded && (
+                                          <div className="feed-input-bundle-body">
+                                            {readableQuestion && <div className="feed-card-question">Q: {readableQuestion}</div>}
+                                            {upstreamSources.length > 0 && (
+                                              <div className="feed-input-bundle-group">
+                                                <div className="feed-input-bundle-label">{t("feed.inputSources")}</div>
+                                                <ul>
+                                                  {upstreamSources.map((source: any, index: any) => (
+                                                    <li key={`${postId}:source:${source.nodeId ?? source.agentName}:${index}`}>
+                                                      {formatFeedInputSourceLabel(source)}
+                                                    </li>
+                                                  ))}
+                                                </ul>
+                                              </div>
+                                            )}
+                                            {readableInputPreview && (
+                                              <div className="feed-input-bundle-group">
+                                                <div className="feed-input-bundle-label">
+                                                  {t("feed.inputSnapshot")}
+                                                  {post.inputContext?.truncated ? t("feed.partial") : ""}
+                                                </div>
+                                                <pre className="feed-sns-content">{readableInputPreview}</pre>
+                                              </div>
+                                            )}
                                           </div>
-                                          <button
-                                            aria-expanded={isInputSnapshotExpanded}
-                                            className={`feed-card-input-toggle ${isInputSnapshotExpanded ? "is-expanded" : ""}`}
-                                            onClick={(event) => {
-                                              event.stopPropagation();
-                                              setFeedSectionExpandedByKey((prev) => ({
-                                                ...prev,
-                                                [inputSnapshotSectionKey]: !(prev[inputSnapshotSectionKey] !== false),
-                                              }));
-                                            }}
-                                            type="button"
-                                          >
-                                            <img alt="" aria-hidden="true" src="/down-arrow.svg" />
-                                          </button>
-                                        </div>
-                                        {isInputSnapshotExpanded && (
-                                          <pre className="feed-sns-content">{readableInputPreview}</pre>
                                         )}
                                       </section>
                                     )}
                                     <section className="feed-doc-link-block">
-                                      <div className="feed-doc-link-title">{t("feed.share.detail")}</div>
-                                      {markdownFilePath ? (
-                                        <div className="feed-doc-link-row">
+                                      <div className="feed-doc-link-head">
+                                        <div className="feed-doc-link-title">{documentSectionTitle}</div>
+                                        {markdownFilePath && (
                                           <button
-                                            className="feed-doc-link-open"
+                                            aria-label={t("feed.document.openFile")}
+                                            className="feed-doc-link-open-icon-button"
                                             onClick={(event) => {
                                               event.stopPropagation();
                                               onOpenFeedMarkdownFile(post);
                                             }}
                                             type="button"
                                           >
-                                            {t("common.open")}
+                                            <img alt="" aria-hidden="true" src="/up.svg" />
                                           </button>
+                                        )}
+                                      </div>
+                                      {markdownFilePath ? (
+                                        <div className="feed-doc-link-row">
                                           <code className="feed-doc-link-path">{markdownFilePath}</code>
                                         </div>
                                       ) : (
                                         <div className="feed-doc-link-missing">
-                                          {t("feed.attachment.empty")}
+                                          {t("feed.document.notLinked")}
                                         </div>
                                       )}
                                     </section>

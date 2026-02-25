@@ -3015,6 +3015,22 @@ h3 {
   word-break: break-word;
 }
 
+.feed-input-bundle-body {
+  display: grid;
+  gap: 8px;
+}
+
+.feed-input-bundle-group {
+  display: grid;
+  gap: 6px;
+}
+
+.feed-input-bundle-label {
+  color: #4b5768;
+  font-size: 12px;
+  font-weight: 700;
+}
+
 .feed-card-summary {
   color: #0f1419;
   font-size: 13px;
@@ -3093,9 +3109,40 @@ h3 {
   font-weight: 700;
 }
 
+.feed-doc-link-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
 .feed-doc-link-row {
   display: grid;
   gap: 8px;
+}
+
+.feed-doc-link-open-icon-button {
+  width: 22px;
+  height: 22px;
+  min-height: 22px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.85;
+}
+
+.feed-doc-link-open-icon-button:hover {
+  background: #eef3f8;
+}
+
+.feed-doc-link-open-icon-button img {
+  width: 15px;
+  height: 15px;
+  transform: rotate(90deg);
 }
 
 .feed-doc-link-open {
