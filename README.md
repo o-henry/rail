@@ -234,12 +234,11 @@ open src-tauri/target/release/bundle/macos/rail.app
 
 ### D. 법적 고지 확인
 
-1. `설정` 탭 이동
-2. `법적 고지` 섹션 확인
-3. 항목별 문서 참조
-   - 폰트/서드파티: `THIRD_PARTY_NOTICES.md`, `public/FONT_LICENSES.txt`
-   - 투자 면책: `DISCLAIMER.md`
-   - 책임 제한: `TERMS.md`
+문서 파일 기준으로 확인합니다.
+
+- 폰트/서드파티: `THIRD_PARTY_NOTICES.md`, `public/FONT_LICENSES.txt`
+- 투자 면책: `DISCLAIMER.md`
+- 책임 제한: `TERMS.md`
 
 ---
 
@@ -320,7 +319,6 @@ bash scripts/secret_scan.sh --all
 중요:
 - 주식/금융 관련 출력은 정보 제공 목적이며 투자 자문이 아닙니다.
 - 최종 투자 판단 및 손익 책임은 사용자에게 있습니다.
-- 앱 내부에서도 `설정 > 법적 고지`에서 동일 내용을 확인할 수 있습니다.
 
 ---
 
