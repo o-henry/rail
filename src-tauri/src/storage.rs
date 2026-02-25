@@ -2,13 +2,21 @@ use serde_json::Value;
 use std::{fs, path::PathBuf};
 use tauri::async_runtime::channel;
 use tauri_plugin_dialog::DialogExt;
+use tauri::{AppHandle, Manager};
 
-fn current_workspace_dir() -> Result<PathBuf, String> {
-    std::env::current_dir().map_err(|e| format!("failed to resolve current dir: {e}"))
+fn app_data_dir(app: &AppHandle) -> Result<PathBuf, String> {
+    app.path()
+        .app_data_dir()
+        .map_err(|e| format!("failed to resolve app data dir: {e}"))
+        .or_else(|_| {
+            std::env::current_dir()
+                .map(|dir| dir.join("rail-data"))
+                .map_err(|e| format!("failed to resolve fallback app data dir: {e}"))
+        })
 }
 
-fn ensure_subdir(name: &str) -> Result<PathBuf, String> {
-    let dir = current_workspace_dir()?.join(name);
+fn ensure_subdir(app: &AppHandle, name: &str) -> Result<PathBuf, String> {
+    let dir = app_data_dir(app)?.join(name);
     fs::create_dir_all(&dir).map_err(|e| format!("failed to create {name} directory: {e}"))?;
     Ok(dir)
 }
@@ -29,8 +37,8 @@ fn normalize_file_name(name: &str) -> Result<String, String> {
     }
 }
 
-fn list_json_files(dir_name: &str) -> Result<Vec<String>, String> {
-    let dir = ensure_subdir(dir_name)?;
+fn list_json_files(app: &AppHandle, dir_name: &str) -> Result<Vec<String>, String> {
+    let dir = ensure_subdir(app, dir_name)?;
     let mut files = Vec::new();
 
     for entry in
@@ -55,27 +63,27 @@ fn list_json_files(dir_name: &str) -> Result<Vec<String>, String> {
     Ok(files)
 }
 
-fn write_json_file(dir_name: &str, name: &str, data: &Value) -> Result<(), String> {
+fn write_json_file(app: &AppHandle, dir_name: &str, name: &str, data: &Value) -> Result<(), String> {
     let normalized_name = normalize_file_name(name)?;
-    let dir = ensure_subdir(dir_name)?;
+    let dir = ensure_subdir(app, dir_name)?;
     let path = dir.join(normalized_name);
     let json = serde_json::to_string_pretty(data)
         .map_err(|e| format!("failed to serialize JSON for {dir_name}: {e}"))?;
     fs::write(path, json).map_err(|e| format!("failed to write {dir_name} file: {e}"))
 }
 
-fn read_json_file(dir_name: &str, name: &str) -> Result<Value, String> {
+fn read_json_file(app: &AppHandle, dir_name: &str, name: &str) -> Result<Value, String> {
     let normalized_name = normalize_file_name(name)?;
-    let dir = ensure_subdir(dir_name)?;
+    let dir = ensure_subdir(app, dir_name)?;
     let path = dir.join(normalized_name);
     let raw =
         fs::read_to_string(path).map_err(|e| format!("failed to read {dir_name} file: {e}"))?;
     serde_json::from_str(&raw).map_err(|e| format!("invalid JSON in {dir_name} file: {e}"))
 }
 
-fn delete_json_file(dir_name: &str, name: &str) -> Result<(), String> {
+fn delete_json_file(app: &AppHandle, dir_name: &str, name: &str) -> Result<(), String> {
     let normalized_name = normalize_file_name(name)?;
-    let dir = ensure_subdir(dir_name)?;
+    let dir = ensure_subdir(app, dir_name)?;
     let path = dir.join(normalized_name);
     if !path.exists() {
         return Err(format!("{dir_name} file not found"));
@@ -83,14 +91,19 @@ fn delete_json_file(dir_name: &str, name: &str) -> Result<(), String> {
     fs::remove_file(path).map_err(|e| format!("failed to delete {dir_name} file: {e}"))
 }
 
-fn rename_json_file(dir_name: &str, from_name: &str, to_name: &str) -> Result<String, String> {
+fn rename_json_file(
+    app: &AppHandle,
+    dir_name: &str,
+    from_name: &str,
+    to_name: &str,
+) -> Result<String, String> {
     let from_normalized = normalize_file_name(from_name)?;
     let to_normalized = normalize_file_name(to_name)?;
     if from_normalized == to_normalized {
         return Ok(to_normalized);
     }
 
-    let dir = ensure_subdir(dir_name)?;
+    let dir = ensure_subdir(app, dir_name)?;
     let from_path = dir.join(&from_normalized);
     if !from_path.exists() {
         return Err(format!("{dir_name} file not found"));
@@ -106,53 +119,53 @@ fn rename_json_file(dir_name: &str, from_name: &str, to_name: &str) -> Result<St
 }
 
 #[tauri::command]
-pub fn graph_list() -> Result<Vec<String>, String> {
-    list_json_files("graphs")
+pub fn graph_list(app: AppHandle) -> Result<Vec<String>, String> {
+    list_json_files(&app, "graphs")
 }
 
 #[tauri::command]
-pub fn graph_save(name: String, graph: Value) -> Result<(), String> {
-    write_json_file("graphs", &name, &graph)
+pub fn graph_save(app: AppHandle, name: String, graph: Value) -> Result<(), String> {
+    write_json_file(&app, "graphs", &name, &graph)
 }
 
 #[tauri::command]
-pub fn graph_load(name: String) -> Result<Value, String> {
-    read_json_file("graphs", &name)
+pub fn graph_load(app: AppHandle, name: String) -> Result<Value, String> {
+    read_json_file(&app, "graphs", &name)
 }
 
 #[tauri::command]
-pub fn graph_delete(name: String) -> Result<(), String> {
-    delete_json_file("graphs", &name)
+pub fn graph_delete(app: AppHandle, name: String) -> Result<(), String> {
+    delete_json_file(&app, "graphs", &name)
 }
 
 #[tauri::command]
-pub fn graph_rename(from_name: String, to_name: String) -> Result<String, String> {
-    rename_json_file("graphs", &from_name, &to_name)
+pub fn graph_rename(app: AppHandle, from_name: String, to_name: String) -> Result<String, String> {
+    rename_json_file(&app, "graphs", &from_name, &to_name)
 }
 
 #[tauri::command]
-pub fn run_save(name: String, run: Value) -> Result<(), String> {
-    write_json_file("runs", &name, &run)
+pub fn run_save(app: AppHandle, name: String, run: Value) -> Result<(), String> {
+    write_json_file(&app, "runs", &name, &run)
 }
 
 #[tauri::command]
-pub fn run_list() -> Result<Vec<String>, String> {
-    list_json_files("runs")
+pub fn run_list(app: AppHandle) -> Result<Vec<String>, String> {
+    list_json_files(&app, "runs")
 }
 
 #[tauri::command]
-pub fn run_load(name: String) -> Result<Value, String> {
-    read_json_file("runs", &name)
+pub fn run_load(app: AppHandle, name: String) -> Result<Value, String> {
+    read_json_file(&app, "runs", &name)
 }
 
 #[tauri::command]
-pub fn run_delete(name: String) -> Result<(), String> {
-    delete_json_file("runs", &name)
+pub fn run_delete(app: AppHandle, name: String) -> Result<(), String> {
+    delete_json_file(&app, "runs", &name)
 }
 
 #[tauri::command]
-pub fn run_directory() -> Result<String, String> {
-    let dir = ensure_subdir("runs")?;
+pub fn run_directory(app: AppHandle) -> Result<String, String> {
+    let dir = ensure_subdir(&app, "runs")?;
     Ok(dir.to_string_lossy().to_string())
 }
 
