@@ -1,7 +1,23 @@
 import { invoke } from "../shared/tauri";
-import { getTurnExecutor, inferQualityProfile, type ArtifactType, type PresetKind, type TurnConfig } from "../features/workflow/domain";
+import {
+  getTurnExecutor,
+  getWebProviderFromExecutor,
+  inferQualityProfile,
+  type ArtifactType,
+  type PresetKind,
+  type TurnConfig,
+  type TurnExecutor,
+  type WebProvider,
+  type WebResultMode,
+} from "../features/workflow/domain";
 import { extractFinalAnswer, nodeStatusLabel, nodeTypeLabel, turnRoleLabel } from "../features/workflow/labels";
-import { stringifyInput, toHumanReadableFeedText } from "../features/workflow/promptUtils";
+import {
+  getByPath,
+  replaceInputPlaceholder,
+  stringifyInput,
+  toHumanReadableFeedText,
+  tryParseJsonText,
+} from "../features/workflow/promptUtils";
 import { clipTextByChars, formatFeedInputSourceLabel, normalizeFeedInputSources, redactSensitiveText, summarizeFeedSteps } from "../features/feed/displayUtils";
 import { FEED_REDACTION_RULE_VERSION } from "../features/feed/constants";
 import { graphEquals, turnModelLabel } from "../features/workflow/graph-utils";
@@ -13,7 +29,16 @@ import {
   normalizeQualityScore,
   normalizeQualityThreshold,
 } from "../features/workflow/quality";
-import type { GraphData, GraphNode, KnowledgeConfig, NodeAnchorSide, NodeExecutionStatus } from "../features/workflow/types";
+import type {
+  GateConfig,
+  GraphData,
+  GraphNode,
+  KnowledgeConfig,
+  NodeAnchorSide,
+  NodeExecutionStatus,
+  TransformConfig,
+  TransformMode,
+} from "../features/workflow/types";
 import type { FancySelectOption } from "../components/FancySelect";
 import { KNOWLEDGE_DEFAULT_MAX_CHARS, KNOWLEDGE_DEFAULT_TOP_K } from "./mainAppGraphHelpers";
 import { t, tp } from "../i18n";
@@ -594,4 +619,373 @@ export function defaultKnowledgeConfig(): KnowledgeConfig {
     topK: KNOWLEDGE_DEFAULT_TOP_K,
     maxChars: KNOWLEDGE_DEFAULT_MAX_CHARS,
   };
+}
+
+export function sanitizeValueForRunSave(value: unknown): unknown {
+  if (typeof value === "string") {
+    return redactSensitiveText(value);
+  }
+  if (Array.isArray(value)) {
+    return value.map((entry) => sanitizeValueForRunSave(entry));
+  }
+  if (value && typeof value === "object") {
+    const rows = value as Record<string, unknown>;
+    const next: Record<string, unknown> = {};
+    for (const [key, entry] of Object.entries(rows)) {
+      next[key] = sanitizeValueForRunSave(entry);
+    }
+    return next;
+  }
+  return value;
+}
+
+export function sanitizeRunRecordForSave<T>(runRecord: T): T {
+  return sanitizeValueForRunSave(runRecord) as T;
+}
+
+export function questionSignature(question?: string): string {
+  return (question ?? "").trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+export function graphSignature(graphData: GraphData): string {
+  const nodeSig = graphData.nodes
+    .map((node) => `${node.id}:${node.type}`)
+    .sort()
+    .join("|");
+  const edgeSig = graphData.edges
+    .map((edge) => `${edge.from.nodeId}->${edge.to.nodeId}`)
+    .sort()
+    .join("|");
+  return `${nodeSig}::${edgeSig}`;
+}
+
+export function normalizeWebEvidenceOutput(
+  provider: WebProvider,
+  output: unknown,
+  mode: WebResultMode | "bridgeAssisted",
+): unknown {
+  const row =
+    output && typeof output === "object" && !Array.isArray(output)
+      ? (output as Record<string, unknown>)
+      : ({ text: stringifyInput(output) } as Record<string, unknown>);
+  const timestamp = String(row.timestamp ?? new Date().toISOString());
+  const text = String(row.text ?? extractFinalAnswer(row.raw ?? row.data ?? row) ?? "").trim();
+  const raw = row.raw ?? row.data ?? output;
+  const metaRow =
+    row.meta && typeof row.meta === "object" && !Array.isArray(row.meta)
+      ? (row.meta as Record<string, unknown>)
+      : {};
+  const confidenceRaw = String(metaRow.confidence ?? "unknown").toLowerCase();
+  const confidence =
+    confidenceRaw === "high" || confidenceRaw === "medium" || confidenceRaw === "low"
+      ? confidenceRaw
+      : "unknown";
+  const citations = Array.isArray(metaRow.citations)
+    ? metaRow.citations
+        .map((entry) => String(entry ?? "").trim())
+        .filter((entry) => entry.length > 0)
+    : [];
+
+  return {
+    provider,
+    timestamp,
+    text,
+    raw,
+    meta: {
+      sourceType: "web",
+      provider,
+      mode,
+      sourceUrl: metaRow.url ? String(metaRow.url) : null,
+      capturedAt: metaRow.capturedAt ? String(metaRow.capturedAt) : timestamp,
+      confidence,
+      citations,
+      needsVerification: mode !== "bridgeAssisted",
+    },
+  };
+}
+
+export function normalizeWebTurnOutput(
+  provider: WebProvider,
+  mode: WebResultMode,
+  rawInput: string,
+): { ok: boolean; output?: unknown; error?: string } {
+  const trimmed = rawInput.trim();
+  if (!trimmed) {
+    return { ok: false, error: "웹 응답 입력이 비어 있습니다." };
+  }
+
+  if (mode === "manualPasteJson") {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(trimmed);
+    } catch (error) {
+      return { ok: false, error: `JSON 파싱 실패: ${String(error)}` };
+    }
+    return {
+      ok: true,
+      output: normalizeWebEvidenceOutput(
+        provider,
+        {
+          provider,
+          timestamp: new Date().toISOString(),
+          data: parsed,
+          text: extractFinalAnswer(parsed),
+        },
+        mode,
+      ),
+    };
+  }
+
+  return {
+    ok: true,
+    output: normalizeWebEvidenceOutput(
+      provider,
+      {
+        provider,
+        timestamp: new Date().toISOString(),
+        text: trimmed,
+      },
+      mode,
+    ),
+  };
+}
+
+export function executeTransformNode(node: GraphNode, input: unknown): { ok: boolean; output?: unknown; error?: string } {
+  const config = node.config as TransformConfig;
+  const mode = (config.mode ?? "pick") as TransformMode;
+
+  if (mode === "pick") {
+    const path = String(config.pickPath ?? "");
+    return { ok: true, output: getByPath(input, path) };
+  }
+
+  if (mode === "merge") {
+    const rawMerge = String(config.mergeJson ?? "{}");
+    let mergeValue: unknown = {};
+    try {
+      mergeValue = JSON.parse(rawMerge);
+    } catch (e) {
+      return { ok: false, error: `merge JSON 형식 오류: ${String(e)}` };
+    }
+
+    if (input && typeof input === "object" && !Array.isArray(input) && mergeValue && typeof mergeValue === "object") {
+      return {
+        ok: true,
+        output: {
+          ...(input as Record<string, unknown>),
+          ...(mergeValue as Record<string, unknown>),
+        },
+      };
+    }
+
+    return {
+      ok: true,
+      output: {
+        input,
+        merge: mergeValue,
+      },
+    };
+  }
+
+  const template = String(config.template ?? "{{input}}");
+  const rendered = replaceInputPlaceholder(template, stringifyInput(input));
+  return {
+    ok: true,
+    output: {
+      text: rendered,
+    },
+  };
+}
+
+export function executeGateNode(options: {
+  node: GraphNode;
+  input: unknown;
+  skipSet: Set<string>;
+  graph: GraphData;
+  simpleWorkflowUi: boolean;
+  addNodeLog: (nodeId: string, message: string) => void;
+  validateSimpleSchema: (schema: unknown, data: unknown) => string[];
+}): { ok: boolean; output?: unknown; error?: string; message?: string } {
+  const { node, input, skipSet, graph, simpleWorkflowUi, addNodeLog, validateSimpleSchema } = options;
+  const config = node.config as GateConfig;
+  let schemaFallbackNote = "";
+  let decisionFallbackNote = "";
+  const schemaRaw = String(config.schemaJson ?? "").trim();
+  if (schemaRaw) {
+    let parsedSchema: unknown;
+    try {
+      parsedSchema = JSON.parse(schemaRaw);
+    } catch (e) {
+      return { ok: false, error: `스키마 JSON 형식 오류: ${String(e)}` };
+    }
+    const schemaErrors = validateSimpleSchema(parsedSchema, input);
+    if (schemaErrors.length > 0) {
+      if (simpleWorkflowUi) {
+        schemaFallbackNote = `스키마 완화 적용 (${schemaErrors.join("; ")})`;
+        addNodeLog(node.id, `[분기] ${schemaFallbackNote}`);
+      } else {
+        return {
+          ok: false,
+          error: `스키마 검증 실패: ${schemaErrors.join("; ")}`,
+        };
+      }
+    }
+  }
+
+  const decisionPath = String(config.decisionPath ?? "DECISION");
+  const decisionRaw =
+    getByPath(input, decisionPath) ??
+    (decisionPath === "DECISION" ? getByPath(input, "decision") : undefined) ??
+    (decisionPath === "decision" ? getByPath(input, "DECISION") : undefined);
+  let decision = String(decisionRaw ?? "").toUpperCase();
+  if (decision !== "PASS" && decision !== "REJECT") {
+    const text = stringifyInput(input).toUpperCase();
+    const jsonMatch = text.match(/"DECISION"\s*:\s*"(PASS|REJECT)"/);
+    if (jsonMatch?.[1]) {
+      decision = jsonMatch[1];
+      decisionFallbackNote = `JSON에서 DECISION=${decision} 추론`;
+    } else if (/\bREJECT\b/.test(text)) {
+      decision = "REJECT";
+      decisionFallbackNote = "본문 키워드에서 REJECT 추론";
+    } else if (/\bPASS\b/.test(text)) {
+      decision = "PASS";
+      decisionFallbackNote = "본문 키워드에서 PASS 추론";
+    } else if (simpleWorkflowUi) {
+      decision = "PASS";
+      decisionFallbackNote = "DECISION 누락으로 PASS 기본값 적용";
+    }
+    if (decisionFallbackNote) {
+      addNodeLog(node.id, `[분기] ${decisionFallbackNote}`);
+    }
+  }
+
+  if (decision !== "PASS" && decision !== "REJECT") {
+    return {
+      ok: false,
+      error: `분기 값은 PASS 또는 REJECT 여야 합니다. 입력값=${String(decisionRaw)}`,
+    };
+  }
+
+  const children = graph.edges
+    .filter((edge) => edge.from.nodeId === node.id)
+    .map((edge) => edge.to.nodeId)
+    .filter((value, index, arr) => arr.indexOf(value) === index);
+
+  const allowed = new Set<string>();
+  if (decision === "PASS") {
+    const target = String(config.passNodeId ?? "") || children[0] || "";
+    if (target) {
+      allowed.add(target);
+    }
+  } else {
+    const target = String(config.rejectNodeId ?? "") || children[1] || "";
+    if (target) {
+      allowed.add(target);
+    }
+  }
+
+  for (const child of children) {
+    if (!allowed.has(child)) {
+      skipSet.add(child);
+    }
+  }
+
+  return {
+    ok: true,
+    output: {
+      decision,
+      fallback: {
+        schema: schemaFallbackNote || undefined,
+        decision: decisionFallbackNote || undefined,
+      },
+    },
+    message: `분기 결과=${decision}, 실행 대상=${Array.from(allowed).join(",") || "없음"}${
+      schemaFallbackNote || decisionFallbackNote ? " (내부 폴백 적용)" : ""
+    }`,
+  };
+}
+
+export function resolveProviderByExecutor(executor: TurnExecutor): string {
+  const webProvider = getWebProviderFromExecutor(executor);
+  if (webProvider) {
+    return webProvider;
+  }
+  if (executor === "ollama") {
+    return "ollama";
+  }
+  return "codex";
+}
+
+export function mergeUsageStats(
+  base?: { inputTokens?: number; outputTokens?: number; totalTokens?: number },
+  next?: { inputTokens?: number; outputTokens?: number; totalTokens?: number },
+): { inputTokens: number; outputTokens: number; totalTokens: number } | undefined {
+  if (!base && !next) {
+    return undefined;
+  }
+  return {
+    inputTokens: (base?.inputTokens ?? 0) + (next?.inputTokens ?? 0),
+    outputTokens: (base?.outputTokens ?? 0) + (next?.outputTokens ?? 0),
+    totalTokens: (base?.totalTokens ?? 0) + (next?.totalTokens ?? 0),
+  };
+}
+
+export function extractSchemaValidationTarget(output: unknown): unknown {
+  if (!output || typeof output !== "object" || Array.isArray(output)) {
+    return output;
+  }
+  const row = output as Record<string, unknown>;
+  const artifact = row.artifact;
+  if (artifact && typeof artifact === "object" && !Array.isArray(artifact)) {
+    const payload = (artifact as Record<string, unknown>).payload;
+    if (payload !== undefined) {
+      return payload;
+    }
+  }
+  if (row.raw !== undefined) {
+    return row.raw;
+  }
+  if (typeof row.text === "string") {
+    return tryParseJsonText(row.text) ?? { text: row.text };
+  }
+  return output;
+}
+
+export function buildSchemaRetryInput(
+  originalInput: unknown,
+  previousOutput: unknown,
+  schema: unknown,
+  schemaErrors: string[],
+): string {
+  const clip = (value: unknown, maxChars = 2800) => {
+    const text = stringifyInput(value).trim();
+    if (!text) {
+      return "(없음)";
+    }
+    if (text.length <= maxChars) {
+      return text;
+    }
+    return `${text.slice(0, maxChars)}\n...(중략)`;
+  };
+
+  const schemaText = (() => {
+    try {
+      return JSON.stringify(schema, null, 2);
+    } catch {
+      return stringifyInput(schema);
+    }
+  })();
+
+  return [
+    "[원래 입력]",
+    clip(originalInput),
+    "[이전 출력]",
+    clip(extractSchemaValidationTarget(previousOutput)),
+    "[출력 스키마(JSON)]",
+    schemaText,
+    "[스키마 오류 목록]",
+    schemaErrors.map((row, index) => `${index + 1}. ${row}`).join("\n"),
+    "[재요청 지시]",
+    "위 스키마를 엄격히 만족하는 결과만 다시 생성하세요. 불필요한 설명 없이 스키마에 맞는 구조만 출력하세요.",
+  ].join("\n\n");
 }
