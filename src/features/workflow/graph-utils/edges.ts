@@ -20,6 +20,7 @@ export function buildRoundedEdgePath(
   withArrow = true,
   fromSide: NodeAnchorSide,
   toSide: NodeAnchorSide,
+  cornerRadius = 8,
 ): string {
   const offsetPoint = (point: LogicalPoint, side: NodeAnchorSide, distance: number): LogicalPoint => {
     if (side === "top") {
@@ -62,6 +63,13 @@ export function buildRoundedEdgePath(
     if (points.length < 2) {
       return "";
     }
+    if (radius <= 0) {
+      let d = `M ${points[0].x} ${points[0].y}`;
+      for (let i = 1; i < points.length; i += 1) {
+        d += ` L ${points[i].x} ${points[i].y}`;
+      }
+      return d;
+    }
     if (points.length === 2) {
       return `M ${points[0].x} ${points[0].y} L ${points[1].x} ${points[1].y}`;
     }
@@ -81,7 +89,7 @@ export function buildRoundedEdgePath(
         continue;
       }
 
-      const corner = Math.min(radius, inLen / 2, outLen / 2);
+    const corner = Math.min(radius, inLen / 2, outLen / 2);
       const p1 = {
         x: cur.x - (inVec.x / inLen) * corner,
         y: cur.y - (inVec.y / inLen) * corner,
@@ -97,8 +105,8 @@ export function buildRoundedEdgePath(
     return d;
   };
 
-  const start = { x: x1, y: y1 };
-  const end = { x: x2, y: y2 };
+  const start = { x: Math.round(x1), y: Math.round(y1) };
+  const end = { x: Math.round(x2), y: Math.round(y2) };
   const alignedVertical =
     (fromSide === "top" || fromSide === "bottom") &&
     (toSide === "top" || toSide === "bottom") &&
@@ -126,10 +134,10 @@ export function buildRoundedEdgePath(
 
   const points: LogicalPoint[] = [start, startStub];
   if (fromHorizontal && toHorizontal) {
-    const midX = (start.x + end.x) / 2;
+    const midX = Math.round((start.x + end.x) / 2);
     points.push({ x: midX, y: startStub.y }, { x: midX, y: endStub.y });
   } else if (!fromHorizontal && !toHorizontal) {
-    const midY = (start.y + end.y) / 2;
+    const midY = Math.round((start.y + end.y) / 2);
     points.push({ x: startStub.x, y: midY }, { x: endStub.x, y: midY });
   } else if (fromHorizontal && !toHorizontal) {
     points.push({ x: endStub.x, y: startStub.y });
@@ -145,7 +153,7 @@ export function buildRoundedEdgePath(
   points.push(end);
 
   const simplified = simplifyOrthogonalPoints(points);
-  return roundedPathFromPoints(simplified, 8);
+  return roundedPathFromPoints(simplified, cornerRadius);
 }
 
 export function buildManualEdgePath(

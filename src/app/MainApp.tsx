@@ -5593,6 +5593,34 @@ ${prompt}`;
     });
     return result;
   })();
+  const snapPoint = (point: LogicalPoint): LogicalPoint => ({
+    x: Math.round(point.x),
+    y: Math.round(point.y),
+  });
+  const bundledFromAnchorByNodeId = (() => {
+    const map = new Map<string, LogicalPoint>();
+    bundledFromSideByNodeId.forEach((side, nodeId) => {
+      const node = canvasNodeMap.get(nodeId);
+      if (!node) {
+        return;
+      }
+      const size = getNodeVisualSize(node.id);
+      map.set(nodeId, snapPoint(getNodeAnchorPoint(node, side, size)));
+    });
+    return map;
+  })();
+  const bundledToAnchorByNodeId = (() => {
+    const map = new Map<string, LogicalPoint>();
+    bundledToSideByNodeId.forEach((side, nodeId) => {
+      const node = canvasNodeMap.get(nodeId);
+      if (!node) {
+        return;
+      }
+      const size = getNodeVisualSize(node.id);
+      map.set(nodeId, snapPoint(getNodeAnchorPoint(node, side, size)));
+    });
+    return map;
+  })();
 
   const edgeLines = canvasDisplayEdges
     .map((entry, index) => {
@@ -5612,8 +5640,12 @@ ${prompt}`;
       const bundledToSide = hasManualControl ? null : bundledToSideByNodeId.get(toNode.id);
       const resolvedFromSide = hasManualControl ? (edge.from.side ?? auto.fromSide) : bundledFromSide ?? auto.fromSide;
       const resolvedToSide = hasManualControl ? (edge.to.side ?? auto.toSide) : bundledToSide ?? auto.toSide;
-      let fromPoint = getNodeAnchorPoint(fromNode, resolvedFromSide, fromSize);
-      let toPoint = getNodeAnchorPoint(toNode, resolvedToSide, toSize);
+      let fromPoint = bundledFromSide
+        ? (bundledFromAnchorByNodeId.get(fromNode.id) ?? snapPoint(getNodeAnchorPoint(fromNode, resolvedFromSide, fromSize)))
+        : snapPoint(getNodeAnchorPoint(fromNode, resolvedFromSide, fromSize));
+      let toPoint = bundledToSide
+        ? (bundledToAnchorByNodeId.get(toNode.id) ?? snapPoint(getNodeAnchorPoint(toNode, resolvedToSide, toSize)))
+        : snapPoint(getNodeAnchorPoint(toNode, resolvedToSide, toSize));
       if (!hasManualControl && !bundledFromSide && !bundledToSide) {
         const aligned = alignAutoEdgePoints(
           fromNode,
@@ -5625,8 +5657,8 @@ ${prompt}`;
           fromSize,
           toSize,
         );
-        fromPoint = aligned.fromPoint;
-        toPoint = aligned.toPoint;
+        fromPoint = snapPoint(aligned.fromPoint);
+        toPoint = snapPoint(aligned.toPoint);
       }
       const edgeKey = entry.edgeKey;
       const defaultControl = edgeMidPoint(fromPoint, toPoint);
@@ -5650,6 +5682,7 @@ ${prompt}`;
               true,
               resolvedFromSide,
               resolvedToSide,
+              bundledFromSide || bundledToSide ? 0 : 8,
             ),
       };
     })
