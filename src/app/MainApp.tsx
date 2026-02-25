@@ -103,6 +103,7 @@ import {
   buildRoundedEdgePath,
   buildSimpleReadonlyTurnEdges,
   cloneGraph,
+  getAutoConnectionSides,
   getGraphEdgeKey,
   getNodeAnchorPoint,
   graphEquals,
@@ -2644,43 +2645,10 @@ function App() {
     };
   }
 
-  function applyEdgeControlPosition(clientX: number, clientY: number) {
-    if (!edgeDragRef.current) {
-      return;
-    }
-    const logicalPoint = clientToLogicalPoint(clientX, clientY);
-    if (!logicalPoint) {
-      return;
-    }
-
-    const minPos = -NODE_DRAG_MARGIN;
-    const maxX = Math.max(minPos, boundedStageWidth + NODE_DRAG_MARGIN);
-    const maxY = Math.max(minPos, boundedStageHeight + NODE_DRAG_MARGIN);
-    const { edgeKey, pointerStart, startControl } = edgeDragRef.current;
-    const dx = logicalPoint.x - pointerStart.x;
-    const dy = logicalPoint.y - pointerStart.y;
-    const nextControl = {
-      x: Math.min(maxX, Math.max(minPos, startControl.x + dx)),
-      y: Math.min(maxY, Math.max(minPos, startControl.y + dy)),
-    };
-
-    setGraph((prev) => ({
-      ...prev,
-      edges: prev.edges.map((edge) =>
-        getGraphEdgeKey(edge) === edgeKey
-          ? {
-              ...edge,
-              control: nextControl,
-            }
-          : edge,
-      ),
-    }));
-  }
-
   function onEdgeDragStart(
-    event: ReactMouseEvent<SVGPathElement>,
+    event: ReactMouseEvent<SVGPathElement | SVGCircleElement>,
     edgeKey: string,
-    defaultControl: LogicalPoint,
+    endPoint: LogicalPoint,
   ) {
     if (panMode || isConnectingDrag) {
       return;
@@ -2688,36 +2656,48 @@ function App() {
     if (event.button !== 0) {
       return;
     }
+    setNodeSelection([]);
+    setSelectedEdgeKey(edgeKey);
     const pointer = clientToLogicalPoint(event.clientX, event.clientY);
     if (!pointer) {
       return;
     }
+    const distanceToArrowEnd = Math.hypot(pointer.x - endPoint.x, pointer.y - endPoint.y);
+    if (distanceToArrowEnd > 26) {
+      return;
+    }
+
+    const currentEdge = graph.edges.find((edge) => getGraphEdgeKey(edge) === edgeKey);
+    if (!currentEdge) {
+      return;
+    }
+    const fromNode = canvasNodeMap.get(currentEdge.from.nodeId);
+    const toNode = canvasNodeMap.get(currentEdge.to.nodeId);
+    if (!fromNode || !toNode) {
+      return;
+    }
+    const fromSize = getNodeVisualSize(fromNode.id);
+    const toSize = getNodeVisualSize(toNode.id);
+    const auto = getAutoConnectionSides(fromNode, toNode, fromSize, toSize);
+    const fromSide = currentEdge.from.side ?? auto.fromSide;
+    const toSide = currentEdge.to.side ?? auto.toSide;
+    const sourceAnchor = getNodeAnchorPoint(fromNode, fromSide, fromSize);
+
     event.preventDefault();
     event.stopPropagation();
-    setNodeSelection([]);
-    setSelectedEdgeKey(edgeKey);
     edgeDragStartSnapshotRef.current = cloneGraph(graph);
     edgeDragRef.current = {
       edgeKey,
-      pointerStart: pointer,
-      startControl: defaultControl,
+      sourceNodeId: currentEdge.from.nodeId,
+      sourceSide: fromSide,
+      originalToNodeId: currentEdge.to.nodeId,
+      originalToSide: toSide,
     };
-
-    if (!edgeDragWindowMoveHandlerRef.current) {
-      edgeDragWindowMoveHandlerRef.current = (nextEvent: MouseEvent) => {
-        if (!edgeDragRef.current) {
-          return;
-        }
-        applyEdgeControlPosition(nextEvent.clientX, nextEvent.clientY);
-      };
-      window.addEventListener("mousemove", edgeDragWindowMoveHandlerRef.current);
-    }
-    if (!edgeDragWindowUpHandlerRef.current) {
-      edgeDragWindowUpHandlerRef.current = () => {
-        onCanvasMouseUp();
-      };
-      window.addEventListener("mouseup", edgeDragWindowUpHandlerRef.current);
-    }
+    setConnectFromNodeId(currentEdge.from.nodeId);
+    setConnectFromSide(fromSide);
+    setConnectPreviewStartPoint(sourceAnchor);
+    setConnectPreviewPoint(pointer);
+    setIsConnectingDrag(true);
   }
 
   function onAssignSelectedEdgeAnchor(nodeId: string, side: NodeAnchorSide): boolean {
@@ -2769,6 +2749,85 @@ function App() {
     });
     setStatus("선 연결 위치를 업데이트했습니다.");
     return true;
+  }
+
+  function reconnectSelectedEdgeTarget(
+    dragState: {
+      edgeKey: string;
+      sourceNodeId: string;
+      sourceSide: NodeAnchorSide;
+    },
+    targetNodeId: string,
+    targetSide: NodeAnchorSide,
+  ): boolean {
+    let changed = false;
+    let blockedReason = "";
+
+    applyGraphChange((prev) => {
+      const currentIndex = prev.edges.findIndex((edge) => getGraphEdgeKey(edge) === dragState.edgeKey);
+      if (currentIndex < 0) {
+        blockedReason = "대상 선을 찾지 못했습니다.";
+        return prev;
+      }
+      const current = prev.edges[currentIndex];
+      const sourceNodeId = current.from.nodeId;
+      if (!sourceNodeId || sourceNodeId === targetNodeId) {
+        blockedReason = "동일 노드로는 연결할 수 없습니다.";
+        return prev;
+      }
+
+      const duplicateExists = prev.edges.some(
+        (edge, index) =>
+          index !== currentIndex &&
+          edge.from.nodeId === sourceNodeId &&
+          edge.to.nodeId === targetNodeId,
+      );
+      if (duplicateExists) {
+        blockedReason = "이미 동일한 방향의 연결이 있습니다.";
+        return prev;
+      }
+
+      const reverseExists = prev.edges.some(
+        (edge, index) =>
+          index !== currentIndex &&
+          edge.from.nodeId === targetNodeId &&
+          edge.to.nodeId === sourceNodeId,
+      );
+      if (reverseExists) {
+        blockedReason = "양방향 연결은 허용되지 않습니다.";
+        return prev;
+      }
+
+      const nextEdge = {
+        ...current,
+        from: {
+          ...current.from,
+          side: dragState.sourceSide,
+        },
+        to: {
+          ...current.to,
+          nodeId: targetNodeId,
+          side: targetSide,
+        },
+        control: undefined,
+      };
+      const nextEdges = prev.edges.slice();
+      nextEdges[currentIndex] = nextEdge;
+      changed = true;
+      return {
+        ...prev,
+        edges: nextEdges,
+      };
+    });
+
+    if (blockedReason) {
+      setStatus(blockedReason);
+      return false;
+    }
+    if (changed) {
+      setStatus("선 연결 대상을 업데이트했습니다.");
+    }
+    return changed;
   }
 
   function zoomAtClientPoint(nextZoom: number, clientX: number, clientY: number) {
@@ -2966,11 +3025,6 @@ function App() {
       return;
     }
 
-    if (edgeDragRef.current) {
-      applyEdgeControlPosition(e.clientX, e.clientY);
-      return;
-    }
-
     if (isConnectingDrag && connectFromNodeId) {
       const point = clientToLogicalPoint(e.clientX, e.clientY);
       if (point) {
@@ -2997,25 +3051,7 @@ function App() {
 
   function onCanvasMouseUp(event?: { clientX: number; clientY: number }) {
     panRef.current = null;
-
-    if (edgeDragRef.current) {
-      if (edgeDragWindowMoveHandlerRef.current) {
-        window.removeEventListener("mousemove", edgeDragWindowMoveHandlerRef.current);
-        edgeDragWindowMoveHandlerRef.current = null;
-      }
-      if (edgeDragWindowUpHandlerRef.current) {
-        window.removeEventListener("mouseup", edgeDragWindowUpHandlerRef.current);
-        edgeDragWindowUpHandlerRef.current = null;
-      }
-
-      const edgeSnapshot = edgeDragStartSnapshotRef.current;
-      if (edgeSnapshot && !graphEquals(edgeSnapshot, graph)) {
-        setUndoStack((stack) => [...stack.slice(-79), cloneGraph(edgeSnapshot)]);
-        setRedoStack([]);
-      }
-      edgeDragRef.current = null;
-      edgeDragStartSnapshotRef.current = null;
-    }
+    const edgeReconnectState = edgeDragRef.current;
 
     if (isConnectingDrag) {
       const pointerPoint =
@@ -3025,7 +3061,11 @@ function App() {
       const dropPoint = pointerPoint ?? connectPreviewPoint;
       const dropTarget = dropPoint ? resolveConnectDropTarget(dropPoint) : null;
       if (dropTarget && connectFromNodeId && connectFromNodeId !== dropTarget.nodeId) {
-        onNodeConnectDrop(dropTarget.nodeId, dropTarget.side);
+        if (edgeReconnectState) {
+          reconnectSelectedEdgeTarget(edgeReconnectState, dropTarget.nodeId, dropTarget.side);
+        } else {
+          onNodeConnectDrop(dropTarget.nodeId, dropTarget.side);
+        }
       } else {
         setIsConnectingDrag(false);
         setConnectPreviewStartPoint(null);
@@ -3034,6 +3074,8 @@ function App() {
         setConnectFromSide(null);
       }
     }
+    edgeDragRef.current = null;
+    edgeDragStartSnapshotRef.current = null;
 
     if (marqueeSelection) {
       const minX = Math.min(marqueeSelection.start.x, marqueeSelection.current.x);
@@ -5873,7 +5915,6 @@ ${prompt}`;
               onAssignSelectedEdgeAnchor={onAssignSelectedEdgeAnchor}
               onNodeAnchorDragStart={onNodeAnchorDragStart}
               onNodeAnchorDrop={onNodeAnchorDrop}
-              onNodeConnectDrop={onNodeConnectDrop}
               onNodeDragStart={onNodeDragStart}
               onOpenFeedFromNode={onOpenFeedFromNode}
               onOpenWebInputForNode={onOpenWebInputForNode}

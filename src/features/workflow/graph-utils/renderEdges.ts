@@ -1,7 +1,6 @@
 import type { GraphEdge, GraphNode, NodeAnchorSide } from "../types";
 import {
   alignAutoEdgePoints,
-  buildManualEdgePath,
   buildRoundedEdgePath,
   edgeMidPoint,
   getAutoConnectionSides,
@@ -200,19 +199,11 @@ export function buildCanvasEdgeLines(params: BuildCanvasEdgeLinesParams): Canvas
       const fromSize = getNodeVisualSize(fromNode.id);
       const toSize = getNodeVisualSize(toNode.id);
       const auto = getAutoConnectionSides(fromNode, toNode, fromSize, toSize);
-      const isBundledEdge =
-        (groupedFrom.get(fromNode.id)?.length ?? 0) > 1 || (groupedTo.get(toNode.id)?.length ?? 0) > 1;
-      const hasManualControl =
-        !entry.readOnly &&
-        !isBundledEdge &&
-        typeof edge.control?.x === "number" &&
-        typeof edge.control?.y === "number";
-      const bundledFromSide = hasManualControl ? null : bundledFromSideByNodeId.get(fromNode.id);
-      const bundledToSide = hasManualControl ? null : bundledToSideByNodeId.get(toNode.id);
-      const resolvedFromSide = hasManualControl
-        ? (edge.from.side ?? auto.fromSide)
-        : bundledFromSide ?? auto.fromSide;
-      const resolvedToSide = hasManualControl ? (edge.to.side ?? auto.toSide) : bundledToSide ?? auto.toSide;
+      const hasManualControl = false;
+      const bundledFromSide = bundledFromSideByNodeId.get(fromNode.id);
+      const bundledToSide = bundledToSideByNodeId.get(toNode.id);
+      const resolvedFromSide = bundledFromSide ?? edge.from.side ?? auto.fromSide;
+      const resolvedToSide = bundledToSide ?? edge.to.side ?? auto.toSide;
       let fromPoint = bundledFromSide
         ? (bundledFromAnchorByNodeId.get(fromNode.id) ??
           snapPoint(getNodeAnchorPoint(fromNode, resolvedFromSide, fromSize)))
@@ -258,13 +249,11 @@ export function buildCanvasEdgeLines(params: BuildCanvasEdgeLinesParams): Canvas
 
       const edgeKey = entry.edgeKey;
       const defaultControl = edgeMidPoint(fromPoint, toPoint);
-      const control = edge.control ?? defaultControl;
+      const control = defaultControl;
       const hasBundledRouting = !hasManualControl && Boolean(bundledFromSide || bundledToSide);
 
       let path: string;
-      if (hasManualControl) {
-        path = buildManualEdgePath(fromPoint.x, fromPoint.y, control.x, control.y, toPoint.x, toPoint.y);
-      } else if (hasBundledRouting && fromHorizontal && toHorizontal) {
+      if (hasBundledRouting && fromHorizontal && toHorizontal) {
         const gap = Math.max(24, Math.round(Math.abs(toPoint.x - fromPoint.x) * 0.38));
         const laneX = bundledFromSide
           ? (resolvedFromSide === "right" ? fromPoint.x + gap : fromPoint.x - gap)

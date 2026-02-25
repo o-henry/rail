@@ -8,7 +8,8 @@ type EdgeLine = {
   edgeKey: string;
   readOnly?: boolean;
   path: string;
-  controlPoint: { x: number; y: number };
+  startPoint: { x: number; y: number };
+  endPoint: { x: number; y: number };
 };
 
 type WorkflowCanvasPaneProps = {
@@ -29,7 +30,11 @@ type WorkflowCanvasPaneProps = {
   selectedEdgeNodeIdSet: Set<string>;
   setNodeSelection: (nodeIds: string[], focusedNodeId?: string) => void;
   setSelectedEdgeKey: (edgeKey: string) => void;
-  onEdgeDragStart: (event: ReactMouseEvent<SVGPathElement>, edgeKey: string, controlPoint: { x: number; y: number }) => void;
+  onEdgeDragStart: (
+    event: ReactMouseEvent<SVGPathElement | SVGCircleElement>,
+    edgeKey: string,
+    endPoint: { x: number; y: number },
+  ) => void;
   connectPreviewLine: string | null;
   canvasNodes: GraphNode[];
   nodeStates: Record<string, NodeRunState>;
@@ -39,7 +44,6 @@ type WorkflowCanvasPaneProps = {
   questionDirectInputNodeIds: Set<string>;
   onNodeAnchorDragStart: (event: ReactMouseEvent<HTMLButtonElement>, nodeId: string, side: NodeAnchorSide) => void;
   onNodeAnchorDrop: (event: ReactMouseEvent<HTMLButtonElement>, nodeId: string, side: NodeAnchorSide) => void;
-  onNodeConnectDrop: (nodeId: string, side?: NodeAnchorSide) => void;
   onAssignSelectedEdgeAnchor: (nodeId: string, side: NodeAnchorSide) => boolean;
   isNodeDragAllowedTarget: (target: EventTarget | null) => boolean;
   onNodeDragStart: (event: ReactMouseEvent<HTMLDivElement>, nodeId: string) => void;
@@ -107,7 +111,6 @@ export default function WorkflowCanvasPane({
   questionDirectInputNodeIds,
   onNodeAnchorDragStart,
   onNodeAnchorDrop,
-  onNodeConnectDrop,
   onAssignSelectedEdgeAnchor,
   isNodeDragAllowedTarget,
   onNodeDragStart,
@@ -147,22 +150,6 @@ export default function WorkflowCanvasPane({
   questionInputRef,
 }: WorkflowCanvasPaneProps) {
   const { t } = useI18n();
-
-  const getDropSideFromNodePointer = (
-    event: ReactMouseEvent<HTMLDivElement>,
-  ): NodeAnchorSide => {
-    const rect = event.currentTarget.getBoundingClientRect();
-    const localX = event.clientX - rect.left;
-    const localY = event.clientY - rect.top;
-    const distances: Array<{ side: NodeAnchorSide; value: number }> = [
-      { side: "left", value: Math.abs(localX) },
-      { side: "right", value: Math.abs(rect.width - localX) },
-      { side: "top", value: Math.abs(localY) },
-      { side: "bottom", value: Math.abs(rect.height - localY) },
-    ];
-    distances.sort((a, b) => a.value - b.value);
-    return distances[0]?.side ?? "right";
-  };
 
   return (
     <section className="canvas-pane">
@@ -215,10 +202,10 @@ export default function WorkflowCanvasPane({
                           setNodeSelection([]);
                           setSelectedEdgeKey(line.edgeKey);
                         }}
-                        onMouseDown={(e) => onEdgeDragStart(e, line.edgeKey, line.controlPoint)}
+                        onMouseDown={(e) => onEdgeDragStart(e, line.edgeKey, line.endPoint)}
                         pointerEvents="stroke"
                         stroke="transparent"
-                        strokeWidth={(selectedEdgeKey === line.edgeKey ? 3 : 2) + 2}
+                        strokeWidth={18}
                       />
                     )}
                     <path
@@ -235,6 +222,21 @@ export default function WorkflowCanvasPane({
                       strokeLinejoin="round"
                       strokeWidth={selectedEdgeKey === line.edgeKey ? 3 : 2}
                     />
+                    {!line.readOnly && (
+                      <circle
+                        className="edge-arrow-handle"
+                        cx={line.endPoint.x}
+                        cy={line.endPoint.y}
+                        fill="transparent"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setNodeSelection([]);
+                          setSelectedEdgeKey(line.edgeKey);
+                        }}
+                        onMouseDown={(e) => onEdgeDragStart(e, line.edgeKey, line.endPoint)}
+                        r={12}
+                      />
+                    )}
                   </g>
                 ))}
                 {connectPreviewLine && (
@@ -282,11 +284,6 @@ export default function WorkflowCanvasPane({
                       if (!isNodeDragAllowedTarget(event.target)) return;
                       if (event.button !== 0 || isConnectingDrag) return;
                       onNodeDragStart(event, node.id);
-                    }}
-                    onMouseUp={(e) => {
-                      if (!isConnectingDrag) return;
-                      e.stopPropagation();
-                      onNodeConnectDrop(node.id, getDropSideFromNodePointer(e));
                     }}
                     style={{
                       left: node.position.x,

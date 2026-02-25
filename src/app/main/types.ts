@@ -1,5 +1,5 @@
 import type { PresetKind, QualityProfileId, TurnExecutor, WebProvider, WebResultMode } from "../../features/workflow/domain";
-import type { GraphData, GraphEdge, GraphNode, NodeExecutionStatus, NodeType } from "../../features/workflow/types";
+import type { GraphData, GraphEdge, GraphNode, NodeAnchorSide, NodeExecutionStatus, NodeType } from "../../features/workflow/types";
 
 export type EngineNotificationEvent = {
   method: string;
@@ -264,8 +264,10 @@ export type DragState = {
 
 export type EdgeDragState = {
   edgeKey: string;
-  pointerStart: LogicalPoint;
-  startControl: LogicalPoint;
+  sourceNodeId: string;
+  sourceSide: NodeAnchorSide;
+  originalToNodeId: string;
+  originalToSide?: NodeAnchorSide;
 };
 
 export type PanState = {

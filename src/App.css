@@ -951,11 +951,20 @@ h3 {
 
 .edge-path-hit {
   pointer-events: stroke;
-  cursor: grab;
+  cursor: pointer;
 }
 
 .edge-control-point {
   pointer-events: none;
+}
+
+.edge-arrow-handle {
+  pointer-events: all;
+  cursor: grab;
+}
+
+.edge-arrow-handle:active {
+  cursor: grabbing;
 }
 
 .graph-node {
@@ -2968,7 +2977,7 @@ h3 {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 10px 16px;
+  padding: 8px 16px;
   background: #f6f6f6;
   border-radius: 4px;
 }
