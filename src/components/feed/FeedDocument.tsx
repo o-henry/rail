@@ -16,6 +16,8 @@ type TextBlock =
   | { kind: "rule" }
   | { kind: "code"; language: string; code: string };
 
+type JsonValue = null | string | number | boolean | JsonValue[] | { [key: string]: JsonValue };
+
 function sanitizeDocumentUrl(raw: string): string | null {
   const candidate = String(raw ?? "").trim();
   if (!candidate) {
@@ -211,6 +213,66 @@ function parseDocumentBlocks(content: string): TextBlock[] {
   return blocks;
 }
 
+function parseWholeJsonDocument(source: string): JsonValue | null {
+  const trimmed = String(source ?? "").trim();
+  if (!trimmed) {
+    return null;
+  }
+  if (!(trimmed.startsWith("{") || trimmed.startsWith("["))) {
+    return null;
+  }
+  try {
+    const parsed = JSON.parse(trimmed) as JsonValue;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function toReadableJsonLabel(key: string): string {
+  const normalized = String(key ?? "")
+    .replace(/[_-]+/g, " ")
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .trim();
+  return normalized || key;
+}
+
+function renderJsonValue(value: JsonValue, keyPrefix = "json"): ReactNode {
+  if (value === null) {
+    return <p className="feed-document-paragraph">(null)</p>;
+  }
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+    return <p className="feed-document-paragraph">{String(value)}</p>;
+  }
+  if (Array.isArray(value)) {
+    if (value.length === 0) {
+      return <p className="feed-document-paragraph">(empty)</p>;
+    }
+    return (
+      <ul className="feed-document-list">
+        {value.map((item, index) => (
+          <li key={`${keyPrefix}-item-${index}`}>{renderJsonValue(item, `${keyPrefix}-${index}`)}</li>
+        ))}
+      </ul>
+    );
+  }
+
+  const entries = Object.entries(value);
+  if (entries.length === 0) {
+    return <p className="feed-document-paragraph">(empty)</p>;
+  }
+  return (
+    <div className="feed-json-document">
+      {entries.map(([key, entryValue], index) => (
+        <section className="feed-json-section" key={`${keyPrefix}-${key}-${index}`}>
+          <h3 className="feed-document-h3">{toReadableJsonLabel(key)}</h3>
+          {renderJsonValue(entryValue, `${keyPrefix}-${key}-${index}`)}
+        </section>
+      ))}
+    </div>
+  );
+}
+
 function renderInlineMarkdown(text: string): ReactNode[] {
   const source = String(text ?? "");
   if (!source) {
@@ -265,6 +327,10 @@ function renderInlineMarkdown(text: string): ReactNode[] {
 
 export default function FeedDocument({ text, className = "" }: FeedDocumentProps) {
   const extracted = useMemo(() => extractChartSpecsFromContent(text), [text]);
+  const jsonDocument = useMemo(
+    () => parseWholeJsonDocument(extracted.contentWithoutChartBlocks),
+    [extracted.contentWithoutChartBlocks],
+  );
   const blocks = useMemo(
     () => parseDocumentBlocks(extracted.contentWithoutChartBlocks),
     [extracted.contentWithoutChartBlocks],
@@ -275,7 +341,9 @@ export default function FeedDocument({ text, className = "" }: FeedDocumentProps
       {extracted.charts.map((chart, index) => (
         <FeedChart key={`chart-${index}`} spec={chart} />
       ))}
-      {blocks.map((block, index) => {
+      {jsonDocument
+        ? renderJsonValue(jsonDocument)
+        : blocks.map((block, index) => {
         if (block.kind === "heading") {
           if (block.level === 1) {
             return (

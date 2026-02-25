@@ -325,3 +325,27 @@ export function buildFinalVisualizationDirective(): string {
     "- 본문은 일반 Markdown 형식으로 작성하세요.",
   ].join("\n");
 }
+
+export function buildOutputSchemaDirective(schemaRaw: string): string {
+  const trimmed = String(schemaRaw ?? "").trim();
+  if (!trimmed) {
+    return "";
+  }
+  let prettySchema = trimmed;
+  try {
+    const parsed = JSON.parse(trimmed);
+    prettySchema = JSON.stringify(parsed, null, 2);
+  } catch {
+    return "";
+  }
+
+  return [
+    "[OUTPUT SCHEMA CONTRACT]",
+    "아래 JSON 스키마를 반드시 만족하는 결과만 출력하세요.",
+    "설명문/서론/결론 없이 스키마에 맞는 결과만 출력하세요.",
+    "```json",
+    prettySchema,
+    "```",
+    "[/OUTPUT SCHEMA CONTRACT]",
+  ].join("\n");
+}

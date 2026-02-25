@@ -2895,6 +2895,18 @@ h3 {
   gap: 8px;
 }
 
+.feed-json-document {
+  display: grid;
+  gap: 8px;
+}
+
+.feed-json-section {
+  display: grid;
+  gap: 4px;
+  border-left: 2px solid #e7e9ec;
+  padding-left: 10px;
+}
+
 .feed-document-h1,
 .feed-document-h2,
 .feed-document-h3 {

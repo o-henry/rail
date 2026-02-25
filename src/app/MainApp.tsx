@@ -72,6 +72,7 @@ import {
   buildFinalVisualizationDirective,
   buildCodexMultiAgentDirective,
   buildForcedAgentRuleBlock,
+  buildOutputSchemaDirective,
   extractPromptInputText,
   getByPath,
   isLikelyWebPromptEcho,
@@ -4382,6 +4383,11 @@ ${prompt}`;
       textToSend = `${textToSend}\n\n${visualizationDirective}`.trim();
       addNodeLog(node.id, "[시각화] 품질 프로필(최종 종합) 기반 시각화 지침 자동 적용");
     }
+    const outputSchemaDirective = buildOutputSchemaDirective(String(config.outputSchemaJson ?? ""));
+    if (outputSchemaDirective) {
+      textToSend = `${textToSend}\n\n${outputSchemaDirective}`.trim();
+      addNodeLog(node.id, "[스키마] 출력 스키마 지시를 프롬프트에 자동 주입했습니다.");
+    }
     if (executor === "codex") {
       const multiAgentDirective = buildCodexMultiAgentDirective(codexMultiAgentMode);
       if (multiAgentDirective) {
@@ -4827,7 +4833,11 @@ ${prompt}`;
     }
 
     addNodeLog(node.id, `[스키마] 검증 실패: ${schemaErrors.join("; ")}`);
-    addNodeLog(node.id, `[스키마] 재질문 ${TURN_OUTPUT_SCHEMA_MAX_RETRY}회 제한 내에서 재시도합니다.`);
+    if (TURN_OUTPUT_SCHEMA_MAX_RETRY > 0) {
+      addNodeLog(node.id, `[스키마] 재질문 ${TURN_OUTPUT_SCHEMA_MAX_RETRY}회 제한 내에서 재시도합니다.`);
+    } else {
+      addNodeLog(node.id, "[스키마] 자동 재질문이 비활성화되어 즉시 실패 처리합니다.");
+    }
 
     let attempts = 0;
     let accumulatedUsage = result.usage;
