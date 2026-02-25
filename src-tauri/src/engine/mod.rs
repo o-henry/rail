@@ -851,6 +851,29 @@ async fn resolve_web_worker_dirs(app: &AppHandle) -> Result<(PathBuf, PathBuf), 
 }
 
 async fn resolve_codex_home_dir(app: &AppHandle) -> Result<PathBuf, String> {
+    if let Ok(raw_override) = env::var("RAIL_CODEX_HOME") {
+        let trimmed = raw_override.trim();
+        if !trimmed.is_empty() {
+            let overridden = PathBuf::from(trimmed);
+            ensure_private_dir(&overridden, "override codex home dir").await?;
+            return Ok(overridden);
+        }
+    }
+
+    let home_mode = env::var("RAIL_CODEX_HOME_MODE")
+        .ok()
+        .map(|value| value.trim().to_lowercase())
+        .filter(|value| !value.is_empty())
+        .unwrap_or_else(|| "global".to_string());
+
+    if home_mode != "isolated" {
+        if let Ok(home) = env::var("HOME") {
+            let global_codex_home = PathBuf::from(home).join(".codex");
+            ensure_private_dir(&global_codex_home, "global codex home dir").await?;
+            return Ok(global_codex_home);
+        }
+    }
+
     let app_data_dir = app
         .path()
         .app_data_dir()
