@@ -11,6 +11,7 @@ import { invoke, listen, openUrl, revealItemInDir } from "../shared/tauri";
 import AppNav from "../components/AppNav";
 import ApprovalModal from "../components/modals/ApprovalModal";
 import PendingWebLoginModal from "../components/modals/PendingWebLoginModal";
+import PendingWebConnectModal from "../components/modals/PendingWebConnectModal";
 import PendingWebTurnModal from "../components/modals/PendingWebTurnModal";
 import BridgePage from "../pages/bridge/BridgePage";
 import FeedPage from "../pages/feed/FeedPage";
@@ -262,6 +263,10 @@ function App() {
   const defaultCodexMultiAgentMode = useMemo(() => loadPersistedCodexMultiAgentMode(), []);
 
   const [workspaceTab, setWorkspaceTab] = useState<WorkspaceTab>("workflow");
+  const [pendingWebConnectCheck, setPendingWebConnectCheck] = useState<{
+    providers: WebProvider[];
+    reason: string;
+  } | null>(null);
 
   const [cwd, setCwd] = useState(defaultCwd);
   const [model, setModel] = useState<string>(DEFAULT_TURN_MODEL);
@@ -350,6 +355,7 @@ function App() {
     pendingWebLoginAutoOpenKeyRef,
     webBridgeStageWarnTimerRef,
     activeWebPromptRef,
+    manualWebFallbackNodeRef,
   } = useWebConnectState();
   const {
     graph,
@@ -2181,7 +2187,22 @@ function App() {
       return;
     }
 
-    setError("해당 WEB 노드의 수동 입력 대기 항목이 없습니다.");
+    const activeProvider = WEB_PROVIDER_OPTIONS.find(
+      (provider) => activeWebNodeByProviderRef.current[provider] === nodeId,
+    );
+    if (activeProvider) {
+      manualWebFallbackNodeRef.current[nodeId] = true;
+      void invoke("web_provider_cancel", { provider: activeProvider })
+        .then(() => {
+          setStatus(`${webProviderLabel(activeProvider)} 자동 수집을 중단하고 수동 입력으로 전환합니다.`);
+        })
+        .catch((error) => {
+          setError(`${webProviderLabel(activeProvider)} 수동 입력 전환 실패: ${String(error)}`);
+        });
+      return;
+    }
+
+    setStatus("현재 해당 WEB 노드의 수동 입력 대기 항목이 없습니다.");
   }
 
   function onCancelPendingWebTurn() {
@@ -3548,6 +3569,37 @@ ${prompt}`;
         addNodeLog(node.id, `[WEB] ${webProviderLabel(webProvider)} 웹 연결 반자동 시작`);
         addNodeLog(node.id, "[WEB] 프롬프트 자동 주입/전송을 시도합니다. 자동 전송 실패 시 웹 탭에서 전송 1회가 필요합니다.");
         setStatus(`${webProviderLabel(webProvider)} 웹 연결 대기 중 - 자동 주입/전송 준비`);
+        const requestManualFallback = async (reasonLine: string) => {
+          addNodeLog(node.id, reasonLine);
+          addNodeLog(node.id, "[WEB] 수동 입력 모달로 전환합니다.");
+          setNodeStatus(node.id, "waiting_user", `${webProvider} 응답 입력 대기`);
+          setNodeRuntimeFields(node.id, {
+            status: "waiting_user",
+          });
+          const fallback = await requestWebTurnResponse(
+            node.id,
+            webProvider,
+            textToSend,
+            "manualPasteText",
+          );
+          const normalizedFallback =
+            fallback.ok && fallback.output !== undefined
+              ? {
+                  ...fallback,
+                  output: normalizeWebEvidenceOutput(
+                    webProvider,
+                    fallback.output,
+                    "manualPasteText",
+                  ),
+                }
+              : fallback;
+          return {
+            ...normalizedFallback,
+            executor,
+            provider: webProvider,
+            knowledgeTrace,
+          };
+        };
         try {
           await openUrl(webProviderHomeUrl(webProvider));
           addNodeLog(node.id, `[WEB] ${webProviderLabel(webProvider)} 웹 탭을 자동으로 열었습니다.`);
@@ -3556,25 +3608,10 @@ ${prompt}`;
         }
         const workerReady = await ensureWebWorkerReady();
         if (!workerReady) {
-          addNodeLog(node.id, `[WEB] 웹 연결 워커 준비 실패, 수동 입력으로 전환`);
           clearWebBridgeStageWarnTimer(webProvider);
           delete activeWebNodeByProviderRef.current[webProvider];
           delete activeWebPromptRef.current[webProvider];
-          setNodeStatus(node.id, "waiting_user", `${webProvider} 응답 입력 대기`);
-          setNodeRuntimeFields(node.id, {
-            status: "waiting_user",
-          });
-          return requestWebTurnResponse(
-            node.id,
-            webProvider,
-            textToSend,
-            "manualPasteText",
-          ).then((result) => ({
-            ...result,
-            executor,
-            provider: webProvider,
-            knowledgeTrace,
-          }));
+          return requestManualFallback("[WEB] 웹 연결 워커 준비 실패, 수동 입력으로 전환");
         } else {
           const runBridgeAssisted = async (timeoutMs = webTimeoutMs) =>
             invoke<WebProviderRunResult>("web_provider_run", {
@@ -3622,6 +3659,10 @@ ${prompt}`;
             }
 
             if (cancelRequestedRef.current || result?.errorCode === "CANCELLED") {
+              if (manualWebFallbackNodeRef.current[node.id]) {
+                delete manualWebFallbackNodeRef.current[node.id];
+                return requestManualFallback("[WEB] 사용자 요청으로 자동 수집을 중단하고 수동 입력으로 전환합니다.");
+              }
               return {
                 ok: false,
                 error: t("run.cancelledByUserShort"),
@@ -3631,41 +3672,17 @@ ${prompt}`;
               };
             }
 
-            const fallbackReason = `[WEB] 웹 연결 수집 실패 (${result?.errorCode ?? "UNKNOWN"}): ${
-              result?.error ?? "unknown error"
-            }`;
-            addNodeLog(node.id, fallbackReason);
-            addNodeLog(node.id, "[WEB] 수동 입력 모달로 전환합니다.");
-            setNodeStatus(node.id, "waiting_user", `${webProvider} 응답 입력 대기`);
-            setNodeRuntimeFields(node.id, {
-              status: "waiting_user",
-            });
-            return requestWebTurnResponse(
-              node.id,
-              webProvider,
-              textToSend,
-              "manualPasteText",
-            ).then((fallback) => {
-              const normalizedFallback =
-                fallback.ok && fallback.output !== undefined
-                  ? {
-                      ...fallback,
-                      output: normalizeWebEvidenceOutput(
-                        webProvider,
-                        fallback.output,
-                        "manualPasteText",
-                      ),
-                    }
-                  : fallback;
-              return {
-                ...normalizedFallback,
-                executor,
-                provider: webProvider,
-                knowledgeTrace,
-              };
-            });
+            return requestManualFallback(
+              `[WEB] 웹 연결 수집 실패 (${result?.errorCode ?? "UNKNOWN"}): ${
+                result?.error ?? "unknown error"
+              }`,
+            );
           } catch (error) {
             if (cancelRequestedRef.current) {
+              if (manualWebFallbackNodeRef.current[node.id]) {
+                delete manualWebFallbackNodeRef.current[node.id];
+                return requestManualFallback("[WEB] 사용자 요청으로 자동 수집을 중단하고 수동 입력으로 전환합니다.");
+              }
               return {
                 ok: false,
                 error: t("run.cancelledByUserShort"),
@@ -3674,40 +3691,12 @@ ${prompt}`;
                 knowledgeTrace,
               };
             }
-            addNodeLog(node.id, `[WEB] 웹 연결 예외: ${String(error)}`);
-            addNodeLog(node.id, "[WEB] 수동 입력 모달로 전환합니다.");
-            setNodeStatus(node.id, "waiting_user", `${webProvider} 응답 입력 대기`);
-            setNodeRuntimeFields(node.id, {
-              status: "waiting_user",
-            });
-            return requestWebTurnResponse(
-              node.id,
-              webProvider,
-              textToSend,
-              "manualPasteText",
-            ).then((fallback) => {
-              const normalizedFallback =
-                fallback.ok && fallback.output !== undefined
-                  ? {
-                      ...fallback,
-                      output: normalizeWebEvidenceOutput(
-                        webProvider,
-                        fallback.output,
-                        "manualPasteText",
-                      ),
-                    }
-                  : fallback;
-              return {
-                ...normalizedFallback,
-                executor,
-                provider: webProvider,
-                knowledgeTrace,
-              };
-            });
+            return requestManualFallback(`[WEB] 웹 연결 예외: ${String(error)}`);
           } finally {
             clearWebBridgeStageWarnTimer(webProvider);
             delete activeWebNodeByProviderRef.current[webProvider];
             delete activeWebPromptRef.current[webProvider];
+            delete manualWebFallbackNodeRef.current[node.id];
           }
         }
       }
@@ -3953,9 +3942,63 @@ ${prompt}`;
     };
   }
 
-  async function onRunGraph() {
+  function collectRequiredWebProviders(): WebProvider[] {
+    const providers = new Set<WebProvider>();
+    for (const node of graph.nodes) {
+      if (node.type !== "turn") {
+        continue;
+      }
+      const executor = getTurnExecutor(node.config as TurnConfig);
+      const provider = getWebProviderFromExecutor(executor);
+      if (provider) {
+        providers.add(provider);
+      }
+    }
+    return Array.from(providers);
+  }
+
+  async function onRunGraph(skipWebConnectPreflight = false) {
     if (isGraphRunning || runStartGuardRef.current) {
       return;
+    }
+
+    if (!skipWebConnectPreflight) {
+      const requiredWebProviders = collectRequiredWebProviders();
+      if (requiredWebProviders.length > 0) {
+        const bridgeStatusLatest = (await refreshWebBridgeStatus(true, true)) ?? webBridgeStatus;
+        const connectedProviderSet = new Set(
+          (bridgeStatusLatest.connectedProviders ?? []).map((row) => row.provider),
+        );
+        const missingProviders = requiredWebProviders.filter((provider) => !connectedProviderSet.has(provider));
+
+        const reasons: string[] = [];
+        if (!bridgeStatusLatest.running || !bridgeStatusLatest.tokenMasked) {
+          reasons.push(t("modal.webConnectReasonNotRunning"));
+        }
+        if (
+          bridgeStatusLatest.extensionOriginPolicy === "allowlist" &&
+          bridgeStatusLatest.extensionOriginAllowlistConfigured === false
+        ) {
+          reasons.push(t("modal.webConnectReasonPolicy"));
+        }
+        if (missingProviders.length > 0) {
+          reasons.push(
+            t("modal.webConnectReasonMissingProviders", {
+              providers: missingProviders.map((provider) => webProviderLabel(provider)).join(", "),
+            }),
+          );
+        }
+
+        if (reasons.length > 0) {
+          setPendingWebConnectCheck({
+            providers: requiredWebProviders,
+            reason: reasons.join("\n"),
+          });
+          setError("");
+          setStatus("웹 연결 확인 필요");
+          return;
+        }
+      }
     }
 
     const incomingNodeIds = new Set(graph.edges.map((edge) => edge.to.nodeId));
@@ -3969,6 +4012,7 @@ ${prompt}`;
     }
 
     runStartGuardRef.current = true;
+    setPendingWebConnectCheck(null);
     setIsRunStarting(true);
     setError("");
     setStatus("그래프 실행 시작");
@@ -4727,6 +4771,25 @@ ${prompt}`;
     }
   }
 
+  function onOpenWebConnectFromModal() {
+    setPendingWebConnectCheck(null);
+    setWorkspaceTab("bridge");
+    void refreshWebBridgeStatus(false, true);
+  }
+
+  function onContinueRunWithoutWebConnect() {
+    if (!pendingWebConnectCheck) {
+      return;
+    }
+    setPendingWebConnectCheck(null);
+    void onRunGraph(true);
+  }
+
+  function onCancelWebConnectModal() {
+    setPendingWebConnectCheck(null);
+    setStatus("그래프 실행 대기");
+  }
+
   async function onCancelGraphRun() {
     cancelRequestedRef.current = true;
     setStatus("취소 요청됨");
@@ -5317,6 +5380,19 @@ ${prompt}`;
         )}
 
       </section>
+
+      <PendingWebConnectModal
+        onCancel={onCancelWebConnectModal}
+        onContinue={onContinueRunWithoutWebConnect}
+        onOpenBridgeTab={onOpenWebConnectFromModal}
+        open={Boolean(pendingWebConnectCheck)}
+        providersLabel={
+          pendingWebConnectCheck
+            ? pendingWebConnectCheck.providers.map((provider) => webProviderLabel(provider)).join(", ")
+            : ""
+        }
+        reason={pendingWebConnectCheck?.reason ?? ""}
+      />
 
       <PendingWebLoginModal
         nodeId={pendingWebLogin?.nodeId ?? ""}

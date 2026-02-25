@@ -387,6 +387,15 @@ export function applyPresetOutputSchemaPolicies(graphData: GraphData): GraphData
       if (getWebProviderFromExecutor(executor)) {
         return node;
       }
+      const promptTemplate = String(config.promptTemplate ?? "").toLowerCase();
+      if (
+        promptTemplate.includes("출력 형식(json)") ||
+        promptTemplate.includes("반드시 아래 json") ||
+        promptTemplate.includes("json으로 출력") ||
+        promptTemplate.includes("json만 출력")
+      ) {
+        return node;
+      }
       const isFinalTurn = (outgoing.get(node.id) ?? 0) === 0;
       return {
         ...node,

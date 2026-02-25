@@ -311,16 +311,50 @@ export function buildNewsTrendPreset(): GraphData {
 }
 
 export function buildStockPreset(): GraphData {
+  const stockIntakeSchema = JSON.stringify(
+    {
+      type: "object",
+      required: ["target", "timeHorizon", "market", "mustAnswer", "constraints"],
+      properties: {
+        target: { type: "string" },
+        timeHorizon: { type: "string" },
+        market: { type: "string" },
+        mustAnswer: { type: "array" },
+        constraints: { type: "array" },
+        assumptions: { type: "array" },
+      },
+    },
+    null,
+    2,
+  );
+  const stockRiskSchema = JSON.stringify(
+    {
+      type: "object",
+      required: ["DECISION", "upsideFactors", "downsideRisks", "accuracyNotes", "finalDraft"],
+      properties: {
+        DECISION: { type: "string", enum: ["PASS", "REJECT"] },
+        upsideFactors: { type: "array" },
+        downsideRisks: { type: "array" },
+        accuracyNotes: { type: "array" },
+        finalDraft: { type: "string" },
+      },
+    },
+    null,
+    2,
+  );
+
   const nodes: GraphNode[] = [
     makePresetNode("turn-stock-intake", "turn", 120, 120, {
-      model: "GPT-5.1-Codex-Mini",
+      model: "GPT-5.3-Codex-Spark",
       role: "STOCK INTAKE AGENT",
       cwd: ".",
       promptTemplate:
         "사용자 질문을 주식 분석 실행 브리프로 구조화하라.\n" +
+        "설명 문장 없이 JSON 본문만 출력하라.\n" +
         "출력 형식(JSON):\n" +
         '{ "target":"지수/종목", "timeHorizon":"단기/중기/장기", "market":"KR/US", "mustAnswer":["..."], "constraints":["..."] }\n' +
         "입력: {{input}}",
+      outputSchemaJson: stockIntakeSchema,
     }),
     makePresetNode("turn-stock-macro", "turn", 420, 20, {
       executor: "web_perplexity",
@@ -347,7 +381,7 @@ export function buildStockPreset(): GraphData {
         "입력: {{input}}",
     }),
     makePresetNode("turn-stock-risk", "turn", 720, 120, {
-      model: "GPT-5.2-Codex",
+      model: "GPT-5.3-Codex-Spark",
       role: "RISK & ACCURACY AGENT",
       cwd: ".",
       promptTemplate:
@@ -356,6 +390,7 @@ export function buildStockPreset(): GraphData {
         '{ "DECISION":"PASS|REJECT", "upsideFactors":["..."], "downsideRisks":["..."], "accuracyNotes":["과거 예측 오차 관련 한계/근거"], "finalDraft":"..." }\n' +
         "주의: 투자 조언 단정 금지, 불확실성 명시.\n" +
         "입력: {{input}}",
+      outputSchemaJson: stockRiskSchema,
     }),
     makePresetNode("gate-stock", "gate", 1020, 120, {
       decisionPath: "DECISION",
@@ -398,4 +433,3 @@ export function buildStockPreset(): GraphData {
 
   return { version: GRAPH_SCHEMA_VERSION, nodes, edges, knowledge: defaultKnowledgeConfig() };
 }
-

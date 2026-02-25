@@ -1113,7 +1113,7 @@ h3 {
 .node-manual-web-input-button {
   min-height: 0;
   height: auto;
-  padding: 0 8px;
+  padding: 2px 8px;
   border-radius: 2px;
   background: #edf2f6;
   color: #2f3b49;
