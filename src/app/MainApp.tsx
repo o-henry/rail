@@ -4104,6 +4104,11 @@ ${prompt}`;
       const requiredWebProviders = collectRequiredWebProviders();
       if (requiredWebProviders.length > 0) {
         const bridgeStatusLatest = (await refreshWebBridgeStatus(true, true)) ?? webBridgeStatus;
+        const connectedProviderSet = new Set(
+          (bridgeStatusLatest.connectedProviders ?? []).map((row) => row.provider),
+        );
+        const missingProviders = requiredWebProviders.filter((provider) => !connectedProviderSet.has(provider));
+
         const reasons: string[] = [];
         if (!bridgeStatusLatest.running || !bridgeStatusLatest.tokenMasked) {
           reasons.push(t("modal.webConnectReasonNotRunning"));
@@ -4114,6 +4119,13 @@ ${prompt}`;
         ) {
           reasons.push(t("modal.webConnectReasonPolicy"));
         }
+        if (missingProviders.length > 0) {
+          reasons.push(
+            t("modal.webConnectReasonMissingProviders", {
+              providers: missingProviders.map((provider) => webProviderLabel(provider)).join(", "),
+            }),
+          );
+        }
 
         if (reasons.length > 0) {
           setPendingWebConnectCheck({
@@ -4123,18 +4135,6 @@ ${prompt}`;
           setError("");
           setStatus("웹 연결 확인 필요");
           return;
-        }
-
-        const connectedProviderSet = new Set(
-          (bridgeStatusLatest.connectedProviders ?? []).map((row) => row.provider),
-        );
-        const missingProviders = requiredWebProviders.filter((provider) => !connectedProviderSet.has(provider));
-        if (missingProviders.length > 0) {
-          setStatus(
-            `[웹 연결] 미감지 서비스 탭: ${missingProviders
-              .map((provider) => webProviderLabel(provider))
-              .join(", ")} (실행은 계속 진행됩니다)`,
-          );
         }
       }
     }

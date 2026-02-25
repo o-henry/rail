@@ -604,11 +604,18 @@ export default function FeedPage({ vm }: FeedPageProps) {
                   groupedFeedRunsForDisplay.map((group: any) => {
                     const isGroupExpanded = feedGroupExpandedByRunId[group.runId] !== false;
                     const isRenamingGroup = feedGroupRenameRunId === group.runId;
+                    const resolvedSourceFile =
+                      String(group.sourceFile ?? "").trim() ||
+                      String(
+                        (Array.isArray(group.posts)
+                          ? group.posts.find((post: any) => String(post?.sourceFile ?? "").trim())?.sourceFile
+                          : "") ?? "",
+                      ).trim();
                     const canManageGroup =
                       !isRenamingGroup &&
                       !group.isLive &&
                       Boolean(group.runId) &&
-                      Boolean(group.sourceFile);
+                      Boolean(resolvedSourceFile);
                     return (
                       <section
                         className={`feed-run-group ${isGroupExpanded ? "is-expanded" : ""}`}
@@ -634,7 +641,7 @@ export default function FeedPage({ vm }: FeedPageProps) {
                                 onClick={() =>
                                   setDeleteGroupTarget({
                                     runId: group.runId,
-                                    sourceFile: group.sourceFile,
+                                    sourceFile: resolvedSourceFile,
                                     name: String(group.name ?? ""),
                                   })
                                 }
@@ -676,10 +683,7 @@ export default function FeedPage({ vm }: FeedPageProps) {
                               placeholder={t("feed.groupName.placeholder")}
                               value={feedGroupRenameDraft}
                             />
-                            <button
-                              onClick={() => void onSubmitFeedRunGroupRename(group.runId, group.sourceFile)}
-                              type="button"
-                            >
+                            <button onClick={() => void onSubmitFeedRunGroupRename(group.runId, resolvedSourceFile)} type="button">
                               {t("common.save")}
                             </button>
                             <button
