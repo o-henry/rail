@@ -2416,7 +2416,7 @@ h3 {
 
 .feed-content-search-wrap {
   min-width: 0;
-  width: min(520px, 42vw);
+  width: 16vw;
   height: 34px;
   border-radius: 999px;
   background: #eef2f7;
@@ -2427,20 +2427,20 @@ h3 {
 }
 
 .feed-content-search-icon {
-  width: 26px;
-  min-width: 26px;
-  height: 26px;
-  min-height: 26px;
+  width: 16px;
+  min-width: 16px;
+  height: 16px;
+  min-height: 16px;
   padding: 0;
-  border-radius: 999px;
-  background: #ffffff;
+  border-radius: 0;
+  background: transparent;
   display: inline-grid;
   place-items: center;
 }
 
 .feed-content-search-icon img {
-  width: 13px;
-  height: 13px;
+  width: 14px;
+  height: 14px;
   display: block;
 }
 

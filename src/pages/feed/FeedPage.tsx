@@ -488,7 +488,7 @@ export default function FeedPage({ vm }: FeedPageProps) {
                       }}
                       type="button"
                     >
-                      <img alt="" aria-hidden="true" src="/search-alt-2-svgrepo-com.svg" />
+                      <img alt="" aria-hidden="true" src="/search-alt-svgrepo-com.svg" />
                     </button>
                     <input
                       ref={contentSearchInputRef}
