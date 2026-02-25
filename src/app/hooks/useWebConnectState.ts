@@ -51,6 +51,8 @@ export function useWebConnectState() {
   const pendingWebLoginAutoOpenKeyRef = useRef("");
   const webBridgeStageWarnTimerRef = useRef<Record<string, number>>({});
   const activeWebPromptRef = useRef<Partial<Record<WebProvider, string>>>({});
+  const activeWebProviderByNodeRef = useRef<Record<string, WebProvider>>({});
+  const activeWebPromptByNodeRef = useRef<Record<string, string>>({});
   const manualWebFallbackNodeRef = useRef<Record<string, boolean>>({});
 
   return {
@@ -83,6 +85,8 @@ export function useWebConnectState() {
     pendingWebLoginAutoOpenKeyRef,
     webBridgeStageWarnTimerRef,
     activeWebPromptRef,
+    activeWebProviderByNodeRef,
+    activeWebPromptByNodeRef,
     manualWebFallbackNodeRef,
   };
 }

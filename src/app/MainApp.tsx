@@ -355,6 +355,8 @@ function App() {
     pendingWebLoginAutoOpenKeyRef,
     webBridgeStageWarnTimerRef,
     activeWebPromptRef,
+    activeWebProviderByNodeRef,
+    activeWebPromptByNodeRef,
     manualWebFallbackNodeRef,
   } = useWebConnectState();
   const {
@@ -2187,18 +2189,12 @@ function App() {
       return;
     }
 
-    const activeProvider = WEB_PROVIDER_OPTIONS.find(
-      (provider) => activeWebNodeByProviderRef.current[provider] === nodeId,
-    );
+    const activeProvider =
+      activeWebProviderByNodeRef.current[nodeId] ??
+      WEB_PROVIDER_OPTIONS.find((provider) => activeWebNodeByProviderRef.current[provider] === nodeId);
     if (activeProvider) {
       manualWebFallbackNodeRef.current[nodeId] = true;
-      void invoke("web_provider_cancel", { provider: activeProvider })
-        .then(() => {
-          setStatus(`${webProviderLabel(activeProvider)} 자동 수집을 중단하고 수동 입력으로 전환합니다.`);
-        })
-        .catch((error) => {
-          setError(`${webProviderLabel(activeProvider)} 수동 입력 전환 실패: ${String(error)}`);
-        });
+      setStatus(`${webProviderLabel(activeProvider)} 자동 수집을 중단하고 수동 입력으로 전환합니다.`);
       return;
     }
 
@@ -3566,6 +3562,8 @@ ${prompt}`;
       if (webResultMode === "bridgeAssisted") {
         activeWebNodeByProviderRef.current[webProvider] = node.id;
         activeWebPromptRef.current[webProvider] = textToSend;
+        activeWebProviderByNodeRef.current[node.id] = webProvider;
+        activeWebPromptByNodeRef.current[node.id] = textToSend;
         addNodeLog(node.id, `[WEB] ${webProviderLabel(webProvider)} 웹 연결 반자동 시작`);
         addNodeLog(node.id, "[WEB] 프롬프트 자동 주입/전송을 시도합니다. 자동 전송 실패 시 웹 탭에서 전송 1회가 필요합니다.");
         setStatus(`${webProviderLabel(webProvider)} 웹 연결 대기 중 - 자동 주입/전송 준비`);
@@ -3609,8 +3607,14 @@ ${prompt}`;
         const workerReady = await ensureWebWorkerReady();
         if (!workerReady) {
           clearWebBridgeStageWarnTimer(webProvider);
-          delete activeWebNodeByProviderRef.current[webProvider];
-          delete activeWebPromptRef.current[webProvider];
+          if (activeWebNodeByProviderRef.current[webProvider] === node.id) {
+            delete activeWebNodeByProviderRef.current[webProvider];
+          }
+          delete activeWebProviderByNodeRef.current[node.id];
+          if (activeWebPromptRef.current[webProvider] === textToSend) {
+            delete activeWebPromptRef.current[webProvider];
+          }
+          delete activeWebPromptByNodeRef.current[node.id];
           return requestManualFallback("[WEB] 웹 연결 워커 준비 실패, 수동 입력으로 전환");
         } else {
           const runBridgeAssisted = async (timeoutMs = webTimeoutMs) =>
@@ -3623,7 +3627,40 @@ ${prompt}`;
 
           let result: WebProviderRunResult | null = null;
           try {
-            result = await runBridgeAssisted();
+            const runPromise = runBridgeAssisted().then(
+              (value) => ({ state: "resolved" as const, value }),
+              (error) => ({ state: "rejected" as const, error }),
+            );
+
+            let settled: Awaited<typeof runPromise> | null = null;
+            while (!settled) {
+              if (manualWebFallbackNodeRef.current[node.id]) {
+                addNodeLog(node.id, "[WEB] 수동 입력 전환 요청 감지 - 자동 수집 취소 요청");
+                try {
+                  await invoke("web_provider_cancel", { provider: webProvider });
+                } catch (cancelError) {
+                  addNodeLog(node.id, `[WEB] 자동 수집 취소 요청 실패: ${String(cancelError)}`);
+                }
+                await runPromise;
+                delete manualWebFallbackNodeRef.current[node.id];
+                return requestManualFallback("[WEB] 사용자 요청으로 자동 수집을 중단하고 수동 입력으로 전환합니다.");
+              }
+
+              const polled = await Promise.race([
+                runPromise,
+                new Promise<null>((resolve) => {
+                  window.setTimeout(() => resolve(null), 200);
+                }),
+              ]);
+              if (polled) {
+                settled = polled;
+              }
+            }
+
+            if (settled.state === "rejected") {
+              throw settled.error;
+            }
+            result = settled.value;
 
             if (result.ok && result.text && isLikelyWebPromptEcho(result.text, textToSend)) {
               addNodeLog(
@@ -3694,8 +3731,14 @@ ${prompt}`;
             return requestManualFallback(`[WEB] 웹 연결 예외: ${String(error)}`);
           } finally {
             clearWebBridgeStageWarnTimer(webProvider);
-            delete activeWebNodeByProviderRef.current[webProvider];
-            delete activeWebPromptRef.current[webProvider];
+            if (activeWebNodeByProviderRef.current[webProvider] === node.id) {
+              delete activeWebNodeByProviderRef.current[webProvider];
+            }
+            delete activeWebProviderByNodeRef.current[node.id];
+            if (activeWebPromptRef.current[webProvider] === textToSend) {
+              delete activeWebPromptRef.current[webProvider];
+            }
+            delete activeWebPromptByNodeRef.current[node.id];
             delete manualWebFallbackNodeRef.current[node.id];
           }
         }
