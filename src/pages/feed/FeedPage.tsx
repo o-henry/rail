@@ -35,7 +35,6 @@ class FeedCardBoundary extends Component<
 export default function FeedPage({ vm }: FeedPageProps) {
   const { t, tp } = useI18n();
   const contentSearchInputRef = useRef<HTMLInputElement | null>(null);
-  const [isContentSearchOpen, setIsContentSearchOpen] = useState(false);
   const [contentSearchQuery, setContentSearchQuery] = useState("");
   const [deleteGroupTarget, setDeleteGroupTarget] = useState<{
     runId: string;
@@ -140,7 +139,6 @@ export default function FeedPage({ vm }: FeedPageProps) {
         return;
       }
       event.preventDefault();
-      setIsContentSearchOpen(true);
       contentSearchInputRef.current?.focus();
       contentSearchInputRef.current?.select();
     };
@@ -480,19 +478,11 @@ export default function FeedPage({ vm }: FeedPageProps) {
               <div className="feed-topbar">
                 <div className="feed-topbar-left">
                   <h2>{t("feed.title")}</h2>
-                  <div className={`feed-content-search-wrap ${isContentSearchOpen ? "is-open" : ""}`}>
+                  <div className="feed-content-search-wrap">
                     <button
                       aria-label={t("feed.search.shortcutHint")}
                       className="feed-content-search-icon"
                       onClick={() => {
-                        if (!isContentSearchOpen) {
-                          setIsContentSearchOpen(true);
-                          requestAnimationFrame(() => {
-                            contentSearchInputRef.current?.focus();
-                            contentSearchInputRef.current?.select();
-                          });
-                          return;
-                        }
                         contentSearchInputRef.current?.focus();
                         contentSearchInputRef.current?.select();
                       }}
@@ -500,25 +490,13 @@ export default function FeedPage({ vm }: FeedPageProps) {
                     >
                       <img alt="" aria-hidden="true" src="/search-alt-svgrepo-com.svg" />
                     </button>
-                    {isContentSearchOpen && (
-                      <input
-                        ref={contentSearchInputRef}
-                        className="feed-content-search-input"
-                        onBlur={() => {
-                          if (!contentSearchQuery.trim()) {
-                            setIsContentSearchOpen(false);
-                          }
-                        }}
-                        onChange={(event) => setContentSearchQuery(event.currentTarget.value)}
-                        onKeyDown={(event) => {
-                          if (event.key === "Escape" && !contentSearchQuery.trim()) {
-                            setIsContentSearchOpen(false);
-                          }
-                        }}
-                        placeholder={t("feed.search.placeholder")}
-                        value={contentSearchQuery}
-                      />
-                    )}
+                    <input
+                      ref={contentSearchInputRef}
+                      className="feed-content-search-input"
+                      onChange={(event) => setContentSearchQuery(event.currentTarget.value)}
+                      placeholder={t("feed.search.placeholder")}
+                      value={contentSearchQuery}
+                    />
                   </div>
                 </div>
                 <button

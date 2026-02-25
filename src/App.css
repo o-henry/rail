@@ -2416,30 +2416,23 @@ h3 {
 
 .feed-content-search-wrap {
   min-width: 0;
-  width: auto;
+  width: 16vw;
   height: 34px;
-  border-radius: 0;
-  background: transparent;
+  border-radius: 999px;
+  background: #eef2f7;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 0;
-  border-bottom: 0;
-  transition: border-color 160ms ease;
-}
-
-.feed-content-search-wrap.is-open {
-  width: 16vw;
-  min-width: 180px;
-  border-bottom: 1px solid #bcc8d8;
+  gap: 8px;
+  padding: 0 10px 0 4px;
 }
 
 .feed-content-search-icon {
-  width: 18px;
-  min-width: 18px;
-  height: 18px;
-  min-height: 18px;
+  width: 16px;
+  min-width: 16px;
+  height: 16px;
+  min-height: 16px;
   padding: 0;
+  padding-left: 5px;
   border-radius: 0;
   background: transparent;
   display: inline-grid;
@@ -2455,7 +2448,7 @@ h3 {
 .feed-content-search-input {
   flex: 1;
   min-width: 0;
-  height: 26px;
+  height: 100%;
   min-height: 0;
   border: 0;
   padding: 0;
