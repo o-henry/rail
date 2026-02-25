@@ -2998,7 +2998,7 @@ h3 {
   transition: transform 160ms ease;
 }
 
-.feed-card-input-toggle:not(.is-expanded) img {
+.feed-card-input-toggle.is-expanded img {
   transform: rotate(180deg);
 }
 
