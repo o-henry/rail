@@ -56,6 +56,7 @@ import {
   type WebResultMode,
 } from "../features/workflow/domain";
 import {
+  applyPresetOutputSchemaPolicies,
   applyPresetTurnPolicies,
   buildPresetGraphByKind,
   simplifyPresetForSimpleWorkflow,
@@ -2285,10 +2286,10 @@ function App() {
 
   function applyPreset(kind: PresetKind) {
     const builtPreset = buildPresetGraphByKind(kind);
-    const presetWithPolicies = {
+    const presetWithPolicies = applyPresetOutputSchemaPolicies({
       ...builtPreset,
       nodes: applyPresetTurnPolicies(kind, builtPreset.nodes),
-    };
+    });
     const preset = simplifyPresetForSimpleWorkflow(presetWithPolicies, SIMPLE_WORKFLOW_UI);
     const localizedPreset = {
       ...preset,

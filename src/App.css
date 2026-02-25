@@ -94,9 +94,19 @@ html[data-locale="en"] {
   --ui-letter-spacing: -0.7px;
 }
 
+html[data-locale="ko"] {
+  --ui-font-stack: var(--font-stack-default);
+  --ui-letter-spacing: -0.7px;
+}
+
 html[data-locale="jp"] {
   --ui-font-stack: var(--font-stack-ja);
   --ui-letter-spacing: -0.7px;
+}
+
+html[data-locale="ko"] :where(*):not(svg):not(path):not(img) {
+  font-family: var(--ui-font-stack) !important;
+  letter-spacing: var(--ui-letter-spacing);
 }
 
 html[data-locale="en"] :where(*):not(svg):not(path):not(img),
@@ -2312,6 +2322,7 @@ h3 {
 
 .feed-agent-static-field-prompt {
   min-height: 144px;
+  font-family: "BasicallyAMono", "DialogNanumBody1984", "Noto Sans KR", monospace;
 }
 
 .feed-agent-settings-grid input:focus,

@@ -352,6 +352,7 @@ export function buildStockPreset(): GraphData {
         "입력을 바탕으로 리스크와 예측 신뢰도를 평가해 JSON으로 출력하라.\n" +
         "출력 형식:\n" +
         '{ "DECISION":"PASS|REJECT", "upsideFactors":["..."], "downsideRisks":["..."], "accuracyNotes":["과거 예측 오차 관련 한계/근거"], "finalDraft":"..." }\n' +
+        "반드시 위 JSON 객체만 출력하고, 코드펜스/서론/부가설명은 금지.\n" +
         "주의: 투자 조언 단정 금지, 불확실성 명시.\n" +
         "입력: {{input}}",
     }),
@@ -361,6 +362,8 @@ export function buildStockPreset(): GraphData {
       cwd: ".",
       promptTemplate:
         "최종 주식 분석 리포트를 작성하라.\n" +
+        "입력에 artifact/completion/thread/log/raw 같은 메타데이터가 있으면 모두 무시하고, 실질 분석 내용만 사용하라.\n" +
+        "가능하면 DECISION/upsideFactors/downsideRisks/accuracyNotes/finalDraft 필드를 우선 해석하라.\n" +
         "구성:\n" +
         "1) 결론 요약(상방/하방 시나리오)\n" +
         "2) 상승 요인 3~5개\n" +

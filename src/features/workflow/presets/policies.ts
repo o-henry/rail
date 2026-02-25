@@ -5,6 +5,12 @@ import {
   normalizeQualityThreshold,
   type PresetTurnPolicy,
 } from "./shared";
+import { STOCK_INTAKE_SCHEMA, STOCK_RISK_SCHEMA } from "./schemas";
+
+const PRESET_OUTPUT_SCHEMA_BY_NODE_ID: Readonly<Record<string, string>> = {
+  "turn-stock-intake": STOCK_INTAKE_SCHEMA,
+  "turn-stock-risk": STOCK_RISK_SCHEMA,
+};
 
 export function resolvePresetTurnPolicy(kind: PresetKind, nodeId: string): PresetTurnPolicy {
   const key = nodeId.toLowerCase();
@@ -332,7 +338,25 @@ export function applyPresetTurnPolicies(kind: PresetKind, nodes: GraphNode[]): G
 }
 
 export function applyPresetOutputSchemaPolicies(graphData: GraphData): GraphData {
-  return graphData;
+  return {
+    ...graphData,
+    nodes: graphData.nodes.map((node) => {
+      if (node.type !== "turn") {
+        return node;
+      }
+      const outputSchemaJson = PRESET_OUTPUT_SCHEMA_BY_NODE_ID[node.id];
+      if (!outputSchemaJson) {
+        return node;
+      }
+      return {
+        ...node,
+        config: {
+          ...(node.config as TurnConfig),
+          outputSchemaJson,
+        },
+      };
+    }),
+  };
 }
 
 export function simplifyPresetForSimpleWorkflow(graphData: GraphData, simpleWorkflowUi: boolean): GraphData {

@@ -49,7 +49,39 @@ export function extractPromptInputText(input: unknown, depth = 0): string {
     return stringifyInput(input).trim();
   }
 
+  const record = input as Record<string, unknown>;
+  const artifactPayload = getByPath(record, "artifact.payload");
+  if (artifactPayload !== undefined) {
+    if (typeof artifactPayload === "string" && artifactPayload.trim()) {
+      return artifactPayload.trim();
+    }
+    if (artifactPayload && typeof artifactPayload === "object") {
+      const payloadDirect = extractStringByPaths(artifactPayload, [
+        "finalDraft",
+        "text",
+        "output.text",
+        "result.text",
+        "completion.text",
+        "response.text",
+        "payload.text",
+        "content",
+        "message",
+      ]);
+      if (payloadDirect && payloadDirect.trim()) {
+        return payloadDirect.trim();
+      }
+    }
+    const payloadExtracted = extractPromptInputText(artifactPayload, depth + 1);
+    if (payloadExtracted) {
+      return payloadExtracted;
+    }
+  }
+
   const direct = extractStringByPaths(input, [
+    "artifact.payload.finalDraft",
+    "artifact.payload.text",
+    "artifact.payload.output.text",
+    "artifact.payload.result.text",
     "text",
     "output.text",
     "result.text",
@@ -65,7 +97,6 @@ export function extractPromptInputText(input: unknown, depth = 0): string {
     return direct.trim();
   }
 
-  const record = input as Record<string, unknown>;
   const nestedCandidates = [
     record.output,
     record.result,
@@ -128,11 +159,14 @@ export function extractReadableTextFromPayload(input: unknown): string | null {
   }
   const row = input as Record<string, unknown>;
   const directCandidates: unknown[] = [
+    row.finalDraft,
     row.text,
     row.content,
     row.message,
+    (row.payload as Record<string, unknown> | undefined)?.finalDraft,
     (row.payload as Record<string, unknown> | undefined)?.text,
     (row.payload as Record<string, unknown> | undefined)?.content,
+    ((row.artifact as Record<string, unknown> | undefined)?.payload as Record<string, unknown> | undefined)?.finalDraft,
     (row.artifact as Record<string, unknown> | undefined)?.text,
     ((row.artifact as Record<string, unknown> | undefined)?.payload as Record<string, unknown> | undefined)?.text,
     (row.output as Record<string, unknown> | undefined)?.text,

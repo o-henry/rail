@@ -437,6 +437,19 @@ export function normalizeArtifactOutput(
     } else {
       payload = { text };
     }
+  } else if (rawOutput && typeof rawOutput === "object" && !Array.isArray(rawOutput)) {
+    const inheritedPayload = getByPath(rawOutput, "artifact.payload");
+    if (inheritedPayload !== undefined) {
+      payload = inheritedPayload;
+    }
+
+    const textCandidate = extractFinalAnswer(rawOutput).trim();
+    const parsedFromText = textCandidate ? tryParseJsonText(textCandidate) : null;
+    if (parsedFromText != null) {
+      payload = parsedFromText;
+    } else if (payload === rawOutput && textCandidate) {
+      payload = { text: textCandidate };
+    }
   }
 
   const warnings: string[] = [];
@@ -974,6 +987,15 @@ export function extractSchemaValidationTarget(output: unknown): unknown {
   if (artifact && typeof artifact === "object" && !Array.isArray(artifact)) {
     const payload = (artifact as Record<string, unknown>).payload;
     if (payload !== undefined) {
+      if (typeof payload === "string") {
+        return tryParseJsonText(payload) ?? { text: payload };
+      }
+      if (payload && typeof payload === "object" && !Array.isArray(payload)) {
+        const payloadText = String((payload as Record<string, unknown>).text ?? "").trim();
+        if (payloadText) {
+          return tryParseJsonText(payloadText) ?? payload;
+        }
+      }
       return payload;
     }
   }
