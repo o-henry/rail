@@ -2746,9 +2746,10 @@ h3 {
   border-radius: 999px;
   display: grid;
   place-items: center;
-  font-size: 12px;
+  font-size: 8px;
   line-height: 1;
   font-weight: 700;
+  letter-spacing: 0.02em;
   background: #ffffff;
   border: 2px solid transparent;
   margin-left: 0;
@@ -2770,23 +2771,13 @@ h3 {
 }
 
 .feed-score-badge.live {
-  width: 42px;
-  min-width: 42px;
   color: #1f68cc;
-  font-size: 10px;
-  letter-spacing: 0.01em;
-  border: 0;
-  border-radius: 12px;
+  border-color: #1f68cc;
 }
 
 .feed-score-badge.fail {
-  width: 42px;
-  min-width: 42px;
   color: #e45a5a;
-  font-size: 10px;
-  letter-spacing: 0.01em;
-  border: 0;
-  border-radius: 12px;
+  border-color: #e45a5a;
 }
 
 .feed-card-question {
