@@ -11,14 +11,6 @@ RAIL은 여러 에이전트(코덱스/웹 AI/로컬 모델)를 **노드 그래�
 
 ---
 
-## Demo
-
-> 아래 영상은 실제 `npm run dev` 실행 상태에서 녹화한 앱 동작 데모입니다.
-
-<video src="./docs/rail-demo.webm" controls muted playsinline width="100%"></video>
-
----
-
 ## Table of Contents
 
 - [What It Solves](#what-it-solves)
@@ -124,7 +116,6 @@ rail/
 ├─ extension/rail-bridge/ # Chrome MV3 확장(Web Connect)
 ├─ scripts/               # 도구 스크립트/검사 스크립트
 ├─ docs/
-│  └─ rail-demo.webm      # 실행 데모 영상
 └─ public/
 ```
 
