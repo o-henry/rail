@@ -24,6 +24,8 @@ const DEFAULT_TIMEOUT_MS = 180_000;
 const BRIDGE_HOST = '127.0.0.1';
 const BRIDGE_PORT = Number(process.env.RAIL_WEB_BRIDGE_PORT ?? 38961) || 38961;
 const WORKER_LOCK_PATH = path.join(PROFILE_ROOT, 'worker.lock.json');
+const PARENT_PID = Number(process.env.RAIL_PARENT_PID ?? 0) || 0;
+const PARENT_WATCH_INTERVAL_MS = 3000;
 const BRIDGE_ALLOWED_WEB_ORIGINS = new Set([
   'https://gemini.google.com',
   'https://chatgpt.com',
@@ -190,6 +192,7 @@ const state = {
 
 let lockHeld = false;
 let shutdownRequested = false;
+let parentWatchTimer = null;
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -277,6 +280,42 @@ async function releaseWorkerLock() {
     // ignore
   } finally {
     lockHeld = false;
+  }
+}
+
+function isParentAlive() {
+  if (!Number.isInteger(PARENT_PID) || PARENT_PID <= 1) {
+    return true;
+  }
+  try {
+    process.kill(PARENT_PID, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function startParentWatchdog() {
+  if (!Number.isInteger(PARENT_PID) || PARENT_PID <= 1) {
+    return;
+  }
+  if (parentWatchTimer) {
+    clearInterval(parentWatchTimer);
+  }
+  parentWatchTimer = setInterval(() => {
+    if (shutdownRequested) {
+      return;
+    }
+    if (!isParentAlive()) {
+      void gracefulShutdown(`parent process exited (pid=${PARENT_PID})`, 0);
+    }
+  }, PARENT_WATCH_INTERVAL_MS);
+}
+
+function stopParentWatchdog() {
+  if (parentWatchTimer) {
+    clearInterval(parentWatchTimer);
+    parentWatchTimer = null;
   }
 }
 
@@ -1597,6 +1636,7 @@ async function gracefulShutdown(reason, exitCode = 0) {
     return;
   }
   shutdownRequested = true;
+  stopParentWatchdog();
   notify('web/worker/stopped', { reason, stoppedAt: nowIso() });
   await logLine(`web worker shutdown: ${reason}`);
   closeAllBridgeTasks('웹 연결 서버가 종료되었습니다.');
@@ -1834,6 +1874,8 @@ async function bootstrap() {
   rl.on('close', async () => {
     await gracefulShutdown('stdin closed', 0);
   });
+
+  startParentWatchdog();
 }
 
 process.on('uncaughtException', (error) => {

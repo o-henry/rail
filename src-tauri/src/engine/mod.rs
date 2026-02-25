@@ -603,6 +603,7 @@ impl WebWorkerRuntime {
             .env("RAIL_WEB_PROFILE_ROOT", &profile_root)
             .env("RAIL_WEB_LOG_PATH", &log_path)
             .env("RAIL_WEB_USE_SYSTEM_CHROME_PROFILE", "0")
+            .env("RAIL_PARENT_PID", std::process::id().to_string())
             .kill_on_drop(true)
             .stdin(std::process::Stdio::piped())
             .stdout(std::process::Stdio::piped())
