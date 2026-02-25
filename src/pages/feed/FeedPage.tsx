@@ -364,62 +364,23 @@ export default function FeedPage({ vm }: FeedPageProps) {
                         </label>
                         <label>
                           {t("feed.qualityCommand.list")}
-                          <textarea
-                            className="prompt-template-textarea"
-                            disabled={!feedInspectorEditable}
-                            onChange={(event) => {
-                              if (!feedInspectorEditableNodeId) {
-                                return;
-                              }
-                              updateNodeConfigById(
-                                feedInspectorEditableNodeId,
-                                "qualityCommands",
-                                event.currentTarget.value,
-                              );
-                            }}
-                            rows={3}
-                            value={String(feedInspectorTurnConfig?.qualityCommands ?? "npm run build")}
-                          />
+                          <pre className="feed-agent-static-field feed-agent-static-field-compact">
+                            {String(feedInspectorTurnConfig?.qualityCommands ?? "npm run build")}
+                          </pre>
                         </label>
                       </>
                     )}
                     <label>
                       {t("feed.promptTemplate")}
-                      <textarea
-                        className="prompt-template-textarea feed-agent-prompt-textarea"
-                        disabled={!feedInspectorEditable}
-                        onChange={(event) => {
-                          if (!feedInspectorEditableNodeId) {
-                            return;
-                          }
-                          updateNodeConfigById(
-                            feedInspectorEditableNodeId,
-                            "promptTemplate",
-                            event.currentTarget.value,
-                          );
-                        }}
-                        rows={8}
-                        value={feedInspectorPromptTemplate}
-                      />
+                      <pre className="feed-agent-static-field feed-agent-static-field-prompt">
+                        {feedInspectorPromptTemplate}
+                      </pre>
                     </label>
                     <label>
                       {t("feed.outputSchema")}
-                      <textarea
-                        className="prompt-template-textarea"
-                        disabled={!feedInspectorEditable}
-                        onChange={(event) => {
-                          if (!feedInspectorEditableNodeId) {
-                            return;
-                          }
-                          updateNodeConfigById(
-                            feedInspectorEditableNodeId,
-                            "outputSchemaJson",
-                            event.currentTarget.value,
-                          );
-                        }}
-                        rows={4}
-                        value={String(feedInspectorTurnConfig?.outputSchemaJson ?? "")}
-                      />
+                      <pre className="feed-agent-static-field feed-agent-static-field-compact">
+                        {String(feedInspectorTurnConfig?.outputSchemaJson ?? "")}
+                      </pre>
                     </label>
                   </div>
                 </section>
