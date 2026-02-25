@@ -78,6 +78,7 @@ import { QUALITY_DEFAULT_THRESHOLD } from "../features/workflow/quality";
 import {
   buildFinalVisualizationDirective,
   buildReadableDocumentDirective,
+  buildExpertOrchestrationDirective,
   buildCodexMultiAgentDirective,
   buildForcedAgentRuleBlock,
   injectOutputLanguageDirective,
@@ -3547,6 +3548,11 @@ ${prompt}`;
       : withKnowledge.prompt;
     const knowledgeTrace = withKnowledge.trace;
     const qualityProfile = inferQualityProfile(node, config);
+    const orchestrationDirective = buildExpertOrchestrationDirective(locale, qualityProfile);
+    if (orchestrationDirective) {
+      textToSend = `${orchestrationDirective}\n\n${textToSend}`.trim();
+      addNodeLog(node.id, "[오케스트레이션] 전문가 실행 계약 지침 자동 적용");
+    }
     const outputSchemaRaw = String(config.outputSchemaJson ?? "").trim();
     const hasStrictOutputSchema = TURN_OUTPUT_SCHEMA_ENABLED && outputSchemaRaw.length > 0;
     const readableDocumentDirective =

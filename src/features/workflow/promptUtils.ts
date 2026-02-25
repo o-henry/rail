@@ -409,6 +409,90 @@ export function buildReadableDocumentDirective(locale: AppLocale): string {
   ].join("\n");
 }
 
+export function buildExpertOrchestrationDirective(
+  locale: AppLocale,
+  profile: "code_implementation" | "research_evidence" | "design_planning" | "synthesis_final" | "generic",
+): string {
+  const coreKo = [
+    "[전문가 오케스트레이션 계약]",
+    "- 문제를 먼저 재정의하라: 목표/범위/성공기준을 3줄 이내로 명시.",
+    "- 작업은 단계로 분해하라: 단계별 입력, 처리, 기대 산출물을 분리.",
+    "- 금지형 제약만 나열하지 말고, 원하는 결과를 긍정 지시로 명확히 적어라.",
+    "- 출력 전 자기검증: 누락/모순/근거 부족 항목을 점검하고 보정.",
+    "[/전문가 오케스트레이션 계약]",
+  ];
+
+  const coreEn = [
+    "[Expert Orchestration Contract]",
+    "- Reframe first: state objective, scope, and success criteria in <=3 lines.",
+    "- Decompose into explicit steps with input/process/expected output per step.",
+    "- Prefer positive instructions over long lists of prohibitions.",
+    "- Before output, run a self-check for gaps, contradictions, and weak evidence.",
+    "[/Expert Orchestration Contract]",
+  ];
+
+  const coreJp = [
+    "[専門家オーケストレーション契約]",
+    "- まず再定義: 目的/範囲/成功基準を3行以内で明記。",
+    "- 作業を段階分解し、各段階の入力/処理/期待成果を分離。",
+    "- 禁止事項の羅列より、望ましい結果を肯定的指示で明確化。",
+    "- 出力前に自己検証し、欠落/矛盾/根拠不足を補正。",
+    "[/専門家オーケストレーション契約]",
+  ];
+
+  const coreZh = [
+    "[专家编排契约]",
+    "- 先重述问题：用不超过3行写清目标/范围/成功标准。",
+    "- 分解为明确步骤：每步给出输入/处理/期望产出。",
+    "- 优先使用正向指令，避免只堆叠禁止项。",
+    "- 输出前做自检：补齐缺漏、冲突和薄弱证据。",
+    "[/专家编排契约]",
+  ];
+
+  const profileKo: Record<typeof profile, string[]> = {
+    code_implementation: [
+      "- 구현 전 파일/모듈 단위 계획을 제시하고, 검증 명령(lint/test/build)을 명시.",
+    ],
+    research_evidence: [
+      "- 사실/추론을 분리하고, 핵심 주장마다 출처·날짜·신뢰도(High/Med/Low)를 붙여라.",
+    ],
+    design_planning: [
+      "- 설계안에는 목표, 제약, 리스크, 우선순위, 단계별 마일스톤을 포함하라.",
+    ],
+    synthesis_final: [
+      "- 최종안은 결론/근거/리스크·한계/다음 행동 순서로 구조화하라.",
+    ],
+    generic: [],
+  };
+
+  const profileEn: Record<typeof profile, string[]> = {
+    code_implementation: [
+      "- Before coding, provide a file/module plan and explicit validation commands (lint/test/build).",
+    ],
+    research_evidence: [
+      "- Separate facts vs inferences and attach source/date/confidence (High/Med/Low) to key claims.",
+    ],
+    design_planning: [
+      "- Include objective, constraints, risks, priorities, and milestone sequence in the plan.",
+    ],
+    synthesis_final: [
+      "- Structure final output as conclusion, evidence, risks/limits, and next actions.",
+    ],
+    generic: [],
+  };
+
+  if (locale === "ko") {
+    return [...coreKo, ...profileKo[profile]].join("\n");
+  }
+  if (locale === "en") {
+    return [...coreEn, ...profileEn[profile]].join("\n");
+  }
+  if (locale === "jp") {
+    return [...coreJp, ...profileEn[profile]].join("\n");
+  }
+  return [...coreZh, ...profileEn[profile]].join("\n");
+}
+
 export function buildOutputSchemaDirective(schemaRaw: string): string {
   const trimmed = String(schemaRaw ?? "").trim();
   if (!trimmed) {

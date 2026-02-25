@@ -522,7 +522,6 @@ export async function buildQualityReport(params: {
   let score = 100;
 
   const fullText = extractFinalAnswer(output) || (typeof output === "string" ? output : "");
-  const normalized = fullText.toLowerCase();
 
   const addCheck = (input: {
     id: string;
@@ -579,6 +578,15 @@ export async function buildQualityReport(params: {
       penalty: 20,
     });
     addCheck({
+      id: "freshness_signal",
+      label: tp("시점/날짜 정보 포함"),
+      kind: "evidence",
+      required: false,
+      passed: /(20\d{2}[-./]\d{1,2}[-./]\d{1,2}|as of|updated|date|날짜|기준|timestamp|時点|日期)/i.test(fullText),
+      penalty: 8,
+      detail: tp("핵심 근거의 시점 정보 포함 권장"),
+    });
+    addCheck({
       id: "uncertainty_signal",
       label: tp("한계/불확실성 표기"),
       kind: "consistency",
@@ -587,9 +595,14 @@ export async function buildQualityReport(params: {
       penalty: 10,
     });
   } else if (profile === "design_planning") {
-    const hits = ["목표", "제약", "리스크", "우선순위", "아키텍처", "scope", "milestone"].filter((key) =>
-      normalized.includes(key.toLowerCase()),
-    ).length;
+    const hits = [
+      /(목표|objective|goal|目的|目标)/i,
+      /(제약|constraint|boundary|制約|约束)/i,
+      /(리스크|위험|risk|リスク|风险)/i,
+      /(우선순위|priority|優先順位)/i,
+      /(아키텍처|architecture|設計)/i,
+      /(마일스톤|milestone|roadmap|ロードマップ|里程碑)/i,
+    ].filter((pattern) => pattern.test(fullText)).length;
     addCheck({
       id: "design_sections",
       label: tp("설계 핵심 항목 포함"),
@@ -600,9 +613,12 @@ export async function buildQualityReport(params: {
       detail: tp("목표/제약/리스크/우선순위 등 3개 이상 필요"),
     });
   } else if (profile === "synthesis_final") {
-    const hits = ["결론", "근거", "한계", "다음 단계", "실행", "체크리스트"].filter((key) =>
-      normalized.includes(key.toLowerCase()),
-    ).length;
+    const hits = [
+      /(결론|요약|conclusion|summary|結論|要約|结论|摘要)/i,
+      /(근거|출처|evidence|source|根拠|依据)/i,
+      /(한계|리스크|불확실|risk|limit|limitation|制約|风险)/i,
+      /(다음 단계|체크포인트|next step|next action|action items|次のステップ|下一步)/i,
+    ].filter((pattern) => pattern.test(fullText)).length;
     addCheck({
       id: "final_structure",
       label: tp("최종 답변 구조 충족"),
@@ -611,6 +627,34 @@ export async function buildQualityReport(params: {
       passed: hits >= 3,
       penalty: 20,
       detail: tp("결론/근거/한계/다음 단계 중 3개 이상"),
+    });
+    const headingCount = (fullText.match(/^##\s+/gm) ?? []).length;
+    const listCount = (fullText.match(/^(?:- |\d+\.\s+)/gm) ?? []).length;
+    addCheck({
+      id: "readability_layout",
+      label: tp("가독성 문서 레이아웃"),
+      kind: "structure",
+      required: false,
+      passed: headingCount >= 2 || listCount >= 4,
+      penalty: 8,
+      detail: tp("제목(##) 2개 이상 또는 목록 4개 이상 권장"),
+    });
+    addCheck({
+      id: "trust_signal",
+      label: tp("신뢰도/근거 표기"),
+      kind: "evidence",
+      required: true,
+      passed: /(출처|근거|source|evidence|confidence|신뢰도|as of|기준|timestamp|date)/i.test(fullText),
+      penalty: 15,
+      detail: tp("핵심 판단에 근거와 신뢰도 표기 필요"),
+    });
+    addCheck({
+      id: "limit_signal",
+      label: tp("한계/불확실성 명시"),
+      kind: "consistency",
+      required: false,
+      passed: /(한계|불확실|가정|제약|limit|uncertainty|assumption|constraint|制約|风险)/i.test(fullText),
+      penalty: 8,
     });
   } else if (profile === "code_implementation") {
     addCheck({
