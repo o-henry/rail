@@ -31,3 +31,15 @@ src-tauri/graphs/
 
 # Local automation/runtime temp artifacts
 .tmp/
+
+# Secrets / local credentials
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+.npmrc
+auth.json
+.auth.json
