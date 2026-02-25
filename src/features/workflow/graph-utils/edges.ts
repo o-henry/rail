@@ -107,49 +107,67 @@ export function buildRoundedEdgePath(
 
   const start = { x: Math.round(x1), y: Math.round(y1) };
   const end = { x: Math.round(x2), y: Math.round(y2) };
-  const alignedVertical =
-    (fromSide === "top" || fromSide === "bottom") &&
-    (toSide === "top" || toSide === "bottom") &&
-    Math.abs(x1 - x2) <= 24;
-  const alignedHorizontal =
-    (fromSide === "left" || fromSide === "right") &&
-    (toSide === "left" || toSide === "right") &&
-    Math.abs(y1 - y2) <= 24;
-  if (alignedVertical || alignedHorizontal) {
-    return `M ${x1} ${y1} L ${x2} ${y2}`;
-  }
   const baseDistance = Math.hypot(end.x - start.x, end.y - start.y);
   if (baseDistance <= 1) {
     return `M ${x1} ${y1} L ${x2} ${y2}`;
   }
 
-  const arrowLead = withArrow ? 10 : 0;
-  const startStubDistance = 24;
-  const endStubDistance = 24 + arrowLead;
+  const startStubDistance = 26;
+  const endStubDistance = 26;
+  const detourDistance = 44;
+  const endEntryDistance = endStubDistance + (withArrow ? 10 : 0);
   const startStub = offsetPoint(start, fromSide, startStubDistance);
-  const endStub = offsetPoint(end, toSide, -endStubDistance);
+  const endEntry = offsetPoint(end, toSide, endEntryDistance);
 
   const fromHorizontal = fromSide === "left" || fromSide === "right";
   const toHorizontal = toSide === "left" || toSide === "right";
 
   const points: LogicalPoint[] = [start, startStub];
-  if (fromHorizontal && toHorizontal) {
-    const midX = Math.round((start.x + end.x) / 2);
-    points.push({ x: midX, y: startStub.y }, { x: midX, y: endStub.y });
-  } else if (!fromHorizontal && !toHorizontal) {
-    const midY = Math.round((start.y + end.y) / 2);
-    points.push({ x: startStub.x, y: midY }, { x: endStub.x, y: midY });
-  } else if (fromHorizontal && !toHorizontal) {
-    points.push({ x: endStub.x, y: startStub.y });
-  } else {
-    points.push({ x: startStub.x, y: endStub.y });
-  }
-  points.push(endStub);
+  const isSameSide = fromSide === toSide;
+  const isHorizontalOpposite =
+    (fromSide === "left" && toSide === "right") || (fromSide === "right" && toSide === "left");
+  const isVerticalOpposite =
+    (fromSide === "top" && toSide === "bottom") || (fromSide === "bottom" && toSide === "top");
 
-  if (withArrow && arrowLead > 0) {
-    const leadPoint = offsetPoint(end, toSide, -arrowLead);
-    points.push(leadPoint);
+  if (isSameSide && (fromSide === "bottom" || fromSide === "top")) {
+    const laneY =
+      fromSide === "bottom"
+        ? Math.max(startStub.y, endEntry.y) + detourDistance
+        : Math.min(startStub.y, endEntry.y) - detourDistance;
+    points.push(
+      { x: startStub.x, y: laneY },
+      { x: endEntry.x, y: laneY },
+    );
+  } else if (isSameSide && (fromSide === "left" || fromSide === "right")) {
+    const laneX =
+      fromSide === "right"
+        ? Math.max(startStub.x, endEntry.x) + detourDistance
+        : Math.min(startStub.x, endEntry.x) - detourDistance;
+    points.push(
+      { x: laneX, y: startStub.y },
+      { x: laneX, y: endEntry.y },
+    );
+  } else if (isHorizontalOpposite) {
+    // Force three-corner orthogonal route for left<->right connections.
+    const laneY = Math.round((startStub.y + endEntry.y) / 2);
+    points.push(
+      { x: startStub.x, y: laneY },
+      { x: endEntry.x, y: laneY },
+    );
+  } else if (isVerticalOpposite) {
+    // Force three-corner orthogonal route for top<->bottom connections.
+    const laneX = Math.round((startStub.x + endEntry.x) / 2);
+    points.push(
+      { x: laneX, y: startStub.y },
+      { x: laneX, y: endEntry.y },
+    );
+  } else if (fromHorizontal && !toHorizontal) {
+    points.push({ x: endEntry.x, y: startStub.y });
+  } else {
+    points.push({ x: startStub.x, y: endEntry.y });
   }
+
+  points.push(endEntry);
   points.push(end);
 
   const simplified = simplifyOrthogonalPoints(points);
