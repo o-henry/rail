@@ -2431,7 +2431,7 @@ h3 {
 .feed-content-search-wrap.is-open {
   width: 16vw;
   min-width: 180px;
-  border-bottom: 1px solid #5f88d7;
+  border-bottom: 1px solid #bcc8d8;
 }
 
 .feed-content-search-icon {
@@ -2460,7 +2460,7 @@ h3 {
   border: 0;
   padding: 0;
   border-radius: 0;
-  background: transparent !important;
+  background: transparent;
   color: #28303a;
   font-size: 12px;
 }
