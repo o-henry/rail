@@ -207,6 +207,7 @@ import {
   DEFAULT_STAGE_WIDTH,
   GRAPH_STAGE_INSET_X,
   GRAPH_STAGE_INSET_Y,
+  GRAPH_STAGE_INSET_BOTTOM,
   KNOWLEDGE_MAX_CHARS_OPTIONS,
   KNOWLEDGE_TOP_K_OPTIONS,
   MAX_CANVAS_ZOOM,
@@ -5953,6 +5954,7 @@ ${prompt}`;
               setWorkflowQuestion={setWorkflowQuestion}
               stageInsetX={GRAPH_STAGE_INSET_X}
               stageInsetY={GRAPH_STAGE_INSET_Y}
+              stageInsetBottom={GRAPH_STAGE_INSET_BOTTOM}
               suspendedWebTurn={suspendedWebTurn}
               turnModelLabel={turnModelLabel}
               turnRoleLabel={turnRoleLabel}

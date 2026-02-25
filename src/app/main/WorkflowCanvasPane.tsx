@@ -25,6 +25,7 @@ type WorkflowCanvasPaneProps = {
   canvasZoom: number;
   stageInsetX: number;
   stageInsetY: number;
+  stageInsetBottom: number;
   edgeLines: EdgeLine[];
   selectedEdgeKey: string;
   selectedEdgeNodeIdSet: Set<string>;
@@ -97,6 +98,7 @@ export default function WorkflowCanvasPane({
   canvasZoom,
   stageInsetX,
   stageInsetY,
+  stageInsetBottom,
   edgeLines,
   selectedEdgeKey,
   selectedEdgeNodeIdSet,
@@ -169,7 +171,7 @@ export default function WorkflowCanvasPane({
             className="graph-stage-shell"
             style={{
               width: Math.round(boundedStageWidth * canvasZoom + stageInsetX * 2),
-              height: Math.round(boundedStageHeight * canvasZoom + stageInsetY * 2),
+              height: Math.round(boundedStageHeight * canvasZoom + stageInsetY + stageInsetBottom),
             }}
           >
             <div
