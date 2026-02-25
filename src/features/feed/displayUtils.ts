@@ -4,6 +4,7 @@ import {
   formatResetAt,
   formatUsage,
 } from "../../shared/lib/valueUtils";
+import { t } from "../../i18n";
 
 type FeedPostStatusValue = "draft" | "done" | "low_quality" | "failed" | "cancelled";
 type FeedViewPostLike = {
@@ -23,15 +24,15 @@ type FeedInputSourceLike = {
 export function feedPostStatusLabel(status: FeedPostStatusValue): string {
   switch (status) {
     case "draft":
-      return "작업중";
+      return t("feed.status.draft");
     case "done":
-      return "완료";
+      return t("feed.status.done");
     case "low_quality":
-      return "품질 미달";
+      return t("feed.status.low_quality");
     case "failed":
-      return "오류";
+      return t("feed.status.failed");
     case "cancelled":
-      return "취소";
+      return t("feed.status.cancelled");
     default:
       return status;
   }

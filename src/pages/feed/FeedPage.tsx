@@ -756,7 +756,7 @@ export default function FeedPage({ vm }: FeedPageProps) {
                                 : isFailedPost
                                   ? "FAIL"
                                   : isLowQualityPost
-                                    ? "LOW QUALITY"
+                                    ? t("label.status.low_quality")
                                     : "PASS";
                               const badgeClass = isDraftPost
                                 ? "live"

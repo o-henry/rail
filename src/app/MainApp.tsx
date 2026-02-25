@@ -4556,8 +4556,17 @@ ${prompt}`;
             }
             if (finalQualityReport.decision !== "PASS") {
               const finishedAtIso = new Date().toISOString();
-              const lowQualitySummary = `품질 미달 (${finalQualityReport.score}/${finalQualityReport.threshold})`;
-              addNodeLog(nodeId, `[품질] REJECT (${finalQualityReport.score}/${finalQualityReport.threshold})`);
+              const lowQualitySummary = t("run.qualityLowSummary", {
+                score: finalQualityReport.score,
+                threshold: finalQualityReport.threshold,
+              });
+              addNodeLog(
+                nodeId,
+                t("run.qualityRejectLog", {
+                  score: finalQualityReport.score,
+                  threshold: finalQualityReport.threshold,
+                }),
+              );
               outputs[nodeId] = normalizedOutput;
               setNodeStatus(nodeId, "done", lowQualitySummary);
               setNodeRuntimeFields(nodeId, {
@@ -4616,7 +4625,13 @@ ${prompt}`;
           const finishedAtIso = new Date().toISOString();
           outputs[nodeId] = normalizedOutput;
           if (qualityReport) {
-            addNodeLog(nodeId, `[품질] PASS (${qualityReport.score}/${qualityReport.threshold})`);
+            addNodeLog(
+              nodeId,
+              t("run.qualityPassLog", {
+                score: qualityReport.score,
+                threshold: qualityReport.threshold,
+              }),
+            );
           }
           setNodeRuntimeFields(nodeId, {
             status: "done",
