@@ -2713,7 +2713,7 @@ h3 {
 .feed-card-head-actions {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   margin-left: auto;
 }
 
@@ -2739,14 +2739,14 @@ h3 {
 }
 
 .feed-score-badge {
-  width: 34px;
-  min-width: 34px;
-  height: 34px;
-  min-height: 34px;
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  min-height: 28px;
   border-radius: 999px;
   display: grid;
   place-items: center;
-  font-size: 8px;
+  font-size: 7px;
   line-height: 1;
   font-weight: 700;
   letter-spacing: 0.02em;
@@ -3137,10 +3137,10 @@ h3 {
 }
 
 .feed-share-icon-button {
-  width: 34px;
-  min-width: 34px;
-  height: 34px;
-  min-height: 34px;
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  min-height: 28px;
   padding: 0;
   border-radius: 999px;
   border: 2px solid #000000;
@@ -3155,17 +3155,17 @@ h3 {
 }
 
 .feed-share-icon {
-  width: 16px;
-  height: 16px;
+  width: 12px;
+  height: 12px;
   display: block;
   object-fit: contain;
 }
 
 .feed-delete-icon-button {
-  width: 34px;
-  min-width: 34px;
-  height: 34px;
-  min-height: 34px;
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  min-height: 28px;
   padding: 0;
   border-radius: 999px;
   border: 2px solid #e45a5a;
@@ -3187,8 +3187,8 @@ h3 {
 }
 
 .feed-delete-icon {
-  width: 16px;
-  height: 16px;
+  width: 12px;
+  height: 12px;
   display: block;
   object-fit: contain;
   filter: invert(21%) sepia(82%) saturate(3358%) hue-rotate(346deg) brightness(95%) contrast(92%);
