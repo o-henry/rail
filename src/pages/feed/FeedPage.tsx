@@ -604,6 +604,11 @@ export default function FeedPage({ vm }: FeedPageProps) {
                   groupedFeedRunsForDisplay.map((group: any) => {
                     const isGroupExpanded = feedGroupExpandedByRunId[group.runId] !== false;
                     const isRenamingGroup = feedGroupRenameRunId === group.runId;
+                    const canManageGroup =
+                      !isRenamingGroup &&
+                      !group.isLive &&
+                      Boolean(group.runId) &&
+                      Boolean(group.sourceFile);
                     return (
                       <section
                         className={`feed-run-group ${isGroupExpanded ? "is-expanded" : ""}`}
@@ -623,7 +628,7 @@ export default function FeedPage({ vm }: FeedPageProps) {
                             </span>
                           </div>
                           <div className="feed-run-group-actions">
-                            {group.kind === "custom" && !isRenamingGroup && !group.isLive && (
+                            {canManageGroup && (
                               <button
                                 className="feed-run-group-delete"
                                 onClick={() =>
@@ -638,7 +643,7 @@ export default function FeedPage({ vm }: FeedPageProps) {
                                 {t("feed.group.delete")}
                               </button>
                             )}
-                            {group.kind === "custom" && !isRenamingGroup && !group.isLive && (
+                            {canManageGroup && (
                               <button
                                 className="feed-run-group-rename"
                                 onClick={() => {
