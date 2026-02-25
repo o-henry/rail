@@ -43,10 +43,64 @@ export function buildPreprocessPrompt(kind: PresetKind): string {
   );
 }
 
+export function buildPreprocessOutputSchema(): string {
+  return JSON.stringify(
+    {
+      type: "object",
+      required: [
+        "intent",
+        "userGoal",
+        "requiredOutputs",
+        "constraints",
+        "assumptions",
+        "researchPlan",
+        "acceptanceCriteria",
+        "riskChecklist",
+        "selfValidationPlan",
+        "templateIntent",
+      ],
+      properties: {
+        intent: { type: "string" },
+        userGoal: { type: "string" },
+        requiredOutputs: { type: "array" },
+        constraints: { type: "array" },
+        assumptions: { type: "array" },
+        researchPlan: { type: "object" },
+        acceptanceCriteria: { type: "array" },
+        riskChecklist: { type: "array" },
+        selfValidationPlan: { type: "array" },
+        templateIntent: { type: "string" },
+      },
+    },
+    null,
+    2,
+  );
+}
+
 export function prependPreprocessAgent(kind: PresetKind, graphData: GraphData): GraphData {
   const preprocessNodeId = `turn-${kind}-preprocess`;
+  const preprocessSchema = buildPreprocessOutputSchema();
   if (graphData.nodes.some((node) => node.id === preprocessNodeId)) {
-    return graphData;
+    return {
+      ...graphData,
+      nodes: graphData.nodes.map((node) => {
+        if (node.id !== preprocessNodeId || node.type !== "turn") {
+          return node;
+        }
+        const config =
+          node.config && typeof node.config === "object" ? (node.config as Record<string, unknown>) : {};
+        if (String(config.outputSchemaJson ?? "").trim()) {
+          return node;
+        }
+        return {
+          ...node,
+          config: {
+            ...config,
+            outputSchemaJson: preprocessSchema,
+          },
+        };
+      }),
+    };
   }
 
   const incomingIds = new Set(graphData.edges.map((edge) => edge.to.nodeId));
@@ -65,6 +119,7 @@ export function prependPreprocessAgent(kind: PresetKind, graphData: GraphData): 
     role: "REQUEST PREPROCESS AGENT",
     cwd: ".",
     promptTemplate: buildPreprocessPrompt(kind),
+    outputSchemaJson: preprocessSchema,
   });
 
   const shiftedNodes = graphData.nodes.map((node) => ({
