@@ -33,6 +33,7 @@ type WorkflowCanvasPaneProps = {
   onEdgeDragStart: (
     event: ReactMouseEvent<SVGPathElement | SVGCircleElement>,
     edgeKey: string,
+    startPoint: { x: number; y: number },
     endPoint: { x: number; y: number },
   ) => void;
   connectPreviewLine: string | null;
@@ -202,7 +203,7 @@ export default function WorkflowCanvasPane({
                           setNodeSelection([]);
                           setSelectedEdgeKey(line.edgeKey);
                         }}
-                        onMouseDown={(e) => onEdgeDragStart(e, line.edgeKey, line.endPoint)}
+                        onMouseDown={(e) => onEdgeDragStart(e, line.edgeKey, line.startPoint, line.endPoint)}
                         pointerEvents="stroke"
                         stroke="transparent"
                         strokeWidth={18}
@@ -233,7 +234,7 @@ export default function WorkflowCanvasPane({
                           setNodeSelection([]);
                           setSelectedEdgeKey(line.edgeKey);
                         }}
-                        onMouseDown={(e) => onEdgeDragStart(e, line.edgeKey, line.endPoint)}
+                        onMouseDown={(e) => onEdgeDragStart(e, line.edgeKey, line.startPoint, line.endPoint)}
                         r={12}
                       />
                     )}

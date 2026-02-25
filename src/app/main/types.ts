@@ -264,10 +264,9 @@ export type DragState = {
 
 export type EdgeDragState = {
   edgeKey: string;
-  sourceNodeId: string;
-  sourceSide: NodeAnchorSide;
-  originalToNodeId: string;
-  originalToSide?: NodeAnchorSide;
+  endpoint: "from" | "to";
+  fixedNodeId: string;
+  fixedSide: NodeAnchorSide;
 };
 
 export type PanState = {

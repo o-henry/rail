@@ -2648,6 +2648,7 @@ function App() {
   function onEdgeDragStart(
     event: ReactMouseEvent<SVGPathElement | SVGCircleElement>,
     edgeKey: string,
+    startPoint: LogicalPoint,
     endPoint: LogicalPoint,
   ) {
     if (panMode || isConnectingDrag) {
@@ -2662,10 +2663,8 @@ function App() {
     if (!pointer) {
       return;
     }
-    const distanceToArrowEnd = Math.hypot(pointer.x - endPoint.x, pointer.y - endPoint.y);
-    if (distanceToArrowEnd > 26) {
-      return;
-    }
+    const distanceToStart = Math.hypot(pointer.x - startPoint.x, pointer.y - startPoint.y);
+    const distanceToEnd = Math.hypot(pointer.x - endPoint.x, pointer.y - endPoint.y);
 
     const currentEdge = graph.edges.find((edge) => getGraphEdgeKey(edge) === edgeKey);
     if (!currentEdge) {
@@ -2681,20 +2680,23 @@ function App() {
     const auto = getAutoConnectionSides(fromNode, toNode, fromSize, toSize);
     const fromSide = currentEdge.from.side ?? auto.fromSide;
     const toSide = currentEdge.to.side ?? auto.toSide;
-    const sourceAnchor = getNodeAnchorPoint(fromNode, fromSide, fromSize);
+    const reconnectFromSource = distanceToEnd <= distanceToStart;
+    const previewSourceNode = reconnectFromSource ? fromNode : toNode;
+    const previewSourceSize = reconnectFromSource ? fromSize : toSize;
+    const previewSourceSide = reconnectFromSource ? fromSide : toSide;
+    const sourceAnchor = getNodeAnchorPoint(previewSourceNode, previewSourceSide, previewSourceSize);
 
     event.preventDefault();
     event.stopPropagation();
     edgeDragStartSnapshotRef.current = cloneGraph(graph);
     edgeDragRef.current = {
       edgeKey,
-      sourceNodeId: currentEdge.from.nodeId,
-      sourceSide: fromSide,
-      originalToNodeId: currentEdge.to.nodeId,
-      originalToSide: toSide,
+      endpoint: reconnectFromSource ? "to" : "from",
+      fixedNodeId: reconnectFromSource ? currentEdge.from.nodeId : currentEdge.to.nodeId,
+      fixedSide: reconnectFromSource ? fromSide : toSide,
     };
-    setConnectFromNodeId(currentEdge.from.nodeId);
-    setConnectFromSide(fromSide);
+    setConnectFromNodeId(previewSourceNode.id);
+    setConnectFromSide(previewSourceSide);
     setConnectPreviewStartPoint(sourceAnchor);
     setConnectPreviewPoint(pointer);
     setIsConnectingDrag(true);
@@ -2751,17 +2753,19 @@ function App() {
     return true;
   }
 
-  function reconnectSelectedEdgeTarget(
+  function reconnectSelectedEdgeEndpoint(
     dragState: {
       edgeKey: string;
-      sourceNodeId: string;
-      sourceSide: NodeAnchorSide;
+      endpoint: "from" | "to";
+      fixedNodeId: string;
+      fixedSide: NodeAnchorSide;
     },
-    targetNodeId: string,
-    targetSide: NodeAnchorSide,
+    dropNodeId: string,
+    dropSide: NodeAnchorSide,
   ): boolean {
     let changed = false;
     let blockedReason = "";
+    let nextSelectedEdgeKey = "";
 
     applyGraphChange((prev) => {
       const currentIndex = prev.edges.findIndex((edge) => getGraphEdgeKey(edge) === dragState.edgeKey);
@@ -2770,17 +2774,22 @@ function App() {
         return prev;
       }
       const current = prev.edges[currentIndex];
-      const sourceNodeId = current.from.nodeId;
-      if (!sourceNodeId || sourceNodeId === targetNodeId) {
+      const reconnectTargetEndpoint = dragState.endpoint === "to";
+      const fixedNodeId = reconnectTargetEndpoint ? current.from.nodeId : current.to.nodeId;
+      if (!fixedNodeId || fixedNodeId === dropNodeId) {
         blockedReason = "동일 노드로는 연결할 수 없습니다.";
         return prev;
       }
+      const candidateFromNodeId = reconnectTargetEndpoint ? fixedNodeId : dropNodeId;
+      const candidateToNodeId = reconnectTargetEndpoint ? dropNodeId : fixedNodeId;
+      const candidateFromSide = reconnectTargetEndpoint ? dragState.fixedSide : dropSide;
+      const candidateToSide = reconnectTargetEndpoint ? dropSide : dragState.fixedSide;
 
       const duplicateExists = prev.edges.some(
         (edge, index) =>
           index !== currentIndex &&
-          edge.from.nodeId === sourceNodeId &&
-          edge.to.nodeId === targetNodeId,
+          edge.from.nodeId === candidateFromNodeId &&
+          edge.to.nodeId === candidateToNodeId,
       );
       if (duplicateExists) {
         blockedReason = "이미 동일한 방향의 연결이 있습니다.";
@@ -2790,8 +2799,8 @@ function App() {
       const reverseExists = prev.edges.some(
         (edge, index) =>
           index !== currentIndex &&
-          edge.from.nodeId === targetNodeId &&
-          edge.to.nodeId === sourceNodeId,
+          edge.from.nodeId === candidateToNodeId &&
+          edge.to.nodeId === candidateFromNodeId,
       );
       if (reverseExists) {
         blockedReason = "양방향 연결은 허용되지 않습니다.";
@@ -2802,17 +2811,19 @@ function App() {
         ...current,
         from: {
           ...current.from,
-          side: dragState.sourceSide,
+          nodeId: candidateFromNodeId,
+          side: candidateFromSide,
         },
         to: {
           ...current.to,
-          nodeId: targetNodeId,
-          side: targetSide,
+          nodeId: candidateToNodeId,
+          side: candidateToSide,
         },
         control: undefined,
       };
       const nextEdges = prev.edges.slice();
       nextEdges[currentIndex] = nextEdge;
+      nextSelectedEdgeKey = getGraphEdgeKey(nextEdge);
       changed = true;
       return {
         ...prev,
@@ -2825,6 +2836,9 @@ function App() {
       return false;
     }
     if (changed) {
+      if (nextSelectedEdgeKey) {
+        setSelectedEdgeKey(nextSelectedEdgeKey);
+      }
       setStatus("선 연결 대상을 업데이트했습니다.");
     }
     return changed;
@@ -3062,7 +3076,7 @@ function App() {
       const dropTarget = dropPoint ? resolveConnectDropTarget(dropPoint) : null;
       if (dropTarget && connectFromNodeId && connectFromNodeId !== dropTarget.nodeId) {
         if (edgeReconnectState) {
-          reconnectSelectedEdgeTarget(edgeReconnectState, dropTarget.nodeId, dropTarget.side);
+          reconnectSelectedEdgeEndpoint(edgeReconnectState, dropTarget.nodeId, dropTarget.side);
         } else {
           onNodeConnectDrop(dropTarget.nodeId, dropTarget.side);
         }
