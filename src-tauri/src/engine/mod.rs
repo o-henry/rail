@@ -870,7 +870,11 @@ async fn resolve_codex_home_dir(app: &AppHandle) -> Result<PathBuf, String> {
         if let Ok(home) = env::var("HOME") {
             let global_codex_home = PathBuf::from(home).join(".codex");
             ensure_private_dir(&global_codex_home, "global codex home dir").await?;
-            return Ok(global_codex_home);
+            let has_user_config = global_codex_home.join("config.toml").is_file();
+            let has_user_auth = global_codex_home.join("auth.json").is_file();
+            if has_user_config || has_user_auth {
+                return Ok(global_codex_home);
+            }
         }
     }
 

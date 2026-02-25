@@ -38,6 +38,41 @@ function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
 }
 
+function buildOrthogonalPolylinePath(points: LogicalPoint[]): string {
+  if (points.length === 0) {
+    return "";
+  }
+  let path = `M ${points[0].x} ${points[0].y}`;
+  for (let i = 1; i < points.length; i += 1) {
+    path += ` L ${points[i].x} ${points[i].y}`;
+  }
+  return path;
+}
+
+function compressCollinear(points: LogicalPoint[]): LogicalPoint[] {
+  if (points.length <= 2) {
+    return points;
+  }
+  const next: LogicalPoint[] = [points[0]];
+  for (let i = 1; i < points.length; i += 1) {
+    const point = points[i];
+    if (next.length < 2) {
+      next.push(point);
+      continue;
+    }
+    const prev = next[next.length - 1];
+    const head = next[next.length - 2];
+    const collinearX = Math.abs(head.x - prev.x) <= 0.1 && Math.abs(prev.x - point.x) <= 0.1;
+    const collinearY = Math.abs(head.y - prev.y) <= 0.1 && Math.abs(prev.y - point.y) <= 0.1;
+    if (collinearX || collinearY) {
+      next[next.length - 1] = point;
+    } else {
+      next.push(point);
+    }
+  }
+  return next;
+}
+
 export function buildCanvasEdgeLines(params: BuildCanvasEdgeLinesParams): CanvasEdgeLine[] {
   const { entries, nodeMap, getNodeVisualSize } = params;
 
@@ -186,34 +221,25 @@ export function buildCanvasEdgeLines(params: BuildCanvasEdgeLinesParams): Canvas
         ? (bundledToAnchorByNodeId.get(toNode.id) ?? snapPoint(getNodeAnchorPoint(toNode, resolvedToSide, toSize)))
         : snapPoint(getNodeAnchorPoint(toNode, resolvedToSide, toSize));
 
-      if (!hasManualControl && !bundledFromSide && !bundledToSide) {
-        const fromHorizontal = resolvedFromSide === "left" || resolvedFromSide === "right";
-        const toHorizontal = resolvedToSide === "left" || resolvedToSide === "right";
-        const fromVertical = !fromHorizontal;
-        const toVertical = !toHorizontal;
+      const fromHorizontal = resolvedFromSide === "left" || resolvedFromSide === "right";
+      const toHorizontal = resolvedToSide === "left" || resolvedToSide === "right";
+      const fromVertical = !fromHorizontal;
+      const toVertical = !toHorizontal;
 
-        // Prefer a true straight lane from source anchor when the target side can accept it.
-        // This removes tiny diagonal artifacts caused by different node heights.
+      if (!hasManualControl && !bundledFromSide && !bundledToSide) {
+        // Single edge: force source-lane alignment to avoid diagonal endpoint drift.
         if (fromHorizontal && toHorizontal) {
           const toMinY = toNode.position.y + SIDE_EDGE_PADDING;
           const toMaxY = toNode.position.y + toSize.height - SIDE_EDGE_PADDING;
-          if (fromPoint.y >= toMinY && fromPoint.y <= toMaxY) {
-            toPoint = { ...toPoint, y: fromPoint.y };
-          } else {
-            const alignedLaneY = clamp(fromPoint.y, toMinY, toMaxY);
-            fromPoint = { ...fromPoint, y: alignedLaneY };
-            toPoint = { ...toPoint, y: alignedLaneY };
-          }
+          const laneY = clamp(Math.round(fromPoint.y), toMinY, toMaxY);
+          fromPoint = { ...fromPoint, y: laneY };
+          toPoint = { ...toPoint, y: laneY };
         } else if (fromVertical && toVertical) {
           const toMinX = toNode.position.x + SIDE_EDGE_PADDING;
           const toMaxX = toNode.position.x + toSize.width - SIDE_EDGE_PADDING;
-          if (fromPoint.x >= toMinX && fromPoint.x <= toMaxX) {
-            toPoint = { ...toPoint, x: fromPoint.x };
-          } else {
-            const alignedLaneX = clamp(fromPoint.x, toMinX, toMaxX);
-            fromPoint = { ...fromPoint, x: alignedLaneX };
-            toPoint = { ...toPoint, x: alignedLaneX };
-          }
+          const laneX = clamp(Math.round(fromPoint.x), toMinX, toMaxX);
+          fromPoint = { ...fromPoint, x: laneX };
+          toPoint = { ...toPoint, x: laneX };
         }
 
         const aligned = alignAutoEdgePoints(
@@ -233,6 +259,51 @@ export function buildCanvasEdgeLines(params: BuildCanvasEdgeLinesParams): Canvas
       const edgeKey = entry.edgeKey;
       const defaultControl = edgeMidPoint(fromPoint, toPoint);
       const control = edge.control ?? defaultControl;
+      const hasBundledRouting = !hasManualControl && Boolean(bundledFromSide || bundledToSide);
+
+      let path: string;
+      if (hasManualControl) {
+        path = buildManualEdgePath(fromPoint.x, fromPoint.y, control.x, control.y, toPoint.x, toPoint.y);
+      } else if (hasBundledRouting && fromHorizontal && toHorizontal) {
+        const gap = Math.max(24, Math.round(Math.abs(toPoint.x - fromPoint.x) * 0.38));
+        const laneX = bundledFromSide
+          ? (resolvedFromSide === "right" ? fromPoint.x + gap : fromPoint.x - gap)
+          : bundledToSide
+            ? (resolvedToSide === "left" ? toPoint.x - gap : toPoint.x + gap)
+            : Math.round((fromPoint.x + toPoint.x) / 2);
+        const points = compressCollinear([
+          fromPoint,
+          { x: laneX, y: fromPoint.y },
+          { x: laneX, y: toPoint.y },
+          toPoint,
+        ]);
+        path = buildOrthogonalPolylinePath(points);
+      } else if (hasBundledRouting && fromVertical && toVertical) {
+        const gap = Math.max(24, Math.round(Math.abs(toPoint.y - fromPoint.y) * 0.38));
+        const laneY = bundledFromSide
+          ? (resolvedFromSide === "bottom" ? fromPoint.y + gap : fromPoint.y - gap)
+          : bundledToSide
+            ? (resolvedToSide === "top" ? toPoint.y - gap : toPoint.y + gap)
+            : Math.round((fromPoint.y + toPoint.y) / 2);
+        const points = compressCollinear([
+          fromPoint,
+          { x: fromPoint.x, y: laneY },
+          { x: toPoint.x, y: laneY },
+          toPoint,
+        ]);
+        path = buildOrthogonalPolylinePath(points);
+      } else {
+        path = buildRoundedEdgePath(
+          fromPoint.x,
+          fromPoint.y,
+          toPoint.x,
+          toPoint.y,
+          true,
+          resolvedFromSide,
+          resolvedToSide,
+          0,
+        );
+      }
 
       return {
         key: `${edgeKey}-${index}`,
@@ -242,18 +313,7 @@ export function buildCanvasEdgeLines(params: BuildCanvasEdgeLinesParams): Canvas
         controlPoint: control,
         hasManualControl,
         readOnly: entry.readOnly,
-        path: hasManualControl
-          ? buildManualEdgePath(fromPoint.x, fromPoint.y, control.x, control.y, toPoint.x, toPoint.y)
-          : buildRoundedEdgePath(
-              fromPoint.x,
-              fromPoint.y,
-              toPoint.x,
-              toPoint.y,
-              true,
-              resolvedFromSide,
-              resolvedToSide,
-              bundledFromSide || bundledToSide ? 0 : 8,
-            ),
+        path,
       } satisfies CanvasEdgeLine;
     })
     .filter(Boolean) as CanvasEdgeLine[];
