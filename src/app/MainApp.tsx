@@ -5498,6 +5498,52 @@ ${prompt}`;
     });
     return result;
   })();
+  const bundledToSideByNodeId = (() => {
+    const grouped = new Map<string, typeof canvasDisplayEdges>();
+    for (const entry of canvasDisplayEdges) {
+      const toId = entry.edge.to.nodeId;
+      const list = grouped.get(toId) ?? [];
+      list.push(entry);
+      grouped.set(toId, list);
+    }
+    const result = new Map<string, NodeAnchorSide>();
+    grouped.forEach((entries, toId) => {
+      if (entries.length < 2) {
+        return;
+      }
+      const toNode = canvasNodeMap.get(toId);
+      if (!toNode) {
+        return;
+      }
+      const toSize = getNodeVisualSize(toNode.id);
+      const toCenterX = toNode.position.x + toSize.width / 2;
+      const toCenterY = toNode.position.y + toSize.height / 2;
+      let sumDx = 0;
+      let sumDy = 0;
+      let sourceCount = 0;
+      for (const entry of entries) {
+        const fromNode = canvasNodeMap.get(entry.edge.from.nodeId);
+        if (!fromNode) {
+          continue;
+        }
+        const fromSize = getNodeVisualSize(fromNode.id);
+        const fromCenterX = fromNode.position.x + fromSize.width / 2;
+        const fromCenterY = fromNode.position.y + fromSize.height / 2;
+        sumDx += toCenterX - fromCenterX;
+        sumDy += toCenterY - fromCenterY;
+        sourceCount += 1;
+      }
+      if (sourceCount === 0) {
+        return;
+      }
+      const avgDx = sumDx / sourceCount;
+      const avgDy = sumDy / sourceCount;
+      const side: NodeAnchorSide =
+        Math.abs(avgDx) >= Math.abs(avgDy) ? (avgDx >= 0 ? "left" : "right") : avgDy >= 0 ? "top" : "bottom";
+      result.set(toId, side);
+    });
+    return result;
+  })();
 
   const edgeLines = canvasDisplayEdges
     .map((entry, index) => {
@@ -5514,11 +5560,12 @@ ${prompt}`;
       const hasManualControl =
         !entry.readOnly && typeof edge.control?.x === "number" && typeof edge.control?.y === "number";
       const bundledFromSide = hasManualControl ? null : bundledFromSideByNodeId.get(fromNode.id);
+      const bundledToSide = hasManualControl ? null : bundledToSideByNodeId.get(toNode.id);
       const resolvedFromSide = hasManualControl ? (edge.from.side ?? auto.fromSide) : bundledFromSide ?? auto.fromSide;
-      const resolvedToSide = hasManualControl ? (edge.to.side ?? auto.toSide) : auto.toSide;
+      const resolvedToSide = hasManualControl ? (edge.to.side ?? auto.toSide) : bundledToSide ?? auto.toSide;
       let fromPoint = getNodeAnchorPoint(fromNode, resolvedFromSide, fromSize);
       let toPoint = getNodeAnchorPoint(toNode, resolvedToSide, toSize);
-      if (!hasManualControl && !bundledFromSide) {
+      if (!hasManualControl && !bundledFromSide && !bundledToSide) {
         const aligned = alignAutoEdgePoints(
           fromNode,
           toNode,
