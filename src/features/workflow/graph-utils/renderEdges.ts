@@ -32,6 +32,12 @@ type BuildCanvasEdgeLinesParams = {
   getNodeVisualSize: (nodeId: string) => NodeVisualSize;
 };
 
+const SIDE_EDGE_PADDING = 8;
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
+}
+
 export function buildCanvasEdgeLines(params: BuildCanvasEdgeLinesParams): CanvasEdgeLine[] {
   const { entries, nodeMap, getNodeVisualSize } = params;
 
@@ -159,8 +165,13 @@ export function buildCanvasEdgeLines(params: BuildCanvasEdgeLinesParams): Canvas
       const fromSize = getNodeVisualSize(fromNode.id);
       const toSize = getNodeVisualSize(toNode.id);
       const auto = getAutoConnectionSides(fromNode, toNode, fromSize, toSize);
+      const isBundledEdge =
+        (groupedFrom.get(fromNode.id)?.length ?? 0) > 1 || (groupedTo.get(toNode.id)?.length ?? 0) > 1;
       const hasManualControl =
-        !entry.readOnly && typeof edge.control?.x === "number" && typeof edge.control?.y === "number";
+        !entry.readOnly &&
+        !isBundledEdge &&
+        typeof edge.control?.x === "number" &&
+        typeof edge.control?.y === "number";
       const bundledFromSide = hasManualControl ? null : bundledFromSideByNodeId.get(fromNode.id);
       const bundledToSide = hasManualControl ? null : bundledToSideByNodeId.get(toNode.id);
       const resolvedFromSide = hasManualControl
@@ -176,6 +187,35 @@ export function buildCanvasEdgeLines(params: BuildCanvasEdgeLinesParams): Canvas
         : snapPoint(getNodeAnchorPoint(toNode, resolvedToSide, toSize));
 
       if (!hasManualControl && !bundledFromSide && !bundledToSide) {
+        const fromHorizontal = resolvedFromSide === "left" || resolvedFromSide === "right";
+        const toHorizontal = resolvedToSide === "left" || resolvedToSide === "right";
+        const fromVertical = !fromHorizontal;
+        const toVertical = !toHorizontal;
+
+        // Prefer a true straight lane from source anchor when the target side can accept it.
+        // This removes tiny diagonal artifacts caused by different node heights.
+        if (fromHorizontal && toHorizontal) {
+          const toMinY = toNode.position.y + SIDE_EDGE_PADDING;
+          const toMaxY = toNode.position.y + toSize.height - SIDE_EDGE_PADDING;
+          if (fromPoint.y >= toMinY && fromPoint.y <= toMaxY) {
+            toPoint = { ...toPoint, y: fromPoint.y };
+          } else {
+            const alignedLaneY = clamp(fromPoint.y, toMinY, toMaxY);
+            fromPoint = { ...fromPoint, y: alignedLaneY };
+            toPoint = { ...toPoint, y: alignedLaneY };
+          }
+        } else if (fromVertical && toVertical) {
+          const toMinX = toNode.position.x + SIDE_EDGE_PADDING;
+          const toMaxX = toNode.position.x + toSize.width - SIDE_EDGE_PADDING;
+          if (fromPoint.x >= toMinX && fromPoint.x <= toMaxX) {
+            toPoint = { ...toPoint, x: fromPoint.x };
+          } else {
+            const alignedLaneX = clamp(fromPoint.x, toMinX, toMaxX);
+            fromPoint = { ...fromPoint, x: alignedLaneX };
+            toPoint = { ...toPoint, x: alignedLaneX };
+          }
+        }
+
         const aligned = alignAutoEdgePoints(
           fromNode,
           toNode,
@@ -218,4 +258,3 @@ export function buildCanvasEdgeLines(params: BuildCanvasEdgeLinesParams): Canvas
     })
     .filter(Boolean) as CanvasEdgeLine[];
 }
-
