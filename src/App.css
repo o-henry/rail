@@ -2569,11 +2569,36 @@ h3 {
   gap: 2px;
 }
 
+.feed-run-group-title-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .feed-run-group-meta strong {
   font-size: 13px;
   line-height: 1.2;
   font-family: "BasicallyAMono", "DialogNanumBody1984", "Noto Sans KR", sans-serif;
   color: #0f1419;
+}
+
+.feed-group-delete-icon-button {
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  min-height: 28px;
+  padding: 0;
+  border-radius: 999px;
+  border: 2px solid #e45a5a;
+  color: #e45a5a;
+  background: #ffffff;
+  display: inline-grid;
+  place-items: center;
+  box-shadow: none;
+}
+
+.feed-group-delete-icon-button:hover {
+  background: #fff1f1;
 }
 
 .feed-run-group-meta span {
@@ -3196,6 +3221,23 @@ h3 {
 
 .feed-delete-icon-button:disabled .feed-delete-icon {
   filter: grayscale(1) brightness(0.78);
+}
+
+.feed-delete-confirm-modal {
+  width: min(520px, 100%);
+}
+
+.feed-delete-confirm-modal h2 {
+  margin: 0;
+}
+
+.feed-delete-confirm-modal .button-row {
+  justify-content: flex-end;
+}
+
+.feed-delete-confirm-danger {
+  background: #e45a5a;
+  color: #ffffff;
 }
 
 .feed-share-menu-wrap-head .feed-share-menu {

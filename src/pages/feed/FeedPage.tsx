@@ -1,4 +1,4 @@
-import { Component, type ErrorInfo, type ReactNode } from "react";
+import { Component, useState, type ErrorInfo, type ReactNode } from "react";
 import FancySelect from "../../components/FancySelect";
 import FeedDocument from "../../components/feed/FeedDocument";
 import { useI18n } from "../../i18n";
@@ -34,6 +34,11 @@ class FeedCardBoundary extends Component<
 
 export default function FeedPage({ vm }: FeedPageProps) {
   const { t, tp } = useI18n();
+  const [deleteGroupTarget, setDeleteGroupTarget] = useState<{
+    runId: string;
+    sourceFile: string;
+    name: string;
+  } | null>(null);
   const {
     feedInspectorTurnNode,
     feedInspectorPost,
@@ -96,7 +101,7 @@ export default function FeedPage({ vm }: FeedPageProps) {
     feedExpandedByPost,
     onSelectFeedInspectorPost,
     onShareFeedPost,
-    onDeleteFeedPost,
+    onDeleteFeedRunGroup,
     setFeedExpandedByPost,
     formatFeedInputSourceLabel,
     formatRunDateTime,
@@ -495,7 +500,25 @@ export default function FeedPage({ vm }: FeedPageProps) {
                       >
                         <header className="feed-run-group-head">
                           <div className="feed-run-group-meta">
-                            <strong>{tp(group.name)}</strong>
+                            <div className="feed-run-group-title-row">
+                              <strong>{tp(group.name)}</strong>
+                              {group.kind === "custom" && !group.isLive && (
+                                <button
+                                  aria-label={t("feed.group.delete")}
+                                  className="feed-group-delete-icon-button"
+                                  onClick={() =>
+                                    setDeleteGroupTarget({
+                                      runId: group.runId,
+                                      sourceFile: group.sourceFile,
+                                      name: String(group.name ?? ""),
+                                    })
+                                  }
+                                  type="button"
+                                >
+                                  <img alt="" aria-hidden="true" className="feed-delete-icon" src="/xmark.svg" />
+                                </button>
+                              )}
+                            </div>
                             <span>
                               {t("feed.countAndDate", {
                                 count: group.posts.length,
@@ -613,15 +636,6 @@ export default function FeedPage({ vm }: FeedPageProps) {
                                       <div className="feed-card-sub">{post.roleLabel}</div>
                                     </div>
                                     <div className="feed-card-head-actions">
-                                      <button
-                                        aria-label={t("feed.post.delete")}
-                                        className="feed-delete-icon-button"
-                                        disabled={!post.sourceFile}
-                                        onClick={() => void onDeleteFeedPost(post)}
-                                        type="button"
-                                      >
-                                        <img alt="" aria-hidden="true" className="feed-delete-icon" src="/xmark.svg" />
-                                      </button>
                                       <span
                                         className={`feed-score-badge ${badgeClass}`}
                                         title={
@@ -769,6 +783,46 @@ export default function FeedPage({ vm }: FeedPageProps) {
                   })}
               </article>
             </article>
+      {deleteGroupTarget && (
+        <div
+          className="modal-backdrop"
+          onClick={() => {
+            setDeleteGroupTarget(null);
+          }}
+        >
+          <section
+            className="approval-modal feed-delete-confirm-modal"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h2>{t("feed.group.deleteTitle")}</h2>
+            <div>{t("feed.group.deleteMessage", { name: tp(deleteGroupTarget.name) })}</div>
+            <div className="button-row">
+              <button
+                onClick={() => {
+                  setDeleteGroupTarget(null);
+                }}
+                type="button"
+              >
+                {t("common.cancel")}
+              </button>
+              <button
+                className="feed-delete-confirm-danger"
+                onClick={() => {
+                  void onDeleteFeedRunGroup(
+                    deleteGroupTarget.runId,
+                    deleteGroupTarget.sourceFile,
+                    deleteGroupTarget.name,
+                  );
+                  setDeleteGroupTarget(null);
+                }}
+                type="button"
+              >
+                {t("common.delete")}
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
     </section>
   );
 }

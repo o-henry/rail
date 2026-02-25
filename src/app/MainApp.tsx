@@ -1185,6 +1185,34 @@ function App() {
     }
   }
 
+  async function onDeleteFeedRunGroup(runId: string, sourceFile: string, groupName: string) {
+    setError("");
+    setFeedShareMenuPostId(null);
+    const target = String(sourceFile ?? "").trim();
+    if (!target) {
+      setError("삭제할 실행 파일을 찾을 수 없습니다.");
+      return;
+    }
+    try {
+      await invoke("run_delete", { name: target });
+      delete feedRunCacheRef.current[target];
+      setFeedPosts((prev) => prev.filter((item) => item.sourceFile !== target));
+      setFeedInspectorPostId("");
+      setFeedGroupExpandedByRunId((prev) => {
+        const next = { ...prev };
+        delete next[runId];
+        return next;
+      });
+      if (feedGroupRenameRunId === runId) {
+        setFeedGroupRenameRunId(null);
+        setFeedGroupRenameDraft("");
+      }
+      setStatus(`피드 세트 삭제 완료: ${groupName}`);
+    } catch (error) {
+      setError(`피드 세트 삭제 실패: ${String(error)}`);
+    }
+  }
+
   async function onSubmitFeedRunGroupRename(runId: string, sourceFile: string) {
     const trimmed = feedGroupRenameDraft.trim();
     if (!trimmed) {
@@ -6091,6 +6119,7 @@ ${prompt}`;
               onSelectFeedInspectorPost,
               onShareFeedPost,
               onDeleteFeedPost,
+              onDeleteFeedRunGroup,
               setFeedExpandedByPost,
               formatFeedInputSourceLabel,
               formatRunDateTime,
