@@ -50,6 +50,7 @@ pub fn run() {
             storage::run_load,
             storage::run_delete,
             storage::run_directory,
+            storage::workspace_write_markdown,
             storage::dialog_pick_directory,
             storage::dialog_pick_knowledge_files,
         ])

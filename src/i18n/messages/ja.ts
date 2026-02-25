@@ -287,6 +287,7 @@ export const JA_MESSAGES: Dictionary = {
     "workflow.canvas.stop": "停止",
     "workflow.canvas.undo": "元に戻す",
     "workflow.canvas.redo": "やり直し",
+    "workflow.canvas.clear": "クリア",
     "workflow.canvas.reopenWebInput": "Web入力を再表示",
     "workflow.canvas.reopenWebInputWindow": "Web応答入力ウィンドウを再表示",
     "workflow.question.placeholder": "質問を入力",

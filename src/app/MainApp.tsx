@@ -792,6 +792,26 @@ function App() {
     });
   }
 
+  function onClearGraphCanvas() {
+    if (isGraphRunning || isRunStarting) {
+      setStatus("워크플로우 실행 중에는 캔버스를 비울 수 없습니다.");
+      return;
+    }
+    if (graph.nodes.length === 0 && graph.edges.length === 0) {
+      setStatus("캔버스가 이미 비어 있습니다.");
+      return;
+    }
+    applyGraphChange((prev) => ({
+      ...prev,
+      nodes: [],
+      edges: [],
+    }));
+    setNodeSelection([]);
+    setSelectedEdgeKey("");
+    setNodeStates({});
+    setStatus("캔버스의 노드와 연결선을 모두 지웠습니다.");
+  }
+
   function reportSoftError(prefix: string, error: unknown) {
     const message = `${prefix}: ${toErrorText(error)}`;
     console.error(message, error);
@@ -1349,6 +1369,7 @@ function App() {
           feedPosts: [failed.post],
         };
         await persistRunRecordFile(oneOffRunFileName, failedRunRecord);
+        await exportRunFeedMarkdownFiles(failedRunRecord);
         feedRunCacheRef.current[oneOffRunFileName] = normalizeRunRecord(failedRunRecord);
         setFeedPosts((prev) => [
           {
@@ -1435,6 +1456,7 @@ function App() {
         feedPosts: [done.post],
       };
       await persistRunRecordFile(oneOffRunFileName, doneRunRecord);
+      await exportRunFeedMarkdownFiles(doneRunRecord);
       feedRunCacheRef.current[oneOffRunFileName] = normalizeRunRecord(doneRunRecord);
       setFeedPosts((prev) => [
         {
@@ -3315,10 +3337,71 @@ function App() {
     });
   }
 
+  function toSafeMarkdownToken(input: string, fallback: string) {
+    const normalized = String(input ?? "")
+      .trim()
+      .replace(/\s+/g, "-")
+      .replace(/[^a-zA-Z0-9._-]+/g, "-")
+      .replace(/-+/g, "-")
+      .replace(/^[-_.]+|[-_.]+$/g, "");
+    return normalized || fallback;
+  }
+
+  async function exportRunFeedMarkdownFiles(runRecord: RunRecord) {
+    const posts = Array.isArray(runRecord.feedPosts) ? runRecord.feedPosts : [];
+    if (posts.length === 0) {
+      return;
+    }
+    const nodeMap = new Map(runRecord.graphSnapshot.nodes.map((node) => [node.id, node]));
+    const failures: string[] = [];
+
+    for (let index = 0; index < posts.length; index += 1) {
+      const post = posts[index];
+      const markdownRaw =
+        feedRawAttachmentRef.current[feedAttachmentRawKey(post.id, "markdown")] ??
+        post.attachments.find((attachment) => attachment.kind === "markdown")?.content ??
+        "";
+      const content = String(markdownRaw ?? "").trim();
+      if (!content) {
+        continue;
+      }
+
+      const node = nodeMap.get(post.nodeId);
+      const nodeCwd =
+        node?.type === "turn"
+          ? resolveNodeCwd(String((node.config as TurnConfig)?.cwd ?? cwd), cwd)
+          : cwd;
+      const targetCwd = nodeCwd || cwd;
+      const nodeToken = toSafeMarkdownToken(post.nodeId, `node-${index + 1}`);
+      const roleToken = toSafeMarkdownToken(post.roleLabel || post.agentName || "agent", "agent");
+      const statusToken = toSafeMarkdownToken(post.status, "status");
+      const createdAtToken = toSafeMarkdownToken(
+        String(post.createdAt || runRecord.startedAt || new Date().toISOString()).replace(/[:]/g, "-"),
+        `time-${index + 1}`,
+      );
+      const fileName = `rail-${runRecord.runId}-${String(index + 1).padStart(2, "0")}-${nodeToken}-${roleToken}-${statusToken}-${createdAtToken}.md`;
+
+      try {
+        await invoke<string>("workspace_write_markdown", {
+          cwd: targetCwd,
+          name: fileName,
+          content,
+        });
+      } catch (error) {
+        failures.push(`${post.nodeId}: ${String(error)}`);
+      }
+    }
+
+    if (failures.length > 0) {
+      setError(`일부 Markdown 저장 실패 (${failures.length}개): ${failures[0]}`);
+    }
+  }
+
   async function saveRunRecord(runRecord: RunRecord) {
     const fileName = `run-${runRecord.runId}.json`;
     try {
       await persistRunRecordFile(fileName, runRecord);
+      await exportRunFeedMarkdownFiles(runRecord);
       setLastSavedRunFile(fileName);
       await refreshFeedTimeline();
     } catch (e) {
@@ -5329,6 +5412,7 @@ ${prompt}`;
   });
   const canResumeGraph = isGraphRunning && isGraphPaused;
   const isWorkflowBusy = (isGraphRunning && !isGraphPaused) || isRunStarting;
+  const canClearGraph = !isWorkflowBusy && (graph.nodes.length > 0 || graph.edges.length > 0);
   const canRunGraphNow =
     canResumeGraph || (!isWorkflowBusy && graph.nodes.length > 0 && workflowQuestion.trim().length > 0);
   const {
@@ -5564,6 +5648,7 @@ ${prompt}`;
               onNodeDragStart={onNodeDragStart}
               onOpenFeedFromNode={onOpenFeedFromNode}
               onOpenWebInputForNode={onOpenWebInputForNode}
+              onClearGraph={onClearGraphCanvas}
               onRedoGraph={onRedoGraph}
               onReopenPendingWebTurn={onReopenPendingWebTurn}
               onRunGraph={onRunGraph}
@@ -5586,6 +5671,7 @@ ${prompt}`;
               suspendedWebTurn={suspendedWebTurn}
               turnModelLabel={turnModelLabel}
               turnRoleLabel={turnRoleLabel}
+              canClearGraph={canClearGraph}
               undoStackLength={undoStack.length}
               workflowQuestion={workflowQuestion}
             />

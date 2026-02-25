@@ -69,6 +69,8 @@ type WorkflowCanvasPaneProps = {
   redoStackLength: number;
   onUndoGraph: () => void;
   onRedoGraph: () => void;
+  onClearGraph: () => void;
+  canClearGraph: boolean;
   isWorkflowBusy: boolean;
   setWorkflowQuestion: (value: string) => void;
   workflowQuestion: string;
@@ -133,6 +135,8 @@ export default function WorkflowCanvasPane({
   redoStackLength,
   onUndoGraph,
   onRedoGraph,
+  onClearGraph,
+  canClearGraph,
   isWorkflowBusy,
   setWorkflowQuestion,
   workflowQuestion,
@@ -391,6 +395,9 @@ export default function WorkflowCanvasPane({
             </button>
             <button aria-label={t("workflow.canvas.redo")} className="canvas-icon-btn" disabled={redoStackLength === 0} onClick={onRedoGraph} title={t("workflow.canvas.redo")} type="button">
               <img alt="" aria-hidden="true" className="canvas-icon-image" src="/canvas-replay.svg" />
+            </button>
+            <button aria-label={t("workflow.canvas.clear")} className="canvas-icon-btn" disabled={!canClearGraph} onClick={onClearGraph} title={t("workflow.canvas.clear")} type="button">
+              <img alt="" aria-hidden="true" className="canvas-icon-image" src="/erase.svg" />
             </button>
           </div>
         </div>

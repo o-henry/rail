@@ -7,34 +7,6 @@ type FeedPageProps = {
   vm: any;
 };
 
-const STRIP_FEED_SECTION_TITLES = [
-  "입력 출처",
-  "전달 입력 스냅샷",
-  "Input Sources",
-  "Input Source",
-  "Input Snapshot",
-  "Delivered Input Snapshot",
-  "入力ソース",
-  "入力スナップショット",
-  "输入来源",
-  "传递输入快照",
-];
-
-function stripDuplicatedInputSections(content: string): string {
-  const source = String(content ?? "");
-  if (!source) {
-    return source;
-  }
-  const titlePattern = STRIP_FEED_SECTION_TITLES.map((title) =>
-    title.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
-  ).join("|");
-  const sectionPattern = new RegExp(
-    `^##\\s*(?:${titlePattern})\\s*$[\\s\\S]*?(?=^##\\s|\\Z)`,
-    "gim",
-  );
-  return source.replace(sectionPattern, "").replace(/\n{3,}/g, "\n\n").trim();
-}
-
 class FeedCardBoundary extends Component<
   { children: ReactNode; postId: string; fallbackText: string },
   { hasError: boolean }
@@ -630,9 +602,7 @@ export default function FeedPage({ vm }: FeedPageProps) {
                               const markdownAttachment = attachments.find((attachment: any) => attachment?.kind === "markdown");
                               const visibleContentRaw =
                                 markdownAttachment?.content ?? post.summary ?? t("feed.attachment.empty");
-                              const visibleContent = stripDuplicatedInputSections(
-                                toHumanReadableFeedText(visibleContentRaw),
-                              );
+                              const visibleContent = toHumanReadableFeedText(visibleContentRaw);
                               const readableQuestion = toHumanReadableFeedText(post.question ?? "");
                               const readableInputPreview = toHumanReadableFeedText(post.inputContext?.preview ?? "");
                               const avatarHue = hashStringToHue(`${post.nodeId}:${post.agentName}:${post.roleLabel}`);

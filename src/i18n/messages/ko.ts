@@ -287,6 +287,7 @@ export const KO_MESSAGES: Dictionary = {
     "workflow.canvas.stop": "중지",
     "workflow.canvas.undo": "되돌리기",
     "workflow.canvas.redo": "다시하기",
+    "workflow.canvas.clear": "지우기",
     "workflow.canvas.reopenWebInput": "웹 입력 다시 열기",
     "workflow.canvas.reopenWebInputWindow": "웹 응답 입력 창 다시 열기",
     "workflow.question.placeholder": "질문 입력",

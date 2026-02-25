@@ -287,6 +287,7 @@ export const ZH_MESSAGES: Dictionary = {
     "workflow.canvas.stop": "停止",
     "workflow.canvas.undo": "撤销",
     "workflow.canvas.redo": "重做",
+    "workflow.canvas.clear": "清空",
     "workflow.canvas.reopenWebInput": "重新打开 Web 输入",
     "workflow.canvas.reopenWebInputWindow": "重新打开 Web 响应输入窗口",
     "workflow.question.placeholder": "输入问题",

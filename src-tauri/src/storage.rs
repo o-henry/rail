@@ -37,6 +37,22 @@ fn normalize_file_name(name: &str) -> Result<String, String> {
     }
 }
 
+fn normalize_markdown_file_name(name: &str) -> Result<String, String> {
+    let trimmed = name.trim();
+    if trimmed.is_empty() {
+        return Err("file name is required".to_string());
+    }
+    if trimmed.contains("..") || trimmed.contains('/') || trimmed.contains('\\') {
+        return Err("invalid file name".to_string());
+    }
+
+    if trimmed.ends_with(".md") {
+        Ok(trimmed.to_string())
+    } else {
+        Ok(format!("{trimmed}.md"))
+    }
+}
+
 fn list_json_files(app: &AppHandle, dir_name: &str) -> Result<Vec<String>, String> {
     let dir = ensure_subdir(app, dir_name)?;
     let mut files = Vec::new();
@@ -167,6 +183,25 @@ pub fn run_delete(app: AppHandle, name: String) -> Result<(), String> {
 pub fn run_directory(app: AppHandle) -> Result<String, String> {
     let dir = ensure_subdir(&app, "runs")?;
     Ok(dir.to_string_lossy().to_string())
+}
+
+#[tauri::command]
+pub fn workspace_write_markdown(cwd: String, name: String, content: String) -> Result<String, String> {
+    let cwd_trimmed = cwd.trim();
+    if cwd_trimmed.is_empty() {
+        return Err("cwd is required".to_string());
+    }
+    let path = PathBuf::from(cwd_trimmed);
+    let normalized_name = normalize_markdown_file_name(&name)?;
+
+    fs::create_dir_all(&path).map_err(|e| format!("failed to create workspace directory: {e}"))?;
+    if !path.is_dir() {
+        return Err("workspace path is not a directory".to_string());
+    }
+
+    let target = path.join(normalized_name);
+    fs::write(&target, content).map_err(|e| format!("failed to write markdown file: {e}"))?;
+    Ok(target.to_string_lossy().to_string())
 }
 
 #[tauri::command]

@@ -18,7 +18,7 @@ import {
   toHumanReadableFeedText,
   tryParseJsonText,
 } from "../features/workflow/promptUtils";
-import { clipTextByChars, formatFeedInputSourceLabel, normalizeFeedInputSources, redactSensitiveText, summarizeFeedSteps } from "../features/feed/displayUtils";
+import { formatFeedInputSourceLabel, normalizeFeedInputSources, redactSensitiveText, summarizeFeedSteps } from "../features/feed/displayUtils";
 import { FEED_REDACTION_RULE_VERSION } from "../features/feed/constants";
 import { graphEquals, turnModelLabel } from "../features/workflow/graph-utils";
 import {
@@ -221,8 +221,7 @@ export function buildFeedPost(input: any): {
   const summary = buildFeedSummary(input.status, input.output, input.error, input.summary);
   const inputSources = normalizeFeedInputSources(input.inputSources);
   const inputContextRaw = toHumanReadableFeedText(stringifyInput(input.inputData).trim());
-  const inputContextClip = inputContextRaw ? clipTextByChars(inputContextRaw, 1200) : null;
-  const inputContextMasked = inputContextClip ? redactSensitiveText(inputContextClip.text) : "";
+  const inputContextMasked = inputContextRaw ? redactSensitiveText(inputContextRaw) : "";
   const outputText = toHumanReadableFeedText(extractFeedOutputText(input.output));
   const logsText = logs.length > 0 ? logs.join("\n") : t("feed.logs.empty");
   const markdownRaw = [
@@ -260,11 +259,11 @@ export function buildFeedPost(input: any): {
       summary,
       steps,
       inputSources,
-      inputContext: inputContextClip
+      inputContext: inputContextRaw
         ? {
             preview: inputContextMasked,
-            charCount: inputContextClip.charCount,
-            truncated: inputContextClip.truncated,
+            charCount: inputContextRaw.length,
+            truncated: false,
           }
         : undefined,
       output: input.output ?? null,
@@ -286,7 +285,11 @@ export function buildFeedPost(input: any): {
     truncated: false,
     charCount: markdownRaw.length,
   };
-  const jsonClip = clipTextByChars(jsonRaw);
+  const jsonClip = {
+    text: jsonRaw,
+    truncated: false,
+    charCount: jsonRaw.length,
+  };
 
   const markdownMasked = redactSensitiveText(markdownClip.text);
   const jsonMasked = redactSensitiveText(jsonClip.text);
@@ -304,11 +307,11 @@ export function buildFeedPost(input: any): {
     summary,
     steps,
     inputSources,
-    inputContext: inputContextClip
+    inputContext: inputContextRaw
       ? {
           preview: inputContextMasked,
-          charCount: inputContextClip.charCount,
-          truncated: inputContextClip.truncated,
+          charCount: inputContextRaw.length,
+          truncated: false,
         }
       : undefined,
     evidence: {

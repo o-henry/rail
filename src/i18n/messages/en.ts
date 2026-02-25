@@ -287,6 +287,7 @@ export const EN_MESSAGES: Dictionary = {
     "workflow.canvas.stop": "Stop",
     "workflow.canvas.undo": "Undo",
     "workflow.canvas.redo": "Redo",
+    "workflow.canvas.clear": "Clear",
     "workflow.canvas.reopenWebInput": "Reopen web input",
     "workflow.canvas.reopenWebInputWindow": "Reopen web response input window",
     "workflow.question.placeholder": "Enter question",
