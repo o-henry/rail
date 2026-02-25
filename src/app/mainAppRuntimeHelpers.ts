@@ -173,13 +173,35 @@ export function buildFeedSummary(status: string, output: unknown, error?: string
   if (status !== "done" && status !== "low_quality") {
     return error?.trim() || t("feed.summary.failed");
   }
-  const outputText = toHumanReadableFeedText(
-    extractFinalAnswer(output).trim() || stringifyInput(output).trim(),
-  );
+  const outputText = toHumanReadableFeedText(extractFeedOutputText(output));
   if (!outputText) {
     return t("feed.summary.noText");
   }
   return outputText.length > 360 ? `${outputText.slice(0, 360)}...` : outputText;
+}
+
+function extractFeedOutputText(output: unknown): string {
+  const direct = extractFinalAnswer(output).trim();
+  if (direct) {
+    return direct;
+  }
+
+  const artifactPayload = getByPath(output, "artifact.payload");
+  if (typeof artifactPayload === "string") {
+    return artifactPayload.trim();
+  }
+  if (artifactPayload && typeof artifactPayload === "object") {
+    try {
+      return JSON.stringify(artifactPayload, null, 2);
+    } catch {
+      return stringifyInput(artifactPayload).trim();
+    }
+  }
+
+  if (typeof output === "string") {
+    return output.trim();
+  }
+  return "";
 }
 
 export function buildFeedPost(input: any): {
@@ -201,9 +223,7 @@ export function buildFeedPost(input: any): {
   const inputContextRaw = toHumanReadableFeedText(stringifyInput(input.inputData).trim());
   const inputContextClip = inputContextRaw ? clipTextByChars(inputContextRaw, 1200) : null;
   const inputContextMasked = inputContextClip ? redactSensitiveText(inputContextClip.text) : "";
-  const outputText = toHumanReadableFeedText(
-    extractFinalAnswer(input.output).trim() || stringifyInput(input.output).trim(),
-  );
+  const outputText = toHumanReadableFeedText(extractFeedOutputText(input.output));
   const logsText = logs.length > 0 ? logs.join("\n") : t("feed.logs.empty");
   const markdownRaw = [
     `# ${agentName}`,

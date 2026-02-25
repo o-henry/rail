@@ -80,24 +80,32 @@ function normalizeFlattenedStructuredText(input: string): string {
     "collectionOrder",
   ];
 
-  const matchedSignals = flattenedSignalKeys.filter((key) =>
-    new RegExp(`\\b${key}\\b`).test(source),
-  ).length;
+  const keyPattern = flattenedSignalKeys.join("|");
+  const keyValueMatches = source.match(new RegExp(`\\b(?:${keyPattern})\\s*:`, "g")) ?? [];
   const newlineCount = (source.match(/\n/g) ?? []).length;
   const longestLine = source
     .split("\n")
     .reduce((max, line) => Math.max(max, line.length), 0);
-  const looksFlattened = matchedSignals >= 3 && newlineCount <= 3 && longestLine >= 360;
+  const hasExplicitMarkdownStructure =
+    /(^|\n)\s*#{1,6}\s+\S/m.test(source) ||
+    /(^|\n)\s*[-*]\s+\S/m.test(source) ||
+    /(^|\n)\s*\d+\.\s+\S/m.test(source);
+  const looksFlattened =
+    keyValueMatches.length >= 4 &&
+    newlineCount <= 3 &&
+    longestLine >= 320 &&
+    !hasExplicitMarkdownStructure;
 
   if (!looksFlattened) {
     return source;
   }
 
   return source
-    .replace(/\s{2,}/g, " ")
+    .replace(/[ \t]{2,}/g, " ")
+    .replace(new RegExp(`\\s*(?:,|;|\\|)\\s*(?=(?:${keyPattern})\\s*:)`, "g"), "\n")
     .replace(
-      /\b(intent|userGoal|requiredOutputs|constraints|assumptions|researchPlan|acceptanceCriteria|riskChecklist|selfValidationPlan|templateIntent|webQueries|sources|collectionOrder|verificationRules)\b/g,
-      "\n$1",
+      new RegExp(`\\b(${keyPattern})\\s*:`, "g"),
+      "\n$1:",
     )
     .replace(/([^\n])\s-\s(?=\S)/g, "$1\n- ")
     .replace(/\n{3,}/g, "\n\n")
