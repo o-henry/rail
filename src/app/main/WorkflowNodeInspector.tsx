@@ -42,13 +42,13 @@ export default function WorkflowNodeInspector({
       {selectedNode.type === "turn" && (
         <section className="inspector-block form-grid">
           <InspectorSectionTitle
-            help="실행기, 모델, 역할, 프롬프트를 설정해 해당 에이전트의 동작을 정의합니다."
-            title="에이전트 설정"
+            help={t("workflow.inspector.agent.help")}
+            title={t("workflow.inspector.agent.title")}
           />
           <label>
-            에이전트
+            {t("feed.agent")}
             <FancySelect
-              ariaLabel="Turn 에이전트"
+              ariaLabel={t("feed.agent")}
               className="modern-select"
               onChange={(next) => updateSelectedNodeConfig("executor", next)}
               options={turnExecutorOptions.map((option) => ({
@@ -60,9 +60,9 @@ export default function WorkflowNodeInspector({
           </label>
           {selectedTurnExecutor === "codex" && (
             <label>
-              모델
+              {t("feed.model")}
               <FancySelect
-                ariaLabel="노드 모델"
+                ariaLabel={t("feed.model")}
                 className="modern-select"
                 onChange={(next) => updateSelectedNodeConfig("model", next)}
                 options={turnModelOptions.map((option) => ({ value: option, label: option }))}
@@ -72,17 +72,17 @@ export default function WorkflowNodeInspector({
           )}
           {selectedTurnExecutor === "ollama" && (
             <label>
-              Ollama 모델
+              {t("feed.ollamaModel")}
               <input
                 onChange={(e) => updateSelectedNodeConfig("ollamaModel", e.currentTarget.value)}
-                placeholder="예: llama3.1:8b"
+                placeholder={t("feed.ollamaPlaceholder")}
                 value={String((selectedNode.config as TurnConfig).ollamaModel ?? "llama3.1:8b")}
               />
             </label>
           )}
           {selectedTurnExecutor === "codex" && (
             <label>
-              작업 경로
+              {t("feed.cwd")}
               <input
                 className="lowercase-path-input"
                 onChange={(e) => updateSelectedNodeConfig("cwd", e.currentTarget.value)}
@@ -93,9 +93,9 @@ export default function WorkflowNodeInspector({
           {getWebProviderFromExecutor(selectedTurnExecutor) && (
             <>
               <label>
-                웹 결과 모드
+                {t("feed.webResultMode")}
                 <FancySelect
-                  ariaLabel="웹 결과 모드"
+                  ariaLabel={t("feed.webResultMode")}
                   className="modern-select"
                   onChange={(next) => updateSelectedNodeConfig("webResultMode", next)}
                   options={[
@@ -107,7 +107,7 @@ export default function WorkflowNodeInspector({
                 />
               </label>
               <label>
-                자동화 타임아웃(ms)
+                {t("feed.webTimeoutMs")}
                 <input
                   onChange={(e) =>
                     updateSelectedNodeConfig("webTimeoutMs", Number(e.currentTarget.value) || 180_000)
@@ -117,12 +117,12 @@ export default function WorkflowNodeInspector({
                 />
               </label>
               <div className="inspector-empty">
-                웹 연결 반자동은 질문 자동 주입/답변 자동 수집을 시도하고, 실패 시 수동 입력으로 폴백합니다.
+                {t("workflow.inspector.web.help")}
               </div>
             </>
           )}
           <label>
-            역할
+            {t("feed.role")}
             <input
               onChange={(e) => updateSelectedNodeConfig("role", e.currentTarget.value)}
               placeholder={turnRoleLabel(selectedNode)}
@@ -130,9 +130,9 @@ export default function WorkflowNodeInspector({
             />
           </label>
           <label>
-            첨부 참고 사용
+            {t("workflow.inspector.knowledgeEnabled")}
             <FancySelect
-              ariaLabel="첨부 참고 사용"
+              ariaLabel={t("workflow.inspector.knowledgeEnabled")}
               className="modern-select"
               onChange={(next) => updateSelectedNodeConfig("knowledgeEnabled", next === "true")}
               options={[
@@ -143,9 +143,9 @@ export default function WorkflowNodeInspector({
             />
           </label>
           <label>
-            품질 프로필
+            {t("feed.qualityProfile")}
             <FancySelect
-              ariaLabel="품질 프로필"
+              ariaLabel={t("feed.qualityProfile")}
               className="modern-select"
               onChange={(next) => updateSelectedNodeConfig("qualityProfile", next)}
               options={qualityProfileOptions}
@@ -153,9 +153,9 @@ export default function WorkflowNodeInspector({
             />
           </label>
           <label>
-            품질 통과 기준 점수
+            {t("feed.qualityThreshold")}
             <FancySelect
-              ariaLabel="품질 통과 기준 점수"
+              ariaLabel={t("feed.qualityThreshold")}
               className="modern-select"
               onChange={(next) => updateSelectedNodeConfig("qualityThreshold", normalizeQualityThreshold(next))}
               options={qualityThresholdOptions}
@@ -165,9 +165,9 @@ export default function WorkflowNodeInspector({
           {selectedQualityProfile === "code_implementation" && (
             <>
               <label>
-                로컬 품질 명령 실행
+                {t("feed.qualityCommand.enabled")}
                 <FancySelect
-                  ariaLabel="로컬 품질 명령 실행"
+                  ariaLabel={t("feed.qualityCommand.enabled")}
                   className="modern-select"
                   onChange={(next) => updateSelectedNodeConfig("qualityCommandEnabled", next === "true")}
                   options={[
@@ -178,7 +178,7 @@ export default function WorkflowNodeInspector({
                 />
               </label>
               <label>
-                품질 명령 목록(줄바꿈 구분)
+                {t("workflow.inspector.qualityCommands")}
                 <textarea
                   className="prompt-template-textarea"
                   onChange={(e) => updateSelectedNodeConfig("qualityCommands", e.currentTarget.value)}
@@ -190,9 +190,9 @@ export default function WorkflowNodeInspector({
           )}
           {!simpleWorkflowUI && (
             <label>
-              출력 형식(아티팩트)
+              {t("workflow.inspector.artifactType")}
               <FancySelect
-                ariaLabel="출력 형식(아티팩트)"
+                ariaLabel={t("workflow.inspector.artifactType")}
                 className="modern-select"
                 onChange={(next) => updateSelectedNodeConfig("artifactType", next)}
                 options={artifactTypeOptions}
@@ -201,7 +201,7 @@ export default function WorkflowNodeInspector({
             </label>
           )}
           <label>
-            출력 스키마(JSON, 선택)
+            {t("workflow.inspector.outputSchemaOptional")}
             <textarea
               className="prompt-template-textarea"
               onChange={(e) => updateSelectedNodeConfig("outputSchemaJson", e.currentTarget.value)}
@@ -210,7 +210,7 @@ export default function WorkflowNodeInspector({
             />
           </label>
           <label>
-            프롬프트 템플릿
+            {t("feed.promptTemplate")}
             <textarea
               className="prompt-template-textarea"
               onChange={(e) => updateSelectedNodeConfig("promptTemplate", e.currentTarget.value)}
@@ -224,13 +224,13 @@ export default function WorkflowNodeInspector({
       {!simpleWorkflowUI && selectedNode.type === "transform" && (
         <section className="inspector-block form-grid">
           <InspectorSectionTitle
-            help="앞 노드 결과를 읽기 쉬운 형태로 다시 정리하는 설정입니다. 쉽게 말해, 필요한 것만 꺼내거나, 고정 정보를 붙이거나, 문장 틀에 맞춰 다시 쓰는 역할입니다."
-            title="결과 정리 설정"
+            help={t("workflow.inspector.transform.help")}
+            title={t("workflow.inspector.transform.title")}
           />
           <label>
-            정리 방식
+            {t("workflow.inspector.transform.mode")}
             <FancySelect
-              ariaLabel="정리 방식"
+              ariaLabel={t("workflow.inspector.transform.mode")}
               className="modern-select"
               onChange={(next) => updateSelectedNodeConfig("mode", next)}
               options={[
@@ -242,26 +242,26 @@ export default function WorkflowNodeInspector({
             />
           </label>
           <label>
-            꺼낼 값 위치
+            {t("workflow.inspector.transform.pickPath")}
             <input
               onChange={(e) => updateSelectedNodeConfig("pickPath", e.currentTarget.value)}
-              placeholder="예: text 또는 result.finalDraft"
+              placeholder={t("workflow.inspector.transform.pickPathPlaceholder")}
               value={String((selectedNode.config as TransformConfig).pickPath ?? "")}
             />
           </label>
-          <div className="inspector-empty">예를 들어 `text`를 쓰면 결과에서 text 부분만 가져옵니다.</div>
+          <div className="inspector-empty">{t("workflow.inspector.transform.pickPathHelp")}</div>
           <label>
-            덧붙일 고정 정보(JSON)
+            {t("workflow.inspector.transform.mergeJson")}
             <textarea
               onChange={(e) => updateSelectedNodeConfig("mergeJson", e.currentTarget.value)}
-              placeholder='예: {"source":"web","priority":"high"}'
+              placeholder={t("workflow.inspector.transform.mergeJsonPlaceholder")}
               rows={3}
               value={String((selectedNode.config as TransformConfig).mergeJson ?? "{}")}
             />
           </label>
-          <div className="inspector-empty">예: {"`{\"출처\":\"웹조사\"}`"}를 넣으면 모든 결과에 같은 정보를 붙입니다.</div>
+          <div className="inspector-empty">{t("workflow.inspector.transform.mergeJsonHelp")}</div>
           <label>
-            문장 틀
+            {t("workflow.inspector.transform.template")}
             <textarea
               className="transform-template-textarea"
               onChange={(e) => updateSelectedNodeConfig("template", e.currentTarget.value)}
@@ -270,7 +270,7 @@ export default function WorkflowNodeInspector({
             />
           </label>
           <div className="inspector-empty">
-            {"`{{input}}`"} 자리에 이전 결과가 들어갑니다. 원하는 문장 형태로 바꿀 때 사용합니다.
+            {t("workflow.inspector.transform.templateHelp")}
           </div>
         </section>
       )}
@@ -278,58 +278,58 @@ export default function WorkflowNodeInspector({
       {!simpleWorkflowUI && selectedNode.type === "gate" && (
         <section className="inspector-block form-grid">
           <InspectorSectionTitle
-            help="이 노드는 결과를 보고 길을 나눕니다. DECISION 값이 PASS면 통과 경로로, REJECT면 재검토 경로로 보냅니다."
-            title="결정 나누기 설정"
+            help={t("workflow.inspector.gate.help")}
+            title={t("workflow.inspector.gate.title")}
           />
           <label>
-            판단값 위치(DECISION)
+            {t("workflow.inspector.gate.decisionPath")}
             <input
               onChange={(e) => updateSelectedNodeConfig("decisionPath", e.currentTarget.value)}
               value={String((selectedNode.config as GateConfig).decisionPath ?? "DECISION")}
             />
           </label>
-          <div className="inspector-empty">보통 `DECISION`을 사용합니다. 값은 PASS 또는 REJECT(대문자)여야 합니다.</div>
+          <div className="inspector-empty">{t("workflow.inspector.gate.decisionPathHelp")}</div>
           <label>
-            통과(PASS) 다음 노드
+            {t("workflow.inspector.gate.passNext")}
             <FancySelect
-              ariaLabel="통과 다음 노드"
+              ariaLabel={t("workflow.inspector.gate.passNext")}
               className="modern-select"
               onChange={(next) => updateSelectedNodeConfig("passNodeId", next)}
               options={[{ value: "", label: t("common.none") }, ...outgoingNodeOptions]}
               value={String((selectedNode.config as GateConfig).passNodeId ?? "")}
             />
           </label>
-          <div className="inspector-empty">결과가 좋으면(통과) 어디로 보낼지 선택합니다.</div>
+          <div className="inspector-empty">{t("workflow.inspector.gate.passHelp")}</div>
           <label>
-            재검토(REJECT) 다음 노드
+            {t("workflow.inspector.gate.rejectNext")}
             <FancySelect
-              ariaLabel="재검토 다음 노드"
+              ariaLabel={t("workflow.inspector.gate.rejectNext")}
               className="modern-select"
               onChange={(next) => updateSelectedNodeConfig("rejectNodeId", next)}
               options={[{ value: "", label: t("common.none") }, ...outgoingNodeOptions]}
               value={String((selectedNode.config as GateConfig).rejectNodeId ?? "")}
             />
           </label>
-          <div className="inspector-empty">결과가 부족하면(재검토) 어디로 보낼지 선택합니다.</div>
+          <div className="inspector-empty">{t("workflow.inspector.gate.rejectHelp")}</div>
           <label>
-            결과 형식 검사(선택)
+            {t("workflow.inspector.gate.schemaOptional")}
             <textarea
               onChange={(e) => updateSelectedNodeConfig("schemaJson", e.currentTarget.value)}
               rows={4}
               value={String((selectedNode.config as GateConfig).schemaJson ?? "")}
             />
           </label>
-          <div className="inspector-empty">고급 옵션입니다. 결과가 원하는 형식인지 자동 검사할 때만 사용하세요.</div>
+          <div className="inspector-empty">{t("workflow.inspector.gate.schemaHelp")}</div>
         </section>
       )}
 
       {simpleWorkflowUI && selectedNode.type !== "turn" && (
         <section className="inspector-block form-grid">
           <InspectorSectionTitle
-            help="이 노드는 시스템이 내부적으로 사용하는 자동 처리 노드입니다."
-            title="내부 처리 노드"
+            help={t("workflow.inspector.internal.help")}
+            title={t("workflow.inspector.internal.title")}
           />
-          <div className="inspector-empty">단순 모드에서는 이 노드 설정을 직접 편집하지 않습니다.</div>
+          <div className="inspector-empty">{t("workflow.inspector.internal.readonly")}</div>
         </section>
       )}
     </>

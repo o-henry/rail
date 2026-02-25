@@ -33,7 +33,7 @@ class FeedCardBoundary extends Component<
 }
 
 export default function FeedPage({ vm }: FeedPageProps) {
-  const { t } = useI18n();
+  const { t, tp } = useI18n();
   const {
     feedInspectorTurnNode,
     feedInspectorPost,
@@ -531,7 +531,7 @@ export default function FeedPage({ vm }: FeedPageProps) {
                       >
                         <header className="feed-run-group-head">
                           <div className="feed-run-group-meta">
-                            <strong>{group.name}</strong>
+                            <strong>{tp(group.name)}</strong>
                             <span>
                               {t("feed.countAndDate", {
                                 count: group.posts.length,
@@ -698,7 +698,9 @@ export default function FeedPage({ vm }: FeedPageProps) {
                                       </div>
                                     </div>
                                   </div>
-                                  <div className="feed-card-summary">{post.summary || t("feed.summary.empty")}</div>
+                                  <div className="feed-card-summary">
+                                    {post.summary ? tp(post.summary) : t("feed.summary.empty")}
+                                  </div>
                                   <button
                                     className="feed-more-button"
                                     aria-expanded={isExpanded}

@@ -284,24 +284,20 @@ export default function WorkflowCanvasPane({
                           </div>
                         )}
                       </div>
-                      <button onClick={() => deleteNode(node.id)} type="button">삭제</button>
+                      <button onClick={() => deleteNode(node.id)} type="button">{t("common.delete")}</button>
                     </div>
                     <div className="node-body">
                       {nodeSummary ? <div className="node-summary-row"><div>{nodeSummary}</div></div> : null}
                       <div className="node-runtime-meta">
-                        <div>완료 여부: {nodeStatus === "done" ? "완료" : nodeStatus === "failed" ? "오류" : nodeStatus === "cancelled" ? "정지" : "대기"}</div>
-                        <div>생성 시간: {formatNodeElapsedTime(runState, runtimeNowMs)}</div>
-                        <div>사용량: {formatUsage(runState?.usage)}</div>
+                        <div>{t("workflow.node.completion")}: {nodeStatus === "done" ? t("label.status.done") : nodeStatus === "failed" ? t("label.status.failed") : nodeStatus === "cancelled" ? t("label.status.cancelled") : t("label.status.idle")}</div>
+                        <div>{t("workflow.node.elapsed")}: {formatNodeElapsedTime(runState, runtimeNowMs)}</div>
+                        <div>{t("feed.usage")}: {formatUsage(runState?.usage)}</div>
                       </div>
-                      <button className="node-feed-link" onClick={() => onOpenFeedFromNode(node.id)} type="button">
-                        {t("workflow.node.outputInFeed")}
-                      </button>
+                      <button className="node-feed-link" onClick={() => onOpenFeedFromNode(node.id)} type="button">{t("workflow.node.outputInFeed")}</button>
                     </div>
                     <div className="node-wait-slot">
                       <span className={`status-pill status-${nodeStatus}`}>{nodeStatusLabel(nodeStatus)}</span>
-                      {receivesQuestionDirectly && (
-                        <span className="node-input-chip"><span className="node-input-chip-text">{t("workflow.node.inputDirect")}</span></span>
-                      )}
+                      {receivesQuestionDirectly && <span className="node-input-chip"><span className="node-input-chip-text">{t("workflow.node.inputDirect")}</span></span>}
                     </div>
                     {showNodeAnchors && (
                       <div className="node-anchors">

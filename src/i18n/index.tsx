@@ -51,7 +51,7 @@ export function tp(phraseKo: string, vars?: Record<string, string | number>, loc
     if (locale === "en") {
       return `${points[1]} pts`;
     }
-    if (locale === "ja") {
+    if (locale === "jp") {
       return `${points[1]}点`;
     }
     return `${points[1]}分`;
@@ -61,7 +61,7 @@ export function tp(phraseKo: string, vars?: Record<string, string | number>, loc
     if (locale === "en") {
       return `${count[1]} items`;
     }
-    if (locale === "ja") {
+    if (locale === "jp") {
       return `${count[1]}件`;
     }
     return `${count[1]}项`;
@@ -89,11 +89,14 @@ const I18nContext = createContext<I18nContextValue>({
   tp: (phrase, vars) => renderTemplate(phrase, vars),
 });
 
-const LOCALE_ORDER: AppLocale[] = ["ko", "en", "ja", "zh"];
+const LOCALE_ORDER: AppLocale[] = ["ko", "en", "jp", "zh"];
 
 function normalizeLocale(input: unknown): AppLocale {
-  if (input === "ko" || input === "en" || input === "ja" || input === "zh") {
+  if (input === "ko" || input === "en" || input === "jp" || input === "zh") {
     return input;
+  }
+  if (input === "ja") {
+    return "jp";
   }
   return "ko";
 }
@@ -110,7 +113,7 @@ export function I18nProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     setCurrentLocale(locale);
     if (typeof document !== "undefined") {
-      document.documentElement.lang = locale;
+      document.documentElement.lang = locale === "jp" ? "ja" : locale;
       document.documentElement.setAttribute("data-locale", locale);
     }
     try {
@@ -147,8 +150,8 @@ export function localeShortLabel(locale: AppLocale): string {
   if (locale === "en") {
     return "EN";
   }
-  if (locale === "ja") {
-    return "JA";
+  if (locale === "jp") {
+    return "JP";
   }
   return "ZH";
 }

@@ -8,7 +8,7 @@ import type { AppLocale, Dictionary } from "./types";
 export const MESSAGES: Record<AppLocale, Dictionary> = {
   ko: KO_MESSAGES,
   en: EN_MESSAGES,
-  ja: JA_MESSAGES,
+  jp: JA_MESSAGES,
   zh: ZH_MESSAGES,
 };
 

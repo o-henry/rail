@@ -94,13 +94,13 @@ html[data-locale="en"] {
   --ui-letter-spacing: -0.7px;
 }
 
-html[data-locale="ja"] {
+html[data-locale="jp"] {
   --ui-font-stack: var(--font-stack-ja);
   --ui-letter-spacing: -0.7px;
 }
 
 html[data-locale="en"] :where(*):not(svg):not(path):not(img),
-html[data-locale="ja"] :where(*):not(svg):not(path):not(img) {
+html[data-locale="jp"] :where(*):not(svg):not(path):not(img) {
   font-family: var(--ui-font-stack) !important;
   letter-spacing: var(--ui-letter-spacing);
 }

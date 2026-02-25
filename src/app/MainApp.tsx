@@ -1380,7 +1380,7 @@ function App() {
           question: post.question ?? workflowQuestion,
           startedAt,
           finishedAt,
-          workflowGroupName: "사용자 추가 요청",
+          workflowGroupName: t("group.followup"),
           workflowGroupKind: "custom",
           graphSnapshot: {
             version: GRAPH_SCHEMA_VERSION,
@@ -1465,7 +1465,7 @@ function App() {
         question: post.question ?? workflowQuestion,
         startedAt,
         finishedAt,
-        workflowGroupName: "사용자 추가 요청",
+        workflowGroupName: t("group.followup"),
         workflowGroupKind: "custom",
         finalAnswer: extractFinalAnswer(effectiveOutput),
         graphSnapshot: {
@@ -5280,7 +5280,7 @@ ${prompt}`;
             finishedAt: finishedAtIso,
             durationMs: Date.now() - startedAtMs,
           });
-          setNodeStatus(nodeId, "done", "턴 실행 완료");
+          setNodeStatus(nodeId, "done", t("run.turnCompleted"));
           runRecord.threadTurnMap[nodeId] = {
             threadId: result.threadId,
             turnId: result.turnId,
@@ -5292,15 +5292,15 @@ ${prompt}`;
             status: "done",
             startedAt: startedAtIso,
             finishedAt: finishedAtIso,
-            summary: "턴 실행 완료",
+            summary: t("run.turnCompleted"),
           });
-          transition(runRecord, nodeId, "done", "턴 실행 완료");
+          transition(runRecord, nodeId, "done", t("run.turnCompleted"));
           const doneFeed = buildFeedPost({
             runId: runRecord.runId,
             node,
             status: "done",
             createdAt: finishedAtIso,
-            summary: "턴 실행 완료",
+            summary: t("run.turnCompleted"),
             logs: runLogCollectorRef.current[nodeId] ?? [],
             output: normalizedOutput,
             durationMs: Date.now() - startedAtMs,

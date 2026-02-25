@@ -137,8 +137,8 @@ export function buildFeedPost(input: any): {
     input.node.type === "turn"
       ? turnModelLabel(input.node)
       : input.node.type === "transform"
-        ? "데이터 변환"
-        : "결정 분기";
+        ? t("label.node.transform")
+        : t("label.node.gate");
   const logs = input.logs ?? [];
   const steps = summarizeFeedSteps(logs);
   const summary = buildFeedSummary(input.status, input.output, input.error, input.summary);

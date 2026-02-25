@@ -1,4 +1,4 @@
-export type AppLocale = "ko" | "en" | "ja" | "zh";
+export type AppLocale = "ko" | "en" | "jp" | "zh";
 
 export type Dictionary = Record<string, string>;
 
