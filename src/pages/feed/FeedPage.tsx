@@ -501,22 +501,6 @@ export default function FeedPage({ vm }: FeedPageProps) {
                         <header className="feed-run-group-head">
                           <div className="feed-run-group-meta">
                             <div className="feed-run-group-title-row">
-                              {group.kind === "custom" && !group.isLive && (
-                                <button
-                                  aria-label={t("feed.group.delete")}
-                                  className="feed-group-delete-icon-button"
-                                  onClick={() =>
-                                    setDeleteGroupTarget({
-                                      runId: group.runId,
-                                      sourceFile: group.sourceFile,
-                                      name: String(group.name ?? ""),
-                                    })
-                                  }
-                                  type="button"
-                                >
-                                  <img alt="" aria-hidden="true" className="feed-delete-icon" src="/xmark.svg" />
-                                </button>
-                              )}
                               <strong>{tp(group.name)}</strong>
                             </div>
                             <span>
@@ -528,6 +512,21 @@ export default function FeedPage({ vm }: FeedPageProps) {
                             </span>
                           </div>
                           <div className="feed-run-group-actions">
+                            {group.kind === "custom" && !isRenamingGroup && !group.isLive && (
+                              <button
+                                className="feed-run-group-delete"
+                                onClick={() =>
+                                  setDeleteGroupTarget({
+                                    runId: group.runId,
+                                    sourceFile: group.sourceFile,
+                                    name: String(group.name ?? ""),
+                                  })
+                                }
+                                type="button"
+                              >
+                                {t("feed.group.delete")}
+                              </button>
+                            )}
                             {group.kind === "custom" && !isRenamingGroup && !group.isLive && (
                               <button
                                 className="feed-run-group-rename"

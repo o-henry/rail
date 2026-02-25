@@ -1111,18 +1111,18 @@ h3 {
 }
 
 .node-manual-web-input-button {
-  min-height: 22px;
-  height: 22px;
+  min-height: 0;
+  height: auto;
   padding: 0 8px;
-  border-radius: 3px;
-  background: #eef2f7;
+  border-radius: 2px;
+  background: #edf2f6;
   color: #2f3b49;
-  font-size: 0.66rem;
-  line-height: 1;
+  font-size: 0.72rem;
+  line-height: 1.2;
 }
 
 .node-manual-web-input-button:hover {
-  background: #e7edf5;
+  background: #e3e9ee;
 }
 
 .node-summary-row {
@@ -2171,7 +2171,7 @@ h3 {
 
 .feed-agent-settings-grid {
   display: grid;
-  gap: 12px;
+  gap: 16px;
 }
 
 .feed-agent-settings-grid label {
@@ -2582,26 +2582,6 @@ h3 {
   color: #0f1419;
 }
 
-.feed-group-delete-icon-button {
-  width: 44px;
-  min-width: 44px;
-  height: 44px;
-  min-height: 44px;
-  padding: 0;
-  border-radius: 4px;
-  border: 1px solid #e45a5a;
-  color: #e45a5a;
-  background: #ffffff;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: none;
-}
-
-.feed-group-delete-icon-button:hover {
-  background: #fff1f1;
-}
-
 .feed-run-group-meta span {
   font-size: 12px;
   color: #657285;
@@ -2628,6 +2608,10 @@ h3 {
 
 .feed-run-group-toggle {
   background: #f2f5f9;
+}
+
+.feed-run-group-delete {
+  font-size: 9px !important;
 }
 
 .feed-run-group-rename {

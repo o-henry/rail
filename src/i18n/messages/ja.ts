@@ -108,7 +108,7 @@ export const JA_MESSAGES: Dictionary = {
     "feed.summary.noText": "実行は完了しましたが、表示する結果テキストがありません。",
     "feed.attachment.empty": "（添付なし）",
     "feed.post.delete": "投稿を削除",
-    "feed.group.delete": "セット削除",
+    "feed.group.delete": "削除",
     "feed.group.deleteTitle": "フィードセットを削除",
     "feed.group.deleteMessage": "「{name}」セットを本当に削除しますか？この操作は取り消せません。",
     "feed.agent.working": "エージェント作業中",

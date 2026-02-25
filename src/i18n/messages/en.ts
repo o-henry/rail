@@ -108,7 +108,7 @@ export const EN_MESSAGES: Dictionary = {
     "feed.summary.noText": "Execution completed, but no result text is available.",
     "feed.attachment.empty": "(No attachment)",
     "feed.post.delete": "Delete post",
-    "feed.group.delete": "Delete set",
+    "feed.group.delete": "Delete",
     "feed.group.deleteTitle": "Delete feed set",
     "feed.group.deleteMessage": "Delete '{name}' set? This action cannot be undone.",
     "feed.agent.working": "Agent is working",

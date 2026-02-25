@@ -108,7 +108,7 @@ export const KO_MESSAGES: Dictionary = {
     "feed.summary.noText": "실행은 완료되었지만 표시할 결과 텍스트가 없습니다.",
     "feed.attachment.empty": "(첨부 없음)",
     "feed.post.delete": "포스트 삭제",
-    "feed.group.delete": "세트 삭제",
+    "feed.group.delete": "삭제",
     "feed.group.deleteTitle": "피드 세트 삭제",
     "feed.group.deleteMessage": "'{name}' 세트를 정말 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.",
     "feed.agent.working": "에이전트 작업 중",

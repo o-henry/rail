@@ -108,7 +108,7 @@ export const ZH_MESSAGES: Dictionary = {
     "feed.summary.noText": "执行已完成，但没有可显示的结果文本。",
     "feed.attachment.empty": "（无附件）",
     "feed.post.delete": "删除帖子",
-    "feed.group.delete": "删除集合",
+    "feed.group.delete": "删除",
     "feed.group.deleteTitle": "删除 Feed 集合",
     "feed.group.deleteMessage": "确认删除“{name}”集合吗？此操作无法撤销。",
     "feed.agent.working": "代理执行中",
