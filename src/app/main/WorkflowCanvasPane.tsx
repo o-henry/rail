@@ -51,7 +51,6 @@ type WorkflowCanvasPaneProps = {
   onOpenFeedFromNode: (nodeId: string) => void;
   runtimeNowMs: number;
   formatNodeElapsedTime: (state: NodeRunState | undefined, nowMs: number) => string;
-  formatUsage: (usage: NodeRunState["usage"]) => string;
   marqueeSelection: MarqueeSelection | null;
   onCanvasZoomIn: () => void;
   onCanvasZoomOut: () => void;
@@ -116,7 +115,6 @@ export default function WorkflowCanvasPane({
   onOpenFeedFromNode,
   runtimeNowMs,
   formatNodeElapsedTime,
-  formatUsage,
   marqueeSelection,
   onCanvasZoomIn,
   onCanvasZoomOut,
@@ -295,7 +293,6 @@ export default function WorkflowCanvasPane({
                       <div className="node-runtime-meta">
                         <div>{t("workflow.node.completion")}: {nodeStatus === "done" ? t("label.status.done") : nodeStatus === "failed" ? t("label.status.failed") : nodeStatus === "cancelled" ? t("label.status.cancelled") : t("label.status.idle")}</div>
                         <div>{t("workflow.node.elapsed")}: {formatNodeElapsedTime(runState, runtimeNowMs)}</div>
-                        <div>{t("feed.usage")}: {formatUsage(runState?.usage)}</div>
                       </div>
                       <button className="node-feed-link" onClick={() => onOpenFeedFromNode(node.id)} type="button">{t("workflow.node.outputInFeed")}</button>
                     </div>

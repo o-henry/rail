@@ -6143,7 +6143,6 @@ ${prompt}`;
               draggingNodeIds={draggingNodeIds}
               edgeLines={edgeLines}
               formatNodeElapsedTime={formatNodeElapsedTime}
-              formatUsage={formatUsage}
               graphCanvasRef={graphCanvasRef}
               isConnectingDrag={isConnectingDrag}
               isGraphRunning={isGraphRunning}
