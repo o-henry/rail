@@ -201,6 +201,8 @@ export const ZH_MESSAGES: Dictionary = {
     "group.custom": "自定义",
     "group.followup": "用户追加请求",
     "run.turnCompleted": "轮次执行完成",
+    "run.cancelledByUser": "执行已因用户停止请求而取消。",
+    "run.cancelledByUserShort": "用户取消",
     "option.knowledge.short": "较短（更快）",
     "option.knowledge.normal": "标准（平衡）",
     "option.knowledge.long": "较长（更精细）",

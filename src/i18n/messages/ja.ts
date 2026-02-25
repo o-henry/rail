@@ -201,6 +201,8 @@ export const JA_MESSAGES: Dictionary = {
     "group.custom": "カスタム",
     "group.followup": "ユーザー追加リクエスト",
     "run.turnCompleted": "ターン実行完了",
+    "run.cancelledByUser": "ユーザーの停止要求により実行がキャンセルされました。",
+    "run.cancelledByUserShort": "ユーザーによりキャンセル",
     "option.knowledge.short": "短め（高速）",
     "option.knowledge.normal": "標準（バランス）",
     "option.knowledge.long": "長め（高精度）",

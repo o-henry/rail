@@ -201,6 +201,8 @@ export const KO_MESSAGES: Dictionary = {
     "group.custom": "사용자 정의",
     "group.followup": "사용자 추가 요청",
     "run.turnCompleted": "턴 실행 완료",
+    "run.cancelledByUser": "사용자 중지 요청으로 실행이 취소되었습니다.",
+    "run.cancelledByUserShort": "사용자 취소",
     "option.knowledge.short": "짧게 (빠름)",
     "option.knowledge.normal": "보통 (균형)",
     "option.knowledge.long": "길게 (정밀)",

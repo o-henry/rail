@@ -2572,7 +2572,7 @@ h3 {
 .feed-run-group-title-row {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
 }
 
 .feed-run-group-meta strong {
@@ -2583,17 +2583,18 @@ h3 {
 }
 
 .feed-group-delete-icon-button {
-  width: 28px;
-  min-width: 28px;
-  height: 28px;
-  min-height: 28px;
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
+  min-height: 44px;
   padding: 0;
-  border-radius: 999px;
-  border: 2px solid #e45a5a;
+  border-radius: 4px;
+  border: 1px solid #e45a5a;
   color: #e45a5a;
   background: #ffffff;
-  display: inline-grid;
-  place-items: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   box-shadow: none;
 }
 

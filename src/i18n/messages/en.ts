@@ -201,6 +201,8 @@ export const EN_MESSAGES: Dictionary = {
     "group.custom": "Custom",
     "group.followup": "User Follow-up",
     "run.turnCompleted": "Turn completed",
+    "run.cancelledByUser": "Execution was cancelled by user stop request.",
+    "run.cancelledByUserShort": "Cancelled by user",
     "option.knowledge.short": "Short (Fast)",
     "option.knowledge.normal": "Normal (Balanced)",
     "option.knowledge.long": "Long (Precise)",

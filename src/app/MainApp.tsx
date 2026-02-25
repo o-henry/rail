@@ -2185,7 +2185,7 @@ function App() {
   }
 
   function onCancelPendingWebTurn() {
-    resolvePendingWebTurn({ ok: false, error: "사용자 취소" });
+    resolvePendingWebTurn({ ok: false, error: t("run.cancelledByUserShort") });
   }
 
   async function onRespondApproval(decision: ApprovalDecision) {
@@ -3624,7 +3624,7 @@ ${prompt}`;
             if (cancelRequestedRef.current || result?.errorCode === "CANCELLED") {
               return {
                 ok: false,
-                error: "사용자 취소",
+                error: t("run.cancelledByUserShort"),
                 executor,
                 provider: webProvider,
                 knowledgeTrace,
@@ -3668,7 +3668,7 @@ ${prompt}`;
             if (cancelRequestedRef.current) {
               return {
                 ok: false,
-                error: "사용자 취소",
+                error: t("run.cancelledByUserShort"),
                 executor,
                 provider: webProvider,
                 knowledgeTrace,
@@ -4149,7 +4149,7 @@ ${prompt}`;
             node,
             status: "cancelled",
             createdAt: cancelledAt,
-            summary: "사용자 중지 요청으로 실행이 취소되었습니다.",
+            summary: t("run.cancelledByUser"),
             logs: runLogCollectorRef.current[nodeId] ?? [],
             inputSources: nodeInputSources,
             inputData: nodeInput,
@@ -4755,13 +4755,13 @@ ${prompt}`;
     }
 
     if (pendingWebTurn) {
-      clearQueuedWebTurnRequests("사용자 취소");
-      resolvePendingWebTurn({ ok: false, error: "사용자 취소" });
+      clearQueuedWebTurnRequests(t("run.cancelledByUserShort"));
+      resolvePendingWebTurn({ ok: false, error: t("run.cancelledByUserShort") });
       return;
     }
     if (suspendedWebTurn) {
-      clearQueuedWebTurnRequests("사용자 취소");
-      resolvePendingWebTurn({ ok: false, error: "사용자 취소" });
+      clearQueuedWebTurnRequests(t("run.cancelledByUserShort"));
+      resolvePendingWebTurn({ ok: false, error: t("run.cancelledByUserShort") });
       return;
     }
 
