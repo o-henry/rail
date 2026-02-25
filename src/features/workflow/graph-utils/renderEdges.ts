@@ -200,10 +200,11 @@ export function buildCanvasEdgeLines(params: BuildCanvasEdgeLinesParams): Canvas
       const toSize = getNodeVisualSize(toNode.id);
       const auto = getAutoConnectionSides(fromNode, toNode, fromSize, toSize);
       const hasManualControl = false;
+      const hasExplicitSides = Boolean(edge.from.side || edge.to.side);
       const bundledFromSide = bundledFromSideByNodeId.get(fromNode.id);
       const bundledToSide = bundledToSideByNodeId.get(toNode.id);
-      const resolvedFromSide = bundledFromSide ?? edge.from.side ?? auto.fromSide;
-      const resolvedToSide = bundledToSide ?? edge.to.side ?? auto.toSide;
+      const resolvedFromSide = edge.from.side ?? bundledFromSide ?? auto.fromSide;
+      const resolvedToSide = edge.to.side ?? bundledToSide ?? auto.toSide;
       let fromPoint = bundledFromSide
         ? (bundledFromAnchorByNodeId.get(fromNode.id) ??
           snapPoint(getNodeAnchorPoint(fromNode, resolvedFromSide, fromSize)))
@@ -217,7 +218,7 @@ export function buildCanvasEdgeLines(params: BuildCanvasEdgeLinesParams): Canvas
       const fromVertical = !fromHorizontal;
       const toVertical = !toHorizontal;
 
-      if (!hasManualControl && !bundledFromSide && !bundledToSide) {
+      if (!hasManualControl && !hasExplicitSides && !bundledFromSide && !bundledToSide) {
         // Single edge: force source-lane alignment to avoid diagonal endpoint drift.
         if (fromHorizontal && toHorizontal) {
           const toMinY = toNode.position.y + SIDE_EDGE_PADDING;
@@ -250,7 +251,7 @@ export function buildCanvasEdgeLines(params: BuildCanvasEdgeLinesParams): Canvas
       const edgeKey = entry.edgeKey;
       const defaultControl = edgeMidPoint(fromPoint, toPoint);
       const control = defaultControl;
-      const hasBundledRouting = !hasManualControl && Boolean(bundledFromSide || bundledToSide);
+      const hasBundledRouting = !hasManualControl && !hasExplicitSides && Boolean(bundledFromSide || bundledToSide);
 
       let path: string;
       if (hasBundledRouting && fromHorizontal && toHorizontal) {

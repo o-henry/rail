@@ -344,7 +344,7 @@ export function alignAutoEdgePoints(
   const fromVertical = !fromHorizontal;
   const toVertical = !toHorizontal;
 
-  if (fromHorizontal && toHorizontal) {
+  if (fromHorizontal && toHorizontal && fromSide !== toSide) {
     const deltaY = Math.abs(fromPoint.y - toPoint.y);
     if (deltaY <= AUTO_EDGE_STRAIGHTEN_THRESHOLD) {
       const fromCenterY = fromNode.position.y + fromSize.height / 2;
@@ -357,7 +357,7 @@ export function alignAutoEdgePoints(
     }
   }
 
-  if (fromVertical && toVertical) {
+  if (fromVertical && toVertical && fromSide !== toSide) {
     const deltaX = Math.abs(fromPoint.x - toPoint.x);
     if (deltaX <= AUTO_EDGE_STRAIGHTEN_THRESHOLD) {
       const fromCenterX = fromNode.position.x + fromSize.width / 2;
