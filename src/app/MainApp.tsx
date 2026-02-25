@@ -4,6 +4,7 @@ import {
   WheelEvent as ReactWheelEvent,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import "../App.css";
@@ -272,6 +273,7 @@ function App() {
     providers: WebProvider[];
     reason: string;
   } | null>(null);
+  const manualInputWaitNoticeByNodeRef = useRef<Record<string, boolean>>({});
 
   const [cwd, setCwd] = useState(defaultCwd);
   const [model, setModel] = useState<string>(DEFAULT_TURN_MODEL);
@@ -2143,6 +2145,13 @@ function App() {
     if (!pendingWebTurn) {
       return;
     }
+    if (!webTurnResolverRef.current) {
+      if (!manualInputWaitNoticeByNodeRef.current[pendingWebTurn.nodeId]) {
+        manualInputWaitNoticeByNodeRef.current[pendingWebTurn.nodeId] = true;
+        setStatus("자동 수집 중단 처리 중입니다. 잠시 후 '입력 완료'를 다시 눌러주세요.");
+      }
+      return;
+    }
     const normalized = normalizeWebTurnOutput(
       pendingWebTurn.provider,
       pendingWebTurn.mode,
@@ -2229,11 +2238,63 @@ function App() {
       WEB_PROVIDER_OPTIONS.find((provider) => activeWebNodeByProviderRef.current[provider] === nodeId);
     if (activeProvider) {
       manualWebFallbackNodeRef.current[nodeId] = true;
-      setStatus(`${webProviderLabel(activeProvider)} 자동 수집을 중단하고 수동 입력으로 전환합니다.`);
+      delete manualInputWaitNoticeByNodeRef.current[nodeId];
+      const prompt = activeWebPromptByNodeRef.current[nodeId] ?? activeWebPromptRef.current[activeProvider] ?? "";
+      if (!pendingWebTurn && !suspendedWebTurn) {
+        setWebResponseDraft("");
+        setPendingWebTurn({
+          nodeId,
+          provider: activeProvider,
+          prompt,
+          mode: "manualPasteText",
+        });
+        webTurnPanel.setPosition({
+          x: WEB_TURN_FLOATING_DEFAULT_X,
+          y: WEB_TURN_FLOATING_DEFAULT_Y,
+        });
+        setStatus(`${webProviderLabel(activeProvider)} 수동 입력 창을 열고 자동 수집 중단을 요청했습니다.`);
+      } else {
+        setStatus(`${webProviderLabel(activeProvider)} 자동 수집 중단을 요청했습니다. 수동 입력 창에서 입력을 계속하세요.`);
+      }
       return;
     }
 
-    setStatus("현재 해당 WEB 노드의 수동 입력 대기 항목이 없습니다.");
+    const targetNode = graph.nodes.find((node) => node.id === nodeId);
+    if (targetNode?.type !== "turn") {
+      setStatus("현재 해당 WEB 노드의 수동 입력 대기 항목이 없습니다.");
+      return;
+    }
+    const provider = getWebProviderFromExecutor(getTurnExecutor(targetNode.config as TurnConfig));
+    if (!provider) {
+      setStatus("현재 해당 WEB 노드의 수동 입력 대기 항목이 없습니다.");
+      return;
+    }
+
+    const template = injectOutputLanguageDirective(
+      String((targetNode.config as TurnConfig).promptTemplate ?? "{{input}}"),
+      locale,
+    );
+    const directInput = workflowQuestion.trim();
+    const prompt =
+      activeWebPromptByNodeRef.current[nodeId] ??
+      activeWebPromptRef.current[provider] ??
+      (template.includes("{{input}}")
+        ? replaceInputPlaceholder(template, directInput)
+        : `${template}${directInput ? `\n${directInput}` : ""}`.trim()) ??
+      "";
+
+    setWebResponseDraft("");
+    setPendingWebTurn({
+      nodeId,
+      provider,
+      prompt,
+      mode: "manualPasteText",
+    });
+    webTurnPanel.setPosition({
+      x: WEB_TURN_FLOATING_DEFAULT_X,
+      y: WEB_TURN_FLOATING_DEFAULT_Y,
+    });
+    setStatus(`${webProviderLabel(provider)} 수동 입력 창을 열었습니다. 실행 연결 후 입력 완료가 반영됩니다.`);
   }
 
   function onCancelPendingWebTurn() {
@@ -3360,6 +3421,9 @@ function App() {
   }
 
   function resolvePendingWebTurn(result: { ok: boolean; output?: unknown; error?: string }) {
+    if (pendingWebTurn?.nodeId) {
+      delete manualInputWaitNoticeByNodeRef.current[pendingWebTurn.nodeId];
+    }
     const resolver = webTurnResolverRef.current;
     webTurnResolverRef.current = null;
     webTurnPanel.clearDragging();
@@ -3420,6 +3484,42 @@ function App() {
     };
     return new Promise((resolve) => {
       clearDetachedWebTurnResolver("이전 웹 입력 세션을 정리하고 새 요청으로 교체했습니다.");
+      if (
+        pendingWebTurn &&
+        !webTurnResolverRef.current &&
+        (pendingWebTurn.nodeId !== nodeId || pendingWebTurn.provider !== provider)
+      ) {
+        setPendingWebTurn(null);
+        setWebResponseDraft("");
+      }
+      if (
+        pendingWebTurn?.nodeId === nodeId &&
+        pendingWebTurn.provider === provider &&
+        !webTurnResolverRef.current
+      ) {
+        webTurnResolverRef.current = resolve;
+        delete manualInputWaitNoticeByNodeRef.current[nodeId];
+        setStatus(`${webProviderLabel(provider)} 수동 입력 창이 실행 흐름에 연결되었습니다.`);
+        return;
+      }
+      if (
+        suspendedWebTurn?.nodeId === nodeId &&
+        suspendedWebTurn.provider === provider &&
+        !webTurnResolverRef.current
+      ) {
+        setPendingWebTurn(suspendedWebTurn);
+        setWebResponseDraft(suspendedWebResponseDraft);
+        setSuspendedWebTurn(null);
+        setSuspendedWebResponseDraft("");
+        webTurnResolverRef.current = resolve;
+        delete manualInputWaitNoticeByNodeRef.current[nodeId];
+        webTurnPanel.setPosition({
+          x: WEB_TURN_FLOATING_DEFAULT_X,
+          y: WEB_TURN_FLOATING_DEFAULT_Y,
+        });
+        setStatus(`${webProviderLabel(provider)} 수동 입력 창이 실행 흐름에 연결되었습니다.`);
+        return;
+      }
       if (!pendingWebTurn && !webTurnResolverRef.current) {
         setWebResponseDraft("");
         setSuspendedWebTurn(null);
@@ -3751,7 +3851,15 @@ ${prompt}`;
                 } catch (cancelError) {
                   addNodeLog(node.id, `[WEB] 자동 수집 취소 요청 실패: ${String(cancelError)}`);
                 }
-                await runPromise;
+                const cancelSettled = await Promise.race([
+                  runPromise,
+                  new Promise<null>((resolve) => {
+                    window.setTimeout(() => resolve(null), 1200);
+                  }),
+                ]);
+                if (!cancelSettled) {
+                  addNodeLog(node.id, "[WEB] 자동 수집 취소 확인이 지연되어 즉시 수동 입력 모달로 전환합니다.");
+                }
                 delete manualWebFallbackNodeRef.current[node.id];
                 return requestManualFallback("[WEB] 사용자 요청으로 자동 수집을 중단하고 수동 입력으로 전환합니다.");
               }
@@ -5019,6 +5127,7 @@ ${prompt}`;
       webTurnResolverRef.current = null;
       webLoginResolverRef.current = null;
       clearQueuedWebTurnRequests("실행이 종료되어 대기 중인 웹 응답 입력을 취소했습니다.");
+      manualInputWaitNoticeByNodeRef.current = {};
       setPendingWebTurn(null);
       setSuspendedWebTurn(null);
       setSuspendedWebResponseDraft("");
