@@ -361,6 +361,54 @@ export function buildFinalVisualizationDirective(): string {
   ].join("\n");
 }
 
+export function buildReadableDocumentDirective(locale: AppLocale): string {
+  if (locale === "ko") {
+    return [
+      "[문서 가독성 포맷 지침]",
+      "- 최종 결과는 사람이 읽기 쉬운 Markdown 문서 형식으로 작성하세요.",
+      "- 첫 줄에 한 문단 요약을 두고, 이후 `##` 제목으로 섹션을 구분하세요.",
+      "- 섹션 내 항목은 문장 나열 대신 bullet(`-`) 또는 번호 목록(`1.`)을 사용하세요.",
+      "- 한 문단은 2~4문장 이내로 유지하고, 지나치게 긴 한 줄 텍스트를 금지하세요.",
+      "- key:value를 한 줄에 연속 나열하지 말고 줄바꿈해 항목별로 분리하세요.",
+      "[/문서 가독성 포맷 지침]",
+    ].join("\n");
+  }
+
+  if (locale === "en") {
+    return [
+      "[Readability Formatting Directive]",
+      "- Write the final output as human-readable Markdown.",
+      "- Start with a short summary paragraph, then split content with `##` section headings.",
+      "- Use bullets (`-`) or numbered lists (`1.`) for enumerations instead of dense prose.",
+      "- Keep paragraphs short (2-4 sentences) and avoid very long single-line blocks.",
+      "- Do not chain multiple key:value pairs on one line; separate each item with line breaks.",
+      "[/Readability Formatting Directive]",
+    ].join("\n");
+  }
+
+  if (locale === "jp") {
+    return [
+      "[可読性フォーマット指示]",
+      "- 最終出力は人間が読みやすい Markdown 形式で作成してください。",
+      "- 冒頭に短い要約段落を置き、その後は `##` 見出しでセクション分割してください。",
+      "- 列挙は密な文章ではなく bullet(`-`) または番号付きリスト(`1.`)を使ってください。",
+      "- 段落は 2〜4 文程度に抑え、極端に長い 1 行テキストを避けてください。",
+      "- key:value を 1 行に連続で並べず、改行で項目ごとに分離してください。",
+      "[/可読性フォーマット指示]",
+    ].join("\n");
+  }
+
+  return [
+    "[可读性格式指令]",
+    "- 最终输出必须采用面向人类阅读的 Markdown 文档格式。",
+    "- 先给简短摘要段落，然后使用 `##` 标题分节。",
+    "- 枚举内容使用 bullet(`-`) 或编号列表(`1.`)，避免密集大段文字。",
+    "- 每段控制在 2-4 句，避免超长单行文本。",
+    "- 不要在一行连续堆叠多个 key:value，需按条目换行拆分。",
+    "[/可读性格式指令]",
+  ].join("\n");
+}
+
 export function buildOutputSchemaDirective(schemaRaw: string): string {
   const trimmed = String(schemaRaw ?? "").trim();
   if (!trimmed) {

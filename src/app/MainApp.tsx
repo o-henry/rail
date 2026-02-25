@@ -77,6 +77,7 @@ import {
 import { QUALITY_DEFAULT_THRESHOLD } from "../features/workflow/quality";
 import {
   buildFinalVisualizationDirective,
+  buildReadableDocumentDirective,
   buildCodexMultiAgentDirective,
   buildForcedAgentRuleBlock,
   injectOutputLanguageDirective,
@@ -3546,15 +3547,23 @@ ${prompt}`;
       : withKnowledge.prompt;
     const knowledgeTrace = withKnowledge.trace;
     const qualityProfile = inferQualityProfile(node, config);
+    const outputSchemaRaw = String(config.outputSchemaJson ?? "").trim();
+    const hasStrictOutputSchema = TURN_OUTPUT_SCHEMA_ENABLED && outputSchemaRaw.length > 0;
+    const readableDocumentDirective =
+      qualityProfile === "synthesis_final" && !hasStrictOutputSchema
+        ? buildReadableDocumentDirective(locale)
+        : "";
+    if (readableDocumentDirective) {
+      textToSend = `${textToSend}\n\n${readableDocumentDirective}`.trim();
+      addNodeLog(node.id, "[포맷] 최종 문서 가독성 포맷 지침 자동 적용");
+    }
     const shouldAutoVisualization = qualityProfile === "synthesis_final";
     const visualizationDirective = shouldAutoVisualization ? buildFinalVisualizationDirective() : "";
     if (visualizationDirective) {
       textToSend = `${textToSend}\n\n${visualizationDirective}`.trim();
       addNodeLog(node.id, "[시각화] 품질 프로필(최종 종합) 기반 시각화 지침 자동 적용");
     }
-    const outputSchemaDirective = TURN_OUTPUT_SCHEMA_ENABLED
-      ? buildOutputSchemaDirective(String(config.outputSchemaJson ?? ""))
-      : "";
+    const outputSchemaDirective = TURN_OUTPUT_SCHEMA_ENABLED ? buildOutputSchemaDirective(outputSchemaRaw) : "";
     if (outputSchemaDirective) {
       textToSend = `${textToSend}\n\n${outputSchemaDirective}`.trim();
       addNodeLog(node.id, "[스키마] 출력 스키마 지시를 프롬프트에 자동 주입했습니다.");

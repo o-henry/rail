@@ -97,7 +97,25 @@ function normalizeFlattenedStructuredText(input: string): string {
     !hasExplicitMarkdownStructure;
 
   if (!looksFlattened) {
-    return source;
+    const genericKeyValueMatches =
+      source.match(/\b[A-Za-z가-힣][A-Za-z0-9가-힣_\/().& -]{1,36}\s*:\s*/g) ?? [];
+    const looksGenericFlattened =
+      genericKeyValueMatches.length >= 5 &&
+      newlineCount <= 2 &&
+      longestLine >= 280 &&
+      !hasExplicitMarkdownStructure;
+    if (!looksGenericFlattened) {
+      return source;
+    }
+    return source
+      .replace(/[ \t]{2,}/g, " ")
+      .replace(/\s*(?:,|;|\|)\s*(?=[A-Za-z가-힣][A-Za-z0-9가-힣_\/().& -]{1,36}\s*:)/g, "\n")
+      .replace(
+        /\b([A-Za-z가-힣][A-Za-z0-9가-힣_\/().& -]{1,36})\s*:\s*/g,
+        "\n$1: ",
+      )
+      .replace(/\n{3,}/g, "\n\n")
+      .trim();
   }
 
   return source
