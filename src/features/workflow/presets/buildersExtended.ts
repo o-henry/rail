@@ -1,16 +1,28 @@
 import type { GraphData, GraphEdge, GraphNode } from "../types";
 import { GRAPH_SCHEMA_VERSION, defaultKnowledgeConfig, makePresetNode } from "./shared";
+import {
+  CREATIVE_INTAKE_SCHEMA,
+  FULLSTACK_INTAKE_SCHEMA,
+  FULLSTACK_OPS_SCHEMA,
+  NEWS_CHECK_SCHEMA,
+  NEWS_INTAKE_SCHEMA,
+  STOCK_INTAKE_SCHEMA,
+  STOCK_RISK_SCHEMA,
+  UNITY_INTAKE_SCHEMA,
+  UNITY_QA_SCHEMA,
+} from "./schemas";
 
 export function buildUnityGamePreset(): GraphData {
   const nodes: GraphNode[] = [
     makePresetNode("turn-unity-intake", "turn", 120, 120, {
-      model: "GPT-5.1-Codex-Mini",
+      model: "GPT-5.3-Codex-Spark",
       role: "UNITY CONCEPT AGENT",
       cwd: ".",
       promptTemplate:
         "입력 요청을 유니티 게임 기획 브리프로 구조화하라.\n" +
         '{ "genre":"...", "coreLoop":"...", "targetPlatform":["..."], "scope":"MVP", "mustHave":["..."] }\n' +
         "입력: {{input}}",
+      outputSchemaJson: UNITY_INTAKE_SCHEMA,
     }),
     makePresetNode("turn-unity-system", "turn", 420, 40, {
       model: "GPT-5.2-Codex",
@@ -39,6 +51,7 @@ export function buildUnityGamePreset(): GraphData {
         "설계/구현 계획을 리뷰해 JSON 판정을 출력하라.\n" +
         '{ "DECISION":"PASS|REJECT", "bugsToWatch":["..."], "performanceRisks":["..."], "finalDraft":"..." }\n' +
         "입력: {{input}}",
+      outputSchemaJson: UNITY_QA_SCHEMA,
     }),
     makePresetNode("gate-unity", "gate", 1020, 120, {
       decisionPath: "DECISION",
@@ -84,13 +97,14 @@ export function buildUnityGamePreset(): GraphData {
 export function buildFullstackPreset(): GraphData {
   const nodes: GraphNode[] = [
     makePresetNode("turn-fullstack-intake", "turn", 120, 120, {
-      model: "GPT-5.1-Codex-Mini",
+      model: "GPT-5.3-Codex-Spark",
       role: "PRODUCT SPEC AGENT",
       cwd: ".",
       promptTemplate:
         "요청을 풀스택 제품 명세로 구조화하라.\n" +
         '{ "personas":["..."], "features":["..."], "nonFunctional":["..."], "mvpScope":["..."] }\n' +
         "입력: {{input}}",
+      outputSchemaJson: FULLSTACK_INTAKE_SCHEMA,
     }),
     makePresetNode("turn-fullstack-backend", "turn", 420, 40, {
       model: "GPT-5.2-Codex",
@@ -118,6 +132,7 @@ export function buildFullstackPreset(): GraphData {
         "운영/보안 리뷰 결과를 JSON으로 출력하라.\n" +
         '{ "DECISION":"PASS|REJECT", "securityRisks":["..."], "deployChecklist":["..."], "finalDraft":"..." }\n' +
         "입력: {{input}}",
+      outputSchemaJson: FULLSTACK_OPS_SCHEMA,
     }),
     makePresetNode("gate-fullstack", "gate", 1020, 120, {
       decisionPath: "DECISION",
@@ -178,13 +193,14 @@ export function buildFullstackPreset(): GraphData {
 export function buildCreativePreset(): GraphData {
   const nodes: GraphNode[] = [
     makePresetNode("turn-creative-intake", "turn", 120, 120, {
-      model: "GPT-5.1-Codex-Mini",
+      model: "GPT-5.3-Codex-Spark",
       role: "PROBLEM REFRAME AGENT",
       cwd: ".",
       promptTemplate:
         "입력 문제를 창의 탐색용으로 재정의하라.\n" +
         '{ "coreProblem":"...", "hiddenConstraints":["..."], "challengeStatement":"..." }\n' +
         "입력: {{input}}",
+      outputSchemaJson: CREATIVE_INTAKE_SCHEMA,
     }),
     makePresetNode("turn-creative-diverge", "turn", 420, 40, {
       model: "GPT-5.2",
@@ -238,18 +254,19 @@ export function buildCreativePreset(): GraphData {
 export function buildNewsTrendPreset(): GraphData {
   const nodes: GraphNode[] = [
     makePresetNode("turn-news-intake", "turn", 120, 120, {
-      model: "GPT-5.1-Codex-Mini",
+      model: "GPT-5.3-Codex-Spark",
       role: "NEWS BRIEF AGENT",
       cwd: ".",
       promptTemplate:
         "질문을 최신 뉴스/트렌드 조사 쿼리로 분해하라.\n" +
         '{ "timeWindow":"최근 7일 또는 30일", "queries":["..."], "mustVerify":["..."] }\n' +
         "입력: {{input}}",
+      outputSchemaJson: NEWS_INTAKE_SCHEMA,
     }),
     makePresetNode("turn-news-scan-a", "turn", 420, 40, {
       executor: "web_gemini",
       webResultMode: "bridgeAssisted",
-      webTimeoutMs: 120000,
+      webTimeoutMs: 180000,
       model: "GPT-5.2",
       role: "WEB NEWS SCAN AGENT A",
       cwd: ".",
@@ -259,7 +276,7 @@ export function buildNewsTrendPreset(): GraphData {
     makePresetNode("turn-news-scan-b", "turn", 420, 220, {
       executor: "web_gemini",
       webResultMode: "bridgeAssisted",
-      webTimeoutMs: 120000,
+      webTimeoutMs: 180000,
       model: "GPT-5.2-Codex",
       role: "WEB TREND SCAN AGENT B",
       cwd: ".",
@@ -274,6 +291,7 @@ export function buildNewsTrendPreset(): GraphData {
         "두 수집 결과를 교차검증해 JSON으로 출력하라.\n" +
         '{ "DECISION":"PASS|REJECT", "confirmed":["..."], "conflicts":["..."], "finalDraft":"..." }\n' +
         "입력: {{input}}",
+      outputSchemaJson: NEWS_CHECK_SCHEMA,
     }),
     makePresetNode("gate-news", "gate", 1020, 120, {
       decisionPath: "DECISION",
@@ -311,38 +329,6 @@ export function buildNewsTrendPreset(): GraphData {
 }
 
 export function buildStockPreset(): GraphData {
-  const stockIntakeSchema = JSON.stringify(
-    {
-      type: "object",
-      required: ["target", "timeHorizon", "market", "mustAnswer", "constraints"],
-      properties: {
-        target: { type: "string" },
-        timeHorizon: { type: "string" },
-        market: { type: "string" },
-        mustAnswer: { type: "array" },
-        constraints: { type: "array" },
-        assumptions: { type: "array" },
-      },
-    },
-    null,
-    2,
-  );
-  const stockRiskSchema = JSON.stringify(
-    {
-      type: "object",
-      required: ["DECISION", "upsideFactors", "downsideRisks", "accuracyNotes", "finalDraft"],
-      properties: {
-        DECISION: { type: "string", enum: ["PASS", "REJECT"] },
-        upsideFactors: { type: "array" },
-        downsideRisks: { type: "array" },
-        accuracyNotes: { type: "array" },
-        finalDraft: { type: "string" },
-      },
-    },
-    null,
-    2,
-  );
-
   const nodes: GraphNode[] = [
     makePresetNode("turn-stock-intake", "turn", 120, 120, {
       model: "GPT-5.3-Codex-Spark",
@@ -354,12 +340,12 @@ export function buildStockPreset(): GraphData {
         "출력 형식(JSON):\n" +
         '{ "target":"지수/종목", "timeHorizon":"단기/중기/장기", "market":"KR/US", "mustAnswer":["..."], "constraints":["..."] }\n' +
         "입력: {{input}}",
-      outputSchemaJson: stockIntakeSchema,
+      outputSchemaJson: STOCK_INTAKE_SCHEMA,
     }),
     makePresetNode("turn-stock-macro", "turn", 420, 20, {
       executor: "web_perplexity",
       webResultMode: "bridgeAssisted",
-      webTimeoutMs: 120000,
+      webTimeoutMs: 180000,
       model: "GPT-5.2",
       role: "MARKET MACRO AGENT",
       cwd: ".",
@@ -371,7 +357,7 @@ export function buildStockPreset(): GraphData {
     makePresetNode("turn-stock-company", "turn", 420, 220, {
       executor: "web_gpt",
       webResultMode: "bridgeAssisted",
-      webTimeoutMs: 120000,
+      webTimeoutMs: 180000,
       model: "GPT-5.2-Codex",
       role: "COMPANY & VALUATION AGENT",
       cwd: ".",
@@ -390,7 +376,7 @@ export function buildStockPreset(): GraphData {
         '{ "DECISION":"PASS|REJECT", "upsideFactors":["..."], "downsideRisks":["..."], "accuracyNotes":["과거 예측 오차 관련 한계/근거"], "finalDraft":"..." }\n' +
         "주의: 투자 조언 단정 금지, 불확실성 명시.\n" +
         "입력: {{input}}",
-      outputSchemaJson: stockRiskSchema,
+      outputSchemaJson: STOCK_RISK_SCHEMA,
     }),
     makePresetNode("gate-stock", "gate", 1020, 120, {
       decisionPath: "DECISION",

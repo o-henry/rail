@@ -1,10 +1,24 @@
 import type { GraphData, GraphEdge, GraphNode } from "../types";
 import { GRAPH_SCHEMA_VERSION, defaultKnowledgeConfig, makePresetNode } from "./shared";
+import {
+  DEVELOPMENT_ARCHITECTURE_SCHEMA,
+  DEVELOPMENT_EVALUATOR_SCHEMA,
+  DEVELOPMENT_REQUIREMENTS_SCHEMA,
+  EXPERT_INTAKE_SCHEMA,
+  EXPERT_REVIEW_SCHEMA,
+  RESEARCH_COLLECTOR_SCHEMA,
+  RESEARCH_FACTCHECK_SCHEMA,
+  RESEARCH_INTAKE_SCHEMA,
+  VALIDATION_INTAKE_SCHEMA,
+  VALIDATION_JUDGE_SCHEMA,
+  VALIDATION_SEARCH_EVIDENCE_SCHEMA,
+  VALIDATION_SEARCH_RISK_SCHEMA,
+} from "./schemas";
 
 export function buildValidationPreset(): GraphData {
   const nodes: GraphNode[] = [
     makePresetNode("turn-intake", "turn", 120, 120, {
-      model: "GPT-5.1-Codex-Mini",
+      model: "GPT-5.3-Codex-Spark",
       role: "PLANNING AGENT",
       cwd: ".",
       promptTemplate:
@@ -17,6 +31,7 @@ export function buildValidationPreset(): GraphData {
         '  "searchQueries":["...","...","..."]\n' +
         "}\n" +
         "질문: {{input}}",
+      outputSchemaJson: VALIDATION_INTAKE_SCHEMA,
     }),
     makePresetNode("turn-search-a", "turn", 420, 40, {
       model: "GPT-5.2",
@@ -28,6 +43,7 @@ export function buildValidationPreset(): GraphData {
         '{ "evidences":[{"claim":"...","evidence":"...","sourceHint":"...","confidence":0.0}] }\n' +
         "조건: 근거가 약하면 confidence를 낮게 주고 추정이라고 표시.\n" +
         "입력: {{input}}",
+      outputSchemaJson: VALIDATION_SEARCH_EVIDENCE_SCHEMA,
     }),
     makePresetNode("turn-search-b", "turn", 420, 220, {
       model: "GPT-5.2-Codex",
@@ -39,6 +55,7 @@ export function buildValidationPreset(): GraphData {
         '{ "risks":[{"point":"...","why":"...","confidence":0.0,"mitigation":"..."}] }\n' +
         "조건: 모호하면 모호하다고 명시.\n" +
         "입력: {{input}}",
+      outputSchemaJson: VALIDATION_SEARCH_RISK_SCHEMA,
     }),
     makePresetNode("turn-judge", "turn", 720, 120, {
       model: "GPT-5.3-Codex",
@@ -50,6 +67,7 @@ export function buildValidationPreset(): GraphData {
         '{ "DECISION":"PASS|REJECT", "finalDraft":"...", "why":["...","..."], "gaps":["..."], "confidence":0.0 }\n' +
         "판정 기준: 근거 일관성, 반례 대응 가능성, 불확실성 명시 여부.\n" +
         "입력: {{input}}",
+      outputSchemaJson: VALIDATION_JUDGE_SCHEMA,
     }),
     makePresetNode("gate-decision", "gate", 1020, 120, {
       decisionPath: "DECISION",
@@ -92,13 +110,14 @@ export function buildValidationPreset(): GraphData {
 export function buildDevelopmentPreset(): GraphData {
   const nodes: GraphNode[] = [
     makePresetNode("turn-requirements", "turn", 120, 120, {
-      model: "GPT-5.1-Codex-Mini",
+      model: "GPT-5.3-Codex-Spark",
       role: "REQUIREMENTS AGENT",
       cwd: ".",
       promptTemplate:
         "아래 요청을 분석해 요구사항 JSON만 출력하라.\n" +
         '{ "functional":["..."], "nonFunctional":["..."], "constraints":["..."], "priority":["P0","P1","P2"] }\n' +
         "질문: {{input}}",
+      outputSchemaJson: DEVELOPMENT_REQUIREMENTS_SCHEMA,
     }),
     makePresetNode("turn-architecture", "turn", 420, 40, {
       model: "GPT-5.2",
@@ -109,6 +128,7 @@ export function buildDevelopmentPreset(): GraphData {
         '{ "architecture":"...", "components":[...], "tradeoffs":[...], "risks":[...], "decisionLog":[...] }\n' +
         "과설계 금지, MVP 우선.\n" +
         "입력: {{input}}",
+      outputSchemaJson: DEVELOPMENT_ARCHITECTURE_SCHEMA,
     }),
     makePresetNode("turn-implementation", "turn", 420, 220, {
       model: "GPT-5.2-Codex",
@@ -127,6 +147,7 @@ export function buildDevelopmentPreset(): GraphData {
         "입력을 리뷰해 품질 판정을 JSON으로 출력하라.\n" +
         '{ "DECISION":"PASS|REJECT", "finalDraft":"...", "risk":["..."], "blockingIssues":["..."] }\n' +
         "입력: {{input}}",
+      outputSchemaJson: DEVELOPMENT_EVALUATOR_SCHEMA,
     }),
     makePresetNode("gate-quality", "gate", 1020, 120, {
       decisionPath: "DECISION",
@@ -186,13 +207,14 @@ export function buildDevelopmentPreset(): GraphData {
 export function buildResearchPreset(): GraphData {
   const nodes: GraphNode[] = [
     makePresetNode("turn-research-intake", "turn", 120, 120, {
-      model: "GPT-5.1-Codex-Mini",
+      model: "GPT-5.3-Codex-Spark",
       role: "RESEARCH PLANNING AGENT",
       cwd: ".",
       promptTemplate:
         "질문을 조사 계획으로 분해해 JSON만 출력하라.\n" +
         '{ "researchGoal":"...", "questions":["..."], "evidenceCriteria":["..."], "riskChecks":["..."] }\n' +
         "질문: {{input}}",
+      outputSchemaJson: RESEARCH_INTAKE_SCHEMA,
     }),
     makePresetNode("turn-research-collector", "turn", 420, 120, {
       model: "GPT-5.2",
@@ -202,6 +224,7 @@ export function buildResearchPreset(): GraphData {
         "입력 기준으로 핵심 근거 후보를 수집해 JSON으로 정리하라.\n" +
         '{ "evidences":[{"id":"E1","statement":"...","whyRelevant":"...","confidence":0.0}] }\n' +
         "입력: {{input}}",
+      outputSchemaJson: RESEARCH_COLLECTOR_SCHEMA,
     }),
     makePresetNode("turn-research-factcheck", "turn", 720, 120, {
       model: "GPT-5.2-Codex",
@@ -211,6 +234,7 @@ export function buildResearchPreset(): GraphData {
         "수집 근거를 검증하고 JSON으로 출력하라.\n" +
         '{ "verified":["E1"], "contested":["E2"], "missing":["..."], "notes":["..."] }\n' +
         "입력: {{input}}",
+      outputSchemaJson: RESEARCH_FACTCHECK_SCHEMA,
     }),
     makePresetNode("transform-research-brief", "transform", 1020, 120, {
       mode: "template",
@@ -253,13 +277,14 @@ export function buildResearchPreset(): GraphData {
 export function buildExpertPreset(): GraphData {
   const nodes: GraphNode[] = [
     makePresetNode("turn-expert-intake", "turn", 120, 120, {
-      model: "GPT-5.1-Codex-Mini",
+      model: "GPT-5.3-Codex-Spark",
       role: "DOMAIN INTAKE AGENT",
       cwd: ".",
       promptTemplate:
         "질문을 전문가 분석용 브리프로 구조화하라.\n" +
         '{ "domain":"...", "objective":"...", "constraints":["..."], "successCriteria":["..."] }\n' +
         "입력: {{input}}",
+      outputSchemaJson: EXPERT_INTAKE_SCHEMA,
     }),
     makePresetNode("turn-expert-analysis", "turn", 420, 40, {
       model: "GPT-5.2-Codex",
@@ -278,6 +303,7 @@ export function buildExpertPreset(): GraphData {
         "전략의 취약점과 반례를 엄격히 리뷰해 JSON으로 출력하라.\n" +
         '{ "DECISION":"PASS|REJECT", "criticalIssues":["..."], "improvements":["..."] }\n' +
         "입력: {{input}}",
+      outputSchemaJson: EXPERT_REVIEW_SCHEMA,
     }),
     makePresetNode("gate-expert", "gate", 720, 120, {
       decisionPath: "DECISION",
@@ -311,4 +337,3 @@ export function buildExpertPreset(): GraphData {
 
   return { version: GRAPH_SCHEMA_VERSION, nodes, edges, knowledge: defaultKnowledgeConfig() };
 }
-
