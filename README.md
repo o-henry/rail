@@ -20,6 +20,7 @@ RAIL은 여러 에이전트(코덱스/웹 AI/로컬 모델)를 **노드 그래�
 - [Tech Stack](#tech-stack)
 - [Requirements](#requirements)
 - [Quick Start](#quick-start)
+- [Install (macOS)](#install-macos)
 - [Usage Guide](#usage-guide)
 - [Web Connect Setup](#web-connect-setup)
 - [Data & Persistence](#data--persistence)
@@ -162,6 +163,47 @@ npm run build
 
 ```bash
 npm run check
+```
+
+---
+
+## Install (macOS)
+
+RAIL은 웹 서비스 배포가 아니라, 일반적인 Tauri 데스크톱 앱처럼 설치/실행합니다.
+
+### 1) 개발 모드 실행
+
+```bash
+npm install
+npm run tauri dev
+```
+
+### 2) 릴리즈 앱 번들 생성
+
+```bash
+npm run tauri build -- --bundles app
+```
+
+생성 결과:
+
+- `src-tauri/target/release/bundle/macos/rail.app`
+
+### 3) 로컬 설치/실행
+
+1. Finder에서 `rail.app`를 `Applications`로 복사
+2. 최초 실행 시 macOS 경고가 나오면 우클릭 → `열기`
+
+터미널에서 바로 실행하려면:
+
+```bash
+open src-tauri/target/release/bundle/macos/rail.app
+```
+
+서명되지 않은 로컬 빌드로 차단되는 경우:
+
+```bash
+xattr -dr com.apple.quarantine src-tauri/target/release/bundle/macos/rail.app
+open src-tauri/target/release/bundle/macos/rail.app
 ```
 
 ---
