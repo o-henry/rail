@@ -184,7 +184,7 @@ export default function WorkflowCanvasPane({
                 height: boundedStageHeight,
               }}
             >
-              <svg className="edge-layer">
+              <svg className="edge-layer" overflow="visible">
                 <defs>
                   <marker id="edge-arrow" markerHeight="7" markerUnits="userSpaceOnUse" markerWidth="7" orient="auto" refX="6" refY="3.5">
                     <path d="M0 0 L7 3.5 L0 7 Z" fill="#70848a" />
