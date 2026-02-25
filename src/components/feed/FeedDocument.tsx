@@ -7,9 +7,14 @@ type FeedDocumentProps = {
   className?: string;
 };
 
+type ListItem = {
+  text: string;
+  childLists: { ordered: boolean; items: ListItem[] }[];
+};
+
 type TextBlock =
   | { kind: "heading"; level: 1 | 2 | 3; text: string }
-  | { kind: "list"; ordered: boolean; items: string[] }
+  | { kind: "list"; ordered: boolean; items: ListItem[] }
   | { kind: "paragraph"; text: string }
   | { kind: "image"; alt: string; src: string; title?: string }
   | { kind: "table"; headers: string[]; rows: string[][] }
@@ -107,6 +112,94 @@ function isTableDividerLine(input: string): boolean {
   return /^\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?$/.test(input.trim());
 }
 
+const LIST_LINE_PATTERN = /^(\s*)([-*]|\d+\.)\s+(.+)$/;
+
+function parseListLine(rawLine: string): { indent: number; ordered: boolean; text: string } | null {
+  const matched = String(rawLine ?? "").match(LIST_LINE_PATTERN);
+  if (!matched) {
+    return null;
+  }
+  const indent = String(matched[1] ?? "").replace(/\t/g, "  ").length;
+  const marker = String(matched[2] ?? "");
+  const text = String(matched[3] ?? "").trim();
+  return {
+    indent,
+    ordered: /^\d+\.$/.test(marker),
+    text,
+  };
+}
+
+function parseListLevel(
+  lines: string[],
+  startIndex: number,
+  levelIndent: number,
+  ordered: boolean,
+): { items: ListItem[]; nextIndex: number } {
+  const items: ListItem[] = [];
+  let index = startIndex;
+
+  while (index < lines.length) {
+    const currentRaw = lines[index] ?? "";
+    const parsed = parseListLine(currentRaw);
+    if (!parsed) {
+      break;
+    }
+    if (parsed.indent < levelIndent) {
+      break;
+    }
+
+    if (parsed.indent > levelIndent) {
+      if (items.length === 0) {
+        break;
+      }
+      const parent = items[items.length - 1];
+      const nested = parseListLevel(lines, index, parsed.indent, parsed.ordered);
+      if (nested.nextIndex <= index) {
+        break;
+      }
+      if (nested.items.length > 0) {
+        parent.childLists.push({
+          ordered: parsed.ordered,
+          items: nested.items,
+        });
+      }
+      index = nested.nextIndex;
+      continue;
+    }
+
+    if (parsed.ordered !== ordered) {
+      break;
+    }
+
+    items.push({
+      text: parsed.text,
+      childLists: [],
+    });
+    index += 1;
+  }
+
+  return { items, nextIndex: index };
+}
+
+function parseListBlock(lines: string[], startIndex: number): { block: TextBlock; nextIndex: number } | null {
+  const first = parseListLine(lines[startIndex] ?? "");
+  if (!first) {
+    return null;
+  }
+  const parsed = parseListLevel(lines, startIndex, first.indent, first.ordered);
+  if (parsed.items.length === 0) {
+    return null;
+  }
+  return {
+    block: {
+      kind: "list",
+      ordered: first.ordered,
+      items: parsed.items,
+    },
+    nextIndex: parsed.nextIndex,
+  };
+}
+
 function parseTextBlocks(source: string): TextBlock[] {
   const lines = source.split("\n");
   const blocks: TextBlock[] = [];
@@ -152,35 +245,14 @@ function parseTextBlocks(source: string): TextBlock[] {
       continue;
     }
 
-    if (/^-\s+/.test(trimmed)) {
-      const items: string[] = [];
-      while (index < lines.length) {
-        const row = (lines[index] ?? "").trim();
-        if (!/^-\s+/.test(row)) {
-          break;
-        }
-        items.push(row.replace(/^-\s+/, "").trim());
-        index += 1;
+    if (parseListLine(line)) {
+      const listBlock = parseListBlock(lines, index);
+      if (listBlock) {
+        blocks.push(listBlock.block);
+        index = listBlock.nextIndex;
+        continue;
       }
-      if (items.length > 0) {
-        blocks.push({ kind: "list", ordered: false, items });
-      }
-      continue;
-    }
-
-    if (/^\d+\.\s+/.test(trimmed)) {
-      const items: string[] = [];
-      while (index < lines.length) {
-        const row = (lines[index] ?? "").trim();
-        if (!/^\d+\.\s+/.test(row)) {
-          break;
-        }
-        items.push(row.replace(/^\d+\.\s+/, "").trim());
-        index += 1;
-      }
-      if (items.length > 0) {
-        blocks.push({ kind: "list", ordered: true, items });
-      }
+      index += 1;
       continue;
     }
 
@@ -220,8 +292,7 @@ function parseTextBlocks(source: string): TextBlock[] {
         parseImageLine(row) ||
         (row.includes("|") && index + 1 < lines.length && isTableDividerLine(lines[index + 1] ?? "")) ||
         /^(#{1,3})\s+/.test(row) ||
-        /^-\s+/.test(row) ||
-        /^\d+\.\s+/.test(row) ||
+        parseListLine(rowRaw) ||
         /^[-*_]{3,}$/.test(row)
       ) {
         break;
@@ -371,6 +442,30 @@ function renderInlineMarkdown(text: string): ReactNode[] {
   return nodes.length > 0 ? nodes : [source];
 }
 
+function renderListBlock(block: { ordered: boolean; items: ListItem[] }, keyPrefix: string): ReactNode {
+  const items = block.items.map((item, itemIndex) => (
+    <li key={`${keyPrefix}-item-${itemIndex}`}>
+      <span>{renderInlineMarkdown(item.text)}</span>
+      {item.childLists.map((childBlock, childIndex) =>
+        renderListBlock(childBlock, `${keyPrefix}-item-${itemIndex}-child-${childIndex}`),
+      )}
+    </li>
+  ));
+
+  if (block.ordered) {
+    return (
+      <ol className="feed-document-list" key={keyPrefix}>
+        {items}
+      </ol>
+    );
+  }
+  return (
+    <ul className="feed-document-list" key={keyPrefix}>
+      {items}
+    </ul>
+  );
+}
+
 export default function FeedDocument({ text, className = "" }: FeedDocumentProps) {
   const normalizedText = useMemo(() => normalizeFlattenedStructuredText(text), [text]);
   const extracted = useMemo(() => extractChartSpecsFromContent(normalizedText), [normalizedText]);
@@ -414,22 +509,7 @@ export default function FeedDocument({ text, className = "" }: FeedDocumentProps
         }
 
         if (block.kind === "list") {
-          if (block.ordered) {
-            return (
-              <ol className="feed-document-list" key={`block-${index}`}>
-                {block.items.map((item, itemIndex) => (
-                  <li key={`item-${index}-${itemIndex}`}>{renderInlineMarkdown(item)}</li>
-                ))}
-              </ol>
-            );
-          }
-          return (
-            <ul className="feed-document-list" key={`block-${index}`}>
-              {block.items.map((item, itemIndex) => (
-                <li key={`item-${index}-${itemIndex}`}>{renderInlineMarkdown(item)}</li>
-              ))}
-            </ul>
-          );
+          return renderListBlock(block, `block-${index}`);
         }
 
         if (block.kind === "image") {
