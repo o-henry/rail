@@ -2003,6 +2003,10 @@ h3 {
   overflow: auto;
 }
 
+.feed-layout.no-feed-inspector {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .feed-layout::-webkit-scrollbar {
   width: 0;
   height: 0;

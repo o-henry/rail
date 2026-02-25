@@ -118,10 +118,13 @@ export default function FeedPage({ vm }: FeedPageProps) {
     typeof setFeedReplyDraftByPost === "function" ? setFeedReplyDraftByPost : null;
   const isFeedbackErrorMessage = (feedback: string) =>
     /(실패|불가|오류|error|failed|failure|不可|失败|失敗|エラー|失敗)/i.test(feedback);
+  const hasFeedEntries =
+    (Array.isArray(groupedFeedRuns) && groupedFeedRuns.length > 0) ||
+    (Array.isArray(currentFeedPosts) && currentFeedPosts.length > 0);
 
   return (
-    <section className="feed-layout workspace-tab-panel">
-            <article className="panel-card feed-agent-panel">
+    <section className={`feed-layout workspace-tab-panel${hasFeedEntries ? "" : " no-feed-inspector"}`}>
+            {hasFeedEntries && <article className="panel-card feed-agent-panel">
               {/* <div className="feed-agent-panel-head"> */}
                 {/* <h3>에이전트 상세설정</h3> */}
                 {/* <span>{feedInspectorAgentPosts.length}개</span> */}
@@ -421,7 +424,7 @@ export default function FeedPage({ vm }: FeedPageProps) {
                   </div>
                 </section>
               )}
-            </article>
+            </article>}
             <article className="panel-card feed-main">
               <div className="feed-topbar">
                 <h2>{t("feed.title")}</h2>
