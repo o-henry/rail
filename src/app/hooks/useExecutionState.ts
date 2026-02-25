@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { t } from "../../i18n";
 import type {
   AuthMode,
   CodexMultiAgentMode,
@@ -16,7 +17,7 @@ export function useExecutionState(options: {
   const { defaultAuthMode, defaultCodexMultiAgentMode, defaultLoginCompleted } = options;
 
   const [engineStarted, setEngineStarted] = useState(false);
-  const [status, setStatus] = useState("대기 중");
+  const [status, setStatus] = useState(() => t("settings.engine.waiting"));
   const [running, setRunning] = useState(false);
   const [error, setErrorState] = useState("");
   const [, setErrorLogs] = useState<string[]>([]);

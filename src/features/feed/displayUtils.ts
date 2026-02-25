@@ -63,7 +63,7 @@ export function formatUsedPercent(input: unknown): string {
 export function formatCreditSummary(input: unknown): string {
   const credits = asRecord(input);
   if (!credits) {
-    return "-";
+    return t("common.noneSimple");
   }
   const balance =
     typeof credits.balance === "string" || typeof credits.balance === "number"
@@ -72,32 +72,32 @@ export function formatCreditSummary(input: unknown): string {
   const hasCredits = credits.hasCredits === true;
   const unlimited = credits.unlimited === true;
   if (unlimited) {
-    return "무제한";
+    return t("common.unlimited");
   }
   if (!hasCredits) {
-    return "없음";
+    return t("common.noneSimple");
   }
-  return `잔액 ${balance}`;
+  return t("usage.balance", { balance });
 }
 
 export function formatRateLimitBlock(title: string, source: Record<string, unknown>): string[] {
   const lines: string[] = [title];
   const planType = typeof source.planType === "string" && source.planType.trim() ? source.planType : "-";
   const limitId = typeof source.limitId === "string" && source.limitId.trim() ? source.limitId : "-";
-  lines.push(`- 요금제: ${planType}`);
-  lines.push(`- 한도 ID: ${limitId}`);
-  lines.push(`- 크레딧: ${formatCreditSummary(source.credits)}`);
+  lines.push(`- ${t("usage.planType")}: ${planType}`);
+  lines.push(`- ${t("usage.limitId")}: ${limitId}`);
+  lines.push(`- ${t("usage.credit")}: ${formatCreditSummary(source.credits)}`);
 
   const primary = asRecord(source.primary);
   if (primary) {
     lines.push(
-      `- 기본 윈도우 (5시간): 사용량 ${formatUsedPercent(primary.usedPercent)} / 리셋 ${formatResetAt(primary.resetsAt)}`,
+      `- ${t("usage.window.primary")}: ${t("usage.used")} ${formatUsedPercent(primary.usedPercent)} / ${t("usage.reset")} ${formatResetAt(primary.resetsAt)}`,
     );
   }
   const secondary = asRecord(source.secondary);
   if (secondary) {
     lines.push(
-      `- 보조 윈도우 (1주일): 사용량 ${formatUsedPercent(secondary.usedPercent)} / 리셋 ${formatResetAt(secondary.resetsAt)}`,
+      `- ${t("usage.window.secondary")}: ${t("usage.used")} ${formatUsedPercent(secondary.usedPercent)} / ${t("usage.reset")} ${formatResetAt(secondary.resetsAt)}`,
     );
   }
   return lines;
@@ -112,14 +112,14 @@ export function formatUsageInfoForDisplay(raw: unknown): string {
   const lines: string[] = [];
   const tokenUsage = extractUsageStats(raw);
   if (tokenUsage) {
-    lines.push(`토큰 사용량: ${formatUsage(tokenUsage)}`);
+    lines.push(`${t("usage.token")}: ${formatUsage(tokenUsage)}`);
   }
   const rateLimits = asRecord(root.rateLimits);
   if (rateLimits) {
     if (lines.length > 0) {
       lines.push("");
     }
-    lines.push(...formatRateLimitBlock("현재 한도", rateLimits));
+    lines.push(...formatRateLimitBlock(t("usage.limit.current"), rateLimits));
   }
 
   const byLimitId = asRecord(root.rateLimitsByLimitId);
@@ -141,7 +141,7 @@ export function formatUsageInfoForDisplay(raw: unknown): string {
 
     if (entries.length > 0) {
       lines.push("");
-      lines.push("모델별 한도");
+      lines.push(t("usage.limit.byModel"));
       for (const entry of entries) {
         lines.push(...formatRateLimitBlock(`- ${entry.header}`, entry.item));
         lines.push("");
@@ -182,13 +182,13 @@ export function clipTextByChars(input: string, maxChars = 12_000): {
     return { text: input, truncated: false, charCount };
   }
   return {
-    text: `${input.slice(0, maxChars)}\n\n...(truncated)` ,
+    text: `${input.slice(0, maxChars)}\n\n...(${t("common.truncated")})`,
     truncated: true,
     charCount,
   };
 }
 
-export function summarizeFeedSteps(logs: string[], placeholder = "실행 로그 요약 없음"): string[] {
+export function summarizeFeedSteps(logs: string[], placeholder = t("feed.steps.empty")): string[] {
   const lines = logs
     .map((line) => String(line ?? "").trim())
     .filter(Boolean)
@@ -221,7 +221,7 @@ export function summarizeFeedSteps(logs: string[], placeholder = "실행 로그 
   return important.slice(-5);
 }
 
-export function normalizeFeedSteps(steps: string[], placeholder = "실행 로그 요약 없음"): string[] {
+export function normalizeFeedSteps(steps: string[], placeholder = t("feed.steps.empty")): string[] {
   const placeholderCompact = placeholder.replace(/\s+/g, "").toLowerCase();
   const seen = new Set<string>();
   return steps
@@ -269,7 +269,7 @@ export function normalizeFeedInputSources(input: unknown): FeedInputSourceLike[]
 
 export function formatFeedInputSourceLabel(source: FeedInputSourceLike): string {
   if (source.kind === "question") {
-    return "사용자 입력 질문";
+    return t("feed.source.userQuestion");
   }
   const pieces: string[] = [source.agentName];
   if (source.roleLabel) {

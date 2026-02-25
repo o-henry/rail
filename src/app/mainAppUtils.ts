@@ -1,3 +1,5 @@
+import { t } from "../i18n";
+
 export const WORKSPACE_CWD_STORAGE_KEY = "rail.settings.cwd";
 export const LOGIN_COMPLETED_STORAGE_KEY = "rail.settings.login_completed";
 export const AUTH_MODE_STORAGE_KEY = "rail.settings.auth_mode";
@@ -180,12 +182,12 @@ export function loadPersistedCodexMultiAgentMode(): CodexMultiAgentModeValue {
 
 export function codexMultiAgentModeLabel(mode: CodexMultiAgentModeValue): string {
   if (mode === "off") {
-    return "끄기";
+    return t("option.multi.off");
   }
   if (mode === "max") {
-    return "최고 품질";
+    return t("option.multi.max");
   }
-  return "균형";
+  return t("option.multi.balanced");
 }
 
 export function isAbsoluteFsPath(path: string): boolean {
@@ -222,13 +224,13 @@ export function toUsageCheckErrorMessage(error: unknown): string {
   const text = toErrorText(error);
   const lower = text.toLowerCase();
   if (lower.includes("method not found") || lower.includes("지원하지 않는") || lower.includes("not support")) {
-    return "사용량 조회 API를 지원하지 않는 엔진 버전입니다. 엔진 실행/로그인은 정상이어도 사용량은 현재 버전에서 조회할 수 없습니다.";
+    return t("usage.error.unsupported");
   }
   if (lower.includes("forbidden") || lower.includes("unauthorized") || lower.includes("401")) {
-    return "사용량 조회 권한이 없습니다. 코덱스 로그인을 다시 시도해주세요.";
+    return t("usage.error.unauthorized");
   }
   if (lower.includes("timeout") || lower.includes("timed out")) {
-    return "사용량 조회가 시간 초과되었습니다. 잠시 후 다시 시도해주세요.";
+    return t("usage.error.timeout");
   }
   const detail = extractStringByPaths(error, ["message", "error", "details"]);
   if (detail) {
@@ -241,10 +243,10 @@ export function toOpenRunsFolderErrorMessage(error: unknown): string {
   const text = toErrorText(error);
   const lower = text.toLowerCase();
   if (lower.includes("not found") || lower.includes("enoent")) {
-    return "실행 기록 폴더를 찾을 수 없습니다. 먼저 실행을 한 번 완료해 주세요.";
+    return t("runsFolder.error.notFound");
   }
   if (lower.includes("permission") || lower.includes("denied")) {
-    return "실행 기록 폴더를 열 권한이 없습니다.";
+    return t("runsFolder.error.permission");
   }
   return text;
 }
@@ -560,16 +562,16 @@ export function formatUsedPercent(input: unknown): string {
 
 export function formatCreditSummary(input: unknown): string {
   if (!input || typeof input !== "object") {
-    return "없음";
+    return t("common.noneSimple");
   }
   const record = input as Record<string, unknown>;
   const unlimited = Boolean(record.unlimited);
   if (unlimited) {
-    return "무제한";
+    return t("common.unlimited");
   }
   const hasCredits = Boolean(record.hasCredits);
   const balance = String(record.balance ?? "0").trim() || "0";
-  return hasCredits ? `잔액 ${balance}` : "없음";
+  return hasCredits ? t("usage.balance", { balance }) : t("common.noneSimple");
 }
 
 export function formatRateLimitBlock(title: string, source: Record<string, unknown>): string[] {
@@ -581,17 +583,17 @@ export function formatRateLimitBlock(title: string, source: Record<string, unkno
   const primary = asRecord(source.primary) ?? {};
   const secondary = asRecord(source.secondary) ?? {};
 
-  lines.push(`- 요금제: ${planType}`);
+  lines.push(`- ${t("usage.planType")}: ${planType}`);
   if (limitName) {
-    lines.push(`- 한도명: ${limitName}`);
+    lines.push(`- ${t("usage.limitName")}: ${limitName}`);
   }
-  lines.push(`- 한도 ID: ${limitId}`);
-  lines.push(`- 크레딧: ${formatCreditSummary(source.credits)}`);
+  lines.push(`- ${t("usage.limitId")}: ${limitId}`);
+  lines.push(`- ${t("usage.credit")}: ${formatCreditSummary(source.credits)}`);
   lines.push(
-    `- 기본 윈도우 (5시간): 사용량 ${formatUsedPercent(primary.usedPercent)} / 리셋 ${formatResetAt(primary.resetsAt)}`,
+    `- ${t("usage.window.primary")}: ${t("usage.used")} ${formatUsedPercent(primary.usedPercent)} / ${t("usage.reset")} ${formatResetAt(primary.resetsAt)}`,
   );
   lines.push(
-    `- 보조 윈도우 (1주일): 사용량 ${formatUsedPercent(secondary.usedPercent)} / 리셋 ${formatResetAt(secondary.resetsAt)}`,
+    `- ${t("usage.window.secondary")}: ${t("usage.used")} ${formatUsedPercent(secondary.usedPercent)} / ${t("usage.reset")} ${formatResetAt(secondary.resetsAt)}`,
   );
   return lines;
 }
@@ -605,12 +607,12 @@ export function formatUsageInfoForDisplay(raw: unknown): string {
 
   const primaryLimit = asRecord(record.rateLimits);
   if (primaryLimit) {
-    sections.push(...formatRateLimitBlock("현재 한도", primaryLimit));
+    sections.push(...formatRateLimitBlock(t("usage.limit.current"), primaryLimit));
   }
 
   const byId = asRecord(record.rateLimitsByLimitId);
   if (byId) {
-    sections.push("", "모델별 한도");
+    sections.push("", t("usage.limit.byModel"));
     for (const [key, value] of Object.entries(byId)) {
       const row = asRecord(value);
       if (!row) {

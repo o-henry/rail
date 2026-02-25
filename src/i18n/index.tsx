@@ -4,6 +4,15 @@ import { STORAGE_KEY, type AppLocale } from "./types";
 
 let currentLocale: AppLocale = "ko";
 const localeWatchers = new Set<(locale: AppLocale) => void>();
+const KO_VALUE_TO_KEY: Record<string, string> = Object.entries(MESSAGES.ko).reduce<Record<string, string>>(
+  (acc, [key, value]) => {
+    if (!(value in acc)) {
+      acc[value] = key;
+    }
+    return acc;
+  },
+  {},
+);
 
 function renderTemplate(input: string, vars?: Record<string, string | number>): string {
   if (!vars) {
@@ -66,7 +75,7 @@ export function tp(phraseKo: string, vars?: Record<string, string | number>, loc
     }
     return `${count[1]}项`;
   }
-  const key = PHRASE_TO_KEY[phraseKo];
+  const key = PHRASE_TO_KEY[phraseKo] ?? KO_VALUE_TO_KEY[phraseKo];
   if (!key) {
     return renderTemplate(phraseKo, vars);
   }

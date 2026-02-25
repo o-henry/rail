@@ -42,85 +42,113 @@ import type {
 import type { FancySelectOption } from "../components/FancySelect";
 import { KNOWLEDGE_DEFAULT_MAX_CHARS, KNOWLEDGE_DEFAULT_TOP_K } from "./mainAppGraphHelpers";
 import { t, tp } from "../i18n";
+import type { AppLocale } from "../i18n";
 
-export const CODEX_MULTI_AGENT_MODE_OPTIONS: ReadonlyArray<FancySelectOption> = [
-  { value: "off", label: "끄기" },
-  { value: "balanced", label: "균형 (권장)" },
-  { value: "max", label: "최고 품질" },
-];
+export function getCodexMultiAgentModeOptions(locale?: AppLocale): ReadonlyArray<FancySelectOption> {
+  return [
+    { value: "off", label: t("option.multi.off", undefined, locale) },
+    { value: "balanced", label: t("option.multi.balanced", undefined, locale) },
+    { value: "max", label: t("option.multi.max", undefined, locale) },
+  ];
+}
 
-export const COST_PRESET_OPTIONS: FancySelectOption[] = [
-  { value: "conservative", label: "고사양 (품질 우선)" },
-  { value: "balanced", label: "보통 (기본)" },
-  { value: "aggressive", label: "저사양 (사용량 절감)" },
-];
+export function getCostPresetOptions(locale?: AppLocale): FancySelectOption[] {
+  return [
+    { value: "conservative", label: t("option.cost.conservative", undefined, locale) },
+    { value: "balanced", label: t("option.cost.balanced", undefined, locale) },
+    { value: "aggressive", label: t("option.cost.aggressive", undefined, locale) },
+  ];
+}
 
 export const NODE_ANCHOR_SIDES: NodeAnchorSide[] = ["top", "right", "bottom", "left"];
 
-export const QUALITY_PROFILE_OPTIONS: FancySelectOption[] = [
-  { value: "code_implementation", label: "코드 구현" },
-  { value: "research_evidence", label: "자료/근거 검증" },
-  { value: "design_planning", label: "설계/기획" },
-  { value: "synthesis_final", label: "최종 종합" },
-  { value: "generic", label: "일반" },
-];
+export function getQualityProfileOptions(locale?: AppLocale): FancySelectOption[] {
+  return [
+    { value: "code_implementation", label: t("option.quality.code_implementation", undefined, locale) },
+    { value: "research_evidence", label: t("option.quality.research_evidence", undefined, locale) },
+    { value: "design_planning", label: t("option.quality.design_planning", undefined, locale) },
+    { value: "synthesis_final", label: t("option.quality.synthesis_final", undefined, locale) },
+    { value: "generic", label: t("option.quality.generic", undefined, locale) },
+  ];
+}
 
-export const QUALITY_THRESHOLD_OPTIONS: FancySelectOption[] = Array.from(
-  { length: (QUALITY_THRESHOLD_MAX - QUALITY_THRESHOLD_MIN) / QUALITY_THRESHOLD_STEP + 1 },
-  (_, index) => {
-    const score = QUALITY_THRESHOLD_MIN + index * QUALITY_THRESHOLD_STEP;
-    return { value: String(score), label: `${score}점` };
-  },
-);
+export function getQualityThresholdOptions(locale?: AppLocale): FancySelectOption[] {
+  return Array.from(
+    { length: (QUALITY_THRESHOLD_MAX - QUALITY_THRESHOLD_MIN) / QUALITY_THRESHOLD_STEP + 1 },
+    (_, index) => {
+      const score = QUALITY_THRESHOLD_MIN + index * QUALITY_THRESHOLD_STEP;
+      return { value: String(score), label: tp(`${score}점`, undefined, locale) };
+    },
+  );
+}
 
 export { normalizeQualityScore, normalizeQualityThreshold };
 
-export const ARTIFACT_TYPE_OPTIONS: FancySelectOption[] = [
-  { value: "none", label: "사용 안 함" },
-  { value: "RequirementArtifact", label: "요구사항 아티팩트" },
-  { value: "DesignArtifact", label: "설계 아티팩트" },
-  { value: "TaskPlanArtifact", label: "작업계획 아티팩트" },
-  { value: "ChangePlanArtifact", label: "변경계획 아티팩트" },
-  { value: "EvidenceArtifact", label: "근거 아티팩트" },
+export function getArtifactTypeOptions(locale?: AppLocale): FancySelectOption[] {
+  return [
+    { value: "none", label: t("option.artifact.none", undefined, locale) },
+    { value: "RequirementArtifact", label: t("option.artifact.requirement", undefined, locale) },
+    { value: "DesignArtifact", label: t("option.artifact.design", undefined, locale) },
+    { value: "TaskPlanArtifact", label: t("option.artifact.taskPlan", undefined, locale) },
+    { value: "ChangePlanArtifact", label: t("option.artifact.changePlan", undefined, locale) },
+    { value: "EvidenceArtifact", label: t("option.artifact.evidence", undefined, locale) },
+  ];
+}
+
+const PRESET_TEMPLATE_META_KEYS: ReadonlyArray<{
+  key: PresetKind;
+  labelKey: string;
+  statusLabelKey: string;
+}> = [
+  { key: "validation", labelKey: "preset.validation", statusLabelKey: "preset.validation" },
+  { key: "development", labelKey: "preset.development", statusLabelKey: "preset.development" },
+  { key: "research", labelKey: "preset.research", statusLabelKey: "preset.research" },
+  { key: "expert", labelKey: "preset.expert", statusLabelKey: "preset.expert" },
+  { key: "unityGame", labelKey: "preset.unityGame", statusLabelKey: "preset.unityGame" },
+  { key: "fullstack", labelKey: "preset.fullstack", statusLabelKey: "preset.fullstack" },
+  { key: "creative", labelKey: "preset.creative", statusLabelKey: "preset.creative" },
+  { key: "newsTrend", labelKey: "preset.newsTrend", statusLabelKey: "preset.newsTrend" },
+  { key: "stock", labelKey: "preset.stock", statusLabelKey: "preset.stock" },
 ];
 
-export const PRESET_TEMPLATE_META: ReadonlyArray<{ key: PresetKind; label: string; statusLabel: string }> = [
-  { key: "validation", label: "정밀 검증 템플릿", statusLabel: "정밀 검증 템플릿" },
-  { key: "development", label: "개발 실행 템플릿", statusLabel: "개발 실행 템플릿" },
-  { key: "research", label: "근거 리서치 템플릿", statusLabel: "근거 리서치 템플릿" },
-  { key: "expert", label: "전문가 분석 템플릿", statusLabel: "전문가 분석 템플릿" },
-  { key: "unityGame", label: "유니티 게임개발 템플릿", statusLabel: "유니티 게임개발 템플릿" },
-  { key: "fullstack", label: "풀스택 구현 템플릿", statusLabel: "풀스택 구현 템플릿" },
-  { key: "creative", label: "창의성 템플릿", statusLabel: "창의성 템플릿" },
-  { key: "newsTrend", label: "뉴스 트렌드 템플릿", statusLabel: "뉴스 트렌드 템플릿" },
-  { key: "stock", label: "주식 분석 템플릿", statusLabel: "주식 분석 템플릿" },
-];
-
-export const PRESET_TEMPLATE_OPTIONS: FancySelectOption[] = PRESET_TEMPLATE_META
-  .filter((row) => row.key !== "development")
-  .map((row) => ({
-    value: row.key,
-    label: row.label,
+export function getPresetTemplateMeta(
+  locale?: AppLocale,
+): ReadonlyArray<{ key: PresetKind; label: string; statusLabel: string }> {
+  return PRESET_TEMPLATE_META_KEYS.map((row) => ({
+    key: row.key,
+    label: t(row.labelKey, undefined, locale),
+    statusLabel: t(row.statusLabelKey, undefined, locale),
   }));
+}
 
-export function presetTemplateLabel(kind: PresetKind): string {
-  const row = PRESET_TEMPLATE_META.find((meta) => meta.key === kind);
-  return row ? tp(row.label) : "Template";
+export function getPresetTemplateOptions(locale?: AppLocale): FancySelectOption[] {
+  return getPresetTemplateMeta(locale)
+    .filter((row) => row.key !== "development")
+    .map((row) => ({
+      value: row.key,
+      label: row.label,
+    }));
+}
+
+export function presetTemplateLabel(kind: PresetKind, locale?: AppLocale): string {
+  const row = getPresetTemplateMeta(locale).find((meta) => meta.key === kind);
+  return row ? row.label : t("workflow.template", undefined, locale);
 }
 
 export function inferRunGroupMeta(
   currentGraph: GraphData,
   lastPreset: { kind: PresetKind; graph: GraphData } | null,
+  locale?: AppLocale,
 ): { name: string; kind: "template" | "custom"; presetKind?: PresetKind } {
   if (lastPreset && graphEquals(lastPreset.graph, currentGraph)) {
     return {
-      name: presetTemplateLabel(lastPreset.kind),
+      name: presetTemplateLabel(lastPreset.kind, locale),
       kind: "template",
       presetKind: lastPreset.kind,
     };
   }
   return {
-    name: t("group.custom"),
+    name: t("group.custom", undefined, locale),
     kind: "custom",
   };
 }
@@ -176,32 +204,32 @@ export function buildFeedPost(input: any): {
   const outputText = toHumanReadableFeedText(
     extractFinalAnswer(input.output).trim() || stringifyInput(input.output).trim(),
   );
-  const logsText = logs.length > 0 ? logs.join("\n") : "(로그 없음)";
+  const logsText = logs.length > 0 ? logs.join("\n") : t("feed.logs.empty");
   const markdownRaw = [
     `# ${agentName}`,
-    `- 상태: ${input.status === "low_quality" ? t("label.status.low_quality") : nodeStatusLabel(input.status as NodeExecutionStatus)}`,
-    `- 역할: ${roleLabel}`,
+    `- ${t("feed.share.status")}: ${input.status === "low_quality" ? t("label.status.low_quality") : nodeStatusLabel(input.status as NodeExecutionStatus)}`,
+    `- ${t("feed.share.role")}: ${roleLabel}`,
     "",
-    "## 요약",
-    summary || "(없음)",
+    `## ${t("feed.share.summary")}`,
+    summary || t("common.none"),
     ...(inputSources.length > 0
-      ? ["", "## 입력 출처", ...inputSources.map((source) => `- ${formatFeedInputSourceLabel(source)}`)]
+      ? ["", `## ${t("feed.inputSources")}`, ...inputSources.map((source) => `- ${formatFeedInputSourceLabel(source)}`)]
       : []),
     ...(inputContextMasked
-      ? ["", "## 전달 입력 스냅샷", inputContextMasked]
+      ? ["", `## ${t("feed.inputSnapshot")}`, inputContextMasked]
       : []),
     "",
-    "## 단계 요약",
+    `## ${t("feed.share.steps")}`,
     ...steps.map((step) => `- ${step}`),
     "",
-    "## 핵심 결과",
-    outputText || "(출력 없음)",
+    `## ${t("feed.share.detail")}`,
+    outputText || t("feed.output.empty"),
     "",
-    "## 노드 로그",
+    `## ${t("feed.logs.title")}`,
     logsText,
     "",
-    "## 참고",
-    "- 이 문서는 실행 결과를 자동 요약해 생성되었습니다.",
+    `## ${t("feed.reference.title")}`,
+    `- ${t("feed.reference.autoGenerated")}`,
   ].join("\n");
 
   const jsonRaw = JSON.stringify(
@@ -272,14 +300,14 @@ export function buildFeedPost(input: any): {
     attachments: [
       {
         kind: "markdown",
-        title: "요약 문서 (Markdown)",
+        title: tp("요약 문서 (Markdown)"),
         content: markdownMasked,
         truncated: markdownClip.truncated,
         charCount: markdownClip.charCount,
       },
       {
         kind: "json",
-        title: "구조화 결과 (JSON)",
+        title: tp("구조화 결과 (JSON)"),
         content: jsonMasked,
         truncated: jsonClip.truncated,
         charCount: jsonClip.charCount,
@@ -414,7 +442,7 @@ export function normalizeArtifactOutput(
   const warnings: string[] = [];
   if (payload == null || typeof payload !== "object") {
     payload = { text: stringifyInput(rawOutput) };
-    warnings.push("아티팩트 변환: 구조화된 출력이 없어 텍스트 기반으로 보정했습니다.");
+    warnings.push(tp("아티팩트 변환: 구조화된 출력이 없어 텍스트 기반으로 보정했습니다."));
   }
 
   const envelope = {
@@ -480,7 +508,7 @@ export async function buildQualityReport(params: {
 
   addCheck({
     id: "non_empty",
-    label: "응답 비어있지 않음",
+    label: tp("응답 비어있지 않음"),
     kind: "structure",
     required: true,
     passed: fullText.trim().length > 0,
@@ -489,18 +517,18 @@ export async function buildQualityReport(params: {
 
   addCheck({
     id: "minimum_length",
-    label: "최소 설명 길이",
+    label: tp("최소 설명 길이"),
     kind: "structure",
     required: false,
     passed: fullText.trim().length >= 120,
     penalty: 10,
-    detail: "120자 미만이면 요약 부족으로 감점",
+    detail: tp("120자 미만이면 요약 부족으로 감점"),
   });
 
   if (profile === "research_evidence") {
     addCheck({
       id: "source_signal",
-      label: "근거/출처 신호 포함",
+      label: tp("근거/출처 신호 포함"),
       kind: "evidence",
       required: true,
       passed: /(source|출처|근거|http|https|reference)/i.test(fullText),
@@ -508,7 +536,7 @@ export async function buildQualityReport(params: {
     });
     addCheck({
       id: "uncertainty_signal",
-      label: "한계/불확실성 표기",
+      label: tp("한계/불확실성 표기"),
       kind: "consistency",
       required: false,
       passed: /(한계|불확실|리스크|위험|counter|반례|제약)/i.test(fullText),
@@ -520,12 +548,12 @@ export async function buildQualityReport(params: {
     ).length;
     addCheck({
       id: "design_sections",
-      label: "설계 핵심 항목 포함",
+      label: tp("설계 핵심 항목 포함"),
       kind: "structure",
       required: true,
       passed: hits >= 3,
       penalty: 20,
-      detail: "목표/제약/리스크/우선순위 등 3개 이상 필요",
+      detail: tp("목표/제약/리스크/우선순위 등 3개 이상 필요"),
     });
   } else if (profile === "synthesis_final") {
     const hits = ["결론", "근거", "한계", "다음 단계", "실행", "체크리스트"].filter((key) =>
@@ -533,17 +561,17 @@ export async function buildQualityReport(params: {
     ).length;
     addCheck({
       id: "final_structure",
-      label: "최종 답변 구조 충족",
+      label: tp("최종 답변 구조 충족"),
       kind: "structure",
       required: true,
       passed: hits >= 3,
       penalty: 20,
-      detail: "결론/근거/한계/다음 단계 중 3개 이상",
+      detail: tp("결론/근거/한계/다음 단계 중 3개 이상"),
     });
   } else if (profile === "code_implementation") {
     addCheck({
       id: "code_plan_signal",
-      label: "코드/파일/테스트 계획 포함",
+      label: tp("코드/파일/테스트 계획 포함"),
       kind: "structure",
       required: true,
       passed: /(file|파일|test|테스트|lint|build|patch|module|class|function)/i.test(fullText),
@@ -553,7 +581,7 @@ export async function buildQualityReport(params: {
     if (config.qualityCommandEnabled) {
       const commands = parseQualityCommands(config.qualityCommands);
       if (commands.length === 0) {
-        warnings.push("품질 명령 실행이 켜져 있지만 명령 목록이 비어 있습니다.");
+        warnings.push(tp("품질 명령 실행이 켜져 있지만 명령 목록이 비어 있습니다."));
       } else {
         try {
           const commandResults = await invoke<any[]>("quality_run_checks", {
@@ -563,12 +591,12 @@ export async function buildQualityReport(params: {
           const failed = commandResults.find((row) => row.exitCode !== 0);
           addCheck({
             id: "local_commands",
-            label: "로컬 품질 명령 통과",
+            label: tp("로컬 품질 명령 통과"),
             kind: "local_command",
             required: true,
             passed: !failed,
             penalty: 30,
-            detail: failed ? `${failed.name} 실패(exit=${failed.exitCode})` : "모든 명령 성공",
+            detail: failed ? `${failed.name} ${tp("실패")}(exit=${failed.exitCode})` : tp("모든 명령 성공"),
           });
           for (const row of commandResults) {
             if (row.exitCode !== 0 && row.stderrTail.trim()) {
@@ -578,7 +606,7 @@ export async function buildQualityReport(params: {
         } catch (error) {
           addCheck({
             id: "local_commands",
-            label: "로컬 품질 명령 통과",
+            label: tp("로컬 품질 명령 통과"),
             kind: "local_command",
             required: true,
             passed: false,
@@ -718,7 +746,7 @@ export function normalizeWebTurnOutput(
 ): { ok: boolean; output?: unknown; error?: string } {
   const trimmed = rawInput.trim();
   if (!trimmed) {
-    return { ok: false, error: "웹 응답 입력이 비어 있습니다." };
+    return { ok: false, error: tp("웹 응답 입력이 비어 있습니다.") };
   }
 
   if (mode === "manualPasteJson") {
@@ -726,7 +754,7 @@ export function normalizeWebTurnOutput(
     try {
       parsed = JSON.parse(trimmed);
     } catch (error) {
-      return { ok: false, error: `JSON 파싱 실패: ${String(error)}` };
+      return { ok: false, error: `${tp("JSON 파싱 실패")}: ${String(error)}` };
     }
     return {
       ok: true,
@@ -772,7 +800,7 @@ export function executeTransformNode(node: GraphNode, input: unknown): { ok: boo
     try {
       mergeValue = JSON.parse(rawMerge);
     } catch (e) {
-      return { ok: false, error: `merge JSON 형식 오류: ${String(e)}` };
+      return { ok: false, error: `${tp("merge JSON 형식 오류")}: ${String(e)}` };
     }
 
     if (input && typeof input === "object" && !Array.isArray(input) && mergeValue && typeof mergeValue === "object") {
@@ -823,17 +851,17 @@ export function executeGateNode(options: {
     try {
       parsedSchema = JSON.parse(schemaRaw);
     } catch (e) {
-      return { ok: false, error: `스키마 JSON 형식 오류: ${String(e)}` };
+      return { ok: false, error: `${tp("스키마 JSON 형식 오류")}: ${String(e)}` };
     }
     const schemaErrors = validateSimpleSchema(parsedSchema, input);
     if (schemaErrors.length > 0) {
       if (simpleWorkflowUi) {
-        schemaFallbackNote = `스키마 완화 적용 (${schemaErrors.join("; ")})`;
+        schemaFallbackNote = `${tp("스키마 완화 적용")} (${schemaErrors.join("; ")})`;
         addNodeLog(node.id, `[분기] ${schemaFallbackNote}`);
       } else {
         return {
           ok: false,
-          error: `스키마 검증 실패: ${schemaErrors.join("; ")}`,
+          error: `${tp("스키마 검증 실패")}: ${schemaErrors.join("; ")}`,
         };
       }
     }
@@ -850,16 +878,16 @@ export function executeGateNode(options: {
     const jsonMatch = text.match(/"DECISION"\s*:\s*"(PASS|REJECT)"/);
     if (jsonMatch?.[1]) {
       decision = jsonMatch[1];
-      decisionFallbackNote = `JSON에서 DECISION=${decision} 추론`;
+      decisionFallbackNote = `${tp("JSON에서 DECISION")}=${decision} ${tp("추론")}`;
     } else if (/\bREJECT\b/.test(text)) {
       decision = "REJECT";
-      decisionFallbackNote = "본문 키워드에서 REJECT 추론";
+      decisionFallbackNote = tp("본문 키워드에서 REJECT 추론");
     } else if (/\bPASS\b/.test(text)) {
       decision = "PASS";
-      decisionFallbackNote = "본문 키워드에서 PASS 추론";
+      decisionFallbackNote = tp("본문 키워드에서 PASS 추론");
     } else if (simpleWorkflowUi) {
       decision = "PASS";
-      decisionFallbackNote = "DECISION 누락으로 PASS 기본값 적용";
+      decisionFallbackNote = tp("DECISION 누락으로 PASS 기본값 적용");
     }
     if (decisionFallbackNote) {
       addNodeLog(node.id, `[분기] ${decisionFallbackNote}`);
@@ -869,7 +897,7 @@ export function executeGateNode(options: {
   if (decision !== "PASS" && decision !== "REJECT") {
     return {
       ok: false,
-      error: `분기 값은 PASS 또는 REJECT 여야 합니다. 입력값=${String(decisionRaw)}`,
+      error: `${tp("분기 값은 PASS 또는 REJECT 여야 합니다. 입력값")}=${String(decisionRaw)}`,
     };
   }
 
@@ -906,8 +934,8 @@ export function executeGateNode(options: {
         decision: decisionFallbackNote || undefined,
       },
     },
-    message: `분기 결과=${decision}, 실행 대상=${Array.from(allowed).join(",") || "없음"}${
-      schemaFallbackNote || decisionFallbackNote ? " (내부 폴백 적용)" : ""
+    message: `${tp("분기 결과")}=${decision}, ${tp("실행 대상")}=${Array.from(allowed).join(",") || tp("없음")}${
+      schemaFallbackNote || decisionFallbackNote ? ` (${tp("내부 폴백 적용")})` : ""
     }`,
   };
 }
@@ -967,12 +995,12 @@ export function buildSchemaRetryInput(
   const clip = (value: unknown, maxChars = 2800) => {
     const text = stringifyInput(value).trim();
     if (!text) {
-      return "(없음)";
+      return tp("(없음)");
     }
     if (text.length <= maxChars) {
       return text;
     }
-    return `${text.slice(0, maxChars)}\n...(중략)`;
+    return `${text.slice(0, maxChars)}\n...(${tp("중략")})`;
   };
 
   const schemaText = (() => {
@@ -984,15 +1012,15 @@ export function buildSchemaRetryInput(
   })();
 
   return [
-    "[원래 입력]",
+    `[${tp("원래 입력")}]`,
     clip(originalInput),
-    "[이전 출력]",
+    `[${tp("이전 출력")}]`,
     clip(extractSchemaValidationTarget(previousOutput)),
-    "[출력 스키마(JSON)]",
+    `[${tp("출력 스키마(JSON)")}]`,
     schemaText,
-    "[스키마 오류 목록]",
+    `[${tp("스키마 오류 목록")}]`,
     schemaErrors.map((row, index) => `${index + 1}. ${row}`).join("\n"),
-    "[재요청 지시]",
-    "위 스키마를 엄격히 만족하는 결과만 다시 생성하세요. 불필요한 설명 없이 스키마에 맞는 구조만 출력하세요.",
+    `[${tp("재요청 지시")}]`,
+    tp("위 스키마를 엄격히 만족하는 결과만 다시 생성하세요. 불필요한 설명 없이 스키마에 맞는 구조만 출력하세요."),
   ].join("\n\n");
 }

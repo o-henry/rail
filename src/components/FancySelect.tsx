@@ -22,18 +22,18 @@ function FancySelect({
   ariaLabel,
   className,
   disabled = false,
-  emptyMessage = "항목이 없습니다.",
+  emptyMessage = "",
   onChange,
   options,
-  placeholder = "선택",
+  placeholder = "",
   value,
 }: FancySelectProps) {
-  const { tp } = useI18n();
+  const { t, tp } = useI18n();
   const [isOpen, setIsOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const selected = options.find((option) => option.value === value) ?? null;
-  const selectedLabel = selected ? tp(selected.label) : tp(placeholder);
+  const selectedLabel = selected ? tp(selected.label) : tp(placeholder || t("fancy.placeholder"));
   const isGraphFileSelect = (className ?? "").includes("graph-file-select");
 
   useEffect(() => {
@@ -138,7 +138,7 @@ function FancySelect({
                   : undefined
               }
             >
-              {tp(emptyMessage)}
+              {tp(emptyMessage || t("fancy.empty"))}
             </div>
           )}
           {options.map((option) => (

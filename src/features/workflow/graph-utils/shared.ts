@@ -5,6 +5,7 @@ import {
   turnExecutorLabel,
   type TurnConfig,
 } from "../domain";
+import { t } from "../../../i18n";
 import type {
   GateConfig,
   GraphNode,
@@ -84,16 +85,16 @@ export function nodeCardSummary(node: GraphNode): string {
     const config = node.config as TransformConfig;
     const mode = String(config.mode ?? "pick");
     if (mode === "merge") {
-      return "정리 방식: 고정 정보 덧붙이기";
+      return `${t("workflow.inspector.transform.mode")}: ${t("transform.mode.merge")}`;
     }
     if (mode === "template") {
-      return "정리 방식: 문장 틀로 다시 쓰기";
+      return `${t("workflow.inspector.transform.mode")}: ${t("transform.mode.template")}`;
     }
-    return "정리 방식: 필요한 값만 꺼내기";
+    return `${t("workflow.inspector.transform.mode")}: ${t("transform.mode.pick")}`;
   }
   const config = node.config as GateConfig;
   const path = String(config.decisionPath ?? "DECISION");
-  return `판단값 위치: ${path === "decision" ? "DECISION" : path}`;
+  return `${t("workflow.inspector.gate.decisionPath")}: ${path === "decision" ? "DECISION" : path}`;
 }
 
 export function turnModelLabel(node: GraphNode): string {

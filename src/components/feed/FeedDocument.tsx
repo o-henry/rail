@@ -1,6 +1,7 @@
 import { useMemo, type ReactNode } from "react";
 import FeedChart from "./FeedChart";
 import { extractChartSpecsFromContent } from "../../features/feed/chartSpec";
+import { t } from "../../i18n";
 
 type FeedDocumentProps = {
   text: string;
@@ -583,7 +584,7 @@ export default function FeedDocument({ text, className = "", highlightQuery = ""
           }
           return (
             <figure className="feed-document-image" key={`block-${index}`}>
-              <img alt={block.alt || "문서 이미지"} loading="lazy" src={safeSrc} />
+              <img alt={block.alt || t("feed.document.imageAlt")} loading="lazy" src={safeSrc} />
               {(block.title || block.alt) && (
                 <figcaption>{block.title || block.alt}</figcaption>
               )}

@@ -117,20 +117,20 @@ export function approvalDecisionLabel(decision: "accept" | "acceptForSession" | 
 
 export function approvalSourceLabel(source: "remote"): string {
   if (source === "remote") {
-    return "엔진(app-server)";
+    return t("approval.source.remote");
   }
   return source;
 }
 
 export function lifecycleStateLabel(state: string): string {
   const map: Record<string, string> = {
-    starting: "시작 중",
-    ready: "준비됨",
-    stopped: "중지됨",
-    disconnected: "연결 끊김",
-    parseError: "파싱 오류",
-    readError: "읽기 오류",
-    stderrError: "표준오류 스트림 오류",
+    starting: t("lifecycle.starting"),
+    ready: t("lifecycle.ready"),
+    stopped: t("lifecycle.stopped"),
+    disconnected: t("lifecycle.disconnected"),
+    parseError: t("lifecycle.parseError"),
+    readError: t("lifecycle.readError"),
+    stderrError: t("lifecycle.stderrError"),
   };
   return map[state] ?? state;
 }

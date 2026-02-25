@@ -1,4 +1,4 @@
-import { Component, useEffect, useMemo, useRef, useState, type ErrorInfo, type ReactNode } from "react";
+import { Component, useMemo, useState, type ErrorInfo, type ReactNode } from "react";
 import FancySelect from "../../components/FancySelect";
 import FeedDocument from "../../components/feed/FeedDocument";
 import { useI18n } from "../../i18n";
@@ -6,6 +6,34 @@ import { useI18n } from "../../i18n";
 type FeedPageProps = {
   vm: any;
 };
+
+const STRIP_FEED_SECTION_TITLES = [
+  "입력 출처",
+  "전달 입력 스냅샷",
+  "Input Sources",
+  "Input Source",
+  "Input Snapshot",
+  "Delivered Input Snapshot",
+  "入力ソース",
+  "入力スナップショット",
+  "输入来源",
+  "传递输入快照",
+];
+
+function stripDuplicatedInputSections(content: string): string {
+  const source = String(content ?? "");
+  if (!source) {
+    return source;
+  }
+  const titlePattern = STRIP_FEED_SECTION_TITLES.map((title) =>
+    title.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
+  ).join("|");
+  const sectionPattern = new RegExp(
+    `^##\\s*(?:${titlePattern})\\s*$[\\s\\S]*?(?=^##\\s|\\Z)`,
+    "gim",
+  );
+  return source.replace(sectionPattern, "").replace(/\n{3,}/g, "\n\n").trim();
+}
 
 class FeedCardBoundary extends Component<
   { children: ReactNode; postId: string; fallbackText: string },
@@ -34,9 +62,6 @@ class FeedCardBoundary extends Component<
 
 export default function FeedPage({ vm }: FeedPageProps) {
   const { t, tp } = useI18n();
-  const contentSearchInputRef = useRef<HTMLInputElement | null>(null);
-  const [isContentSearchOpen, setIsContentSearchOpen] = useState(false);
-  const [contentSearchQuery, setContentSearchQuery] = useState("");
   const [feedSectionExpandedByKey, setFeedSectionExpandedByKey] = useState<Record<string, boolean>>({});
   const [deleteGroupTarget, setDeleteGroupTarget] = useState<{
     runId: string;
@@ -130,90 +155,10 @@ export default function FeedPage({ vm }: FeedPageProps) {
   const hasFeedEntries =
     (Array.isArray(groupedFeedRuns) && groupedFeedRuns.length > 0) ||
     (Array.isArray(currentFeedPosts) && currentFeedPosts.length > 0);
-  const normalizedContentSearchQuery = contentSearchQuery.trim().toLocaleLowerCase();
-
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (!(event.metaKey || event.ctrlKey)) {
-        return;
-      }
-      if (String(event.key ?? "").toLowerCase() !== "f") {
-        return;
-      }
-      event.preventDefault();
-      setIsContentSearchOpen(true);
-      requestAnimationFrame(() => {
-        contentSearchInputRef.current?.focus();
-        contentSearchInputRef.current?.select();
-      });
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => {
-      window.removeEventListener("keydown", onKeyDown);
-    };
-  }, []);
-
-  const renderHighlightedText = (input: string) => {
-    const source = String(input ?? "");
-    if (!source) {
-      return source;
-    }
-    if (!normalizedContentSearchQuery) {
-      return source;
-    }
-    const escaped = normalizedContentSearchQuery.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const matcher = new RegExp(`(${escaped})`, "gi");
-    const chunks = source.split(matcher).filter((chunk) => chunk.length > 0);
-    return chunks.map((chunk, index) => {
-      const isMatch =
-        chunk.localeCompare(normalizedContentSearchQuery, undefined, { sensitivity: "accent" }) === 0;
-      if (isMatch) {
-        return (
-          <mark className="feed-highlight-mark" key={`feed-highlight-${index}-${chunk.length}`}>
-            {chunk}
-          </mark>
-        );
-      }
-      return <span key={`feed-text-${index}-${chunk.length}`}>{chunk}</span>;
-    });
-  };
 
   const groupedFeedRunsForDisplay = useMemo(() => {
-    const baseGroups = Array.isArray(groupedFeedRuns) ? groupedFeedRuns : [];
-    if (!normalizedContentSearchQuery) {
-      return baseGroups;
-    }
-
-    return baseGroups
-      .map((group: any) => {
-        const posts = Array.isArray(group?.posts) ? group.posts : [];
-        const filteredPosts = posts.filter((post: any) => {
-          const attachments = Array.isArray(post?.attachments) ? post.attachments : [];
-          const markdownAttachment = attachments.find((attachment: any) => attachment?.kind === "markdown");
-          const visibleContentRaw = String(markdownAttachment?.content ?? post?.summary ?? "");
-          const readableContent = String(toHumanReadableFeedText(visibleContentRaw) ?? "");
-          const readableSummary = String(toHumanReadableFeedText(post?.summary ?? "") ?? "");
-          const readableQuestion = String(toHumanReadableFeedText(post?.question ?? "") ?? "");
-          const readableInputPreview = String(toHumanReadableFeedText(post?.inputContext?.preview ?? "") ?? "");
-          const sourceBlob = [
-            readableContent,
-            readableSummary,
-            readableQuestion,
-            readableInputPreview,
-            String(post?.agentName ?? ""),
-            String(post?.roleLabel ?? ""),
-          ]
-            .join("\n")
-            .toLocaleLowerCase();
-          return sourceBlob.includes(normalizedContentSearchQuery);
-        });
-        return {
-          ...group,
-          posts: filteredPosts,
-        };
-      })
-      .filter((group: any) => Array.isArray(group?.posts) && group.posts.length > 0);
-  }, [groupedFeedRuns, normalizedContentSearchQuery, toHumanReadableFeedText]);
+    return Array.isArray(groupedFeedRuns) ? groupedFeedRuns : [];
+  }, [groupedFeedRuns]);
 
   return (
     <section className={`feed-layout workspace-tab-panel${hasFeedEntries ? "" : " no-feed-inspector"}`}>
@@ -223,7 +168,7 @@ export default function FeedPage({ vm }: FeedPageProps) {
                 {/* <span>{feedInspectorAgentPosts.length}개</span> */}
               {/* </div> */}
               {/* {feedInspectorAgentPosts.length === 0 && (
-                <div className="inspector-empty">표시할 에이전트 포스트가 없습니다.</div>
+                <div className="inspector-empty">{t("feed.empty")}</div>
               )}
               {feedInspectorAgentPosts.length > 0 && (
                 <div className="feed-agent-list">
@@ -483,46 +428,6 @@ export default function FeedPage({ vm }: FeedPageProps) {
               <div className="feed-topbar">
                 <div className="feed-topbar-left">
                   <h2>{t("feed.title")}</h2>
-                  <div className={`feed-content-search-wrap ${isContentSearchOpen ? "is-open" : ""}`}>
-                    <button
-                      aria-label={t("feed.search.shortcutHint")}
-                      className="feed-content-search-icon"
-                      onClick={() => {
-                        if (!isContentSearchOpen) {
-                          setIsContentSearchOpen(true);
-                          requestAnimationFrame(() => {
-                            contentSearchInputRef.current?.focus();
-                            contentSearchInputRef.current?.select();
-                          });
-                          return;
-                        }
-                        contentSearchInputRef.current?.focus();
-                        contentSearchInputRef.current?.select();
-                      }}
-                      type="button"
-                    >
-                      <img alt="" aria-hidden="true" src="/search-alt-svgrepo-com.svg" />
-                    </button>
-                    {isContentSearchOpen && (
-                      <input
-                        ref={contentSearchInputRef}
-                        className="feed-content-search-input"
-                        onBlur={() => {
-                          if (!contentSearchQuery.trim()) {
-                            setIsContentSearchOpen(false);
-                          }
-                        }}
-                        onChange={(event) => setContentSearchQuery(event.currentTarget.value)}
-                        onKeyDown={(event) => {
-                          if (event.key === "Escape" && !contentSearchQuery.trim()) {
-                            setIsContentSearchOpen(false);
-                          }
-                        }}
-                        placeholder={t("feed.search.placeholder")}
-                        value={contentSearchQuery}
-                      />
-                    )}
-                  </div>
                 </div>
                 <button
                   className={`feed-filter-toggle ${feedFilterOpen ? "is-open" : ""}`}
@@ -619,12 +524,6 @@ export default function FeedPage({ vm }: FeedPageProps) {
                 {!feedLoading && currentFeedPosts.length === 0 && (
                   <div className="log-empty">{t("feed.empty")}</div>
                 )}
-                {!feedLoading &&
-                  currentFeedPosts.length > 0 &&
-                  groupedFeedRunsForDisplay.length === 0 &&
-                  normalizedContentSearchQuery && (
-                    <div className="log-empty">{t("feed.search.empty")}</div>
-                  )}
                 {!feedLoading &&
                   groupedFeedRunsForDisplay.map((group: any) => {
                     const isGroupExpanded = feedGroupExpandedByRunId[group.runId] !== false;
@@ -731,7 +630,9 @@ export default function FeedPage({ vm }: FeedPageProps) {
                               const markdownAttachment = attachments.find((attachment: any) => attachment?.kind === "markdown");
                               const visibleContentRaw =
                                 markdownAttachment?.content ?? post.summary ?? t("feed.attachment.empty");
-                              const visibleContent = toHumanReadableFeedText(visibleContentRaw);
+                              const visibleContent = stripDuplicatedInputSections(
+                                toHumanReadableFeedText(visibleContentRaw),
+                              );
                               const readableQuestion = toHumanReadableFeedText(post.question ?? "");
                               const readableInputPreview = toHumanReadableFeedText(post.inputContext?.preview ?? "");
                               const avatarHue = hashStringToHue(`${post.nodeId}:${post.agentName}:${post.roleLabel}`);
@@ -793,10 +694,10 @@ export default function FeedPage({ vm }: FeedPageProps) {
                                     </div>
                                     <div className="feed-card-title-wrap">
                                       <h3 className={post.nodeType === "gate" ? "gate-node-title" : undefined}>
-                                        {renderHighlightedText(String(post.agentName ?? ""))}
+                                        {String(post.agentName ?? "")}
                                       </h3>
                                       <div className="feed-card-sub">
-                                        {renderHighlightedText(String(post.roleLabel ?? ""))}
+                                        {String(post.roleLabel ?? "")}
                                       </div>
                                     </div>
                                     <div className="feed-card-head-actions">
@@ -844,7 +745,7 @@ export default function FeedPage({ vm }: FeedPageProps) {
                                     </div>
                                   </div>
                                   <div className="feed-card-summary">
-                                    {renderHighlightedText(post.summary ? tp(post.summary) : t("feed.summary.empty"))}
+                                    {post.summary ? tp(post.summary) : t("feed.summary.empty")}
                                   </div>
                                   <button
                                     className="feed-more-button"
@@ -883,14 +784,14 @@ export default function FeedPage({ vm }: FeedPageProps) {
                                           <ul>
                                             {upstreamSources.map((source: any, index: any) => (
                                               <li key={`${postId}:source:${source.nodeId ?? source.agentName}:${index}`}>
-                                                {renderHighlightedText(formatFeedInputSourceLabel(source))}
+                                                {formatFeedInputSourceLabel(source)}
                                               </li>
                                             ))}
                                           </ul>
                                         )}
                                       </section>
                                     ) : readableQuestion ? (
-                                      <div className="feed-card-question">Q: {renderHighlightedText(readableQuestion)}</div>
+                                      <div className="feed-card-question">Q: {readableQuestion}</div>
                                     ) : null}
                                     {readableInputPreview && (
                                       <section className="feed-card-input-sources">
@@ -915,13 +816,12 @@ export default function FeedPage({ vm }: FeedPageProps) {
                                           </button>
                                         </div>
                                         {isInputSnapshotExpanded && (
-                                          <pre className="feed-sns-content">{renderHighlightedText(readableInputPreview)}</pre>
+                                          <pre className="feed-sns-content">{readableInputPreview}</pre>
                                         )}
                                       </section>
                                     )}
                                     <FeedDocument
                                       className="feed-sns-content"
-                                      highlightQuery={contentSearchQuery}
                                       text={visibleContent}
                                     />
                                     <div className="feed-evidence-row">

@@ -1,4 +1,5 @@
 import type { GraphNode } from "./types";
+import { t } from "../../i18n";
 
 export type TurnExecutor =
   | "codex"
@@ -75,7 +76,7 @@ export const TURN_EXECUTOR_LABELS: Record<TurnExecutor, string> = {
   web_grok: "WEB / GROK",
   web_perplexity: "WEB / PERPLEXITY",
   web_claude: "WEB / CLAUDE",
-  ollama: "Ollama (로컬)",
+  ollama: "Ollama",
 };
 
 export const WEB_PROVIDER_OPTIONS: ReadonlyArray<WebProvider> = [
@@ -153,9 +154,9 @@ export function isPresetKind(value: string): value is PresetKind {
 }
 
 export function costPresetLabel(preset: CostPreset): string {
-  if (preset === "conservative") return "고사양 (품질 우선)";
-  if (preset === "aggressive") return "저사양 (사용량 절감)";
-  return "보통 (기본)";
+  if (preset === "conservative") return t("option.cost.conservative");
+  if (preset === "aggressive") return t("option.cost.aggressive");
+  return t("option.cost.balanced");
 }
 
 export function getCostPresetTargetModel(
@@ -177,6 +178,9 @@ export function getTurnExecutor(config: TurnConfig): TurnExecutor {
 }
 
 export function turnExecutorLabel(executor: TurnExecutor): string {
+  if (executor === "ollama") {
+    return t("feed.executor.ollama");
+  }
   return TURN_EXECUTOR_LABELS[executor];
 }
 
