@@ -244,6 +244,12 @@ open src-tauri/target/release/bundle/macos/rail.app
 3. `압축해제된 확장 프로그램 로드`
 4. `extension/rail-bridge` 폴더 선택
 
+### 1-1) 레포 정리/삭제 시 주의
+
+- `rail.app`는 단독 실행 가능하지만, Web Connect는 Chrome 확장이 필요합니다.
+- 확장을 `압축해제` 방식으로 로드한 경우, 로드한 폴더 경로가 사라지면 확장이 동작하지 않습니다.
+- 레포를 삭제할 계획이면 `extension/rail-bridge`를 다른 영구 경로로 복사한 뒤 그 경로를 다시 로드하세요.
+
 ### 2) 앱에서 연결 코드 발급
 
 1. 앱 `웹 연결` 탭 이동

@@ -7,10 +7,23 @@ const tokenInput = document.querySelector("#bridge-token");
 const statusEl = document.querySelector("#status");
 const saveButton = document.querySelector("#save");
 const testButton = document.querySelector("#test");
+const TEST_TIMEOUT_MS = 5000;
 
 function setStatus(text, isError = false) {
+  if (!statusEl) {
+    return;
+  }
   statusEl.textContent = text;
   statusEl.style.color = isError ? "#d92f2f" : "#2e3947";
+}
+
+function setButtonsDisabled(disabled) {
+  if (saveButton) {
+    saveButton.disabled = disabled;
+  }
+  if (testButton) {
+    testButton.disabled = disabled;
+  }
 }
 
 function normalizeUrl(raw) {
@@ -88,11 +101,19 @@ async function loadConfig() {
     }
   }
 
-  urlInput.value = nextUrl;
-  tokenInput.value = nextToken;
+  if (urlInput) {
+    urlInput.value = nextUrl;
+  }
+  if (tokenInput) {
+    tokenInput.value = nextToken;
+  }
 }
 
 async function saveConfig() {
+  if (!urlInput || !tokenInput) {
+    setStatus("입력 요소를 찾지 못했습니다.", true);
+    return;
+  }
   const nextUrl = validateBridgeUrl(urlInput.value);
   if (!nextUrl) {
     setStatus("웹 연결 URL은 http://127.0.0.1:<port> 형식만 허용됩니다.", true);
@@ -119,6 +140,10 @@ async function saveConfig() {
 }
 
 async function testConnection() {
+  if (!urlInput || !tokenInput) {
+    setStatus("입력 요소를 찾지 못했습니다.", true);
+    return;
+  }
   const baseUrl = validateBridgeUrl(urlInput.value);
   if (!baseUrl) {
     setStatus("웹 연결 URL은 http://127.0.0.1:<port> 형식만 허용됩니다.", true);
@@ -130,12 +155,18 @@ async function testConnection() {
     return;
   }
   try {
+    setButtonsDisabled(true);
+    setStatus("연결 테스트 중...");
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), TEST_TIMEOUT_MS);
     const response = await fetch(`${baseUrl}/v1/health`, {
       method: "GET",
       headers: {
         Authorization: `Bearer ${token}`,
       },
+      signal: controller.signal,
     });
+    clearTimeout(timeoutId);
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) {
       const reason = String(payload?.error ?? `HTTP ${response.status}`);
@@ -154,16 +185,26 @@ async function testConnection() {
     }
     setStatus("연결 성공");
   } catch (error) {
-    setStatus(`연결 실패: ${String(error)}`, true);
+    if (error?.name === "AbortError") {
+      setStatus("연결 실패: 응답 시간 초과(5초)", true);
+    } else {
+      setStatus(`연결 실패: ${String(error)}`, true);
+    }
+  } finally {
+    setButtonsDisabled(false);
   }
 }
 
-saveButton.addEventListener("click", () => {
-  void saveConfig();
-});
+if (saveButton) {
+  saveButton.addEventListener("click", () => {
+    void saveConfig();
+  });
+}
 
-testButton.addEventListener("click", () => {
-  void testConnection();
-});
+if (testButton) {
+  testButton.addEventListener("click", () => {
+    void testConnection();
+  });
+}
 
 void loadConfig();

@@ -61,6 +61,11 @@ button:active {
   transform: translateY(1px);
 }
 
+button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .status {
   min-height: 18px;
   font-size: 12px;
