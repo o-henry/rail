@@ -1,4 +1,4 @@
-import { Component, useState, type ErrorInfo, type ReactNode } from "react";
+import { Component, useEffect, useMemo, useRef, useState, type ErrorInfo, type ReactNode } from "react";
 import FancySelect from "../../components/FancySelect";
 import FeedDocument from "../../components/feed/FeedDocument";
 import { useI18n } from "../../i18n";
@@ -34,6 +34,8 @@ class FeedCardBoundary extends Component<
 
 export default function FeedPage({ vm }: FeedPageProps) {
   const { t, tp } = useI18n();
+  const contentSearchInputRef = useRef<HTMLInputElement | null>(null);
+  const [contentSearchQuery, setContentSearchQuery] = useState("");
   const [deleteGroupTarget, setDeleteGroupTarget] = useState<{
     runId: string;
     sourceFile: string;
@@ -126,6 +128,87 @@ export default function FeedPage({ vm }: FeedPageProps) {
   const hasFeedEntries =
     (Array.isArray(groupedFeedRuns) && groupedFeedRuns.length > 0) ||
     (Array.isArray(currentFeedPosts) && currentFeedPosts.length > 0);
+  const normalizedContentSearchQuery = contentSearchQuery.trim().toLocaleLowerCase();
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!(event.metaKey || event.ctrlKey)) {
+        return;
+      }
+      if (String(event.key ?? "").toLowerCase() !== "f") {
+        return;
+      }
+      event.preventDefault();
+      contentSearchInputRef.current?.focus();
+      contentSearchInputRef.current?.select();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, []);
+
+  const renderHighlightedText = (input: string) => {
+    const source = String(input ?? "");
+    if (!source) {
+      return source;
+    }
+    if (!normalizedContentSearchQuery) {
+      return source;
+    }
+    const escaped = normalizedContentSearchQuery.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const matcher = new RegExp(`(${escaped})`, "gi");
+    const chunks = source.split(matcher).filter((chunk) => chunk.length > 0);
+    return chunks.map((chunk, index) => {
+      const isMatch =
+        chunk.localeCompare(normalizedContentSearchQuery, undefined, { sensitivity: "accent" }) === 0;
+      if (isMatch) {
+        return (
+          <mark className="feed-highlight-mark" key={`feed-highlight-${index}-${chunk.length}`}>
+            {chunk}
+          </mark>
+        );
+      }
+      return <span key={`feed-text-${index}-${chunk.length}`}>{chunk}</span>;
+    });
+  };
+
+  const groupedFeedRunsForDisplay = useMemo(() => {
+    const baseGroups = Array.isArray(groupedFeedRuns) ? groupedFeedRuns : [];
+    if (!normalizedContentSearchQuery) {
+      return baseGroups;
+    }
+
+    return baseGroups
+      .map((group: any) => {
+        const posts = Array.isArray(group?.posts) ? group.posts : [];
+        const filteredPosts = posts.filter((post: any) => {
+          const attachments = Array.isArray(post?.attachments) ? post.attachments : [];
+          const markdownAttachment = attachments.find((attachment: any) => attachment?.kind === "markdown");
+          const visibleContentRaw = String(markdownAttachment?.content ?? post?.summary ?? "");
+          const readableContent = String(toHumanReadableFeedText(visibleContentRaw) ?? "");
+          const readableSummary = String(toHumanReadableFeedText(post?.summary ?? "") ?? "");
+          const readableQuestion = String(toHumanReadableFeedText(post?.question ?? "") ?? "");
+          const readableInputPreview = String(toHumanReadableFeedText(post?.inputContext?.preview ?? "") ?? "");
+          const sourceBlob = [
+            readableContent,
+            readableSummary,
+            readableQuestion,
+            readableInputPreview,
+            String(post?.agentName ?? ""),
+            String(post?.roleLabel ?? ""),
+          ]
+            .join("\n")
+            .toLocaleLowerCase();
+          return sourceBlob.includes(normalizedContentSearchQuery);
+        });
+        return {
+          ...group,
+          posts: filteredPosts,
+        };
+      })
+      .filter((group: any) => Array.isArray(group?.posts) && group.posts.length > 0);
+  }, [groupedFeedRuns, normalizedContentSearchQuery, toHumanReadableFeedText]);
 
   return (
     <section className={`feed-layout workspace-tab-panel${hasFeedEntries ? "" : " no-feed-inspector"}`}>
@@ -393,7 +476,29 @@ export default function FeedPage({ vm }: FeedPageProps) {
             </article>}
             <article className="panel-card feed-main">
               <div className="feed-topbar">
-                <h2>{t("feed.title")}</h2>
+                <div className="feed-topbar-left">
+                  <h2>{t("feed.title")}</h2>
+                  <div className="feed-content-search-wrap">
+                    <button
+                      aria-label={t("feed.search.shortcutHint")}
+                      className="feed-content-search-icon"
+                      onClick={() => {
+                        contentSearchInputRef.current?.focus();
+                        contentSearchInputRef.current?.select();
+                      }}
+                      type="button"
+                    >
+                      <img alt="" aria-hidden="true" src="/search-alt-2-svgrepo-com.svg" />
+                    </button>
+                    <input
+                      ref={contentSearchInputRef}
+                      className="feed-content-search-input"
+                      onChange={(event) => setContentSearchQuery(event.currentTarget.value)}
+                      placeholder={t("feed.search.placeholder")}
+                      value={contentSearchQuery}
+                    />
+                  </div>
+                </div>
                 <button
                   className={`feed-filter-toggle ${feedFilterOpen ? "is-open" : ""}`}
                   onClick={() => setFeedFilterOpen((prev: any) => !prev)}
@@ -490,7 +595,13 @@ export default function FeedPage({ vm }: FeedPageProps) {
                   <div className="log-empty">{t("feed.empty")}</div>
                 )}
                 {!feedLoading &&
-                  groupedFeedRuns.map((group: any) => {
+                  currentFeedPosts.length > 0 &&
+                  groupedFeedRunsForDisplay.length === 0 &&
+                  normalizedContentSearchQuery && (
+                    <div className="log-empty">{t("feed.search.empty")}</div>
+                  )}
+                {!feedLoading &&
+                  groupedFeedRunsForDisplay.map((group: any) => {
                     const isGroupExpanded = feedGroupExpandedByRunId[group.runId] !== false;
                     const isRenamingGroup = feedGroupRenameRunId === group.runId;
                     return (
@@ -630,9 +741,11 @@ export default function FeedPage({ vm }: FeedPageProps) {
                                     </div>
                                     <div className="feed-card-title-wrap">
                                       <h3 className={post.nodeType === "gate" ? "gate-node-title" : undefined}>
-                                        {post.agentName}
+                                        {renderHighlightedText(String(post.agentName ?? ""))}
                                       </h3>
-                                      <div className="feed-card-sub">{post.roleLabel}</div>
+                                      <div className="feed-card-sub">
+                                        {renderHighlightedText(String(post.roleLabel ?? ""))}
+                                      </div>
                                     </div>
                                     <div className="feed-card-head-actions">
                                       <span
@@ -677,7 +790,7 @@ export default function FeedPage({ vm }: FeedPageProps) {
                                     </div>
                                   </div>
                                   <div className="feed-card-summary">
-                                    {post.summary ? tp(post.summary) : t("feed.summary.empty")}
+                                    {renderHighlightedText(post.summary ? tp(post.summary) : t("feed.summary.empty"))}
                                   </div>
                                   <button
                                     className="feed-more-button"
@@ -699,13 +812,13 @@ export default function FeedPage({ vm }: FeedPageProps) {
                                         <ul>
                                           {upstreamSources.map((source: any, index: any) => (
                                             <li key={`${postId}:source:${source.nodeId ?? source.agentName}:${index}`}>
-                                              {formatFeedInputSourceLabel(source)}
+                                              {renderHighlightedText(formatFeedInputSourceLabel(source))}
                                             </li>
                                           ))}
                                         </ul>
                                       </section>
                                     ) : readableQuestion ? (
-                                      <div className="feed-card-question">Q: {readableQuestion}</div>
+                                      <div className="feed-card-question">Q: {renderHighlightedText(readableQuestion)}</div>
                                     ) : null}
                                     {readableInputPreview && (
                                       <section className="feed-card-input-sources">
@@ -713,10 +826,14 @@ export default function FeedPage({ vm }: FeedPageProps) {
                                           {t("feed.inputSnapshot")}
                                           {post.inputContext?.truncated ? t("feed.partial") : ""}
                                         </div>
-                                        <pre className="feed-sns-content">{readableInputPreview}</pre>
+                                        <pre className="feed-sns-content">{renderHighlightedText(readableInputPreview)}</pre>
                                       </section>
                                     )}
-                                    <FeedDocument className="feed-sns-content" text={visibleContent} />
+                                    <FeedDocument
+                                      className="feed-sns-content"
+                                      highlightQuery={contentSearchQuery}
+                                      text={visibleContent}
+                                    />
                                     <div className="feed-evidence-row">
                                       <span>{formatRelativeFeedTime(post.createdAt)}</span>
                                       <span>

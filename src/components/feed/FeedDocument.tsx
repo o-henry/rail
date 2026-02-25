@@ -5,6 +5,7 @@ import { extractChartSpecsFromContent } from "../../features/feed/chartSpec";
 type FeedDocumentProps = {
   text: string;
   className?: string;
+  highlightQuery?: string;
 };
 
 type ListItem = {
@@ -22,6 +23,39 @@ type TextBlock =
   | { kind: "code"; language: string; code: string };
 
 type JsonValue = null | string | number | boolean | JsonValue[] | { [key: string]: JsonValue };
+
+function escapeRegex(input: string): string {
+  return String(input ?? "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function splitHighlightParts(input: string, query: string): { value: string; hit: boolean }[] {
+  const source = String(input ?? "");
+  const keyword = String(query ?? "").trim();
+  if (!source || !keyword) {
+    return [{ value: source, hit: false }];
+  }
+  const matcher = new RegExp(`(${escapeRegex(keyword)})`, "gi");
+  const chunks = source.split(matcher);
+  return chunks
+    .filter((chunk) => chunk.length > 0)
+    .map((chunk) => ({
+      value: chunk,
+      hit: chunk.localeCompare(keyword, undefined, { sensitivity: "accent" }) === 0,
+    }));
+}
+
+function renderHighlightedText(input: string, query: string, keyPrefix: string): ReactNode[] {
+  const parts = splitHighlightParts(input, query);
+  return parts.map((part, index) =>
+    part.hit ? (
+      <mark className="feed-highlight-mark" key={`${keyPrefix}-hit-${index}`}>
+        {part.value}
+      </mark>
+    ) : (
+      <span key={`${keyPrefix}-text-${index}`}>{part.value}</span>
+    ),
+  );
+}
 
 function normalizeFlattenedStructuredText(input: string): string {
   const source = String(input ?? "").replace(/\r\n/g, "\n");
@@ -354,12 +388,16 @@ function toReadableJsonLabel(key: string): string {
   return normalized || key;
 }
 
-function renderJsonValue(value: JsonValue, keyPrefix = "json"): ReactNode {
+function renderJsonValue(value: JsonValue, highlightQuery = "", keyPrefix = "json"): ReactNode {
   if (value === null) {
     return <p className="feed-document-paragraph">(null)</p>;
   }
   if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
-    return <p className="feed-document-paragraph">{String(value)}</p>;
+    return (
+      <p className="feed-document-paragraph">
+        {renderHighlightedText(String(value), highlightQuery, `${keyPrefix}-value`)}
+      </p>
+    );
   }
   if (Array.isArray(value)) {
     if (value.length === 0) {
@@ -368,7 +406,9 @@ function renderJsonValue(value: JsonValue, keyPrefix = "json"): ReactNode {
     return (
       <ul className="feed-document-list">
         {value.map((item, index) => (
-          <li key={`${keyPrefix}-item-${index}`}>{renderJsonValue(item, `${keyPrefix}-${index}`)}</li>
+          <li key={`${keyPrefix}-item-${index}`}>
+            {renderJsonValue(item, highlightQuery, `${keyPrefix}-${index}`)}
+          </li>
         ))}
       </ul>
     );
@@ -382,15 +422,21 @@ function renderJsonValue(value: JsonValue, keyPrefix = "json"): ReactNode {
     <div className="feed-json-document">
       {entries.map(([key, entryValue], index) => (
         <section className="feed-json-section" key={`${keyPrefix}-${key}-${index}`}>
-          <h3 className="feed-document-h3">{toReadableJsonLabel(key)}</h3>
-          {renderJsonValue(entryValue, `${keyPrefix}-${key}-${index}`)}
+          <h3 className="feed-document-h3">
+            {renderHighlightedText(
+              toReadableJsonLabel(key),
+              highlightQuery,
+              `${keyPrefix}-${key}-${index}-label`,
+            )}
+          </h3>
+          {renderJsonValue(entryValue, highlightQuery, `${keyPrefix}-${key}-${index}`)}
         </section>
       ))}
     </div>
   );
 }
 
-function renderInlineMarkdown(text: string): ReactNode[] {
+function renderInlineMarkdown(text: string, highlightQuery = "", keyPrefix = "inline"): ReactNode[] {
   const source = String(text ?? "");
   if (!source) {
     return [];
@@ -403,20 +449,30 @@ function renderInlineMarkdown(text: string): ReactNode[] {
   while ((match = pattern.exec(source)) !== null) {
     const start = match.index;
     if (start > cursor) {
-      nodes.push(source.slice(cursor, start));
+      nodes.push(...renderHighlightedText(source.slice(cursor, start), highlightQuery, `${keyPrefix}-${start}`));
     }
     if (match[1]) {
       nodes.push(
-        <strong key={`inline-bold-${start}-${match[1].length}`}>{match[1]}</strong>,
+        <strong key={`inline-bold-${start}-${match[1].length}`}>
+          {renderHighlightedText(match[1], highlightQuery, `${keyPrefix}-bold-${start}`)}
+        </strong>,
       );
     } else if (match[2]) {
-      nodes.push(<code key={`inline-code-${start}-${match[2].length}`}>{match[2]}</code>);
+      nodes.push(
+        <code key={`inline-code-${start}-${match[2].length}`}>
+          {renderHighlightedText(match[2], highlightQuery, `${keyPrefix}-code-${start}`)}
+        </code>,
+      );
     } else if (match[3]) {
-      nodes.push(<em key={`inline-italic-${start}-${match[3].length}`}>{match[3]}</em>);
+      nodes.push(
+        <em key={`inline-italic-${start}-${match[3].length}`}>
+          {renderHighlightedText(match[3], highlightQuery, `${keyPrefix}-italic-${start}`)}
+        </em>,
+      );
     } else if (match[4] && match[5]) {
       const href = sanitizeDocumentUrl(match[5]);
       if (!href) {
-        nodes.push(`${match[4]} (${match[5]})`);
+        nodes.push(...renderHighlightedText(`${match[4]} (${match[5]})`, highlightQuery, `${keyPrefix}-raw-${start}`));
         cursor = start + match[0].length;
         continue;
       }
@@ -427,27 +483,35 @@ function renderInlineMarkdown(text: string): ReactNode[] {
           rel="noreferrer noopener"
           target="_blank"
         >
-          {match[4]}
+          {renderHighlightedText(match[4], highlightQuery, `${keyPrefix}-link-${start}`)}
         </a>,
       );
     } else {
-      nodes.push(match[0]);
+      nodes.push(...renderHighlightedText(match[0], highlightQuery, `${keyPrefix}-etc-${start}`));
     }
     cursor = start + match[0].length;
   }
 
   if (cursor < source.length) {
-    nodes.push(source.slice(cursor));
+    nodes.push(...renderHighlightedText(source.slice(cursor), highlightQuery, `${keyPrefix}-tail`));
   }
   return nodes.length > 0 ? nodes : [source];
 }
 
-function renderListBlock(block: { ordered: boolean; items: ListItem[] }, keyPrefix: string): ReactNode {
+function renderListBlock(
+  block: { ordered: boolean; items: ListItem[] },
+  keyPrefix: string,
+  highlightQuery = "",
+): ReactNode {
   const items = block.items.map((item, itemIndex) => (
     <li key={`${keyPrefix}-item-${itemIndex}`}>
-      <span>{renderInlineMarkdown(item.text)}</span>
+      <span>{renderInlineMarkdown(item.text, highlightQuery, `${keyPrefix}-item-${itemIndex}`)}</span>
       {item.childLists.map((childBlock, childIndex) =>
-        renderListBlock(childBlock, `${keyPrefix}-item-${itemIndex}-child-${childIndex}`),
+        renderListBlock(
+          childBlock,
+          `${keyPrefix}-item-${itemIndex}-child-${childIndex}`,
+          highlightQuery,
+        ),
       )}
     </li>
   ));
@@ -466,7 +530,7 @@ function renderListBlock(block: { ordered: boolean; items: ListItem[] }, keyPref
   );
 }
 
-export default function FeedDocument({ text, className = "" }: FeedDocumentProps) {
+export default function FeedDocument({ text, className = "", highlightQuery = "" }: FeedDocumentProps) {
   const normalizedText = useMemo(() => normalizeFlattenedStructuredText(text), [text]);
   const extracted = useMemo(() => extractChartSpecsFromContent(normalizedText), [normalizedText]);
   const jsonDocument = useMemo(
@@ -484,32 +548,32 @@ export default function FeedDocument({ text, className = "" }: FeedDocumentProps
         <FeedChart key={`chart-${index}`} spec={chart} />
       ))}
       {jsonDocument
-        ? renderJsonValue(jsonDocument)
+        ? renderJsonValue(jsonDocument, highlightQuery)
         : blocks.map((block, index) => {
         if (block.kind === "heading") {
           if (block.level === 1) {
             return (
               <h1 className="feed-document-h1" key={`block-${index}`}>
-                {renderInlineMarkdown(block.text)}
+                {renderInlineMarkdown(block.text, highlightQuery, `heading-h1-${index}`)}
               </h1>
             );
           }
           if (block.level === 2) {
             return (
               <h2 className="feed-document-h2" key={`block-${index}`}>
-                {renderInlineMarkdown(block.text)}
+                {renderInlineMarkdown(block.text, highlightQuery, `heading-h2-${index}`)}
               </h2>
             );
           }
           return (
             <h3 className="feed-document-h3" key={`block-${index}`}>
-              {renderInlineMarkdown(block.text)}
+              {renderInlineMarkdown(block.text, highlightQuery, `heading-h3-${index}`)}
             </h3>
           );
         }
 
         if (block.kind === "list") {
-          return renderListBlock(block, `block-${index}`);
+          return renderListBlock(block, `block-${index}`, highlightQuery);
         }
 
         if (block.kind === "image") {
@@ -534,7 +598,9 @@ export default function FeedDocument({ text, className = "" }: FeedDocumentProps
                 <thead>
                   <tr>
                     {block.headers.map((header, headerIndex) => (
-                      <th key={`header-${index}-${headerIndex}`}>{renderInlineMarkdown(header)}</th>
+                      <th key={`header-${index}-${headerIndex}`}>
+                        {renderInlineMarkdown(header, highlightQuery, `table-header-${index}-${headerIndex}`)}
+                      </th>
                     ))}
                   </tr>
                 </thead>
@@ -542,7 +608,13 @@ export default function FeedDocument({ text, className = "" }: FeedDocumentProps
                   {block.rows.map((row, rowIndex) => (
                     <tr key={`row-${index}-${rowIndex}`}>
                       {row.map((cell, cellIndex) => (
-                        <td key={`cell-${index}-${rowIndex}-${cellIndex}`}>{renderInlineMarkdown(cell)}</td>
+                        <td key={`cell-${index}-${rowIndex}-${cellIndex}`}>
+                          {renderInlineMarkdown(
+                            cell,
+                            highlightQuery,
+                            `table-cell-${index}-${rowIndex}-${cellIndex}`,
+                          )}
+                        </td>
                       ))}
                     </tr>
                   ))}
@@ -566,7 +638,7 @@ export default function FeedDocument({ text, className = "" }: FeedDocumentProps
 
         return (
           <p className="feed-document-paragraph" key={`block-${index}`}>
-            {renderInlineMarkdown(block.text)}
+            {renderInlineMarkdown(block.text, highlightQuery, `paragraph-${index}`)}
           </p>
         );
       })}
