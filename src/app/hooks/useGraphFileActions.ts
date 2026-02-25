@@ -11,6 +11,7 @@ type UseGraphFileActionsParams<TNode> = {
   graphFileName: string;
   selectedGraphFileName: string;
   graphRenameDraft: string;
+  isGraphRunning: boolean;
   selectedNode: TNode | null;
   setError: (value: string) => void;
   refreshGraphFiles: () => Promise<void>;
@@ -46,6 +47,7 @@ export function useGraphFileActions<TNode>(params: UseGraphFileActionsParams<TNo
     graphFileName,
     selectedGraphFileName,
     graphRenameDraft,
+    isGraphRunning,
     selectedNode,
     setError,
     refreshGraphFiles,
@@ -73,6 +75,10 @@ export function useGraphFileActions<TNode>(params: UseGraphFileActionsParams<TNo
 
   const updateNodeConfigById = useCallback(
     (nodeId: string, key: string, value: unknown) => {
+      if (isGraphRunning) {
+        setStatus("워크플로우 실행 중에는 노드 설정을 변경할 수 없습니다.");
+        return;
+      }
       setGraph((prev) => ({
         ...prev,
         nodes: prev.nodes.map((node) =>
@@ -88,7 +94,7 @@ export function useGraphFileActions<TNode>(params: UseGraphFileActionsParams<TNo
         ),
       }));
     },
-    [setGraph],
+    [isGraphRunning, setGraph, setStatus],
   );
 
   const updateSelectedNodeConfig = useCallback(

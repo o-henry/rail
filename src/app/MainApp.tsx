@@ -796,6 +796,13 @@ function App() {
     setError(message);
   }
 
+  function normalizeWebBridgeProgressMessage(stage: string, message: string) {
+    if (stage === "bridge_waiting_user_send") {
+      return "자동 전송 확인 대기 중입니다. 웹 탭에서 전송 버튼을 클릭하면 계속 진행됩니다.";
+    }
+    return message.trim() || stage;
+  }
+
   function clearWebBridgeStageWarnTimer(providerKey: string) {
     const current = webBridgeStageWarnTimerRef.current[providerKey];
     if (typeof current === "number") {
@@ -903,14 +910,18 @@ function App() {
               const activeWebNodeId = providerKey
                 ? activeWebNodeByProviderRef.current[providerKey]
                 : "";
-              if (activeWebNodeId && message) {
-                addNodeLog(activeWebNodeId, `[WEB] ${message}`);
+              const hasBridgeStage = Boolean(stage?.startsWith("bridge_"));
+              const progressMessage = hasBridgeStage
+                ? normalizeWebBridgeProgressMessage(stage ?? "", message ?? "")
+                : (message ?? "");
+              if (activeWebNodeId && progressMessage && stage !== "bridge_waiting_user_send") {
+                addNodeLog(activeWebNodeId, `[WEB] ${progressMessage}`);
               }
-              if (stage?.startsWith("bridge_")) {
+              if (hasBridgeStage) {
                 const prefix = providerKey
                   ? `[${providerKey.toUpperCase()}] `
                   : "";
-                const line = `${prefix}${message ?? stage}`;
+                const line = `${prefix}${progressMessage || stage}`;
                 setWebBridgeLogs((prev) => [`${new Date().toLocaleTimeString()} ${line}`, ...prev].slice(0, 120));
                 if (providerKey && stage === "bridge_queued") {
                   setStatus(`${webProviderLabel(providerKey)} 작업 대기열 등록됨`);
@@ -950,7 +961,13 @@ function App() {
                   setStatus(`${webProviderLabel(providerKey)} 프롬프트 자동 주입 완료`);
                 } else if (providerKey && stage === "bridge_waiting_user_send") {
                   clearWebBridgeStageWarnTimer(providerKey);
-                  setStatus(`${webProviderLabel(providerKey)} 탭에서 전송 1회가 필요합니다.`);
+                  setStatus(`${webProviderLabel(providerKey)} 자동 전송 확인 중`);
+                  scheduleWebBridgeStageWarn(
+                    providerKey,
+                    1_600,
+                    `${webProviderLabel(providerKey)} 탭에서 전송 1회가 필요합니다.`,
+                    "[WEB] 자동 전송이 확인되지 않아 사용자 전송 클릭을 기다립니다.",
+                  );
                 } else if (providerKey && stage === "bridge_extension_error") {
                   clearWebBridgeStageWarnTimer(providerKey);
                   setStatus(`${webProviderLabel(providerKey)} 웹 연결 오류 - 확장 연결 상태를 확인하세요.`);
@@ -2161,6 +2178,7 @@ function App() {
   }
 
   function onOpenWebInputForNode(nodeId: string) {
+    clearDetachedWebTurnResolver("이전 웹 입력 세션이 비어 있어 새 입력 세션으로 교체했습니다.");
     if (pendingWebTurn?.nodeId === nodeId) {
       webTurnPanel.setPosition({
         x: WEB_TURN_FLOATING_DEFAULT_X,
@@ -2177,7 +2195,8 @@ function App() {
 
     const queuedIndex = webTurnQueueRef.current.findIndex((row) => row.turn.nodeId === nodeId);
     if (queuedIndex >= 0) {
-      if (pendingWebTurn || webTurnResolverRef.current) {
+      const hasActiveWebInputSession = Boolean(pendingWebTurn || suspendedWebTurn || webTurnResolverRef.current);
+      if (hasActiveWebInputSession) {
         if (queuedIndex > 0) {
           const [target] = webTurnQueueRef.current.splice(queuedIndex, 1);
           if (target) {
@@ -2995,6 +3014,7 @@ function App() {
     graphFileName,
     selectedGraphFileName,
     graphRenameDraft,
+    isGraphRunning,
     selectedNode,
     setError,
     refreshGraphFiles,
@@ -3374,6 +3394,18 @@ function App() {
     }
   }
 
+  function clearDetachedWebTurnResolver(reason: string) {
+    if (pendingWebTurn || suspendedWebTurn) {
+      return;
+    }
+    const resolver = webTurnResolverRef.current;
+    if (!resolver) {
+      return;
+    }
+    webTurnResolverRef.current = null;
+    resolver({ ok: false, error: reason });
+  }
+
   async function requestWebTurnResponse(
     nodeId: string,
     provider: WebProvider,
@@ -3387,6 +3419,7 @@ function App() {
       mode,
     };
     return new Promise((resolve) => {
+      clearDetachedWebTurnResolver("이전 웹 입력 세션을 정리하고 새 요청으로 교체했습니다.");
       if (!pendingWebTurn && !webTurnResolverRef.current) {
         setWebResponseDraft("");
         setSuspendedWebTurn(null);
