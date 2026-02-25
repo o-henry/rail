@@ -169,14 +169,32 @@ export function authModeLabel(mode: "chatgpt" | "apikey" | "unknown"): string {
 export function extractFinalAnswer(output: unknown): string {
   const maybeText = extractStringByPaths(output, [
     "text",
+    "artifact.payload.finalDraft",
+    "artifact.payload.text",
+    "payload.finalDraft",
+    "payload.text",
     "completion.text",
+    "completion.output_text",
+    "completion.response.output_text",
+    "completion.response.text",
+    "completion.turn.output_text",
+    "completion.turn.response.output_text",
+    "completion.turn.response.text",
     "finalDraft",
+    "result.finalDraft",
+    "result.text",
     "result",
   ]);
   if (maybeText) {
     return maybeText;
   }
+  if (typeof output === "string") {
+    return output;
+  }
   if (output == null) {
+    return "";
+  }
+  if (typeof output === "object") {
     return "";
   }
   return formatUnknown(output);

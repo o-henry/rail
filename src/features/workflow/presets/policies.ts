@@ -5,7 +5,7 @@ import {
   normalizeQualityThreshold,
   type PresetTurnPolicy,
 } from "./shared";
-import { STOCK_INTAKE_SCHEMA, STOCK_RISK_SCHEMA } from "./schemas";
+import { PREPROCESS_BRIEF_SCHEMA, STOCK_INTAKE_SCHEMA, STOCK_RISK_SCHEMA } from "./schemas";
 
 const PRESET_OUTPUT_SCHEMA_BY_NODE_ID: Readonly<Record<string, string>> = {
   "turn-stock-intake": STOCK_INTAKE_SCHEMA,
@@ -344,7 +344,7 @@ export function applyPresetOutputSchemaPolicies(graphData: GraphData): GraphData
       if (node.type !== "turn") {
         return node;
       }
-      const outputSchemaJson = PRESET_OUTPUT_SCHEMA_BY_NODE_ID[node.id];
+      const outputSchemaJson = PRESET_OUTPUT_SCHEMA_BY_NODE_ID[node.id] ?? (node.id.includes("preprocess") ? PREPROCESS_BRIEF_SCHEMA : undefined);
       if (!outputSchemaJson) {
         return node;
       }

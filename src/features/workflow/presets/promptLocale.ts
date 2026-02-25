@@ -46,25 +46,24 @@ function buildLocalizedPreprocessPrompt(kind: PresetKind, locale: AppLocale): st
       "You are the request preprocessor for this multi-agent workflow.\n" +
       "Goal: convert the user's ambiguous request into an executable brief and enforce must-have elements.\n" +
       "Rules: do not distort intent; state conservative assumptions when needed.\n" +
-      "Write in this format:\n" +
-      "## Intent\n" +
-      "- intent: ...\n" +
-      "- userGoal: ...\n" +
-      `- templateIntent: ${intent}\n` +
-      "## Required Outputs\n" +
-      "- requiredOutputs: ...\n" +
-      "## Constraints / Assumptions\n" +
-      "- constraints: ...\n" +
-      "- assumptions: ...\n" +
-      "## Research Plan\n" +
-      "- webQueries: ...\n" +
-      "- sources: news / papers & official docs / community & SNS\n" +
-      "- collectionOrder: freshness check -> collect core evidence -> collect counterexamples/risks\n" +
-      "- verificationRules: cite sources / include timestamps / annotate confidence\n" +
-      "## Validation Criteria\n" +
-      "- acceptanceCriteria: ...\n" +
-      "- riskChecklist: ...\n" +
-      "- selfValidationPlan: accuracy / completeness / feasibility / missing items\n" +
+      "Output strictly one JSON object only. No markdown/code fence/preamble.\n" +
+      "{\n" +
+      '  "intent": "...",\n' +
+      '  "userGoal": "...",\n' +
+      `  "templateIntent": "${intent}",\n` +
+      '  "requiredOutputs": ["..."],\n' +
+      '  "constraints": ["..."],\n' +
+      '  "assumptions": ["..."],\n' +
+      '  "researchPlan": {\n' +
+      '    "webQueries": ["..."],\n' +
+      '    "sources": ["news","papers & official docs","community & SNS"],\n' +
+      '    "collectionOrder": ["freshness check","collect core evidence","collect counterexamples/risks"],\n' +
+      '    "verificationRules": ["cite sources","include timestamps","annotate confidence"]\n' +
+      "  },\n" +
+      '  "acceptanceCriteria": ["..."],\n' +
+      '  "riskChecklist": ["..."],\n' +
+      '  "selfValidationPlan": ["accuracy","completeness","feasibility","missing items"]\n' +
+      "}\n" +
       `Question: ${INPUT_PLACEHOLDER}`
     );
   }
@@ -73,25 +72,24 @@ function buildLocalizedPreprocessPrompt(kind: PresetKind, locale: AppLocale): st
       "あなたはこのマルチエージェント実行の要求前処理エージェントです。\n" +
       "目的: 曖昧なユーザー要求を実行可能なブリーフへ整理し、必須要素を強制すること。\n" +
       "原則: 意図を歪めないこと。必要時は保守的な仮定を明示すること。\n" +
-      "次の形式で作成してください:\n" +
-      "## 意図\n" +
-      "- intent: ...\n" +
-      "- userGoal: ...\n" +
-      `- templateIntent: ${intent}\n` +
-      "## 必須アウトプット\n" +
-      "- requiredOutputs: ...\n" +
-      "## 制約 / 仮定\n" +
-      "- constraints: ...\n" +
-      "- assumptions: ...\n" +
-      "## リサーチ計画\n" +
-      "- webQueries: ...\n" +
-      "- sources: ニュース / 論文・公式文書 / コミュニティ・SNS\n" +
-      "- collectionOrder: 最新性確認 -> 中核根拠の収集 -> 反証・リスク収集\n" +
-      "- verificationRules: 出典明記 / タイムスタンプ確認 / 信頼度表記\n" +
-      "## 検証基準\n" +
-      "- acceptanceCriteria: ...\n" +
-      "- riskChecklist: ...\n" +
-      "- selfValidationPlan: 正確性 / 完全性 / 実行可能性 / 抜け漏れ\n" +
+      "必ず JSON オブジェクトのみを出力してください。コードフェンス/前置き/補足説明は禁止。\n" +
+      "{\n" +
+      '  "intent": "...",\n' +
+      '  "userGoal": "...",\n' +
+      `  "templateIntent": "${intent}",\n` +
+      '  "requiredOutputs": ["..."],\n' +
+      '  "constraints": ["..."],\n' +
+      '  "assumptions": ["..."],\n' +
+      '  "researchPlan": {\n' +
+      '    "webQueries": ["..."],\n' +
+      '    "sources": ["ニュース","論文・公式文書","コミュニティ・SNS"],\n' +
+      '    "collectionOrder": ["最新性確認","中核根拠の収集","反証・リスク収集"],\n' +
+      '    "verificationRules": ["出典明記","タイムスタンプ確認","信頼度表記"]\n' +
+      "  },\n" +
+      '  "acceptanceCriteria": ["..."],\n' +
+      '  "riskChecklist": ["..."],\n' +
+      '  "selfValidationPlan": ["正確性","完全性","実行可能性","抜け漏れ"]\n' +
+      "}\n" +
       `質問: ${INPUT_PLACEHOLDER}`
     );
   }
@@ -99,25 +97,24 @@ function buildLocalizedPreprocessPrompt(kind: PresetKind, locale: AppLocale): st
     "你是该多代理流程的需求预处理代理。\n" +
     "目标: 将用户模糊请求整理为可执行简报，并强制补齐关键要素。\n" +
     "原则: 不得偏离用户意图；必要时明确保守假设。\n" +
-    "请按以下格式输出:\n" +
-    "## 意图\n" +
-    "- intent: ...\n" +
-    "- userGoal: ...\n" +
-    `- templateIntent: ${intent}\n` +
-    "## 必需输出\n" +
-    "- requiredOutputs: ...\n" +
-    "## 约束 / 假设\n" +
-    "- constraints: ...\n" +
-    "- assumptions: ...\n" +
-    "## 调研计划\n" +
-    "- webQueries: ...\n" +
-    "- sources: 新闻 / 论文与官方文档 / 社区与SNS\n" +
-    "- collectionOrder: 时效性确认 -> 核心证据收集 -> 反例与风险收集\n" +
-    "- verificationRules: 标注来源 / 标注时间 / 标注可信度\n" +
-    "## 验证标准\n" +
-    "- acceptanceCriteria: ...\n" +
-    "- riskChecklist: ...\n" +
-    "- selfValidationPlan: 准确性 / 完整性 / 可执行性 / 缺漏检查\n" +
+    "必须只输出一个 JSON 对象。禁止代码块/前言/补充说明。\n" +
+    "{\n" +
+    '  "intent": "...",\n' +
+    '  "userGoal": "...",\n' +
+    `  "templateIntent": "${intent}",\n` +
+    '  "requiredOutputs": ["..."],\n' +
+    '  "constraints": ["..."],\n' +
+    '  "assumptions": ["..."],\n' +
+    '  "researchPlan": {\n' +
+    '    "webQueries": ["..."],\n' +
+    '    "sources": ["新闻","论文与官方文档","社区与SNS"],\n' +
+    '    "collectionOrder": ["时效性确认","核心证据收集","反例与风险收集"],\n' +
+    '    "verificationRules": ["标注来源","标注时间","标注可信度"]\n' +
+    "  },\n" +
+    '  "acceptanceCriteria": ["..."],\n' +
+    '  "riskChecklist": ["..."],\n' +
+    '  "selfValidationPlan": ["准确性","完整性","可执行性","缺漏检查"]\n' +
+    "}\n" +
     `问题: ${INPUT_PLACEHOLDER}`
   );
 }

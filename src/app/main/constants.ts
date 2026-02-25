@@ -34,8 +34,8 @@ export const WEB_TURN_FLOATING_MARGIN = 12;
 export const WEB_TURN_FLOATING_MIN_VISIBLE_WIDTH = 120;
 export const WEB_TURN_FLOATING_MIN_VISIBLE_HEIGHT = 72;
 export const TURN_OUTPUT_SCHEMA_ENABLED = true;
-export const TURN_OUTPUT_SCHEMA_MAX_RETRY = 0;
-export const FORCE_AGENT_RULES_ALL_TURNS = true;
+export const TURN_OUTPUT_SCHEMA_MAX_RETRY = 1;
+export const FORCE_AGENT_RULES_ALL_TURNS = false;
 export const SIMPLE_WORKFLOW_UI = true;
 
 export const KNOWLEDGE_TOP_K_OPTIONS: SelectOption[] = [

@@ -3545,7 +3545,8 @@ ${prompt}`;
       ? `${forcedRuleBlock}\n\n${withKnowledge.prompt}`.trim()
       : withKnowledge.prompt;
     const knowledgeTrace = withKnowledge.trace;
-    const shouldAutoVisualization = inferQualityProfile(node, config) === "synthesis_final";
+    const qualityProfile = inferQualityProfile(node, config);
+    const shouldAutoVisualization = qualityProfile === "synthesis_final";
     const visualizationDirective = shouldAutoVisualization ? buildFinalVisualizationDirective() : "";
     if (visualizationDirective) {
       textToSend = `${textToSend}\n\n${visualizationDirective}`.trim();
@@ -3558,7 +3559,7 @@ ${prompt}`;
       textToSend = `${textToSend}\n\n${outputSchemaDirective}`.trim();
       addNodeLog(node.id, "[스키마] 출력 스키마 지시를 프롬프트에 자동 주입했습니다.");
     }
-    if (executor === "codex") {
+    if (executor === "codex" && qualityProfile === "synthesis_final") {
       const multiAgentDirective = buildCodexMultiAgentDirective(codexMultiAgentMode);
       if (multiAgentDirective) {
         textToSend = `${multiAgentDirective}\n\n${textToSend}`.trim();
@@ -4447,23 +4448,11 @@ ${prompt}`;
 
         if (node.type === "turn") {
           const isFinalTurnNode = (adjacency.get(nodeId)?.length ?? 0) === 0;
+          const hasOutputSchema = String((node.config as TurnConfig).outputSchemaJson ?? "").trim().length > 0;
           const turnExecution = await executeTurnNodeWithOutputSchemaRetry(node, input, {
-            maxRetry: isFinalTurnNode ? 1 : 0,
+            maxRetry: isFinalTurnNode || hasOutputSchema ? 1 : 0,
           });
           let result = turnExecution.result;
-          const schemaFallbackUsed =
-            !result.ok &&
-            turnExecution.normalizedOutput !== undefined &&
-            String(result.error ?? "").startsWith("출력 스키마 검증 실패");
-          if (schemaFallbackUsed) {
-            addNodeLog(nodeId, "[스키마] 검증 실패: 생성된 문서를 보존하고 후속 단계로 진행합니다.");
-            result = {
-              ...result,
-              ok: true,
-              output: turnExecution.normalizedOutput,
-              error: undefined,
-            };
-          }
           if (!result.ok && pauseRequestedRef.current && isPauseSignalError(result.error)) {
             const pauseMessage = "사용자 일시정지 요청으로 노드 실행을 보류했습니다.";
             addNodeLog(nodeId, `[중지] ${pauseMessage}`);
@@ -4534,9 +4523,6 @@ ${prompt}`;
             addNodeLog(nodeId, `[아티팩트] ${warning}`);
           }
           const normalizedOutput = turnExecution.normalizedOutput ?? result.output;
-          if (schemaFallbackUsed) {
-            addNodeLog(nodeId, "[스키마] 경고: 스키마 불일치 상태의 문서를 채택했습니다.");
-          }
           let qualityReport: QualityReport | undefined;
           if (isFinalTurnNode) {
             const finalQualityReport = await buildQualityReport({

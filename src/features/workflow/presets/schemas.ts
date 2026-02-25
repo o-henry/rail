@@ -13,6 +13,43 @@ export const VALIDATION_INTAKE_SCHEMA = stringifySchema({
   },
 });
 
+export const PREPROCESS_BRIEF_SCHEMA = stringifySchema({
+  type: "object",
+  required: [
+    "intent",
+    "userGoal",
+    "templateIntent",
+    "requiredOutputs",
+    "constraints",
+    "assumptions",
+    "researchPlan",
+    "acceptanceCriteria",
+    "riskChecklist",
+    "selfValidationPlan",
+  ],
+  properties: {
+    intent: { type: "string" },
+    userGoal: { type: "string" },
+    templateIntent: { type: "string" },
+    requiredOutputs: { type: "array" },
+    constraints: { type: "array" },
+    assumptions: { type: "array" },
+    researchPlan: {
+      type: "object",
+      required: ["webQueries", "sources", "collectionOrder", "verificationRules"],
+      properties: {
+        webQueries: { type: "array" },
+        sources: { type: "array" },
+        collectionOrder: { type: "array" },
+        verificationRules: { type: "array" },
+      },
+    },
+    acceptanceCriteria: { type: "array" },
+    riskChecklist: { type: "array" },
+    selfValidationPlan: { type: "array" },
+  },
+});
+
 export const VALIDATION_SEARCH_EVIDENCE_SCHEMA = stringifySchema({
   type: "object",
   required: ["evidences"],

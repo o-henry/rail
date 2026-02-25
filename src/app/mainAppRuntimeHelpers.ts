@@ -426,6 +426,7 @@ export function normalizeArtifactOutput(
   }
 
   let payload: unknown = rawOutput;
+  const textCandidate = extractFinalAnswer(rawOutput).trim();
   if (typeof rawOutput === "string") {
     const text = rawOutput.trim();
     if (text.startsWith("{") || text.startsWith("[")) {
@@ -442,8 +443,6 @@ export function normalizeArtifactOutput(
     if (inheritedPayload !== undefined) {
       payload = inheritedPayload;
     }
-
-    const textCandidate = extractFinalAnswer(rawOutput).trim();
     const parsedFromText = textCandidate ? tryParseJsonText(textCandidate) : null;
     if (parsedFromText != null) {
       payload = parsedFromText;
@@ -453,8 +452,20 @@ export function normalizeArtifactOutput(
   }
 
   const warnings: string[] = [];
+  if (
+    payload &&
+    typeof payload === "object" &&
+    !Array.isArray(payload) &&
+    payload === rawOutput &&
+    ("completion" in (payload as Record<string, unknown>) ||
+      "threadId" in (payload as Record<string, unknown>) ||
+      "turnId" in (payload as Record<string, unknown>))
+  ) {
+    payload = textCandidate ? { text: textCandidate } : { text: "" };
+    warnings.push(tp("아티팩트 변환: 실행 메타데이터 wrapper를 본문에서 제외했습니다."));
+  }
   if (payload == null || typeof payload !== "object") {
-    payload = { text: stringifyInput(rawOutput) };
+    payload = { text: textCandidate || stringifyInput(rawOutput) };
     warnings.push(tp("아티팩트 변환: 구조화된 출력이 없어 텍스트 기반으로 보정했습니다."));
   }
 
@@ -469,7 +480,7 @@ export function normalizeArtifactOutput(
   return {
     output: {
       artifact: envelope,
-      text: extractFinalAnswer(rawOutput) || stringifyInput(rawOutput),
+      text: textCandidate || (typeof rawOutput === "string" ? rawOutput : ""),
       raw: rawOutput,
     },
     warnings,
@@ -490,7 +501,7 @@ export async function buildQualityReport(params: {
   const warnings: string[] = [];
   let score = 100;
 
-  const fullText = extractFinalAnswer(output) || stringifyInput(output);
+  const fullText = extractFinalAnswer(output) || (typeof output === "string" ? output : "");
   const normalized = fullText.toLowerCase();
 
   const addCheck = (input: {
