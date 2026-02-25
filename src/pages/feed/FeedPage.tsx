@@ -574,10 +574,6 @@ export default function FeedPage({ vm }: FeedPageProps) {
                                 borderColor: `hsl(${avatarHue} 36% 76%)`,
                               };
                               const avatarLabel = buildFeedAvatarLabel(post);
-                              const score = Math.max(
-                                1,
-                                Math.min(99, Number((evidence as any).qualityScore ?? (post.status === "done" ? 95 : 55))),
-                              );
                               const pendingRequestCount = (pendingNodeRequests[post.nodeId] ?? []).length;
                               const requestDraft = String(replyDraftMap[postId] ?? "");
                               const requestSubmitting = Boolean(replySubmittingMap[postId]);
@@ -585,6 +581,9 @@ export default function FeedPage({ vm }: FeedPageProps) {
                               const requestFeedbackError = isFeedbackErrorMessage(requestFeedback);
                               const isExpanded = feedExpandedByPost[postId] === true;
                               const isDraftPost = post.status === "draft";
+                              const isFailedPost = post.status === "failed" || post.status === "cancelled";
+                              const badgeText = isDraftPost ? "LIVE" : isFailedPost ? "FAIL" : "PASS";
+                              const badgeClass = isDraftPost ? "live" : isFailedPost ? "fail" : "pass";
                               const canRequest = post.nodeType === "turn";
                               const nodeInputSources = Array.isArray(post.inputSources) ? post.inputSources : [];
                               const upstreamSources = nodeInputSources.filter(
@@ -624,16 +623,16 @@ export default function FeedPage({ vm }: FeedPageProps) {
                                         <img alt="" aria-hidden="true" className="feed-delete-icon" src="/xmark.svg" />
                                       </button>
                                       <span
-                                        className={`feed-score-badge ${
-                                          isDraftPost ? "live" : post.status === "done" ? "good" : "warn"
-                                        }`}
+                                        className={`feed-score-badge ${badgeClass}`}
                                         title={
                                           isDraftPost
                                             ? t("feed.agent.working")
-                                            : t("feed.qualityScore", { score })
+                                            : isFailedPost
+                                              ? t("label.status.failed")
+                                              : t("label.status.done")
                                         }
                                       >
-                                        {isDraftPost ? "LIVE" : score}
+                                        {badgeText}
                                       </span>
                                       <div
                                         className="feed-share-menu-wrap feed-share-menu-wrap-head"

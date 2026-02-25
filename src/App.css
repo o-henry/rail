@@ -2764,10 +2764,25 @@ h3 {
   border: 2px solid #d96d1f;
 }
 
+.feed-score-badge.pass {
+  color: #1f9960;
+  border-color: #1f9960;
+}
+
 .feed-score-badge.live {
   width: 42px;
   min-width: 42px;
   color: #1f68cc;
+  font-size: 10px;
+  letter-spacing: 0.01em;
+  border: 0;
+  border-radius: 12px;
+}
+
+.feed-score-badge.fail {
+  width: 42px;
+  min-width: 42px;
+  color: #e45a5a;
   font-size: 10px;
   letter-spacing: 0.01em;
   border: 0;
