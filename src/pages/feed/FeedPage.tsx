@@ -337,25 +337,6 @@ export default function FeedPage({ vm }: FeedPageProps) {
                         value={toArtifactType(feedInspectorTurnConfig?.artifactType)}
                       />
                     </label>
-                    <label>
-                      {t("feed.outputSchema")}
-                      <textarea
-                        className="prompt-template-textarea"
-                        disabled={!feedInspectorEditable}
-                        onChange={(event) => {
-                          if (!feedInspectorEditableNodeId) {
-                            return;
-                          }
-                          updateNodeConfigById(
-                            feedInspectorEditableNodeId,
-                            "outputSchemaJson",
-                            event.currentTarget.value,
-                          );
-                        }}
-                        rows={4}
-                        value={String(feedInspectorTurnConfig?.outputSchemaJson ?? "")}
-                      />
-                    </label>
                     {feedInspectorQualityProfile === "code_implementation" && (
                       <>
                         <label>
@@ -419,6 +400,25 @@ export default function FeedPage({ vm }: FeedPageProps) {
                         }}
                         rows={8}
                         value={feedInspectorPromptTemplate}
+                      />
+                    </label>
+                    <label>
+                      {t("feed.outputSchema")}
+                      <textarea
+                        className="prompt-template-textarea"
+                        disabled={!feedInspectorEditable}
+                        onChange={(event) => {
+                          if (!feedInspectorEditableNodeId) {
+                            return;
+                          }
+                          updateNodeConfigById(
+                            feedInspectorEditableNodeId,
+                            "outputSchemaJson",
+                            event.currentTarget.value,
+                          );
+                        }}
+                        rows={4}
+                        value={String(feedInspectorTurnConfig?.outputSchemaJson ?? "")}
                       />
                     </label>
                   </div>

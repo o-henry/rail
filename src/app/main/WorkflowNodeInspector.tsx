@@ -201,21 +201,21 @@ export default function WorkflowNodeInspector({
             </label>
           )}
           <label>
-            {t("workflow.inspector.outputSchemaOptional")}
-            <textarea
-              className="prompt-template-textarea"
-              onChange={(e) => updateSelectedNodeConfig("outputSchemaJson", e.currentTarget.value)}
-              rows={4}
-              value={String((selectedNode.config as TurnConfig).outputSchemaJson ?? "")}
-            />
-          </label>
-          <label>
             {t("feed.promptTemplate")}
             <textarea
               className="prompt-template-textarea"
               onChange={(e) => updateSelectedNodeConfig("promptTemplate", e.currentTarget.value)}
               rows={6}
               value={String((selectedNode.config as TurnConfig).promptTemplate ?? "{{input}}")}
+            />
+          </label>
+          <label>
+            {t("workflow.inspector.outputSchemaOptional")}
+            <textarea
+              className="prompt-template-textarea"
+              onChange={(e) => updateSelectedNodeConfig("outputSchemaJson", e.currentTarget.value)}
+              rows={4}
+              value={String((selectedNode.config as TurnConfig).outputSchemaJson ?? "")}
             />
           </label>
         </section>
