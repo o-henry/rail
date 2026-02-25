@@ -13,6 +13,7 @@ import ApprovalModal from "../components/modals/ApprovalModal";
 import PendingWebLoginModal from "../components/modals/PendingWebLoginModal";
 import PendingWebConnectModal from "../components/modals/PendingWebConnectModal";
 import PendingWebTurnModal from "../components/modals/PendingWebTurnModal";
+import StockDisclaimerModal from "../components/modals/StockDisclaimerModal";
 import BridgePage from "../pages/bridge/BridgePage";
 import FeedPage from "../pages/feed/FeedPage";
 import SettingsPage from "../pages/settings/SettingsPage";
@@ -267,6 +268,12 @@ function App() {
     providers: WebProvider[];
     reason: string;
   } | null>(null);
+  const [pendingStockDisclaimer, setPendingStockDisclaimer] = useState<{
+    stage: "preset" | "run";
+    presetKind?: PresetKind;
+  } | null>(null);
+  const [stockDisclaimerChecked, setStockDisclaimerChecked] = useState(false);
+  const [stockDisclaimerAcceptedAt, setStockDisclaimerAcceptedAt] = useState<string>("");
 
   const [cwd, setCwd] = useState(defaultCwd);
   const [model, setModel] = useState<string>(DEFAULT_TURN_MODEL);
@@ -2273,7 +2280,14 @@ function App() {
     getNodeVisualSize,
   });
 
-  function applyPreset(kind: PresetKind) {
+  function applyPreset(kind: PresetKind, bypassStockDisclaimer = false) {
+    if (kind === "stock" && !bypassStockDisclaimer) {
+      setPendingStockDisclaimer({ stage: "preset", presetKind: kind });
+      setStockDisclaimerChecked(false);
+      setStatus(t("modal.stockDisclaimer.required"));
+      return;
+    }
+
     const builtPreset = buildPresetGraphByKind(kind);
     const presetWithPolicies = {
       ...builtPreset,
@@ -2300,6 +2314,9 @@ function App() {
     lastAppliedPresetRef.current = { kind, graph: cloneGraph(nextPreset) };
     const templateMeta = PRESET_TEMPLATE_META.find((row) => row.key === kind);
     setStatus(`${templateMeta?.statusLabel ?? "템플릿"} 로드됨`);
+    if (kind !== "stock") {
+      setStockDisclaimerAcceptedAt("");
+    }
   }
 
   function applyCostPreset(preset: CostPreset) {
@@ -4071,7 +4088,7 @@ ${prompt}`;
     );
   }
 
-  async function onRunGraph(skipWebConnectPreflight = false) {
+  async function onRunGraph(skipWebConnectPreflight = false, skipStockDisclaimerCheck = false, acceptedAt = "") {
     if (isGraphRunning && isGraphPaused) {
       pauseRequestedRef.current = false;
       setIsGraphPaused(false);
@@ -4122,6 +4139,16 @@ ${prompt}`;
       }
     }
 
+    const runGroup = inferRunGroupMeta(graph, lastAppliedPresetRef.current);
+    if (runGroup.presetKind === "stock" && !skipStockDisclaimerCheck && !stockDisclaimerAcceptedAt) {
+      setPendingStockDisclaimer({ stage: "run" });
+      setStockDisclaimerChecked(false);
+      setStatus(t("modal.stockDisclaimer.required"));
+      return;
+    }
+
+    const effectiveStockDisclaimerAcceptedAt = acceptedAt || stockDisclaimerAcceptedAt;
+
     const incomingNodeIds = new Set(graph.edges.map((edge) => edge.to.nodeId));
     const directInputNodeIds = graph.nodes.filter((node) => !incomingNodeIds.has(node.id)).map((node) => node.id);
     if (directInputNodeIds.length !== 1) {
@@ -4156,7 +4183,6 @@ ${prompt}`;
     }, {});
     setNodeStates(initialState);
 
-    const runGroup = inferRunGroupMeta(graph, lastAppliedPresetRef.current);
     const runRecord: RunRecord = {
       runId: `${Date.now()}`,
       question: workflowQuestion,
@@ -4174,6 +4200,11 @@ ${prompt}`;
       nodeMetrics: {},
       feedPosts: [],
     };
+    if (runGroup.presetKind === "stock" && effectiveStockDisclaimerAcceptedAt) {
+      runRecord.summaryLogs.push(
+        `[고지] 주식 템플릿 동의 완료 (${effectiveStockDisclaimerAcceptedAt}) - 투자자문 아님 / 정보 제공 목적 / 최종 판단은 사용자 책임`,
+      );
+    }
     setActiveFeedRunMeta({
       runId: runRecord.runId,
       question: workflowQuestion,
@@ -4965,6 +4996,30 @@ ${prompt}`;
     void onRunGraph(true);
   }
 
+  function onConfirmStockDisclaimer() {
+    if (!pendingStockDisclaimer || !stockDisclaimerChecked) {
+      return;
+    }
+    const acceptedAt = new Date().toISOString();
+    const pending = pendingStockDisclaimer;
+    setStockDisclaimerAcceptedAt(acceptedAt);
+    setPendingStockDisclaimer(null);
+    setStockDisclaimerChecked(false);
+    setStatus(t("modal.stockDisclaimer.accepted"));
+
+    if (pending.stage === "preset" && pending.presetKind) {
+      applyPreset(pending.presetKind, true);
+      return;
+    }
+    void onRunGraph(false, true, acceptedAt);
+  }
+
+  function onCancelStockDisclaimer() {
+    setPendingStockDisclaimer(null);
+    setStockDisclaimerChecked(false);
+    setStatus(t("modal.stockDisclaimer.cancelled"));
+  }
+
   function onCancelWebConnectModal() {
     setPendingWebConnectCheck(null);
     setStatus("그래프 실행 대기");
@@ -5578,6 +5633,14 @@ ${prompt}`;
             : ""
         }
         reason={pendingWebConnectCheck?.reason ?? ""}
+      />
+
+      <StockDisclaimerModal
+        checked={stockDisclaimerChecked}
+        onCancel={onCancelStockDisclaimer}
+        onChangeChecked={setStockDisclaimerChecked}
+        onConfirm={onConfirmStockDisclaimer}
+        open={Boolean(pendingStockDisclaimer)}
       />
 
       <PendingWebLoginModal

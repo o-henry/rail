@@ -3760,6 +3760,31 @@ pre {
   background: var(--surface);
 }
 
+.stock-disclaimer-modal {
+  gap: 10px;
+}
+
+.stock-disclaimer-modal ul {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 4px;
+}
+
+.stock-disclaimer-modal li {
+  font-size: 12px;
+  color: #2e3d52;
+  line-height: 1.45;
+}
+
+.stock-disclaimer-agree {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: #2b3a4f;
+}
+
 .web-turn-modal textarea:focus,
 .web-turn-modal textarea:focus-visible,
 .web-turn-modal input:focus,
