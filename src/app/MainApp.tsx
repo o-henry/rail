@@ -4902,7 +4902,20 @@ ${prompt}`;
           const turnExecution = await executeTurnNodeWithOutputSchemaRetry(node, input, {
             maxRetry: isFinalTurnNode ? 1 : 0,
           });
-          const result = turnExecution.result;
+          let result = turnExecution.result;
+          const schemaFallbackUsed =
+            !result.ok &&
+            turnExecution.normalizedOutput !== undefined &&
+            String(result.error ?? "").startsWith("출력 스키마 검증 실패");
+          if (schemaFallbackUsed) {
+            addNodeLog(nodeId, "[스키마] 검증 실패: 생성된 문서를 보존하고 후속 단계로 진행합니다.");
+            result = {
+              ...result,
+              ok: true,
+              output: turnExecution.normalizedOutput,
+              error: undefined,
+            };
+          }
           if (result.knowledgeTrace && result.knowledgeTrace.length > 0) {
             runRecord.knowledgeTrace?.push(...result.knowledgeTrace);
           }
@@ -4958,6 +4971,9 @@ ${prompt}`;
             addNodeLog(nodeId, `[아티팩트] ${warning}`);
           }
           const normalizedOutput = turnExecution.normalizedOutput ?? result.output;
+          if (schemaFallbackUsed) {
+            addNodeLog(nodeId, "[스키마] 경고: 스키마 불일치 상태의 문서를 채택했습니다.");
+          }
           let qualityReport: QualityReport | undefined;
           if (isFinalTurnNode) {
             const finalQualityReport = await buildQualityReport({
