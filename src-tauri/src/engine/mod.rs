@@ -3,6 +3,7 @@ use serde_json::{json, Value};
 use std::{
     collections::HashMap,
     env,
+    ffi::OsString,
     fs,
     path::{Path, PathBuf},
     sync::{
@@ -107,6 +108,39 @@ fn resolve_executable(binary: &str, override_env: &str) -> Result<PathBuf, Strin
     Err(format!(
         "failed to resolve executable `{binary}`; set {override_env} to an absolute path"
     ))
+}
+
+fn build_runtime_path(extra_bin_dirs: &[PathBuf]) -> Option<OsString> {
+    let mut dirs: Vec<PathBuf> = Vec::new();
+    let mut push_unique = |dir: PathBuf| {
+        if dir.as_os_str().is_empty() || !dir.exists() {
+            return;
+        }
+        if !dirs.iter().any(|existing| existing == &dir) {
+            dirs.push(dir);
+        }
+    };
+
+    for dir in extra_bin_dirs {
+        push_unique(dir.clone());
+    }
+
+    if let Some(path_var) = env::var_os("PATH") {
+        for dir in env::split_paths(&path_var) {
+            push_unique(dir);
+        }
+    }
+
+    for fallback in [
+        PathBuf::from("/opt/homebrew/bin"),
+        PathBuf::from("/usr/local/bin"),
+        PathBuf::from("/usr/bin"),
+        PathBuf::from("/bin"),
+    ] {
+        push_unique(fallback);
+    }
+
+    env::join_paths(dirs).ok()
 }
 
 #[derive(Default)]
@@ -267,8 +301,10 @@ impl EngineRuntime {
     async fn start(app: AppHandle, cwd: String) -> Result<Arc<Self>, String> {
         let codex_home = resolve_codex_home_dir(&app).await?;
         let codex_bin = resolve_executable("codex", "RAIL_CODEX_BIN")?;
+        let node_bin = resolve_executable("node", "RAIL_NODE_BIN")?;
 
-        let mut child = Command::new(codex_bin)
+        let mut command = Command::new(&codex_bin);
+        command
             .arg("app-server")
             .arg("--listen")
             .arg("stdio://")
@@ -277,7 +313,23 @@ impl EngineRuntime {
             .kill_on_drop(true)
             .stdin(std::process::Stdio::piped())
             .stdout(std::process::Stdio::piped())
-            .stderr(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped());
+
+        let path_dirs = [
+            codex_bin
+                .parent()
+                .map(|path| path.to_path_buf())
+                .unwrap_or_default(),
+            node_bin
+                .parent()
+                .map(|path| path.to_path_buf())
+                .unwrap_or_default(),
+        ];
+        if let Some(path_env) = build_runtime_path(&path_dirs) {
+            command.env("PATH", path_env);
+        }
+
+        let mut child = command
             .spawn()
             .map_err(|e| format!("failed to spawn codex app-server: {e}"))?;
 
