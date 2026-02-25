@@ -56,7 +56,6 @@ import {
   type WebResultMode,
 } from "../features/workflow/domain";
 import {
-  applyPresetOutputSchemaPolicies,
   applyPresetTurnPolicies,
   buildPresetGraphByKind,
   simplifyPresetForSimpleWorkflow,
@@ -215,6 +214,7 @@ import {
   STAGE_GROW_LIMIT,
   STAGE_GROW_MARGIN,
   TURN_OUTPUT_SCHEMA_MAX_RETRY,
+  TURN_OUTPUT_SCHEMA_ENABLED,
   WEB_BRIDGE_CLAIM_WARN_MS,
   WEB_BRIDGE_PROMPT_FILLED_WARN_MS,
   WEB_TURN_FLOATING_DEFAULT_X,
@@ -2275,10 +2275,10 @@ function App() {
 
   function applyPreset(kind: PresetKind) {
     const builtPreset = buildPresetGraphByKind(kind);
-    const presetWithPolicies = applyPresetOutputSchemaPolicies({
+    const presetWithPolicies = {
       ...builtPreset,
       nodes: applyPresetTurnPolicies(kind, builtPreset.nodes),
-    });
+    };
     const preset = simplifyPresetForSimpleWorkflow(presetWithPolicies, SIMPLE_WORKFLOW_UI);
     const nextPreset = autoArrangeGraphLayout({
       ...preset,
@@ -3512,7 +3512,9 @@ ${prompt}`;
       textToSend = `${textToSend}\n\n${visualizationDirective}`.trim();
       addNodeLog(node.id, "[시각화] 품질 프로필(최종 종합) 기반 시각화 지침 자동 적용");
     }
-    const outputSchemaDirective = buildOutputSchemaDirective(String(config.outputSchemaJson ?? ""));
+    const outputSchemaDirective = TURN_OUTPUT_SCHEMA_ENABLED
+      ? buildOutputSchemaDirective(String(config.outputSchemaJson ?? ""))
+      : "";
     if (outputSchemaDirective) {
       textToSend = `${textToSend}\n\n${outputSchemaDirective}`.trim();
       addNodeLog(node.id, "[스키마] 출력 스키마 지시를 프롬프트에 자동 주입했습니다.");
@@ -3940,7 +3942,7 @@ ${prompt}`;
     const provider = resolveProviderByExecutor(executor);
     const artifactType = toArtifactType(config.artifactType);
     const warnings: string[] = [];
-    const schemaRaw = String(config.outputSchemaJson ?? "").trim();
+    const schemaRaw = TURN_OUTPUT_SCHEMA_ENABLED ? String(config.outputSchemaJson ?? "").trim() : "";
 
     let parsedSchema: unknown | null = null;
     if (schemaRaw) {
