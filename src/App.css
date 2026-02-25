@@ -1093,6 +1093,7 @@ h3 {
 
 .node-wait-slot {
   display: flex;
+  align-items: center;
   justify-content: flex-start;
   /* padding: 6px 8px 9px; */
   padding: 8px;
@@ -1102,8 +1103,26 @@ h3 {
   font-size: 0.74rem;
 }
 
-.node-wait-slot .node-input-chip {
+.node-wait-actions {
   margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.node-manual-web-input-button {
+  min-height: 22px;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 3px;
+  background: #eef2f7;
+  color: #2f3b49;
+  font-size: 0.66rem;
+  line-height: 1;
+}
+
+.node-manual-web-input-button:hover {
+  background: #e7edf5;
 }
 
 .node-summary-row {

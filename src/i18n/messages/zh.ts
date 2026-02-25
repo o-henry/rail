@@ -210,6 +210,7 @@ export const ZH_MESSAGES: Dictionary = {
     "workflow.node.elapsed": "生成时间",
     "workflow.node.outputInFeed": "输出/日志请在 Feed 中查看",
     "workflow.node.inputDirect": "直接输入问题",
+    "workflow.node.manualWebInput": "手动输入",
     "workflow.node.connection": "连接",
     "workflow.nodeSelect": "节点类型",
     "workflow.nodeSelect.empty": "没有可选节点。",

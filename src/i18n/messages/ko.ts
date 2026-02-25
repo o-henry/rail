@@ -210,6 +210,7 @@ export const KO_MESSAGES: Dictionary = {
     "workflow.node.elapsed": "생성 시간",
     "workflow.node.outputInFeed": "출력/로그는 피드에서 보기",
     "workflow.node.inputDirect": "질문 직접 입력",
+    "workflow.node.manualWebInput": "수동입력",
     "workflow.node.connection": "연결",
     "workflow.nodeSelect": "노드 선택",
     "workflow.nodeSelect.empty": "선택 가능한 노드가 없습니다.",

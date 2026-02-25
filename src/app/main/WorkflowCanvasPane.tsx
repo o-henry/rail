@@ -65,6 +65,7 @@ type WorkflowCanvasPaneProps = {
   suspendedWebTurn: PendingWebTurn | null;
   pendingWebTurn: PendingWebTurn | null;
   onReopenPendingWebTurn: () => void;
+  onOpenWebInputForNode: (nodeId: string) => void;
   undoStackLength: number;
   redoStackLength: number;
   onUndoGraph: () => void;
@@ -129,6 +130,7 @@ export default function WorkflowCanvasPane({
   suspendedWebTurn,
   pendingWebTurn,
   onReopenPendingWebTurn,
+  onOpenWebInputForNode,
   undoStackLength,
   redoStackLength,
   onUndoGraph,
@@ -235,6 +237,8 @@ export default function WorkflowCanvasPane({
                 const isNodeDragging = draggingNodeIds.includes(node.id);
                 const showNodeAnchors = isNodeSelected || isConnectingDrag;
                 const receivesQuestionDirectly = questionDirectInputNodeIds.has(node.id);
+                const isWebTurnNode =
+                  node.type === "turn" && String(node.config?.executor ?? "").startsWith("web_");
                 return (
                   <div
                     className={`graph-node node-${node.type} ${isNodeSelected ? "selected" : ""} ${isNodeDragging ? "is-dragging" : ""}`.trim()}
@@ -297,7 +301,26 @@ export default function WorkflowCanvasPane({
                     </div>
                     <div className="node-wait-slot">
                       <span className={`status-pill status-${nodeStatus}`}>{nodeStatusLabel(nodeStatus)}</span>
-                      {receivesQuestionDirectly && <span className="node-input-chip"><span className="node-input-chip-text">{t("workflow.node.inputDirect")}</span></span>}
+                      <div className="node-wait-actions">
+                        {receivesQuestionDirectly && (
+                          <span className="node-input-chip">
+                            <span className="node-input-chip-text">{t("workflow.node.inputDirect")}</span>
+                          </span>
+                        )}
+                        {isWebTurnNode && (
+                          <button
+                            className="node-manual-web-input-button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              onOpenWebInputForNode(node.id);
+                            }}
+                            title={t("workflow.node.manualWebInput")}
+                            type="button"
+                          >
+                            {t("workflow.node.manualWebInput")}
+                          </button>
+                        )}
+                      </div>
                     </div>
                     {showNodeAnchors && (
                       <div className="node-anchors">

@@ -210,6 +210,7 @@ export const EN_MESSAGES: Dictionary = {
     "workflow.node.elapsed": "Elapsed",
     "workflow.node.outputInFeed": "View output/logs in Feed",
     "workflow.node.inputDirect": "Direct question input",
+    "workflow.node.manualWebInput": "Manual Input",
     "workflow.node.connection": "Connection",
     "workflow.nodeSelect": "Node Type",
     "workflow.nodeSelect.empty": "No node types available.",

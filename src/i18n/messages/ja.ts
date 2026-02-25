@@ -210,6 +210,7 @@ export const JA_MESSAGES: Dictionary = {
     "workflow.node.elapsed": "生成時間",
     "workflow.node.outputInFeed": "出力/ログはフィードで確認",
     "workflow.node.inputDirect": "質問を直接入力",
+    "workflow.node.manualWebInput": "手動入力",
     "workflow.node.connection": "接続",
     "workflow.nodeSelect": "ノード種別",
     "workflow.nodeSelect.empty": "選択可能なノードがありません。",

@@ -2217,6 +2217,54 @@ function App() {
     setStatus(`${webProviderLabel(suspendedWebTurn.provider)} 웹 응답 입력 창을 다시 열었습니다.`);
   }
 
+  function onOpenWebInputForNode(nodeId: string) {
+    if (pendingWebTurn?.nodeId === nodeId) {
+      webTurnPanel.setPosition({
+        x: WEB_TURN_FLOATING_DEFAULT_X,
+        y: WEB_TURN_FLOATING_DEFAULT_Y,
+      });
+      setStatus("해당 WEB 노드의 수동 입력 창이 이미 열려 있습니다.");
+      return;
+    }
+
+    if (suspendedWebTurn?.nodeId === nodeId) {
+      onReopenPendingWebTurn();
+      return;
+    }
+
+    const queuedIndex = webTurnQueueRef.current.findIndex((row) => row.turn.nodeId === nodeId);
+    if (queuedIndex >= 0) {
+      if (pendingWebTurn || webTurnResolverRef.current) {
+        if (queuedIndex > 0) {
+          const [target] = webTurnQueueRef.current.splice(queuedIndex, 1);
+          if (target) {
+            webTurnQueueRef.current.unshift(target);
+          }
+        }
+        setStatus("해당 WEB 노드 입력은 대기열 맨 앞으로 이동했습니다.");
+        return;
+      }
+
+      const [target] = webTurnQueueRef.current.splice(queuedIndex, 1);
+      if (!target) {
+        return;
+      }
+      setPendingWebTurn(target.turn);
+      setWebResponseDraft("");
+      setSuspendedWebTurn(null);
+      setSuspendedWebResponseDraft("");
+      webTurnResolverRef.current = target.resolve;
+      webTurnPanel.setPosition({
+        x: WEB_TURN_FLOATING_DEFAULT_X,
+        y: WEB_TURN_FLOATING_DEFAULT_Y,
+      });
+      setStatus(`${webProviderLabel(target.turn.provider)} 웹 응답 입력 창을 상단에 표시했습니다.`);
+      return;
+    }
+
+    setError("해당 WEB 노드의 수동 입력 대기 항목이 없습니다.");
+  }
+
   function onCancelPendingWebTurn() {
     resolvePendingWebTurn({ ok: false, error: "사용자 취소" });
   }
@@ -6017,6 +6065,7 @@ ${prompt}`;
               onNodeConnectDrop={onNodeConnectDrop}
               onNodeDragStart={onNodeDragStart}
               onOpenFeedFromNode={onOpenFeedFromNode}
+              onOpenWebInputForNode={onOpenWebInputForNode}
               onRedoGraph={onRedoGraph}
               onReopenPendingWebTurn={onReopenPendingWebTurn}
               onRunGraph={onRunGraph}
