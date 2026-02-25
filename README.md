@@ -25,6 +25,7 @@ RAIL은 여러 에이전트(코덱스/웹 AI/로컬 모델)를 **노드 그래�
 - [Web Connect Setup](#web-connect-setup)
 - [Data & Persistence](#data--persistence)
 - [Security Model](#security-model)
+- [Legal Notice](#legal-notice)
 - [Architecture Rules (Guardrails)](#architecture-rules-guardrails)
 - [Troubleshooting](#troubleshooting)
 - [Development Scripts](#development-scripts)
@@ -295,6 +296,21 @@ open src-tauri/target/release/bundle/macos/rail.app
 ```bash
 bash scripts/secret_scan.sh --all
 ```
+
+---
+
+## Legal Notice
+
+배포/운영 전 아래 문서를 반드시 확인하세요.
+
+- `TERMS.md` : 서비스 이용 약관/책임 제한
+- `DISCLAIMER.md` : 투자/금융 면책 고지
+- `THIRD_PARTY_NOTICES.md` : 서드파티 고지
+- `public/FONT_LICENSES.txt` : 폰트 라이선스 고지
+
+중요:
+- 주식/금융 관련 출력은 정보 제공 목적이며 투자 자문이 아닙니다.
+- 최종 투자 판단 및 손익 책임은 사용자에게 있습니다.
 
 ---
 

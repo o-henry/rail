@@ -146,6 +146,30 @@ export default function SettingsPage({
         </div>
       )}
       {!compact && (
+        <section className="settings-legal-notice">
+          <h4>{t("settings.legal.title")}</h4>
+          <p>{t("settings.legal.description")}</p>
+          <div className="settings-legal-grid">
+            <article className="settings-legal-card">
+              <strong>{t("settings.legal.fonts.title")}</strong>
+              <p>{t("settings.legal.fonts.body")}</p>
+              <code>public/FONT_LICENSES.txt</code>
+              <code>THIRD_PARTY_NOTICES.md</code>
+            </article>
+            <article className="settings-legal-card">
+              <strong>{t("settings.legal.investment.title")}</strong>
+              <p>{t("settings.legal.investment.body")}</p>
+              <code>DISCLAIMER.md</code>
+            </article>
+            <article className="settings-legal-card">
+              <strong>{t("settings.legal.liability.title")}</strong>
+              <p>{t("settings.legal.liability.body")}</p>
+              <code>TERMS.md</code>
+            </article>
+          </div>
+        </section>
+      )}
+      {!compact && (
         <section className="settings-run-history settings-run-history-hidden">
           <div className="settings-run-history-head">
             <h3>LOG</h3>
