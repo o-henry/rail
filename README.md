@@ -2,6 +2,8 @@
 
 > Local-first Multi-Agent Workflow Desktop for Codex + Web AI (Tauri + React + TypeScript)
 
+Languages: [Korean](./README.md) | [English](./README.en.md) | [Japanese](./README.jp.md) | [Chinese](./README.zh.md)
+
 RAIL은 여러 에이전트(코덱스/웹 AI/로컬 모델)를 **노드 그래프(DAG)** 로 연결해,
 질문 수집 → 분석 → 검증 → 종합까지 한 번에 실행하는 데스크톱 앱입니다.
 
