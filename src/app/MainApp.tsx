@@ -552,6 +552,13 @@ function App() {
 
     return [...editableEdges, ...readonlyEdges];
   }, [canvasEdges, canvasNodeIdSet, graph]);
+  const selectedEdgeNodeIdSet = useMemo(() => {
+    const selected = canvasDisplayEdges.find((row) => row.edgeKey === selectedEdgeKey);
+    if (!selected) {
+      return new Set<string>();
+    }
+    return new Set([selected.edge.from.nodeId, selected.edge.to.nodeId]);
+  }, [canvasDisplayEdges, selectedEdgeKey]);
   const selectedNode = canvasNodes.find((node) => node.id === selectedNodeId) ?? null;
   const questionDirectInputNodeIds = useMemo(() => {
     const incomingNodeIds = new Set(graph.edges.map((edge) => edge.to.nodeId));
@@ -2562,6 +2569,67 @@ function App() {
     });
   }
 
+  function nearestNodeSideByPoint(point: { x: number; y: number }, node: GraphNode): NodeAnchorSide {
+    const size = getNodeVisualSize(node.id);
+    const left = node.position.x;
+    const right = node.position.x + size.width;
+    const top = node.position.y;
+    const bottom = node.position.y + size.height;
+    const sideDistances: Array<{ side: NodeAnchorSide; value: number }> = [
+      { side: "left", value: Math.abs(point.x - left) },
+      { side: "right", value: Math.abs(right - point.x) },
+      { side: "top", value: Math.abs(point.y - top) },
+      { side: "bottom", value: Math.abs(bottom - point.y) },
+    ];
+    sideDistances.sort((a, b) => a.value - b.value);
+    return sideDistances[0]?.side ?? "right";
+  }
+
+  function resolveConnectDropTarget(point: { x: number; y: number }): { nodeId: string; side: NodeAnchorSide } | null {
+    const snapMargin = 28;
+    let bestTarget: { nodeId: string; side: NodeAnchorSide; distance: number } | null = null;
+    for (const node of canvasNodes) {
+      if (!node.id || node.id === connectFromNodeId) {
+        continue;
+      }
+      const size = getNodeVisualSize(node.id);
+      const expandedLeft = node.position.x - snapMargin;
+      const expandedRight = node.position.x + size.width + snapMargin;
+      const expandedTop = node.position.y - snapMargin;
+      const expandedBottom = node.position.y + size.height + snapMargin;
+      const insideExpandedBounds =
+        point.x >= expandedLeft &&
+        point.x <= expandedRight &&
+        point.y >= expandedTop &&
+        point.y <= expandedBottom;
+      if (!insideExpandedBounds) {
+        continue;
+      }
+      const side = nearestNodeSideByPoint(point, node);
+      const anchorPoint = getNodeAnchorPoint(node, side, size);
+      const distance = Math.hypot(anchorPoint.x - point.x, anchorPoint.y - point.y);
+      if (!bestTarget || distance < bestTarget.distance) {
+        bestTarget = { nodeId: node.id, side, distance };
+      }
+    }
+    return bestTarget ? { nodeId: bestTarget.nodeId, side: bestTarget.side } : null;
+  }
+
+  function snapConnectPreviewPoint(point: { x: number; y: number }) {
+    const target = resolveConnectDropTarget(point);
+    if (!target) {
+      setConnectPreviewPoint(point);
+      return;
+    }
+    const node = canvasNodes.find((row) => row.id === target.nodeId);
+    if (!node) {
+      setConnectPreviewPoint(point);
+      return;
+    }
+    const anchor = getNodeAnchorPoint(node, target.side, getNodeVisualSize(node.id));
+    setConnectPreviewPoint(anchor);
+  }
+
   function clientToLogicalPoint(clientX: number, clientY: number, zoomValue = canvasZoom): { x: number; y: number } | null {
     const canvas = graphCanvasRef.current;
     if (!canvas) {
@@ -2650,6 +2718,57 @@ function App() {
       };
       window.addEventListener("mouseup", edgeDragWindowUpHandlerRef.current);
     }
+  }
+
+  function onAssignSelectedEdgeAnchor(nodeId: string, side: NodeAnchorSide): boolean {
+    if (!selectedEdgeKey) {
+      return false;
+    }
+    const currentEdge = graph.edges.find((edge) => getGraphEdgeKey(edge) === selectedEdgeKey);
+    if (!currentEdge) {
+      return false;
+    }
+    const isSourceNode = currentEdge.from.nodeId === nodeId;
+    const isTargetNode = currentEdge.to.nodeId === nodeId;
+    if (!isSourceNode && !isTargetNode) {
+      return false;
+    }
+    const currentSide = isSourceNode ? currentEdge.from.side : currentEdge.to.side;
+    if (currentSide === side) {
+      return true;
+    }
+    applyGraphChange((prev) => {
+      const nextEdges = prev.edges.map((edge) => {
+        if (getGraphEdgeKey(edge) !== selectedEdgeKey) {
+          return edge;
+        }
+        if (edge.from.nodeId === nodeId) {
+          return {
+            ...edge,
+            from: {
+              ...edge.from,
+              side,
+            },
+          };
+        }
+        if (edge.to.nodeId === nodeId) {
+          return {
+            ...edge,
+            to: {
+              ...edge.to,
+              side,
+            },
+          };
+        }
+        return edge;
+      });
+      return {
+        ...prev,
+        edges: nextEdges,
+      };
+    });
+    setStatus("선 연결 위치를 업데이트했습니다.");
+    return true;
   }
 
   function zoomAtClientPoint(nextZoom: number, clientX: number, clientY: number) {
@@ -2855,7 +2974,7 @@ function App() {
     if (isConnectingDrag && connectFromNodeId) {
       const point = clientToLogicalPoint(e.clientX, e.clientY);
       if (point) {
-        setConnectPreviewPoint(point);
+        snapConnectPreviewPoint(point);
       }
       return;
     }
@@ -2876,7 +2995,7 @@ function App() {
     applyDragPosition(e.clientX, e.clientY);
   }
 
-  function onCanvasMouseUp() {
+  function onCanvasMouseUp(event?: { clientX: number; clientY: number }) {
     panRef.current = null;
 
     if (edgeDragRef.current) {
@@ -2899,11 +3018,21 @@ function App() {
     }
 
     if (isConnectingDrag) {
-      setIsConnectingDrag(false);
-      setConnectPreviewStartPoint(null);
-      setConnectPreviewPoint(null);
-      setConnectFromNodeId("");
-      setConnectFromSide(null);
+      const pointerPoint =
+        event && Number.isFinite(event.clientX) && Number.isFinite(event.clientY)
+          ? clientToLogicalPoint(event.clientX, event.clientY)
+          : null;
+      const dropPoint = pointerPoint ?? connectPreviewPoint;
+      const dropTarget = dropPoint ? resolveConnectDropTarget(dropPoint) : null;
+      if (dropTarget && connectFromNodeId && connectFromNodeId !== dropTarget.nodeId) {
+        onNodeConnectDrop(dropTarget.nodeId, dropTarget.side);
+      } else {
+        setIsConnectingDrag(false);
+        setConnectPreviewStartPoint(null);
+        setConnectPreviewPoint(null);
+        setConnectFromNodeId("");
+        setConnectFromSide(null);
+      }
     }
 
     if (marqueeSelection) {
@@ -3342,15 +3471,14 @@ function App() {
     const onWindowMove = (event: MouseEvent) => {
       const point = clientToLogicalPoint(event.clientX, event.clientY);
       if (point) {
-        setConnectPreviewPoint(point);
+        snapConnectPreviewPoint(point);
       }
     };
-    const onWindowUp = () => {
-      setIsConnectingDrag(false);
-      setConnectPreviewStartPoint(null);
-      setConnectPreviewPoint(null);
-      setConnectFromNodeId("");
-      setConnectFromSide(null);
+    const onWindowUp = (event: MouseEvent) => {
+      onCanvasMouseUp({
+        clientX: event.clientX,
+        clientY: event.clientY,
+      });
     };
     window.addEventListener("mousemove", onWindowMove);
     window.addEventListener("mouseup", onWindowUp);
@@ -5742,6 +5870,7 @@ ${prompt}`;
               onCanvasZoomIn={onCanvasZoomIn}
               onCanvasZoomOut={onCanvasZoomOut}
               onEdgeDragStart={onEdgeDragStart}
+              onAssignSelectedEdgeAnchor={onAssignSelectedEdgeAnchor}
               onNodeAnchorDragStart={onNodeAnchorDragStart}
               onNodeAnchorDrop={onNodeAnchorDrop}
               onNodeConnectDrop={onNodeConnectDrop}
@@ -5760,6 +5889,7 @@ ${prompt}`;
               redoStackLength={redoStack.length}
               runtimeNowMs={runtimeNowMs}
               selectedEdgeKey={selectedEdgeKey}
+              selectedEdgeNodeIdSet={selectedEdgeNodeIdSet}
               selectedNodeIds={selectedNodeIds}
               setCanvasFullscreen={setCanvasFullscreen}
               setNodeSelection={setNodeSelection}

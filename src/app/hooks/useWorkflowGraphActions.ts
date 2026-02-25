@@ -398,11 +398,16 @@ export function useWorkflowGraphActions(params: UseWorkflowGraphActionsParams) {
   );
 
   const onNodeConnectDrop = useCallback(
-    (targetNodeId: string) => {
+    (targetNodeId: string, targetSide?: NodeAnchorSide) => {
       if (!connectFromNodeId || connectFromNodeId === targetNodeId) {
         return;
       }
-      createEdgeConnection(connectFromNodeId, targetNodeId, connectFromSide ?? undefined);
+      createEdgeConnection(
+        connectFromNodeId,
+        targetNodeId,
+        connectFromSide ?? undefined,
+        targetSide,
+      );
       setConnectFromNodeId("");
       setConnectFromSide(null);
       setConnectPreviewStartPoint(null);

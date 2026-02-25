@@ -26,6 +26,7 @@ type WorkflowCanvasPaneProps = {
   stageInsetY: number;
   edgeLines: EdgeLine[];
   selectedEdgeKey: string;
+  selectedEdgeNodeIdSet: Set<string>;
   setNodeSelection: (nodeIds: string[], focusedNodeId?: string) => void;
   setSelectedEdgeKey: (edgeKey: string) => void;
   onEdgeDragStart: (event: ReactMouseEvent<SVGPathElement>, edgeKey: string, controlPoint: { x: number; y: number }) => void;
@@ -38,7 +39,8 @@ type WorkflowCanvasPaneProps = {
   questionDirectInputNodeIds: Set<string>;
   onNodeAnchorDragStart: (event: ReactMouseEvent<HTMLButtonElement>, nodeId: string, side: NodeAnchorSide) => void;
   onNodeAnchorDrop: (event: ReactMouseEvent<HTMLButtonElement>, nodeId: string, side: NodeAnchorSide) => void;
-  onNodeConnectDrop: (nodeId: string) => void;
+  onNodeConnectDrop: (nodeId: string, side?: NodeAnchorSide) => void;
+  onAssignSelectedEdgeAnchor: (nodeId: string, side: NodeAnchorSide) => boolean;
   isNodeDragAllowedTarget: (target: EventTarget | null) => boolean;
   onNodeDragStart: (event: ReactMouseEvent<HTMLDivElement>, nodeId: string) => void;
   nodeAnchorSides: readonly NodeAnchorSide[];
@@ -92,6 +94,7 @@ export default function WorkflowCanvasPane({
   stageInsetY,
   edgeLines,
   selectedEdgeKey,
+  selectedEdgeNodeIdSet,
   setNodeSelection,
   setSelectedEdgeKey,
   onEdgeDragStart,
@@ -105,6 +108,7 @@ export default function WorkflowCanvasPane({
   onNodeAnchorDragStart,
   onNodeAnchorDrop,
   onNodeConnectDrop,
+  onAssignSelectedEdgeAnchor,
   isNodeDragAllowedTarget,
   onNodeDragStart,
   nodeAnchorSides,
@@ -143,6 +147,22 @@ export default function WorkflowCanvasPane({
   questionInputRef,
 }: WorkflowCanvasPaneProps) {
   const { t } = useI18n();
+
+  const getDropSideFromNodePointer = (
+    event: ReactMouseEvent<HTMLDivElement>,
+  ): NodeAnchorSide => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    const localX = event.clientX - rect.left;
+    const localY = event.clientY - rect.top;
+    const distances: Array<{ side: NodeAnchorSide; value: number }> = [
+      { side: "left", value: Math.abs(localX) },
+      { side: "right", value: Math.abs(rect.width - localX) },
+      { side: "top", value: Math.abs(localY) },
+      { side: "bottom", value: Math.abs(rect.height - localY) },
+    ];
+    distances.sort((a, b) => a.value - b.value);
+    return distances[0]?.side ?? "right";
+  };
 
   return (
     <section className="canvas-pane">
@@ -237,7 +257,8 @@ export default function WorkflowCanvasPane({
                 const nodeSummary = nodeCardSummary(node);
                 const isNodeSelected = selectedNodeIds.includes(node.id);
                 const isNodeDragging = draggingNodeIds.includes(node.id);
-                const showNodeAnchors = isNodeSelected || isConnectingDrag;
+                const showNodeAnchors =
+                  isNodeSelected || isConnectingDrag || selectedEdgeNodeIdSet.has(node.id);
                 const receivesQuestionDirectly = questionDirectInputNodeIds.has(node.id);
                 const isWebTurnNode =
                   node.type === "turn" && String(node.config?.executor ?? "").startsWith("web_");
@@ -265,7 +286,7 @@ export default function WorkflowCanvasPane({
                     onMouseUp={(e) => {
                       if (!isConnectingDrag) return;
                       e.stopPropagation();
-                      onNodeConnectDrop(node.id);
+                      onNodeConnectDrop(node.id, getDropSideFromNodePointer(e));
                     }}
                     style={{
                       left: node.position.x,
@@ -341,7 +362,17 @@ export default function WorkflowCanvasPane({
                             aria-label={`${t("workflow.node.connection")} ${side}`}
                             className={`node-anchor node-anchor-${side}`}
                             key={`${node.id}-${side}`}
-                            onMouseDown={(e) => onNodeAnchorDragStart(e, node.id, side)}
+                            onMouseDown={(e) => {
+                              if (!isConnectingDrag && selectedEdgeKey) {
+                                const applied = onAssignSelectedEdgeAnchor(node.id, side);
+                                if (applied) {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  return;
+                                }
+                              }
+                              onNodeAnchorDragStart(e, node.id, side);
+                            }}
                             onMouseUp={(e) => onNodeAnchorDrop(e, node.id, side)}
                             type="button"
                           />
