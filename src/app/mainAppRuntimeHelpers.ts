@@ -91,15 +91,17 @@ export const PRESET_TEMPLATE_META: ReadonlyArray<{ key: PresetKind; label: strin
   { key: "expert", label: "전문가 분석 템플릿", statusLabel: "전문가 분석 템플릿" },
   { key: "unityGame", label: "유니티 게임개발 템플릿", statusLabel: "유니티 게임개발 템플릿" },
   { key: "fullstack", label: "풀스택 구현 템플릿", statusLabel: "풀스택 구현 템플릿" },
-  { key: "creative", label: "창의 제작 템플릿", statusLabel: "창의 제작 템플릿" },
+  { key: "creative", label: "창의성 템플릿", statusLabel: "창의성 템플릿" },
   { key: "newsTrend", label: "뉴스 트렌드 템플릿", statusLabel: "뉴스 트렌드 템플릿" },
   { key: "stock", label: "주식 분석 템플릿", statusLabel: "주식 분석 템플릿" },
 ];
 
-export const PRESET_TEMPLATE_OPTIONS: FancySelectOption[] = PRESET_TEMPLATE_META.map((row) => ({
-  value: row.key,
-  label: row.label,
-}));
+export const PRESET_TEMPLATE_OPTIONS: FancySelectOption[] = PRESET_TEMPLATE_META
+  .filter((row) => row.key !== "development")
+  .map((row) => ({
+    value: row.key,
+    label: row.label,
+  }));
 
 export function presetTemplateLabel(kind: PresetKind): string {
   const row = PRESET_TEMPLATE_META.find((meta) => meta.key === kind);

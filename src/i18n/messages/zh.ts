@@ -211,7 +211,7 @@ export const ZH_MESSAGES: Dictionary = {
     "preset.expert": "专家分析模板",
     "preset.unityGame": "Unity 游戏开发模板",
     "preset.fullstack": "全栈实现模板",
-    "preset.creative": "创意制作模板",
+    "preset.creative": "创造力模板",
     "preset.newsTrend": "新闻趋势模板",
     "preset.stock": "股票分析模板",
     "common.none": "(无)",

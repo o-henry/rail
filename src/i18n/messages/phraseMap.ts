@@ -45,6 +45,7 @@ export const PHRASE_TO_KEY: Record<string, string> = {
   "유니티 게임개발 템플릿": "preset.unityGame",
   "풀스택 구현 템플릿": "preset.fullstack",
   "창의 제작 템플릿": "preset.creative",
+  "창의성 템플릿": "preset.creative",
   "뉴스 트렌드 템플릿": "preset.newsTrend",
   "주식 분석 템플릿": "preset.stock",
   "(없음)": "common.none",

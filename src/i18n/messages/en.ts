@@ -211,7 +211,7 @@ export const EN_MESSAGES: Dictionary = {
     "preset.expert": "Expert Analysis Template",
     "preset.unityGame": "Unity Game Dev Template",
     "preset.fullstack": "Fullstack Template",
-    "preset.creative": "Creative Template",
+    "preset.creative": "Creativity Template",
     "preset.newsTrend": "News Trend Template",
     "preset.stock": "Stock Analysis Template",
     "common.none": "(None)",
