@@ -33,10 +33,12 @@ export function useExecutionState(options: {
 
   const [nodeStates, setNodeStates] = useState<Record<string, NodeRunState>>({});
   const [isGraphRunning, setIsGraphRunning] = useState(false);
+  const [isGraphPaused, setIsGraphPaused] = useState(false);
   const [isRunStarting, setIsRunStarting] = useState(false);
   const [runtimeNowMs, setRuntimeNowMs] = useState(() => Date.now());
 
   const cancelRequestedRef = useRef(false);
+  const pauseRequestedRef = useRef(false);
   const activeTurnNodeIdRef = useRef<string>("");
   const turnTerminalResolverRef = useRef<((terminal: TurnTerminal) => void) | null>(null);
   const activeRunDeltaRef = useRef<Record<string, string>>({});
@@ -79,11 +81,14 @@ export function useExecutionState(options: {
     setNodeStates,
     isGraphRunning,
     setIsGraphRunning,
+    isGraphPaused,
+    setIsGraphPaused,
     isRunStarting,
     setIsRunStarting,
     runtimeNowMs,
     setRuntimeNowMs,
     cancelRequestedRef,
+    pauseRequestedRef,
     activeTurnNodeIdRef,
     turnTerminalResolverRef,
     activeRunDeltaRef,

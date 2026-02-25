@@ -305,11 +305,14 @@ function App() {
     setNodeStates,
     isGraphRunning,
     setIsGraphRunning,
+    isGraphPaused,
+    setIsGraphPaused,
     isRunStarting,
     setIsRunStarting,
     runtimeNowMs,
     setRuntimeNowMs,
     cancelRequestedRef,
+    pauseRequestedRef,
     activeTurnNodeIdRef,
     turnTerminalResolverRef,
     activeRunDeltaRef,
@@ -3634,6 +3637,23 @@ ${prompt}`;
 
             let settled: Awaited<typeof runPromise> | null = null;
             while (!settled) {
+              if (pauseRequestedRef.current) {
+                addNodeLog(node.id, "[WEB] 일시정지 요청 감지 - 자동 수집 취소 요청");
+                try {
+                  await invoke("web_provider_cancel", { provider: webProvider });
+                } catch (cancelError) {
+                  addNodeLog(node.id, `[WEB] 자동 수집 취소 요청 실패: ${String(cancelError)}`);
+                }
+                await runPromise;
+                return {
+                  ok: false,
+                  error: PAUSE_ERROR_TOKEN,
+                  executor,
+                  provider: webProvider,
+                  knowledgeTrace,
+                };
+              }
+
               if (manualWebFallbackNodeRef.current[node.id]) {
                 addNodeLog(node.id, "[WEB] 수동 입력 전환 요청 감지 - 자동 수집 취소 요청");
                 try {
@@ -3695,10 +3715,19 @@ ${prompt}`;
               };
             }
 
-            if (cancelRequestedRef.current || result?.errorCode === "CANCELLED") {
+            if (cancelRequestedRef.current || pauseRequestedRef.current || result?.errorCode === "CANCELLED") {
               if (manualWebFallbackNodeRef.current[node.id]) {
                 delete manualWebFallbackNodeRef.current[node.id];
                 return requestManualFallback("[WEB] 사용자 요청으로 자동 수집을 중단하고 수동 입력으로 전환합니다.");
+              }
+              if (pauseRequestedRef.current) {
+                return {
+                  ok: false,
+                  error: PAUSE_ERROR_TOKEN,
+                  executor,
+                  provider: webProvider,
+                  knowledgeTrace,
+                };
               }
               return {
                 ok: false,
@@ -3715,10 +3744,19 @@ ${prompt}`;
               }`,
             );
           } catch (error) {
-            if (cancelRequestedRef.current) {
+            if (cancelRequestedRef.current || pauseRequestedRef.current) {
               if (manualWebFallbackNodeRef.current[node.id]) {
                 delete manualWebFallbackNodeRef.current[node.id];
                 return requestManualFallback("[WEB] 사용자 요청으로 자동 수집을 중단하고 수동 입력으로 전환합니다.");
+              }
+              if (pauseRequestedRef.current) {
+                return {
+                  ok: false,
+                  error: PAUSE_ERROR_TOKEN,
+                  executor,
+                  provider: webProvider,
+                  knowledgeTrace,
+                };
               }
               return {
                 ok: false,
@@ -4016,7 +4054,29 @@ ${prompt}`;
     return Array.from(providers);
   }
 
+  const PAUSE_ERROR_TOKEN = "__PAUSED_BY_USER__";
+
+  function isPauseSignalError(input: unknown): boolean {
+    const text = String(input ?? "").toLowerCase();
+    if (!text) {
+      return false;
+    }
+    return (
+      text.includes(PAUSE_ERROR_TOKEN.toLowerCase()) ||
+      text.includes("cancelled") ||
+      text.includes("취소") ||
+      text.includes("interrupt")
+    );
+  }
+
   async function onRunGraph(skipWebConnectPreflight = false) {
+    if (isGraphRunning && isGraphPaused) {
+      pauseRequestedRef.current = false;
+      setIsGraphPaused(false);
+      setStatus("그래프 실행 재개");
+      return;
+    }
+
     if (isGraphRunning || runStartGuardRef.current) {
       return;
     }
@@ -4076,7 +4136,9 @@ ${prompt}`;
     setError("");
     setStatus("그래프 실행 시작");
     setIsGraphRunning(true);
+    setIsGraphPaused(false);
     cancelRequestedRef.current = false;
+    pauseRequestedRef.current = false;
     collectingRunRef.current = true;
 
     const initialState: Record<string, NodeRunState> = {};
@@ -4220,6 +4282,7 @@ ${prompt}`;
       const dagMaxThreads = codexMultiAgentMode === "max" ? 4 : codexMultiAgentMode === "balanced" ? 2 : 1;
       const activeTasks = new Map<string, Promise<void>>();
       let activeTurnTasks = 0;
+      let pauseStatusShown = false;
 
       const scheduleChildren = (nodeId: string) => {
         const children = adjacency.get(nodeId) ?? [];
@@ -4242,6 +4305,21 @@ ${prompt}`;
 
         const nodeInputSources = resolveFeedInputSources(nodeId);
         const nodeInput = nodeInputFor(nodeId, outputs, workflowQuestion);
+
+        if (pauseRequestedRef.current) {
+          const pauseMessage = "사용자 일시정지 요청으로 대기열로 복귀";
+          setNodeStatus(nodeId, "queued", pauseMessage);
+          setNodeRuntimeFields(nodeId, {
+            status: "queued",
+            finishedAt: undefined,
+            durationMs: undefined,
+          });
+          transition(runRecord, nodeId, "queued", pauseMessage);
+          if (!queue.includes(nodeId)) {
+            queue.push(nodeId);
+          }
+          return;
+        }
 
         if (cancelRequestedRef.current) {
           setNodeStatus(nodeId, "cancelled", "취소 요청됨");
@@ -4344,6 +4422,21 @@ ${prompt}`;
               output: turnExecution.normalizedOutput,
               error: undefined,
             };
+          }
+          if (!result.ok && pauseRequestedRef.current && isPauseSignalError(result.error)) {
+            const pauseMessage = "사용자 일시정지 요청으로 노드 실행을 보류했습니다.";
+            addNodeLog(nodeId, `[중지] ${pauseMessage}`);
+            setNodeStatus(nodeId, "queued", pauseMessage);
+            setNodeRuntimeFields(nodeId, {
+              status: "queued",
+              finishedAt: undefined,
+              durationMs: undefined,
+            });
+            transition(runRecord, nodeId, "queued", pauseMessage);
+            if (!queue.includes(nodeId)) {
+              queue.push(nodeId);
+            }
+            return;
           }
           if (result.knowledgeTrace && result.knowledgeTrace.length > 0) {
             runRecord.knowledgeTrace?.push(...result.knowledgeTrace);
@@ -4693,6 +4786,30 @@ ${prompt}`;
       };
 
       while (queue.length > 0 || activeTasks.size > 0) {
+        if (pauseRequestedRef.current) {
+          if (activeTasks.size > 0) {
+            await Promise.race(activeTasks.values());
+            continue;
+          }
+          if (!pauseStatusShown) {
+            pauseStatusShown = true;
+            setIsGraphPaused(true);
+            setStatus("그래프 실행 일시정지됨");
+          }
+          await new Promise<void>((resolve) => {
+            const intervalId = window.setInterval(() => {
+              if (!pauseRequestedRef.current) {
+                window.clearInterval(intervalId);
+                resolve();
+              }
+            }, 120);
+          });
+          pauseStatusShown = false;
+          setIsGraphPaused(false);
+          setStatus("그래프 실행 재개");
+          continue;
+        }
+
         if (!cancelRequestedRef.current) {
           for (let index = 0; index < queue.length && activeTasks.size < dagMaxThreads; ) {
             const nodeId = queue[index];
@@ -4822,9 +4939,11 @@ ${prompt}`;
       setWebResponseDraft("");
       activeTurnNodeIdRef.current = "";
       setIsGraphRunning(false);
+      setIsGraphPaused(false);
       setIsRunStarting(false);
       runStartGuardRef.current = false;
       cancelRequestedRef.current = false;
+      pauseRequestedRef.current = false;
       collectingRunRef.current = false;
       setActiveFeedRunMeta(null);
     }
@@ -4850,12 +4969,16 @@ ${prompt}`;
   }
 
   async function onCancelGraphRun() {
-    cancelRequestedRef.current = true;
-    setStatus("취소 요청됨");
+    if (!isGraphRunning) {
+      return;
+    }
+    pauseRequestedRef.current = true;
+    setIsGraphPaused(true);
+    setStatus("일시정지 요청됨");
 
     if (pendingWebLogin) {
       resolvePendingWebLogin(false);
-      return;
+      // continue to ensure active work is interrupted too.
     }
 
     const activeWebProviders = Object.keys(activeWebNodeByProviderRef.current) as WebProvider[];
@@ -4877,13 +5000,13 @@ ${prompt}`;
     }
 
     if (pendingWebTurn) {
-      clearQueuedWebTurnRequests(t("run.cancelledByUserShort"));
-      resolvePendingWebTurn({ ok: false, error: t("run.cancelledByUserShort") });
+      clearQueuedWebTurnRequests(PAUSE_ERROR_TOKEN);
+      resolvePendingWebTurn({ ok: false, error: PAUSE_ERROR_TOKEN });
       return;
     }
     if (suspendedWebTurn) {
-      clearQueuedWebTurnRequests(t("run.cancelledByUserShort"));
-      resolvePendingWebTurn({ ok: false, error: t("run.cancelledByUserShort") });
+      clearQueuedWebTurnRequests(PAUSE_ERROR_TOKEN);
+      resolvePendingWebTurn({ ok: false, error: PAUSE_ERROR_TOKEN });
       return;
     }
 
@@ -4993,8 +5116,10 @@ ${prompt}`;
       label: target ? nodeSelectionLabel(target) : "연결된 노드",
     };
   });
-  const isWorkflowBusy = isGraphRunning || isRunStarting;
-  const canRunGraphNow = !isWorkflowBusy && graph.nodes.length > 0 && workflowQuestion.trim().length > 0;
+  const canResumeGraph = isGraphRunning && isGraphPaused;
+  const isWorkflowBusy = (isGraphRunning && !isGraphPaused) || isRunStarting;
+  const canRunGraphNow =
+    canResumeGraph || (!isWorkflowBusy && graph.nodes.length > 0 && workflowQuestion.trim().length > 0);
   const {
     currentFeedPosts,
     feedCategoryPosts,
