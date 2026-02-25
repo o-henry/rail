@@ -10,6 +10,7 @@ use std::{
         Arc,
     },
 };
+use tauri::path::BaseDirectory;
 use tauri::webview::WebviewBuilder;
 use tauri::{AppHandle, Emitter, Manager, State, WebviewUrl, WebviewWindowBuilder, Window};
 use tokio::{
@@ -35,6 +36,78 @@ const CHILD_VIEW_HEIGHT_RATIO: f64 = 0.34;
 const CHILD_VIEW_SAFE_MARGIN_X: u32 = 44;
 const CHILD_VIEW_SAFE_MARGIN_TOP: u32 = 212;
 const CHILD_VIEW_SAFE_MARGIN_BOTTOM: u32 = 36;
+
+fn is_executable(path: &Path) -> bool {
+    if !path.exists() || !path.is_file() {
+        return false;
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        if let Ok(meta) = fs::metadata(path) {
+            return meta.permissions().mode() & 0o111 != 0;
+        }
+    }
+    #[cfg(not(unix))]
+    {
+        return true;
+    }
+    false
+}
+
+fn find_in_path(binary: &str) -> Option<PathBuf> {
+    let path_var = env::var_os("PATH")?;
+    env::split_paths(&path_var)
+        .map(|dir| dir.join(binary))
+        .find(|candidate| is_executable(candidate))
+}
+
+fn find_in_nvm(binary: &str) -> Option<PathBuf> {
+    let home = env::var_os("HOME")?;
+    let node_versions_dir = PathBuf::from(home).join(".nvm/versions/node");
+    let entries = fs::read_dir(node_versions_dir).ok()?;
+    let mut dirs = entries
+        .filter_map(Result::ok)
+        .map(|entry| entry.path())
+        .filter(|path| path.is_dir())
+        .collect::<Vec<_>>();
+    dirs.sort();
+    dirs.reverse();
+
+    dirs.into_iter()
+        .map(|dir| dir.join("bin").join(binary))
+        .find(|candidate| is_executable(candidate))
+}
+
+fn resolve_executable(binary: &str, override_env: &str) -> Result<PathBuf, String> {
+    if let Ok(raw) = env::var(override_env) {
+        let candidate = PathBuf::from(raw.trim());
+        if is_executable(&candidate) {
+            return Ok(candidate);
+        }
+    }
+    if let Some(found) = find_in_path(binary) {
+        return Ok(found);
+    }
+
+    let hardcoded = [
+        PathBuf::from(format!("/opt/homebrew/bin/{binary}")),
+        PathBuf::from(format!("/usr/local/bin/{binary}")),
+        PathBuf::from(format!("/usr/bin/{binary}")),
+    ];
+    for candidate in hardcoded {
+        if is_executable(&candidate) {
+            return Ok(candidate);
+        }
+    }
+    if let Some(found) = find_in_nvm(binary) {
+        return Ok(found);
+    }
+
+    Err(format!(
+        "failed to resolve executable `{binary}`; set {override_env} to an absolute path"
+    ))
+}
 
 #[derive(Default)]
 pub struct EngineManager {
@@ -193,8 +266,9 @@ pub struct WebWorkerHealth {
 impl EngineRuntime {
     async fn start(app: AppHandle, cwd: String) -> Result<Arc<Self>, String> {
         let codex_home = resolve_codex_home_dir(&app).await?;
+        let codex_bin = resolve_executable("codex", "RAIL_CODEX_BIN")?;
 
-        let mut child = Command::new("codex")
+        let mut child = Command::new(codex_bin)
             .arg("app-server")
             .arg("--listen")
             .arg("stdio://")
@@ -466,18 +540,14 @@ impl EngineRuntime {
 
 impl WebWorkerRuntime {
     async fn start(app: AppHandle) -> Result<Arc<Self>, String> {
-        let worker_script = resolve_web_worker_script_path()?;
+        let node_bin = resolve_executable("node", "RAIL_NODE_BIN")?;
+        let worker_script = resolve_web_worker_script_path(&app)?;
         let (profile_root, log_path) = resolve_web_worker_dirs(&app).await?;
+        let worker_cwd = resolve_web_worker_cwd(&app);
 
-        let project_root = worker_script
-            .parent()
-            .and_then(|parent| parent.parent())
-            .ok_or_else(|| format!("invalid worker script path: {}", worker_script.display()))?
-            .to_path_buf();
-
-        let mut child = Command::new("node")
+        let mut child = Command::new(node_bin)
             .arg(&worker_script)
-            .current_dir(project_root)
+            .current_dir(worker_cwd)
             .env("RAIL_WEB_PROFILE_ROOT", &profile_root)
             .env("RAIL_WEB_LOG_PATH", &log_path)
             .env("RAIL_WEB_USE_SYSTEM_CHROME_PROFILE", "0")
@@ -672,12 +742,41 @@ impl WebWorkerRuntime {
     }
 }
 
-fn resolve_web_worker_script_path() -> Result<PathBuf, String> {
-    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../scripts/web_worker/index.mjs");
-    if !path.exists() {
-        return Err(format!("web worker script not found: {}", path.display()));
+fn resolve_web_worker_script_path(app: &AppHandle) -> Result<PathBuf, String> {
+    // Prefer bundled app resource path so rail.app runs standalone.
+    if let Ok(resource_path) = app
+        .path()
+        .resolve("scripts/web_worker/index.mjs", BaseDirectory::Resource)
+    {
+        if resource_path.exists() {
+            return Ok(resource_path);
+        }
     }
-    Ok(path)
+    if let Ok(resource_path_up) = app
+        .path()
+        .resolve("_up_/scripts/web_worker/index.mjs", BaseDirectory::Resource)
+    {
+        if resource_path_up.exists() {
+            return Ok(resource_path_up);
+        }
+    }
+
+    // Dev fallback when running from source tree.
+    let dev_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../scripts/web_worker/index.mjs");
+    if dev_path.exists() {
+        return Ok(dev_path);
+    }
+
+    Err("web worker script not found in app resources or source tree".to_string())
+}
+
+fn resolve_web_worker_cwd(app: &AppHandle) -> PathBuf {
+    // For bundled app, use app data dir as stable writable cwd.
+    if let Ok(app_data_dir) = app.path().app_data_dir() {
+        return app_data_dir;
+    }
+    // Dev fallback.
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..")
 }
 
 async fn resolve_web_worker_dirs(app: &AppHandle) -> Result<(PathBuf, PathBuf), String> {
