@@ -8,10 +8,14 @@ import {
   buildStockPreset,
   buildUnityGamePreset,
 } from "./presets/buildersExtended";
-import { applyPresetTurnPolicies, simplifyPresetForSimpleWorkflow } from "./presets/policies";
+import {
+  applyPresetOutputSchemaPolicies,
+  applyPresetTurnPolicies,
+  simplifyPresetForSimpleWorkflow,
+} from "./presets/policies";
 import { prependPreprocessAgent } from "./presets/preprocess";
 
-export { applyPresetTurnPolicies, simplifyPresetForSimpleWorkflow };
+export { applyPresetOutputSchemaPolicies, applyPresetTurnPolicies, simplifyPresetForSimpleWorkflow };
 
 export function buildPresetGraphByKind(kind: PresetKind): GraphData {
   let base: GraphData;

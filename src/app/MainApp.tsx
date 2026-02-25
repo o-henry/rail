@@ -51,6 +51,7 @@ import {
   type WebResultMode,
 } from "../features/workflow/domain";
 import {
+  applyPresetOutputSchemaPolicies,
   applyPresetTurnPolicies,
   buildPresetGraphByKind,
   simplifyPresetForSimpleWorkflow,
@@ -2353,10 +2354,10 @@ function App() {
 
   function applyPreset(kind: PresetKind) {
     const builtPreset = buildPresetGraphByKind(kind);
-    const presetWithPolicies: GraphData = {
+    const presetWithPolicies = applyPresetOutputSchemaPolicies({
       ...builtPreset,
       nodes: applyPresetTurnPolicies(kind, builtPreset.nodes),
-    };
+    });
     const preset = simplifyPresetForSimpleWorkflow(presetWithPolicies, SIMPLE_WORKFLOW_UI);
     const nextPreset = autoArrangeGraphLayout({
       ...preset,
@@ -4516,6 +4517,7 @@ ${prompt}`;
   async function executeTurnNodeWithOutputSchemaRetry(
     node: GraphNode,
     input: unknown,
+    options?: { maxRetry?: number },
   ): Promise<{
     result: Awaited<ReturnType<typeof executeTurnNode>>;
     normalizedOutput?: unknown;
@@ -4562,9 +4564,10 @@ ${prompt}`;
       return { result, normalizedOutput, artifactWarnings: warnings };
     }
 
+    const maxRetry = Math.max(0, options?.maxRetry ?? TURN_OUTPUT_SCHEMA_MAX_RETRY);
     addNodeLog(node.id, `[스키마] 검증 실패: ${schemaErrors.join("; ")}`);
-    if (TURN_OUTPUT_SCHEMA_MAX_RETRY > 0) {
-      addNodeLog(node.id, `[스키마] 재질문 ${TURN_OUTPUT_SCHEMA_MAX_RETRY}회 제한 내에서 재시도합니다.`);
+    if (maxRetry > 0) {
+      addNodeLog(node.id, `[스키마] 재질문 ${maxRetry}회 제한 내에서 재시도합니다.`);
     } else {
       addNodeLog(node.id, "[스키마] 자동 재질문이 비활성화되어 즉시 실패 처리합니다.");
     }
@@ -4572,7 +4575,7 @@ ${prompt}`;
     let attempts = 0;
     let accumulatedUsage = result.usage;
 
-    while (attempts < TURN_OUTPUT_SCHEMA_MAX_RETRY && schemaErrors.length > 0) {
+    while (attempts < maxRetry && schemaErrors.length > 0) {
       attempts += 1;
       const retryInput = buildSchemaRetryInput(input, normalizedOutput, parsedSchema, schemaErrors);
       const retryResult = await executeTurnNode(node, retryInput);
@@ -4895,7 +4898,10 @@ ${prompt}`;
         const input = nodeInput;
 
         if (node.type === "turn") {
-          const turnExecution = await executeTurnNodeWithOutputSchemaRetry(node, input);
+          const isFinalTurnNode = (adjacency.get(nodeId)?.length ?? 0) === 0;
+          const turnExecution = await executeTurnNodeWithOutputSchemaRetry(node, input, {
+            maxRetry: isFinalTurnNode ? 1 : 0,
+          });
           const result = turnExecution.result;
           if (result.knowledgeTrace && result.knowledgeTrace.length > 0) {
             runRecord.knowledgeTrace?.push(...result.knowledgeTrace);
@@ -4952,7 +4958,6 @@ ${prompt}`;
             addNodeLog(nodeId, `[아티팩트] ${warning}`);
           }
           const normalizedOutput = turnExecution.normalizedOutput ?? result.output;
-          const isFinalTurnNode = (adjacency.get(nodeId)?.length ?? 0) === 0;
           let qualityReport: QualityReport | undefined;
           if (isFinalTurnNode) {
             const finalQualityReport = await buildQualityReport({

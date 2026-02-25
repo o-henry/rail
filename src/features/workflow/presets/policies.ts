@@ -1,4 +1,4 @@
-import type { PresetKind, TurnConfig } from "../domain";
+import { getTurnExecutor, getWebProviderFromExecutor, type PresetKind, type TurnConfig } from "../domain";
 import type { GraphData, GraphEdge, GraphNode } from "../types";
 import {
   DEFAULT_PRESET_TURN_POLICY,
@@ -329,6 +329,74 @@ export function applyPresetTurnPolicies(kind: PresetKind, nodes: GraphNode[]): G
       },
     };
   });
+}
+
+const INTERMEDIATE_OUTPUT_SCHEMA = JSON.stringify(
+  {
+    type: "object",
+    required: ["summary", "key_points", "next_action"],
+    properties: {
+      summary: { type: "string" },
+      key_points: { type: "array" },
+      next_action: { type: "string" },
+      evidence: { type: "array" },
+      confidence: { type: "string" },
+    },
+  },
+  null,
+  2,
+);
+
+const FINAL_OUTPUT_SCHEMA = JSON.stringify(
+  {
+    type: "object",
+    required: ["final_answer", "evidence", "limitations", "next_steps"],
+    properties: {
+      final_answer: { type: "string" },
+      evidence: { type: "array" },
+      limitations: { type: "array" },
+      next_steps: { type: "array" },
+      citations: { type: "array" },
+      confidence: { type: "string" },
+    },
+  },
+  null,
+  2,
+);
+
+export function applyPresetOutputSchemaPolicies(graphData: GraphData): GraphData {
+  const outgoing = new Map<string, number>();
+  for (const node of graphData.nodes) {
+    outgoing.set(node.id, 0);
+  }
+  for (const edge of graphData.edges) {
+    outgoing.set(edge.from.nodeId, (outgoing.get(edge.from.nodeId) ?? 0) + 1);
+  }
+
+  return {
+    ...graphData,
+    nodes: graphData.nodes.map((node) => {
+      if (node.type !== "turn") {
+        return node;
+      }
+      const config = node.config as TurnConfig;
+      if (String(config.outputSchemaJson ?? "").trim()) {
+        return node;
+      }
+      const executor = getTurnExecutor(config);
+      if (getWebProviderFromExecutor(executor)) {
+        return node;
+      }
+      const isFinalTurn = (outgoing.get(node.id) ?? 0) === 0;
+      return {
+        ...node,
+        config: {
+          ...config,
+          outputSchemaJson: isFinalTurn ? FINAL_OUTPUT_SCHEMA : INTERMEDIATE_OUTPUT_SCHEMA,
+        },
+      };
+    }),
+  };
 }
 
 export function simplifyPresetForSimpleWorkflow(graphData: GraphData, simpleWorkflowUi: boolean): GraphData {
