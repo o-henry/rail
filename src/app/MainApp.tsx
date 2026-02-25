@@ -3514,6 +3514,36 @@ function App() {
     return merged;
   }
 
+  function buildFinalTurnInput(
+    nodeId: string,
+    currentInput: unknown,
+    outputs: Record<string, unknown>,
+    rootInput: string,
+  ): unknown {
+    const incomingEdges = graph.edges.filter((edge) => edge.to.nodeId === nodeId);
+    if (incomingEdges.length === 0) {
+      return currentInput;
+    }
+
+    const upstream: Record<string, unknown> = {};
+    for (const edge of incomingEdges) {
+      const sourceNodeId = edge.from.nodeId;
+      if (!(sourceNodeId in outputs)) {
+        continue;
+      }
+      upstream[sourceNodeId] = outputs[sourceNodeId];
+    }
+
+    if (Object.keys(upstream).length === 0) {
+      return currentInput;
+    }
+
+    return {
+      question: rootInput,
+      upstream,
+    };
+  }
+
   function transition(runRecord: RunRecord, nodeId: string, state: NodeExecutionStatus, message?: string) {
     runRecord.transitions.push({
       at: new Date().toISOString(),
@@ -4715,7 +4745,10 @@ ${prompt}`;
         });
         transition(runRecord, nodeId, "running");
 
-        const input = nodeInput;
+        const input =
+          node.type === "turn" && (adjacency.get(nodeId)?.length ?? 0) === 0
+            ? buildFinalTurnInput(nodeId, nodeInput, outputs, workflowQuestion)
+            : nodeInput;
 
         if (node.type === "turn") {
           const isFinalTurnNode = (adjacency.get(nodeId)?.length ?? 0) === 0;
