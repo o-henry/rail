@@ -102,7 +102,7 @@ export const KO_MESSAGES: Dictionary = {
     "feed.option.disabled": "미사용",
     "feed.inputSources": "입력 출처",
     "feed.inputSnapshot": "전달 입력 스냅샷",
-    "feed.inputBundle": "입력 묶음",
+    "feed.inputBundle": "입력",
     "feed.partial": " (일부)",
     "feed.more": "더보기",
     "feed.less": "접기",
