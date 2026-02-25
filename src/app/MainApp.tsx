@@ -4556,12 +4556,14 @@ ${prompt}`;
             }
             if (finalQualityReport.decision !== "PASS") {
               const finishedAtIso = new Date().toISOString();
-              setNodeStatus(nodeId, "failed", "품질 게이트 REJECT");
+              const lowQualitySummary = `품질 미달 (${finalQualityReport.score}/${finalQualityReport.threshold})`;
+              addNodeLog(nodeId, `[품질] REJECT (${finalQualityReport.score}/${finalQualityReport.threshold})`);
+              outputs[nodeId] = normalizedOutput;
+              setNodeStatus(nodeId, "done", lowQualitySummary);
               setNodeRuntimeFields(nodeId, {
-                status: "failed",
+                status: "done",
                 output: normalizedOutput,
                 qualityReport: finalQualityReport,
-                error: `품질 게이트 REJECT (점수 ${finalQualityReport.score}/${finalQualityReport.threshold})`,
                 threadId: result.threadId,
                 turnId: result.turnId,
                 usage: result.usage,
@@ -4576,39 +4578,34 @@ ${prompt}`;
                 nodeId,
                 executor: result.executor,
                 provider: result.provider,
-                status: "failed",
+                status: "done",
                 startedAt: startedAtIso,
                 finishedAt: finishedAtIso,
-                summary: `품질 REJECT (${finalQualityReport.score}/${finalQualityReport.threshold})`,
+                summary: lowQualitySummary,
               });
-              transition(
-                runRecord,
-                nodeId,
-                "failed",
-                `품질 REJECT (${finalQualityReport.score}/${finalQualityReport.threshold})`,
-              );
-              const rejectedFeed = buildFeedPost({
+              transition(runRecord, nodeId, "done", lowQualitySummary);
+              const lowQualityFeed = buildFeedPost({
                 runId: runRecord.runId,
                 node,
-                status: "failed",
+                status: "low_quality",
                 createdAt: finishedAtIso,
-                summary: `품질 REJECT (${finalQualityReport.score}/${finalQualityReport.threshold})`,
+                summary: lowQualitySummary,
                 logs: runLogCollectorRef.current[nodeId] ?? [],
                 output: normalizedOutput,
-                error: `품질 게이트 REJECT (점수 ${finalQualityReport.score}/${finalQualityReport.threshold})`,
                 durationMs: Date.now() - startedAtMs,
                 usage: result.usage,
                 qualityReport: finalQualityReport,
                 inputSources: nodeInputSources,
                 inputData: input,
               });
-              runRecord.feedPosts?.push(rejectedFeed.post);
-              rememberFeedSource(rejectedFeed.post);
-              feedRawAttachmentRef.current[feedAttachmentRawKey(rejectedFeed.post.id, "markdown")] =
-                rejectedFeed.rawAttachments.markdown;
-              feedRawAttachmentRef.current[feedAttachmentRawKey(rejectedFeed.post.id, "json")] =
-                rejectedFeed.rawAttachments.json;
-              terminalStateByNodeId[nodeId] = "failed";
+              runRecord.feedPosts?.push(lowQualityFeed.post);
+              rememberFeedSource(lowQualityFeed.post);
+              feedRawAttachmentRef.current[feedAttachmentRawKey(lowQualityFeed.post.id, "markdown")] =
+                lowQualityFeed.rawAttachments.markdown;
+              feedRawAttachmentRef.current[feedAttachmentRawKey(lowQualityFeed.post.id, "json")] =
+                lowQualityFeed.rawAttachments.json;
+              lastDoneNodeId = nodeId;
+              terminalStateByNodeId[nodeId] = "done";
               scheduleChildren(nodeId);
               return;
             }

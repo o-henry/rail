@@ -239,7 +239,7 @@ export function computeFeedDerivedState(params: {
 
   const feedCategoryPosts: Record<FeedCategory, any[]> = {
     all_posts: filteredFeedPosts,
-    completed_posts: filteredFeedPosts.filter((post) => post.status === "done"),
+    completed_posts: filteredFeedPosts.filter((post) => post.status === "done" || post.status === "low_quality"),
     web_posts: filteredFeedPosts.filter((post) =>
       String(post.executor ?? "").toLowerCase().startsWith("web_"),
     ),

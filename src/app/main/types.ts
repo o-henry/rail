@@ -106,7 +106,7 @@ export type FeedAttachment = {
   charCount: number;
 };
 
-export type FeedPostStatus = "draft" | "done" | "failed" | "cancelled";
+export type FeedPostStatus = "draft" | "done" | "low_quality" | "failed" | "cancelled";
 export type FeedInputSource = {
   kind: "question" | "node";
   nodeId?: string;

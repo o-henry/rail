@@ -5,7 +5,7 @@ import {
   formatUsage,
 } from "../../shared/lib/valueUtils";
 
-type FeedPostStatusValue = "draft" | "done" | "failed" | "cancelled";
+type FeedPostStatusValue = "draft" | "done" | "low_quality" | "failed" | "cancelled";
 type FeedViewPostLike = {
   agentName: string;
   roleLabel: string;
@@ -26,6 +26,8 @@ export function feedPostStatusLabel(status: FeedPostStatusValue): string {
       return "작업중";
     case "done":
       return "완료";
+    case "low_quality":
+      return "품질 미달";
     case "failed":
       return "오류";
     case "cancelled":

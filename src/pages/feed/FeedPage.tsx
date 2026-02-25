@@ -37,6 +37,7 @@ export default function FeedPage({ vm }: FeedPageProps) {
   const contentSearchInputRef = useRef<HTMLInputElement | null>(null);
   const [isContentSearchOpen, setIsContentSearchOpen] = useState(false);
   const [contentSearchQuery, setContentSearchQuery] = useState("");
+  const [feedSectionExpandedByKey, setFeedSectionExpandedByKey] = useState<Record<string, boolean>>({});
   const [deleteGroupTarget, setDeleteGroupTarget] = useState<{
     runId: string;
     sourceFile: string;
@@ -748,13 +749,31 @@ export default function FeedPage({ vm }: FeedPageProps) {
                               const isExpanded = feedExpandedByPost[postId] === true;
                               const isDraftPost = post.status === "draft";
                               const isFailedPost = post.status === "failed" || post.status === "cancelled";
-                              const badgeText = isDraftPost ? "LIVE" : isFailedPost ? "FAIL" : "PASS";
-                              const badgeClass = isDraftPost ? "live" : isFailedPost ? "fail" : "pass";
+                              const isLowQualityPost =
+                                post.status === "low_quality" || String(post?.evidence?.qualityDecision ?? "") === "REJECT";
+                              const badgeText = isDraftPost
+                                ? "LIVE"
+                                : isFailedPost
+                                  ? "FAIL"
+                                  : isLowQualityPost
+                                    ? "LOW QUALITY"
+                                    : "PASS";
+                              const badgeClass = isDraftPost
+                                ? "live"
+                                : isFailedPost
+                                  ? "fail"
+                                  : isLowQualityPost
+                                    ? "low-quality"
+                                    : "pass";
                               const canRequest = post.nodeType === "turn";
                               const nodeInputSources = Array.isArray(post.inputSources) ? post.inputSources : [];
                               const upstreamSources = nodeInputSources.filter(
                                 (source: any) => source && source.kind === "node",
                               );
+                              const inputSourcesSectionKey = `${postId}:inputSources`;
+                              const inputSnapshotSectionKey = `${postId}:inputSnapshot`;
+                              const isInputSourcesExpanded = feedSectionExpandedByKey[inputSourcesSectionKey] !== false;
+                              const isInputSnapshotExpanded = feedSectionExpandedByKey[inputSnapshotSectionKey] !== false;
                               return (
                                 <FeedCardBoundary
                                   fallbackText={t("feed.renderError")}
@@ -788,7 +807,9 @@ export default function FeedPage({ vm }: FeedPageProps) {
                                             ? t("feed.agent.working")
                                             : isFailedPost
                                               ? t("label.status.failed")
-                                            : t("label.status.done")
+                                              : isLowQualityPost
+                                                ? t("label.status.low_quality")
+                                              : t("label.status.done")
                                         }
                                       >
                                         <span aria-hidden="true" className="feed-score-badge-icon" />
@@ -841,25 +862,61 @@ export default function FeedPage({ vm }: FeedPageProps) {
                                   <div className={`feed-card-details ${isExpanded ? "is-expanded" : ""}`} aria-hidden={!isExpanded}>
                                     {upstreamSources.length > 0 ? (
                                       <section className="feed-card-input-sources">
-                                        <div className="feed-card-input-sources-title">{t("feed.inputSources")}</div>
-                                        <ul>
-                                          {upstreamSources.map((source: any, index: any) => (
-                                            <li key={`${postId}:source:${source.nodeId ?? source.agentName}:${index}`}>
-                                              {renderHighlightedText(formatFeedInputSourceLabel(source))}
-                                            </li>
-                                          ))}
-                                        </ul>
+                                        <div className="feed-card-input-sources-head">
+                                          <div className="feed-card-input-sources-title">{t("feed.inputSources")}</div>
+                                          <button
+                                            aria-expanded={isInputSourcesExpanded}
+                                            className={`feed-card-input-toggle ${isInputSourcesExpanded ? "is-expanded" : ""}`}
+                                            onClick={(event) => {
+                                              event.stopPropagation();
+                                              setFeedSectionExpandedByKey((prev) => ({
+                                                ...prev,
+                                                [inputSourcesSectionKey]: !(prev[inputSourcesSectionKey] !== false),
+                                              }));
+                                            }}
+                                            type="button"
+                                          >
+                                            <img alt="" aria-hidden="true" src="/down-arrow.svg" />
+                                          </button>
+                                        </div>
+                                        {isInputSourcesExpanded && (
+                                          <ul>
+                                            {upstreamSources.map((source: any, index: any) => (
+                                              <li key={`${postId}:source:${source.nodeId ?? source.agentName}:${index}`}>
+                                                {renderHighlightedText(formatFeedInputSourceLabel(source))}
+                                              </li>
+                                            ))}
+                                          </ul>
+                                        )}
                                       </section>
                                     ) : readableQuestion ? (
                                       <div className="feed-card-question">Q: {renderHighlightedText(readableQuestion)}</div>
                                     ) : null}
                                     {readableInputPreview && (
                                       <section className="feed-card-input-sources">
-                                        <div className="feed-card-input-sources-title">
-                                          {t("feed.inputSnapshot")}
-                                          {post.inputContext?.truncated ? t("feed.partial") : ""}
+                                        <div className="feed-card-input-sources-head">
+                                          <div className="feed-card-input-sources-title">
+                                            {t("feed.inputSnapshot")}
+                                            {post.inputContext?.truncated ? t("feed.partial") : ""}
+                                          </div>
+                                          <button
+                                            aria-expanded={isInputSnapshotExpanded}
+                                            className={`feed-card-input-toggle ${isInputSnapshotExpanded ? "is-expanded" : ""}`}
+                                            onClick={(event) => {
+                                              event.stopPropagation();
+                                              setFeedSectionExpandedByKey((prev) => ({
+                                                ...prev,
+                                                [inputSnapshotSectionKey]: !(prev[inputSnapshotSectionKey] !== false),
+                                              }));
+                                            }}
+                                            type="button"
+                                          >
+                                            <img alt="" aria-hidden="true" src="/down-arrow.svg" />
+                                          </button>
                                         </div>
-                                        <pre className="feed-sns-content">{renderHighlightedText(readableInputPreview)}</pre>
+                                        {isInputSnapshotExpanded && (
+                                          <pre className="feed-sns-content">{renderHighlightedText(readableInputPreview)}</pre>
+                                        )}
                                       </section>
                                     )}
                                     <FeedDocument

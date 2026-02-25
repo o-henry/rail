@@ -142,7 +142,7 @@ export function buildFeedSummary(status: string, output: unknown, error?: string
   if (status === "draft") {
     return t("feed.summary.running");
   }
-  if (status !== "done") {
+  if (status !== "done" && status !== "low_quality") {
     return error?.trim() || t("feed.summary.failed");
   }
   const outputText = toHumanReadableFeedText(
@@ -179,7 +179,7 @@ export function buildFeedPost(input: any): {
   const logsText = logs.length > 0 ? logs.join("\n") : "(로그 없음)";
   const markdownRaw = [
     `# ${agentName}`,
-    `- 상태: ${nodeStatusLabel(input.status as NodeExecutionStatus)}`,
+    `- 상태: ${input.status === "low_quality" ? t("label.status.low_quality") : nodeStatusLabel(input.status as NodeExecutionStatus)}`,
     `- 역할: ${roleLabel}`,
     "",
     "## 요약",
