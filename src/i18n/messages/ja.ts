@@ -164,6 +164,7 @@ export const JA_MESSAGES: Dictionary = {
     "modal.webConnectReasonNotRunning": "Web接続サーバーが停止中、または接続トークンが未準備です。",
     "modal.webConnectReasonPolicy": "拡張許可ポリシーが未設定です。Web接続タブで接続コードを再適用してください。",
     "modal.webConnectReasonMissingProviders": "次のサービスタブで拡張検出を先に確認してください: {providers}",
+    "modal.webConnectQuickGuide": "手順: (1) 対象サービスのブラウザタブを開いて再読み込み。 (2) 拡張機能でトークン保存と接続テストを完了。 (3) この画面に戻って続行。",
     "modal.loginRequired": "ログインが必要です",
     "modal.openLoginSession": "ログインセッションを開く",
     "modal.continueAfterLogin": "ログイン後に続行",

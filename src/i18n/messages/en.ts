@@ -164,6 +164,7 @@ export const EN_MESSAGES: Dictionary = {
     "modal.webConnectReasonNotRunning": "Web Connect server is not running or the connection token is not ready.",
     "modal.webConnectReasonPolicy": "Extension allow policy is not ready. Re-apply connect code in Web Connect tab.",
     "modal.webConnectReasonMissingProviders": "Verify extension detection in these service tabs first: {providers}",
+    "modal.webConnectQuickGuide": "Quick guide: (1) Open the target service tab and refresh it. (2) In the extension, save token and run connection test. (3) Return here and continue.",
     "modal.loginRequired": "Login required",
     "modal.openLoginSession": "Open login session",
     "modal.continueAfterLogin": "Continue after login",

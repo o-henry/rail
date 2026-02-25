@@ -164,6 +164,7 @@ export const KO_MESSAGES: Dictionary = {
     "modal.webConnectReasonNotRunning": "웹 연결 서버가 실행 중이 아니거나 연결 토큰이 준비되지 않았습니다.",
     "modal.webConnectReasonPolicy": "확장 허용 정책이 준비되지 않았습니다. 웹 연결 탭에서 연결 코드를 다시 적용하세요.",
     "modal.webConnectReasonMissingProviders": "다음 서비스 탭의 확장 감지를 먼저 확인하세요: {providers}",
+    "modal.webConnectQuickGuide": "안내: (1) 해당 서비스 브라우저 탭을 연 뒤 새로고침하세요. (2) 확장에서 토큰 저장/연결 테스트를 완료하세요. (3) 이 창으로 돌아와 다시 진행하세요.",
     "modal.loginRequired": "로그인이 필요합니다",
     "modal.openLoginSession": "로그인 세션 열기",
     "modal.continueAfterLogin": "로그인 완료 후 계속",

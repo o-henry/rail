@@ -164,6 +164,7 @@ export const ZH_MESSAGES: Dictionary = {
     "modal.webConnectReasonNotRunning": "网页连接服务未运行，或连接令牌尚未就绪。",
     "modal.webConnectReasonPolicy": "扩展允许策略未准备好，请在网页连接页重新应用连接代码。",
     "modal.webConnectReasonMissingProviders": "请先在以下服务标签页确认扩展检测: {providers}",
+    "modal.webConnectQuickGuide": "操作指引: (1) 打开目标服务网页标签并刷新。 (2) 在扩展中完成令牌保存与连接测试。 (3) 回到此窗口继续执行。",
     "modal.loginRequired": "需要登录",
     "modal.openLoginSession": "打开登录会话",
     "modal.continueAfterLogin": "登录后继续",

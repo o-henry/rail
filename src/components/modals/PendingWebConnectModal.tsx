@@ -28,6 +28,7 @@ export default function PendingWebConnectModal({
         <h2>{t("modal.webConnectRequired")}</h2>
         <div>{t("modal.service")}: {providersLabel}</div>
         <div>{reason}</div>
+        <div>{t("modal.webConnectQuickGuide")}</div>
         <div className="button-row">
           <button onClick={onOpenBridgeTab} type="button">
             {t("modal.openWebConnect")}
