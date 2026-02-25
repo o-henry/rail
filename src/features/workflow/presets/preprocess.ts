@@ -19,6 +19,7 @@ export function buildPreprocessPrompt(kind: PresetKind): string {
   return (
     "당신은 사용자 요구사항 전처리 전담 에이전트다.\n" +
     "목표: 사용자의 모호한 요청을 실행 가능한 브리프로 정제하고, 이후 멀티에이전트가 놓치기 쉬운 필수 요소를 강제한다.\n" +
+    "원칙: 답변 생성 전에 '의도 분석 → 근거 수집 계획 → 검증 계획'을 먼저 명시하라.\n" +
     "중요: 원문 의도를 왜곡하지 말고, 필요한 경우 보수적 가정을 명시하라.\n" +
     "반드시 아래 JSON만 출력하라:\n" +
     "{\n" +
@@ -27,6 +28,12 @@ export function buildPreprocessPrompt(kind: PresetKind): string {
     '  "requiredOutputs":["..."],\n' +
     '  "constraints":["..."],\n' +
     '  "assumptions":["..."],\n' +
+    '  "researchPlan": {\n' +
+    '    "webQueries": ["..."],\n' +
+    '    "sources": ["뉴스", "논문/공식문서", "커뮤니티/SNS"],\n' +
+    '    "collectionOrder": ["최신성 확인", "핵심 근거 수집", "반례/리스크 수집"],\n' +
+    '    "verificationRules": ["출처 명시", "타임스탬프 확인", "신뢰도 표기"]\n' +
+    "  },\n" +
     '  "acceptanceCriteria":["..."],\n' +
     '  "riskChecklist":["..."],\n' +
     '  "selfValidationPlan":["정확성","완전성","실행가능성","누락여부"],\n' +
@@ -79,4 +86,3 @@ export function prependPreprocessAgent(kind: PresetKind, graphData: GraphData): 
     edges: [...preprocessEdges, ...graphData.edges],
   };
 }
-

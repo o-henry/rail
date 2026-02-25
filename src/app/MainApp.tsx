@@ -194,6 +194,7 @@ import {
   AUTO_LAYOUT_NODE_AXIS_SNAP_THRESHOLD,
   AUTO_LAYOUT_SNAP_THRESHOLD,
   CODEX_LOGIN_COOLDOWN_MS,
+  FORCE_AGENT_RULES_ALL_TURNS,
   DEFAULT_STAGE_HEIGHT,
   DEFAULT_STAGE_WIDTH,
   GRAPH_STAGE_INSET_X,
@@ -243,6 +244,7 @@ import type {
   NodeMetric,
   NodeRunState,
   NodeVisualSize,
+  QualityReport,
   RegressionSummary,
   RunRecord,
   ThreadStartResult,
@@ -4154,21 +4156,74 @@ function App() {
       }
       return {
         ok: true,
-        output: {
+        output: normalizeWebEvidenceOutput(
           provider,
-          timestamp: new Date().toISOString(),
-          data: parsed,
-          text: extractFinalAnswer(parsed),
-        },
+          {
+            provider,
+            timestamp: new Date().toISOString(),
+            data: parsed,
+            text: extractFinalAnswer(parsed),
+          },
+          mode,
+        ),
       };
     }
 
     return {
       ok: true,
-      output: {
+      output: normalizeWebEvidenceOutput(
         provider,
-        timestamp: new Date().toISOString(),
-        text: trimmed,
+        {
+          provider,
+          timestamp: new Date().toISOString(),
+          text: trimmed,
+        },
+        mode,
+      ),
+    };
+  }
+
+  function normalizeWebEvidenceOutput(
+    provider: WebProvider,
+    output: unknown,
+    mode: WebResultMode | "bridgeAssisted",
+  ): unknown {
+    const row =
+      output && typeof output === "object" && !Array.isArray(output)
+        ? (output as Record<string, unknown>)
+        : ({ text: stringifyInput(output) } as Record<string, unknown>);
+    const timestamp = String(row.timestamp ?? new Date().toISOString());
+    const text = String(row.text ?? extractFinalAnswer(row.raw ?? row.data ?? row) ?? "").trim();
+    const raw = row.raw ?? row.data ?? output;
+    const metaRow =
+      row.meta && typeof row.meta === "object" && !Array.isArray(row.meta)
+        ? (row.meta as Record<string, unknown>)
+        : {};
+    const confidenceRaw = String(metaRow.confidence ?? "unknown").toLowerCase();
+    const confidence =
+      confidenceRaw === "high" || confidenceRaw === "medium" || confidenceRaw === "low"
+        ? confidenceRaw
+        : "unknown";
+    const citations = Array.isArray(metaRow.citations)
+      ? metaRow.citations
+          .map((entry) => String(entry ?? "").trim())
+          .filter((entry) => entry.length > 0)
+      : [];
+
+    return {
+      provider,
+      timestamp,
+      text,
+      raw,
+      meta: {
+        sourceType: "web",
+        provider,
+        mode,
+        sourceUrl: metaRow.url ? String(metaRow.url) : null,
+        capturedAt: metaRow.capturedAt ? String(metaRow.capturedAt) : timestamp,
+        confidence,
+        citations,
+        needsVerification: mode !== "bridgeAssisted",
       },
     };
   }
@@ -4367,7 +4422,8 @@ ${prompt}`;
       : `${promptTemplate}${inputText ? `\n${inputText}` : ""}`;
     const promptWithRequests = `${basePrompt}${queuedRequestBlock}`.trim();
     const agentRuleDocs = await loadAgentRuleDocs(nodeCwd);
-    const shouldForceAgentRules = inferQualityProfile(node, config) === "code_implementation";
+    const shouldForceAgentRules =
+      FORCE_AGENT_RULES_ALL_TURNS || inferQualityProfile(node, config) === "code_implementation";
     if (agentRuleDocs.length > 0 && shouldForceAgentRules) {
       addNodeLog(node.id, `[규칙] agent/skill 문서 ${agentRuleDocs.length}개 강제 적용`);
     }
@@ -4495,13 +4551,17 @@ ${prompt}`;
               addNodeLog(node.id, `[WEB] ${webProviderLabel(webProvider)} 웹 연결 응답 수집 완료`);
               return {
                 ok: true,
-                output: {
-                  provider: webProvider,
-                  timestamp: new Date().toISOString(),
-                  text: result.text,
-                  raw: result.raw,
-                  meta: result.meta,
-                },
+                output: normalizeWebEvidenceOutput(
+                  webProvider,
+                  {
+                    provider: webProvider,
+                    timestamp: new Date().toISOString(),
+                    text: result.text,
+                    raw: result.raw,
+                    meta: result.meta,
+                  },
+                  "bridgeAssisted",
+                ),
                 executor,
                 provider: webProvider,
                 knowledgeTrace,
@@ -4532,12 +4592,25 @@ ${prompt}`;
               webProvider,
               textToSend,
               "manualPasteText",
-            ).then((fallback) => ({
-              ...fallback,
-              executor,
-              provider: webProvider,
-              knowledgeTrace,
-            }));
+            ).then((fallback) => {
+              const normalizedFallback =
+                fallback.ok && fallback.output !== undefined
+                  ? {
+                      ...fallback,
+                      output: normalizeWebEvidenceOutput(
+                        webProvider,
+                        fallback.output,
+                        "manualPasteText",
+                      ),
+                    }
+                  : fallback;
+              return {
+                ...normalizedFallback,
+                executor,
+                provider: webProvider,
+                knowledgeTrace,
+              };
+            });
           } catch (error) {
             if (cancelRequestedRef.current) {
               return {
@@ -4559,12 +4632,25 @@ ${prompt}`;
               webProvider,
               textToSend,
               "manualPasteText",
-            ).then((fallback) => ({
-              ...fallback,
-              executor,
-              provider: webProvider,
-              knowledgeTrace,
-            }));
+            ).then((fallback) => {
+              const normalizedFallback =
+                fallback.ok && fallback.output !== undefined
+                  ? {
+                      ...fallback,
+                      output: normalizeWebEvidenceOutput(
+                        webProvider,
+                        fallback.output,
+                        "manualPasteText",
+                      ),
+                    }
+                  : fallback;
+              return {
+                ...normalizedFallback,
+                executor,
+                provider: webProvider,
+                knowledgeTrace,
+              };
+            });
           } finally {
             clearWebBridgeStageWarnTimer(webProvider);
             delete activeWebNodeByProviderRef.current[webProvider];
@@ -5222,91 +5308,99 @@ ${prompt}`;
             addNodeLog(nodeId, `[아티팩트] ${warning}`);
           }
           const normalizedOutput = turnExecution.normalizedOutput ?? result.output;
-          const qualityReport = await buildQualityReport({
-            node,
-            config,
-            output: normalizedOutput,
-            cwd: String(config.cwd ?? cwd).trim() || cwd,
-          });
-          const nodeMetric: NodeMetric = {
-            nodeId,
-            profile: qualityReport.profile,
-            score: qualityReport.score,
-            decision: qualityReport.decision,
-            threshold: qualityReport.threshold,
-            failedChecks: qualityReport.failures.length,
-            warningCount: qualityReport.warnings.length,
-          };
-          runRecord.nodeMetrics = {
-            ...(runRecord.nodeMetrics ?? {}),
-            [nodeId]: nodeMetric,
-          };
-          for (const warning of qualityReport.warnings) {
-            addNodeLog(nodeId, `[품질] ${warning}`);
-          }
-
-          if (qualityReport.decision !== "PASS") {
-            const finishedAtIso = new Date().toISOString();
-            setNodeStatus(nodeId, "failed", "품질 게이트 REJECT");
-            setNodeRuntimeFields(nodeId, {
-              status: "failed",
-              output: normalizedOutput,
-              qualityReport,
-              error: `품질 게이트 REJECT (점수 ${qualityReport.score}/${qualityReport.threshold})`,
-              threadId: result.threadId,
-              turnId: result.turnId,
-              usage: result.usage,
-              finishedAt: finishedAtIso,
-              durationMs: Date.now() - startedAtMs,
-            });
-            runRecord.threadTurnMap[nodeId] = {
-              threadId: result.threadId,
-              turnId: result.turnId,
-            };
-            runRecord.providerTrace?.push({
-              nodeId,
-              executor: result.executor,
-              provider: result.provider,
-              status: "failed",
-              startedAt: startedAtIso,
-              finishedAt: finishedAtIso,
-              summary: `품질 REJECT (${qualityReport.score}/${qualityReport.threshold})`,
-            });
-            transition(
-              runRecord,
-              nodeId,
-              "failed",
-              `품질 REJECT (${qualityReport.score}/${qualityReport.threshold})`,
-            );
-            const rejectedFeed = buildFeedPost({
-              runId: runRecord.runId,
+          const isFinalTurnNode = (adjacency.get(nodeId)?.length ?? 0) === 0;
+          let qualityReport: QualityReport | undefined;
+          if (isFinalTurnNode) {
+            const finalQualityReport = await buildQualityReport({
               node,
-              status: "failed",
-              createdAt: finishedAtIso,
-              summary: `품질 REJECT (${qualityReport.score}/${qualityReport.threshold})`,
-              logs: runLogCollectorRef.current[nodeId] ?? [],
+              config,
               output: normalizedOutput,
-              error: `품질 게이트 REJECT (점수 ${qualityReport.score}/${qualityReport.threshold})`,
-              durationMs: Date.now() - startedAtMs,
-              usage: result.usage,
-              qualityReport,
-              inputSources: nodeInputSources,
-              inputData: input,
+              cwd: String(config.cwd ?? cwd).trim() || cwd,
             });
-            runRecord.feedPosts?.push(rejectedFeed.post);
-            rememberFeedSource(rejectedFeed.post);
-            feedRawAttachmentRef.current[feedAttachmentRawKey(rejectedFeed.post.id, "markdown")] =
-              rejectedFeed.rawAttachments.markdown;
-            feedRawAttachmentRef.current[feedAttachmentRawKey(rejectedFeed.post.id, "json")] =
-              rejectedFeed.rawAttachments.json;
-            terminalStateByNodeId[nodeId] = "failed";
-            scheduleChildren(nodeId);
-            return;
+            qualityReport = finalQualityReport;
+            const nodeMetric: NodeMetric = {
+              nodeId,
+              profile: finalQualityReport.profile,
+              score: finalQualityReport.score,
+              decision: finalQualityReport.decision,
+              threshold: finalQualityReport.threshold,
+              failedChecks: finalQualityReport.failures.length,
+              warningCount: finalQualityReport.warnings.length,
+            };
+            runRecord.nodeMetrics = {
+              ...(runRecord.nodeMetrics ?? {}),
+              [nodeId]: nodeMetric,
+            };
+            for (const warning of finalQualityReport.warnings) {
+              addNodeLog(nodeId, `[품질] ${warning}`);
+            }
+            if (finalQualityReport.decision !== "PASS") {
+              const finishedAtIso = new Date().toISOString();
+              setNodeStatus(nodeId, "failed", "품질 게이트 REJECT");
+              setNodeRuntimeFields(nodeId, {
+                status: "failed",
+                output: normalizedOutput,
+                qualityReport: finalQualityReport,
+                error: `품질 게이트 REJECT (점수 ${finalQualityReport.score}/${finalQualityReport.threshold})`,
+                threadId: result.threadId,
+                turnId: result.turnId,
+                usage: result.usage,
+                finishedAt: finishedAtIso,
+                durationMs: Date.now() - startedAtMs,
+              });
+              runRecord.threadTurnMap[nodeId] = {
+                threadId: result.threadId,
+                turnId: result.turnId,
+              };
+              runRecord.providerTrace?.push({
+                nodeId,
+                executor: result.executor,
+                provider: result.provider,
+                status: "failed",
+                startedAt: startedAtIso,
+                finishedAt: finishedAtIso,
+                summary: `품질 REJECT (${finalQualityReport.score}/${finalQualityReport.threshold})`,
+              });
+              transition(
+                runRecord,
+                nodeId,
+                "failed",
+                `품질 REJECT (${finalQualityReport.score}/${finalQualityReport.threshold})`,
+              );
+              const rejectedFeed = buildFeedPost({
+                runId: runRecord.runId,
+                node,
+                status: "failed",
+                createdAt: finishedAtIso,
+                summary: `품질 REJECT (${finalQualityReport.score}/${finalQualityReport.threshold})`,
+                logs: runLogCollectorRef.current[nodeId] ?? [],
+                output: normalizedOutput,
+                error: `품질 게이트 REJECT (점수 ${finalQualityReport.score}/${finalQualityReport.threshold})`,
+                durationMs: Date.now() - startedAtMs,
+                usage: result.usage,
+                qualityReport: finalQualityReport,
+                inputSources: nodeInputSources,
+                inputData: input,
+              });
+              runRecord.feedPosts?.push(rejectedFeed.post);
+              rememberFeedSource(rejectedFeed.post);
+              feedRawAttachmentRef.current[feedAttachmentRawKey(rejectedFeed.post.id, "markdown")] =
+                rejectedFeed.rawAttachments.markdown;
+              feedRawAttachmentRef.current[feedAttachmentRawKey(rejectedFeed.post.id, "json")] =
+                rejectedFeed.rawAttachments.json;
+              terminalStateByNodeId[nodeId] = "failed";
+              scheduleChildren(nodeId);
+              return;
+            }
+          } else {
+            addNodeLog(nodeId, "[품질] 중간 노드는 품질 게이트를 생략합니다. (최종 노드만 검증)");
           }
 
           const finishedAtIso = new Date().toISOString();
           outputs[nodeId] = normalizedOutput;
-          addNodeLog(nodeId, `[품질] PASS (${qualityReport.score}/${qualityReport.threshold})`);
+          if (qualityReport) {
+            addNodeLog(nodeId, `[품질] PASS (${qualityReport.score}/${qualityReport.threshold})`);
+          }
           setNodeRuntimeFields(nodeId, {
             status: "done",
             output: normalizedOutput,
