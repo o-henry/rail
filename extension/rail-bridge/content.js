@@ -228,13 +228,12 @@ async function loadBridgeConfig() {
   const sessionAvailable = Boolean(chrome.storage.session);
   const sessionToken = String(sessionStored[TOKEN_KEY] ?? "").trim();
   const localToken = String(localStored[TOKEN_KEY] ?? "").trim();
-  bridgeToken = sessionToken || (sessionAvailable ? "" : localToken);
+  bridgeToken = sessionToken || localToken;
 
   if (sessionAvailable && !sessionToken && localToken) {
     await writeSessionBridgeConfig({ [TOKEN_KEY]: localToken });
-    bridgeToken = localToken;
   }
-  if (sessionAvailable && localToken) {
+  if (sessionAvailable && sessionToken && localToken) {
     await removeLocalBridgeToken();
   }
 }

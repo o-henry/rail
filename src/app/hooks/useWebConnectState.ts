@@ -8,6 +8,11 @@ import type {
 import type { WebBridgeStatus } from "../mainAppGraphHelpers";
 
 export function useWebConnectState() {
+  type WebTurnResolve = (result: { ok: boolean; output?: unknown; error?: string }) => void;
+  type QueuedWebTurnRequest = {
+    turn: PendingWebTurn;
+    resolve: WebTurnResolve;
+  };
   const [pendingWebTurn, setPendingWebTurn] = useState<PendingWebTurn | null>(null);
   const [suspendedWebTurn, setSuspendedWebTurn] = useState<PendingWebTurn | null>(null);
   const [suspendedWebResponseDraft, setSuspendedWebResponseDraft] = useState("");
@@ -37,11 +42,9 @@ export function useWebConnectState() {
     claude: false,
   });
 
-  const activeWebNodeIdRef = useRef<string>("");
-  const activeWebProviderRef = useRef<WebProvider | null>(null);
-  const webTurnResolverRef = useRef<((result: { ok: boolean; output?: unknown; error?: string }) => void) | null>(
-    null,
-  );
+  const activeWebNodeByProviderRef = useRef<Partial<Record<WebProvider, string>>>({});
+  const webTurnResolverRef = useRef<WebTurnResolve | null>(null);
+  const webTurnQueueRef = useRef<QueuedWebTurnRequest[]>([]);
   const webLoginResolverRef = useRef<((retry: boolean) => void) | null>(null);
   const pendingWebTurnAutoOpenKeyRef = useRef("");
   const webTurnFloatingRef = useRef<HTMLElement | null>(null);
@@ -70,9 +73,9 @@ export function useWebConnectState() {
     setWebBridgeConnectCode,
     providerChildViewOpen,
     setProviderChildViewOpen,
-    activeWebNodeIdRef,
-    activeWebProviderRef,
+    activeWebNodeByProviderRef,
     webTurnResolverRef,
+    webTurnQueueRef,
     webLoginResolverRef,
     pendingWebTurnAutoOpenKeyRef,
     webTurnFloatingRef,

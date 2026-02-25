@@ -3441,7 +3441,7 @@ pre {
 
 .web-turn-floating {
   position: fixed;
-  z-index: 46;
+  z-index: 120;
   width: min(860px, calc(100vw - 24px));
   max-height: calc(100vh - 24px);
   overflow: auto;

@@ -338,9 +338,9 @@ function App() {
     setWebBridgeConnectCode,
     providerChildViewOpen,
     setProviderChildViewOpen,
-    activeWebNodeIdRef,
-    activeWebProviderRef,
+    activeWebNodeByProviderRef,
     webTurnResolverRef,
+    webTurnQueueRef,
     webLoginResolverRef,
     pendingWebTurnAutoOpenKeyRef,
     webTurnFloatingRef,
@@ -767,9 +767,8 @@ function App() {
     clearWebBridgeStageWarnTimer(providerKey);
     webBridgeStageWarnTimerRef.current[providerKey] = window.setTimeout(() => {
       setStatus(statusMessage);
-      const activeWebNodeId = activeWebNodeIdRef.current;
-      const activeProvider = activeWebProviderRef.current;
-      if (activeWebNodeId && activeProvider && activeProvider === providerKey) {
+      const activeWebNodeId = activeWebNodeByProviderRef.current[providerKey as WebProvider];
+      if (activeWebNodeId) {
         addNodeLog(activeWebNodeId, nodeLogMessage);
       }
       onTimeout?.();
@@ -849,15 +848,17 @@ function App() {
 
             if (payload.method === "web/progress") {
               const message = extractStringByPaths(payload.params, ["message", "stage", "error"]);
-              const activeWebNodeId = activeWebNodeIdRef.current;
-              if (activeWebNodeId && message) {
-                addNodeLog(activeWebNodeId, `[WEB] ${message}`);
-              }
               const stage = extractStringByPaths(payload.params, ["stage"]);
               const provider = extractStringByPaths(payload.params, ["provider"])?.toLowerCase() ?? "";
               const providerKey = provider && WEB_PROVIDER_OPTIONS.includes(provider as WebProvider)
                 ? (provider as WebProvider)
                 : null;
+              const activeWebNodeId = providerKey
+                ? activeWebNodeByProviderRef.current[providerKey]
+                : "";
+              if (activeWebNodeId && message) {
+                addNodeLog(activeWebNodeId, `[WEB] ${message}`);
+              }
               if (stage?.startsWith("bridge_")) {
                 const prefix = providerKey
                   ? `[${providerKey.toUpperCase()}] `
@@ -879,9 +880,8 @@ function App() {
                       void navigator.clipboard
                         .writeText(prompt)
                         .then(() => {
-                          const activeWebNodeId = activeWebNodeIdRef.current;
-                          const activeProvider = activeWebProviderRef.current;
-                          if (activeWebNodeId && activeProvider === providerKey) {
+                          const activeWebNodeId = activeWebNodeByProviderRef.current[providerKey];
+                          if (activeWebNodeId) {
                             addNodeLog(activeWebNodeId, "[WEB] 자동 주입 지연으로 프롬프트를 클립보드에 복사했습니다.");
                           }
                         })
@@ -2051,6 +2051,17 @@ function App() {
       pendingWebTurnAutoOpenKeyRef.current = "";
       return;
     }
+    webTurnPanel.setPosition({
+      x: WEB_TURN_FLOATING_DEFAULT_X,
+      y: WEB_TURN_FLOATING_DEFAULT_Y,
+    });
+    window.setTimeout(() => {
+      const panel = webTurnFloatingRef.current;
+      const textarea = panel?.querySelector("textarea");
+      if (textarea instanceof HTMLTextAreaElement) {
+        textarea.focus({ preventScroll: true });
+      }
+    }, 0);
     const key = `${pendingWebTurn.nodeId}:${pendingWebTurn.provider}:${pendingWebTurn.mode}:${pendingWebTurn.prompt.length}`;
     if (pendingWebTurnAutoOpenKeyRef.current === key) {
       return;
@@ -3746,6 +3757,7 @@ function App() {
         webTurnResolverRef.current({ ok: false, error: "화면이 닫혀 실행이 취소되었습니다." });
         webTurnResolverRef.current = null;
       }
+      clearQueuedWebTurnRequests("화면이 닫혀 실행이 취소되었습니다.");
     };
   }, []);
 
@@ -4116,12 +4128,34 @@ function App() {
     const resolver = webTurnResolverRef.current;
     webTurnResolverRef.current = null;
     webTurnPanel.clearDragging();
-    setPendingWebTurn(null);
-    setSuspendedWebTurn(null);
-    setSuspendedWebResponseDraft("");
-    setWebResponseDraft("");
+    const nextQueued = webTurnQueueRef.current.shift() ?? null;
+    if (nextQueued) {
+      setPendingWebTurn(nextQueued.turn);
+      setSuspendedWebTurn(null);
+      setSuspendedWebResponseDraft("");
+      setWebResponseDraft("");
+      webTurnResolverRef.current = nextQueued.resolve;
+      webTurnPanel.setPosition({
+        x: WEB_TURN_FLOATING_DEFAULT_X,
+        y: WEB_TURN_FLOATING_DEFAULT_Y,
+      });
+      setStatus(`${webProviderLabel(nextQueued.turn.provider)} 웹 응답 입력 창을 상단에 표시했습니다.`);
+    } else {
+      setPendingWebTurn(null);
+      setSuspendedWebTurn(null);
+      setSuspendedWebResponseDraft("");
+      setWebResponseDraft("");
+    }
     if (resolver) {
       resolver(result);
+    }
+  }
+
+  function clearQueuedWebTurnRequests(reason: string) {
+    const queued = [...webTurnQueueRef.current];
+    webTurnQueueRef.current = [];
+    for (const request of queued) {
+      request.resolve({ ok: false, error: reason });
     }
   }
 
@@ -4131,17 +4165,27 @@ function App() {
     prompt: string,
     mode: WebResultMode,
   ): Promise<{ ok: boolean; output?: unknown; error?: string }> {
-    setWebResponseDraft("");
-    setSuspendedWebTurn(null);
-    setSuspendedWebResponseDraft("");
-    setPendingWebTurn({
+    const turn = {
       nodeId,
       provider,
       prompt,
       mode,
-    });
+    };
     return new Promise((resolve) => {
-      webTurnResolverRef.current = resolve;
+      if (!pendingWebTurn && !webTurnResolverRef.current) {
+        setWebResponseDraft("");
+        setSuspendedWebTurn(null);
+        setSuspendedWebResponseDraft("");
+        setPendingWebTurn(turn);
+        webTurnResolverRef.current = resolve;
+        webTurnPanel.setPosition({
+          x: WEB_TURN_FLOATING_DEFAULT_X,
+          y: WEB_TURN_FLOATING_DEFAULT_Y,
+        });
+        return;
+      }
+      webTurnQueueRef.current.push({ turn, resolve });
+      addNodeLog(nodeId, `[WEB] 수동 입력 대기열 등록 (${webTurnQueueRef.current.length})`);
     });
   }
 
@@ -4336,8 +4380,7 @@ ${prompt}`;
       const webTimeoutMs = Math.max(5_000, Number(config.webTimeoutMs ?? 180_000) || 180_000);
 
       if (webResultMode === "bridgeAssisted") {
-        activeWebNodeIdRef.current = node.id;
-        activeWebProviderRef.current = webProvider;
+        activeWebNodeByProviderRef.current[webProvider] = node.id;
         activeWebPromptRef.current[webProvider] = textToSend;
         addNodeLog(node.id, `[WEB] ${webProviderLabel(webProvider)} 웹 연결 반자동 시작`);
         addNodeLog(node.id, "[WEB] 프롬프트 자동 주입/전송을 시도합니다. 자동 전송 실패 시 웹 탭에서 전송 1회가 필요합니다.");
@@ -4352,8 +4395,7 @@ ${prompt}`;
         if (!workerReady) {
           addNodeLog(node.id, `[WEB] 웹 연결 워커 준비 실패, 수동 입력으로 전환`);
           clearWebBridgeStageWarnTimer(webProvider);
-          activeWebNodeIdRef.current = "";
-          activeWebProviderRef.current = null;
+          delete activeWebNodeByProviderRef.current[webProvider];
           delete activeWebPromptRef.current[webProvider];
           setNodeStatus(node.id, "waiting_user", `${webProvider} 응답 입력 대기`);
           setNodeRuntimeFields(node.id, {
@@ -4471,8 +4513,7 @@ ${prompt}`;
             }));
           } finally {
             clearWebBridgeStageWarnTimer(webProvider);
-            activeWebNodeIdRef.current = "";
-            activeWebProviderRef.current = null;
+            delete activeWebNodeByProviderRef.current[webProvider];
             delete activeWebPromptRef.current[webProvider];
           }
         }
@@ -5406,7 +5447,9 @@ ${prompt}`;
               queue.splice(index, 1);
               continue;
             }
-            const requiresTurnLock = node.type === "turn";
+            const turnExecutor = node.type === "turn" ? getTurnExecutor(node.config as TurnConfig) : null;
+            const isWebTurn = Boolean(turnExecutor && getWebProviderFromExecutor(turnExecutor));
+            const requiresTurnLock = node.type === "turn" && !isWebTurn;
             if (requiresTurnLock && activeTurnTasks > 0) {
               index += 1;
               continue;
@@ -5513,17 +5556,17 @@ ${prompt}`;
       }
       webBridgeStageWarnTimerRef.current = {};
       activeWebPromptRef.current = {};
+      activeWebNodeByProviderRef.current = {};
       turnTerminalResolverRef.current = null;
       webTurnResolverRef.current = null;
       webLoginResolverRef.current = null;
+      clearQueuedWebTurnRequests("실행이 종료되어 대기 중인 웹 응답 입력을 취소했습니다.");
       setPendingWebTurn(null);
       setSuspendedWebTurn(null);
       setSuspendedWebResponseDraft("");
       setPendingWebLogin(null);
       setWebResponseDraft("");
       activeTurnNodeIdRef.current = "";
-      activeWebNodeIdRef.current = "";
-      activeWebProviderRef.current = null;
       setIsGraphRunning(false);
       setIsRunStarting(false);
       runStartGuardRef.current = false;
@@ -5542,24 +5585,31 @@ ${prompt}`;
       return;
     }
 
-    const activeWebNodeId = activeWebNodeIdRef.current;
-    const activeWebProvider = activeWebProviderRef.current;
-    if (activeWebNodeId && activeWebProvider) {
-      try {
-        await invoke("web_provider_cancel", { provider: activeWebProvider });
-        addNodeLog(activeWebNodeId, "[WEB] 취소 요청 전송");
-        clearWebBridgeStageWarnTimer(activeWebProvider);
-        delete activeWebPromptRef.current[activeWebProvider];
-      } catch (e) {
-        setError(String(e));
+    const activeWebProviders = Object.keys(activeWebNodeByProviderRef.current) as WebProvider[];
+    if (activeWebProviders.length > 0) {
+      for (const provider of activeWebProviders) {
+        const activeWebNodeId = activeWebNodeByProviderRef.current[provider];
+        try {
+          await invoke("web_provider_cancel", { provider });
+          if (activeWebNodeId) {
+            addNodeLog(activeWebNodeId, "[WEB] 취소 요청 전송");
+          }
+          clearWebBridgeStageWarnTimer(provider);
+          delete activeWebPromptRef.current[provider];
+          delete activeWebNodeByProviderRef.current[provider];
+        } catch (e) {
+          setError(String(e));
+        }
       }
     }
 
     if (pendingWebTurn) {
+      clearQueuedWebTurnRequests("사용자 취소");
       resolvePendingWebTurn({ ok: false, error: "사용자 취소" });
       return;
     }
     if (suspendedWebTurn) {
+      clearQueuedWebTurnRequests("사용자 취소");
       resolvePendingWebTurn({ ok: false, error: "사용자 취소" });
       return;
     }
