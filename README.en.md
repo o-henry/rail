@@ -359,9 +359,14 @@ Checks include:
 
 - `npm run dev` : Vite dev server
 - `npm run tauri dev` : Tauri dev runtime
+- `npm run tauri:dev:isolated` : Tauri dev with isolated Codex home (forced)
+- `npm run tauri:dev:global` : Tauri dev with global `~/.codex` home (when needed)
 - `npm run build` : Type-check + production bundle
 - `npm run check:arch` : architecture guardrails
 - `npm run check` : architecture + build checks
+
+Note:
+- Default runtime now uses an isolated Codex home to prevent mixing with VSCode Codex history.
 
 ---
 

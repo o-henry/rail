@@ -864,7 +864,7 @@ async fn resolve_codex_home_dir(app: &AppHandle) -> Result<PathBuf, String> {
         .ok()
         .map(|value| value.trim().to_lowercase())
         .filter(|value| !value.is_empty())
-        .unwrap_or_else(|| "global".to_string());
+        .unwrap_or_else(|| "isolated".to_string());
 
     if home_mode != "isolated" {
         if let Ok(home) = env::var("HOME") {

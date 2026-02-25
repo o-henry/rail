@@ -360,9 +360,14 @@ npm run check:arch
 
 - `npm run dev` : Vite 開発サーバー
 - `npm run tauri dev` : Tauri 開発実行
+- `npm run tauri:dev:isolated` : Codex ホーム分離(強制)で Tauri 開発実行
+- `npm run tauri:dev:global` : グローバル `~/.codex` ホームで Tauri 開発実行(必要時)
 - `npm run build` : 型チェック + バンドル
 - `npm run check:arch` : 構造規約検査
 - `npm run check` : 構造 + ビルド統合検査
+
+注記:
+- デフォルト実行は Codex ホームを分離(`isolated`)し、VSCode Codex 履歴と混在しないようにしています。
 
 ---
 

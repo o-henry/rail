@@ -360,9 +360,14 @@ npm run check:arch
 
 - `npm run dev`：Vite 开发服务器
 - `npm run tauri dev`：Tauri 开发运行
+- `npm run tauri:dev:isolated`：以分离 Codex Home（强制）运行 Tauri 开发模式
+- `npm run tauri:dev:global`：以全局 `~/.codex` Home 运行 Tauri 开发模式（按需）
 - `npm run build`：类型检查 + 打包
 - `npm run check:arch`：架构约束检查
 - `npm run check`：架构 + 构建综合检查
+
+说明：
+- 默认运行模式已改为分离 Codex Home（`isolated`），避免与 VSCode Codex 历史混用。
 
 ---
 
