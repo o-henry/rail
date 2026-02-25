@@ -295,18 +295,28 @@ export function extractDeltaText(input: unknown, depth = 0): string {
     return "";
   }
 
-  const direct = ["delta", "text", "content", "output_text", "value"]
-    .map((key) => record[key])
-    .map((value) => extractDeltaText(value, depth + 1))
-    .join("");
-  if (direct) {
-    return direct;
+  const directCandidates: unknown[] = [
+    record.delta,
+    record.text,
+    record.content,
+    record.output_text,
+    record.value,
+    asRecord(record.message)?.delta,
+    asRecord(record.message)?.content,
+    asRecord(record.item)?.delta,
+    asRecord(record.item)?.content,
+    asRecord(record.event)?.delta,
+    asRecord(record.event)?.content,
+  ];
+
+  for (const candidate of directCandidates) {
+    const extracted = extractDeltaText(candidate, depth + 1);
+    if (extracted) {
+      return extracted;
+    }
   }
 
-  return Object.values(record)
-    .map((value) => extractDeltaText(value, depth + 1))
-    .filter(Boolean)
-    .join("");
+  return "";
 }
 
 export function extractCompletedStatus(input: unknown, depth = 0): string | null {

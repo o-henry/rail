@@ -18,6 +18,52 @@ type TextBlock =
 
 type JsonValue = null | string | number | boolean | JsonValue[] | { [key: string]: JsonValue };
 
+function normalizeFlattenedStructuredText(input: string): string {
+  const source = String(input ?? "").replace(/\r\n/g, "\n");
+  if (!source.trim()) {
+    return "";
+  }
+
+  const flattenedSignalKeys = [
+    "intent",
+    "userGoal",
+    "requiredOutputs",
+    "constraints",
+    "assumptions",
+    "researchPlan",
+    "acceptanceCriteria",
+    "riskChecklist",
+    "selfValidationPlan",
+    "templateIntent",
+    "webQueries",
+    "verificationRules",
+    "collectionOrder",
+  ];
+
+  const matchedSignals = flattenedSignalKeys.filter((key) =>
+    new RegExp(`\\b${key}\\b`).test(source),
+  ).length;
+  const newlineCount = (source.match(/\n/g) ?? []).length;
+  const longestLine = source
+    .split("\n")
+    .reduce((max, line) => Math.max(max, line.length), 0);
+  const looksFlattened = matchedSignals >= 3 && newlineCount <= 3 && longestLine >= 360;
+
+  if (!looksFlattened) {
+    return source;
+  }
+
+  return source
+    .replace(/\s{2,}/g, " ")
+    .replace(
+      /\b(intent|userGoal|requiredOutputs|constraints|assumptions|researchPlan|acceptanceCriteria|riskChecklist|selfValidationPlan|templateIntent|webQueries|sources|collectionOrder|verificationRules)\b/g,
+      "\n$1",
+    )
+    .replace(/([^\n])\s-\s(?=\S)/g, "$1\n- ")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
 function sanitizeDocumentUrl(raw: string): string | null {
   const candidate = String(raw ?? "").trim();
   if (!candidate) {
@@ -326,7 +372,8 @@ function renderInlineMarkdown(text: string): ReactNode[] {
 }
 
 export default function FeedDocument({ text, className = "" }: FeedDocumentProps) {
-  const extracted = useMemo(() => extractChartSpecsFromContent(text), [text]);
+  const normalizedText = useMemo(() => normalizeFlattenedStructuredText(text), [text]);
+  const extracted = useMemo(() => extractChartSpecsFromContent(normalizedText), [normalizedText]);
   const jsonDocument = useMemo(
     () => parseWholeJsonDocument(extracted.contentWithoutChartBlocks),
     [extracted.contentWithoutChartBlocks],

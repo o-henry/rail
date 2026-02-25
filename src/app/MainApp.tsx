@@ -3857,10 +3857,26 @@ ${prompt}`;
       };
     }
 
+    const streamedText = String(activeRunDeltaRef.current[node.id] ?? "");
+    const completionText =
+      extractStringByPaths(terminal.params, [
+        "text",
+        "output_text",
+        "turn.output_text",
+        "turn.response.output_text",
+        "turn.response.text",
+        "response.output_text",
+        "response.text",
+      ]) ??
+      extractDeltaText(terminal.params);
+    const finalOutputText = (streamedText.trim() || completionText.trim())
+      ? (streamedText.trim() ? streamedText : completionText)
+      : "";
+
     return {
       ok: true,
       output: {
-        text: activeRunDeltaRef.current[node.id] ?? "",
+        text: finalOutputText,
         completion: terminal.params,
       },
       threadId: activeThreadId,
