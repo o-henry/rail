@@ -397,7 +397,7 @@ export default function WorkflowCanvasPane({
               <img alt="" aria-hidden="true" className="canvas-icon-image" src="/canvas-replay.svg" />
             </button>
             <button aria-label={t("workflow.canvas.clear")} className="canvas-icon-btn" disabled={!canClearGraph} onClick={onClearGraph} title={t("workflow.canvas.clear")} type="button">
-              <img alt="" aria-hidden="true" className="canvas-icon-image" src="/clear.svg" />
+              <img alt="" aria-hidden="true" className="canvas-icon-image canvas-icon-image-clear" src="/clear.svg" />
             </button>
           </div>
         </div>

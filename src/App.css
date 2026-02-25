@@ -1386,6 +1386,11 @@ h3 {
   height: 12px;
 }
 
+.canvas-runbar .canvas-icon-image-clear {
+  width: 15px;
+  height: 15px;
+}
+
 .inspector-pane {
   min-height: 0;
   display: grid;
@@ -2645,6 +2650,7 @@ h3 {
   align-items: center;
   justify-content: center;
   min-width: 16px;
+  width: 16px;
   height: 16px;
   padding: 0 4px;
   border-radius: 12px;
