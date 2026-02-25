@@ -78,6 +78,7 @@ import {
   buildFinalVisualizationDirective,
   buildCodexMultiAgentDirective,
   buildForcedAgentRuleBlock,
+  injectOutputLanguageDirective,
   buildOutputSchemaDirective,
   extractPromptInputText,
   isLikelyWebPromptEcho,
@@ -257,7 +258,7 @@ import type {
 } from "./main";
 
 function App() {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
   const defaultCwd = useMemo(() => loadPersistedCwd("."), []);
   const defaultLoginCompleted = useMemo(() => loadPersistedLoginCompleted(), []);
   const defaultAuthMode = useMemo(() => loadPersistedAuthMode(), []);
@@ -2294,8 +2295,27 @@ function App() {
       nodes: applyPresetTurnPolicies(kind, builtPreset.nodes),
     };
     const preset = simplifyPresetForSimpleWorkflow(presetWithPolicies, SIMPLE_WORKFLOW_UI);
-    const nextPreset = autoArrangeGraphLayout({
+    const localizedPreset = {
       ...preset,
+      nodes: preset.nodes.map((node) => {
+        if (node.type !== "turn") {
+          return node;
+        }
+        const config = node.config as TurnConfig;
+        return {
+          ...node,
+          config: {
+            ...config,
+            promptTemplate: injectOutputLanguageDirective(
+              String(config.promptTemplate ?? "{{input}}"),
+              locale,
+            ),
+          },
+        };
+      }),
+    };
+    const nextPreset = autoArrangeGraphLayout({
+      ...localizedPreset,
       knowledge: normalizeKnowledgeConfig(graph.knowledge),
     });
     setGraph(cloneGraph(nextPreset));
@@ -3495,7 +3515,10 @@ ${prompt}`;
     const nodeModel = toTurnModelDisplayName(String(config.model ?? model).trim() || model);
     const nodeModelEngine = toTurnModelEngineId(nodeModel);
     const nodeCwd = resolveNodeCwd(config.cwd ?? cwd, cwd);
-    const promptTemplate = String(config.promptTemplate ?? "{{input}}");
+    const promptTemplate = injectOutputLanguageDirective(
+      String(config.promptTemplate ?? "{{input}}"),
+      locale,
+    );
     const nodeOllamaModel = String(config.ollamaModel ?? "llama3.1:8b").trim() || "llama3.1:8b";
 
     const inputText = extractPromptInputText(input);

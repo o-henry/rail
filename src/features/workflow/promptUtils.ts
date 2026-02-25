@@ -1,4 +1,5 @@
 import { extractStringByPaths, formatUnknown } from "../../shared/lib/valueUtils";
+import type { AppLocale } from "../../i18n";
 
 export function getByPath(input: unknown, path: string): unknown {
   if (!path.trim()) {
@@ -348,4 +349,62 @@ export function buildOutputSchemaDirective(schemaRaw: string): string {
     "```",
     "[/OUTPUT SCHEMA CONTRACT]",
   ].join("\n");
+}
+
+const OUTPUT_LANGUAGE_BLOCK_START = "[RAIL OUTPUT LANGUAGE]";
+const OUTPUT_LANGUAGE_BLOCK_END = "[/RAIL OUTPUT LANGUAGE]";
+
+function stripOutputLanguageDirective(input: string): string {
+  return String(input ?? "")
+    .replace(/\[RAIL OUTPUT LANGUAGE\][\s\S]*?\[\/RAIL OUTPUT LANGUAGE\]\s*/g, "")
+    .trimStart();
+}
+
+export function buildOutputLanguageDirective(locale: AppLocale): string {
+  if (locale === "ko") {
+    return [
+      OUTPUT_LANGUAGE_BLOCK_START,
+      "- 최종 답변은 반드시 한국어로 작성하라.",
+      "- 영어 고유명사/라이브러리명/코드 식별자는 원문 표기를 유지할 수 있다.",
+      "- 설명/요약/목록/표 캡션까지 모두 한국어를 우선 사용하라.",
+      OUTPUT_LANGUAGE_BLOCK_END,
+    ].join("\n");
+  }
+
+  if (locale === "en") {
+    return [
+      OUTPUT_LANGUAGE_BLOCK_START,
+      "- Write the final answer strictly in English.",
+      "- Keep proper nouns, library names, and code identifiers in their original form.",
+      "- Use English consistently for headings, bullets, summaries, and table/chart captions.",
+      OUTPUT_LANGUAGE_BLOCK_END,
+    ].join("\n");
+  }
+
+  if (locale === "jp") {
+    return [
+      OUTPUT_LANGUAGE_BLOCK_START,
+      "- 最終回答は必ず日本語で作成してください。",
+      "- 固有名詞、ライブラリ名、コード識別子は原文表記を維持して構いません。",
+      "- 見出し、箇条書き、要約、表・チャートの説明も日本語を優先してください。",
+      OUTPUT_LANGUAGE_BLOCK_END,
+    ].join("\n");
+  }
+
+  return [
+    OUTPUT_LANGUAGE_BLOCK_START,
+    "- 最终回答必须使用中文。",
+    "- 专有名词、库名称、代码标识符可保留原文。",
+    "- 标题、列表、摘要、表格/图表说明等内容请统一使用中文。",
+    OUTPUT_LANGUAGE_BLOCK_END,
+  ].join("\n");
+}
+
+export function injectOutputLanguageDirective(template: string, locale: AppLocale): string {
+  const body = stripOutputLanguageDirective(template);
+  const directive = buildOutputLanguageDirective(locale);
+  if (!directive) {
+    return body;
+  }
+  return `${directive}\n\n${body}`.trim();
 }
