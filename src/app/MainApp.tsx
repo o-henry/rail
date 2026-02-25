@@ -263,7 +263,7 @@ import type {
 
 function App() {
   const { locale, t, tp } = useI18n();
-  const defaultCwd = useMemo(() => loadPersistedCwd("."), []);
+  const defaultCwd = useMemo(() => loadPersistedCwd(""), []);
   const defaultLoginCompleted = useMemo(() => loadPersistedLoginCompleted(), []);
   const defaultAuthMode = useMemo(() => loadPersistedAuthMode(), []);
   const defaultCodexMultiAgentMode = useMemo(() => loadPersistedCodexMultiAgentMode(), []);
@@ -1183,6 +1183,23 @@ function App() {
     }
   }
 
+  async function onOpenFeedMarkdownFile(post: FeedViewPost) {
+    setError("");
+    const attachments = Array.isArray(post.attachments) ? post.attachments : [];
+    const markdownAttachment = attachments.find((attachment) => attachment.kind === "markdown");
+    const filePath = String(markdownAttachment?.filePath ?? "").trim();
+    if (!filePath) {
+      setError("문서 파일 경로를 찾지 못했습니다.");
+      return;
+    }
+    try {
+      await revealItemInDir(filePath);
+      setStatus("문서 파일 열림");
+    } catch (error) {
+      setError(`문서 파일 열기 실패: ${String(error)}`);
+    }
+  }
+
   async function ensureFeedRunRecord(sourceFile: string): Promise<RunRecord | null> {
     const target = sourceFile.trim();
     if (!target) {
@@ -1368,8 +1385,8 @@ function App() {
           ],
           feedPosts: [failed.post],
         };
-        await persistRunRecordFile(oneOffRunFileName, failedRunRecord);
         await exportRunFeedMarkdownFiles(failedRunRecord);
+        await persistRunRecordFile(oneOffRunFileName, failedRunRecord);
         feedRunCacheRef.current[oneOffRunFileName] = normalizeRunRecord(failedRunRecord);
         setFeedPosts((prev) => [
           {
@@ -1455,8 +1472,8 @@ function App() {
         ],
         feedPosts: [done.post],
       };
-      await persistRunRecordFile(oneOffRunFileName, doneRunRecord);
       await exportRunFeedMarkdownFiles(doneRunRecord);
+      await persistRunRecordFile(oneOffRunFileName, doneRunRecord);
       feedRunCacheRef.current[oneOffRunFileName] = normalizeRunRecord(doneRunRecord);
       setFeedPosts((prev) => [
         {
@@ -1523,8 +1540,12 @@ function App() {
     if (engineStarted) {
       return;
     }
+    const resolvedCwd = String(cwd ?? "").trim();
+    if (!resolvedCwd || resolvedCwd === ".") {
+      throw new Error("작업 경로(CWD)를 먼저 선택하세요.");
+    }
     try {
-      await invoke("engine_start", { cwd });
+      await invoke("engine_start", { cwd: resolvedCwd });
       setEngineStarted(true);
     } catch (error) {
       if (isEngineAlreadyStartedError(error)) {
@@ -3181,7 +3202,7 @@ function App() {
   useEffect(() => {
     try {
       const next = cwd.trim();
-      if (!next) {
+      if (!next || next === ".") {
         window.localStorage.removeItem(WORKSPACE_CWD_STORAGE_KEY);
         return;
       }
@@ -3382,11 +3403,15 @@ function App() {
       const fileName = `rail-${runRecord.runId}-${String(index + 1).padStart(2, "0")}-${nodeToken}-${roleToken}-${statusToken}-${createdAtToken}.md`;
 
       try {
-        await invoke<string>("workspace_write_markdown", {
+        const writtenPath = await invoke<string>("workspace_write_markdown", {
           cwd: targetCwd,
           name: fileName,
           content,
         });
+        const markdownAttachment = post.attachments.find((attachment) => attachment.kind === "markdown");
+        if (markdownAttachment) {
+          markdownAttachment.filePath = String(writtenPath ?? "").trim();
+        }
       } catch (error) {
         failures.push(`${post.nodeId}: ${String(error)}`);
       }
@@ -3400,8 +3425,8 @@ function App() {
   async function saveRunRecord(runRecord: RunRecord) {
     const fileName = `run-${runRecord.runId}.json`;
     try {
-      await persistRunRecordFile(fileName, runRecord);
       await exportRunFeedMarkdownFiles(runRecord);
+      await persistRunRecordFile(fileName, runRecord);
       setLastSavedRunFile(fileName);
       await refreshFeedTimeline();
     } catch (e) {
@@ -4359,6 +4384,13 @@ ${prompt}`;
     }
 
     if (isGraphRunning || runStartGuardRef.current) {
+      return;
+    }
+
+    const resolvedCwd = String(cwd ?? "").trim();
+    if (!resolvedCwd || resolvedCwd === ".") {
+      setError("작업 경로(CWD)를 먼저 선택하세요.");
+      setStatus("그래프 실행 대기");
       return;
     }
 
@@ -5413,8 +5445,10 @@ ${prompt}`;
   const canResumeGraph = isGraphRunning && isGraphPaused;
   const isWorkflowBusy = (isGraphRunning && !isGraphPaused) || isRunStarting;
   const canClearGraph = !isWorkflowBusy && (graph.nodes.length > 0 || graph.edges.length > 0);
+  const isWorkspaceCwdConfigured = String(cwd ?? "").trim().length > 0 && String(cwd ?? "").trim() !== ".";
   const canRunGraphNow =
-    canResumeGraph || (!isWorkflowBusy && graph.nodes.length > 0 && workflowQuestion.trim().length > 0);
+    canResumeGraph ||
+    (isWorkspaceCwdConfigured && !isWorkflowBusy && graph.nodes.length > 0 && workflowQuestion.trim().length > 0);
   const {
     currentFeedPosts,
     feedCategoryPosts,
@@ -5812,6 +5846,7 @@ ${prompt}`;
               formatUsage,
               setFeedReplyDraftByPost,
               onSubmitFeedAgentRequest,
+              onOpenFeedMarkdownFile,
             }}
           />
         )}

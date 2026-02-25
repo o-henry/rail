@@ -113,6 +113,33 @@ export function extractPromptInputText(input: unknown, depth = 0): string {
     }
   }
 
+  const skipKeys = new Set([
+    "text",
+    "output",
+    "result",
+    "response",
+    "payload",
+    "artifact",
+    "data",
+    "item",
+    "raw",
+    "completion",
+    "meta",
+  ]);
+  const mergedParts = Object.entries(record)
+    .filter(([key]) => !skipKeys.has(key))
+    .map(([key, value]) => {
+      const extracted = extractPromptInputText(value, depth + 1);
+      if (!extracted) {
+        return "";
+      }
+      return `## ${key}\n${extracted}`;
+    })
+    .filter(Boolean);
+  if (mergedParts.length > 0) {
+    return mergedParts.join("\n\n");
+  }
+
   return stringifyInput(input).trim();
 }
 
@@ -334,6 +361,7 @@ export function buildCodexMultiAgentDirective(mode: "off" | "balanced" | "max"):
     "복잡한 작업은 반드시 하위 에이전트(sub-agent) 병렬 실행으로 처리하라.",
     "각 하위 에이전트는 역할을 분리하고, 산출물은 짧은 구조화 요약으로 제출하라.",
     "모든 하위 에이전트 결과를 확인한 뒤 최종 통합 답변을 작성하라.",
+    "하위 에이전트 실행 계획/중간 진행상황/병렬 처리 설명은 최종 사용자 답변에 노출하지 마라.",
     ...qualityRules,
     "[/CODEx MULTI-AGENT ORCHESTRATION]",
   ].join("\n");
@@ -419,6 +447,7 @@ export function buildExpertOrchestrationDirective(
     "- 작업은 단계로 분해하라: 단계별 입력, 처리, 기대 산출물을 분리.",
     "- 금지형 제약만 나열하지 말고, 원하는 결과를 긍정 지시로 명확히 적어라.",
     "- 출력 전 자기검증: 누락/모순/근거 부족 항목을 점검하고 보정.",
+    "- 내부 실행 과정(계획/하위 에이전트 사용/진행 로그)은 최종 답변에 쓰지 말고, 사용자에게는 결과만 제시하라.",
     "[/전문가 오케스트레이션 계약]",
   ];
 
@@ -428,6 +457,7 @@ export function buildExpertOrchestrationDirective(
     "- Decompose into explicit steps with input/process/expected output per step.",
     "- Prefer positive instructions over long lists of prohibitions.",
     "- Before output, run a self-check for gaps, contradictions, and weak evidence.",
+    "- Keep orchestration internal: do not output planning logs/sub-agent process; show only final results.",
     "[/Expert Orchestration Contract]",
   ];
 
@@ -437,6 +467,7 @@ export function buildExpertOrchestrationDirective(
     "- 作業を段階分解し、各段階の入力/処理/期待成果を分離。",
     "- 禁止事項の羅列より、望ましい結果を肯定的指示で明確化。",
     "- 出力前に自己検証し、欠落/矛盾/根拠不足を補正。",
+    "- 内部の実行過程（計画/サブエージェント/進行ログ）は出力せず、最終結果のみ提示する。",
     "[/専門家オーケストレーション契約]",
   ];
 
@@ -446,6 +477,7 @@ export function buildExpertOrchestrationDirective(
     "- 分解为明确步骤：每步给出输入/处理/期望产出。",
     "- 优先使用正向指令，避免只堆叠禁止项。",
     "- 输出前做自检：补齐缺漏、冲突和薄弱证据。",
+    "- 编排过程保持内部化：不要输出计划日志/子代理执行过程，只呈现最终结果。",
     "[/专家编排契约]",
   ];
 

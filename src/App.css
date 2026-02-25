@@ -1389,6 +1389,8 @@ h3 {
 .canvas-runbar .canvas-icon-image-clear {
   width: 15px;
   height: 15px;
+  position: relative;
+  left: 2px;
 }
 
 .inspector-pane {
@@ -3074,6 +3076,59 @@ h3 {
   max-height: none;
   white-space: normal;
   word-break: break-word;
+}
+
+.feed-doc-link-block {
+  display: grid;
+  gap: 8px;
+  border-radius: 8px;
+  border: 1px solid #e7e9ec;
+  background: #fbfcfd;
+  padding: 10px 12px;
+}
+
+.feed-doc-link-title {
+  color: #4f5b67;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.feed-doc-link-row {
+  display: grid;
+  gap: 8px;
+}
+
+.feed-doc-link-open {
+  width: fit-content;
+  min-height: 28px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid #d7dde5;
+  background: #ffffff;
+  color: #0f1419;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.feed-doc-link-open:hover {
+  background: #f2f5f9;
+}
+
+.feed-doc-link-path {
+  border-radius: 6px;
+  background: #f3f6f9;
+  color: #2b3440;
+  font-size: 12px;
+  line-height: 1.45;
+  padding: 8px 10px;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.feed-doc-link-missing {
+  color: #72808f;
+  font-size: 12px;
+  line-height: 1.45;
 }
 
 .feed-document {

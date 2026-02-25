@@ -1,6 +1,5 @@
 import { Component, useMemo, useState, type ErrorInfo, type ReactNode } from "react";
 import FancySelect from "../../components/FancySelect";
-import FeedDocument from "../../components/feed/FeedDocument";
 import { useI18n } from "../../i18n";
 
 type FeedPageProps = {
@@ -111,6 +110,7 @@ export default function FeedPage({ vm }: FeedPageProps) {
     formatUsage,
     setFeedReplyDraftByPost,
     onSubmitFeedAgentRequest,
+    onOpenFeedMarkdownFile,
   } = vm;
   const replyDraftMap =
     feedReplyDraftByPost && typeof feedReplyDraftByPost === "object" ? feedReplyDraftByPost : {};
@@ -600,9 +600,7 @@ export default function FeedPage({ vm }: FeedPageProps) {
                               const attachments = Array.isArray(post.attachments) ? post.attachments : [];
                               const evidence = post.evidence && typeof post.evidence === "object" ? post.evidence : {};
                               const markdownAttachment = attachments.find((attachment: any) => attachment?.kind === "markdown");
-                              const visibleContentRaw =
-                                markdownAttachment?.content ?? post.summary ?? t("feed.attachment.empty");
-                              const visibleContent = toHumanReadableFeedText(visibleContentRaw);
+                              const markdownFilePath = String(markdownAttachment?.filePath ?? "").trim();
                               const readableQuestion = toHumanReadableFeedText(post.question ?? "");
                               const readableInputPreview = toHumanReadableFeedText(post.inputContext?.preview ?? "");
                               const avatarHue = hashStringToHue(`${post.nodeId}:${post.agentName}:${post.roleLabel}`);
@@ -790,10 +788,28 @@ export default function FeedPage({ vm }: FeedPageProps) {
                                         )}
                                       </section>
                                     )}
-                                    <FeedDocument
-                                      className="feed-sns-content"
-                                      text={visibleContent}
-                                    />
+                                    <section className="feed-doc-link-block">
+                                      <div className="feed-doc-link-title">{t("feed.share.detail")}</div>
+                                      {markdownFilePath ? (
+                                        <div className="feed-doc-link-row">
+                                          <button
+                                            className="feed-doc-link-open"
+                                            onClick={(event) => {
+                                              event.stopPropagation();
+                                              onOpenFeedMarkdownFile(post);
+                                            }}
+                                            type="button"
+                                          >
+                                            {t("common.open")}
+                                          </button>
+                                          <code className="feed-doc-link-path">{markdownFilePath}</code>
+                                        </div>
+                                      ) : (
+                                        <div className="feed-doc-link-missing">
+                                          {t("feed.attachment.empty")}
+                                        </div>
+                                      )}
+                                    </section>
                                     <div className="feed-evidence-row">
                                       <span>{formatRelativeFeedTime(post.createdAt)}</span>
                                       <span>

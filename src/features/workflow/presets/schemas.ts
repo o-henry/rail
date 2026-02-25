@@ -254,12 +254,11 @@ export const STOCK_INTAKE_SCHEMA = stringifySchema({
 
 export const STOCK_RISK_SCHEMA = stringifySchema({
   type: "object",
-  required: ["DECISION", "upsideFactors", "downsideRisks", "accuracyNotes", "finalDraft"],
+  required: ["upsideFactors", "downsideRisks", "accuracyNotes", "dataIssues"],
   properties: {
-    DECISION: { type: "string", enum: ["PASS", "REJECT"] },
     upsideFactors: { type: "array" },
     downsideRisks: { type: "array" },
     accuracyNotes: { type: "array" },
-    finalDraft: { type: "string" },
+    dataIssues: { type: "array" },
   },
 });

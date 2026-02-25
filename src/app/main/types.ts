@@ -104,6 +104,7 @@ export type FeedAttachment = {
   content: string;
   truncated: boolean;
   charCount: number;
+  filePath?: string;
 };
 
 export type FeedPostStatus = "draft" | "done" | "low_quality" | "failed" | "cancelled";

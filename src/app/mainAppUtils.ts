@@ -131,7 +131,10 @@ export function loadPersistedCwd(fallback = "."): string {
   try {
     const raw = window.localStorage.getItem(WORKSPACE_CWD_STORAGE_KEY);
     const parsed = typeof raw === "string" ? raw.trim() : "";
-    return parsed || fallback;
+    if (!parsed || parsed === ".") {
+      return fallback;
+    }
+    return parsed;
   } catch {
     return fallback;
   }

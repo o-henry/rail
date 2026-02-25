@@ -349,9 +349,9 @@ export function buildStockPreset(): GraphData {
       role: "RISK & ACCURACY AGENT",
       cwd: ".",
       promptTemplate:
-        "입력을 바탕으로 리스크와 예측 신뢰도를 평가해 JSON으로 출력하라.\n" +
+        "입력을 바탕으로 리스크와 예측 신뢰도를 점검해 JSON으로 출력하라.\n" +
         "출력 형식:\n" +
-        '{ "DECISION":"PASS|REJECT", "upsideFactors":["..."], "downsideRisks":["..."], "accuracyNotes":["과거 예측 오차 관련 한계/근거"], "finalDraft":"..." }\n' +
+        '{ "upsideFactors":["..."], "downsideRisks":["..."], "accuracyNotes":["..."], "dataIssues":["수치 충돌/출처 누락/검증 필요 항목"] }\n' +
         "반드시 위 JSON 객체만 출력하고, 코드펜스/서론/부가설명은 금지.\n" +
         "주의: 투자 조언 단정 금지, 불확실성 명시.\n" +
         "입력: {{input}}",
@@ -361,15 +361,15 @@ export function buildStockPreset(): GraphData {
       role: "STOCK SYNTHESIS AGENT",
       cwd: ".",
       promptTemplate:
-        "최종 주식 분석 리포트를 작성하라.\n" +
+        "사용자 질문에 직접 답하는 최종 주식/시장 전망 리포트를 작성하라.\n" +
         "입력에 artifact/completion/thread/log/raw 같은 메타데이터가 있으면 모두 무시하고, 실질 분석 내용만 사용하라.\n" +
-        "가능하면 DECISION/upsideFactors/downsideRisks/accuracyNotes/finalDraft 필드를 우선 해석하라.\n" +
+        "입력의 각 노드 결과를 종합해 결론을 도출하고, 하위 에이전트 평가/채점/판정 보고서는 작성하지 마라.\n" +
         "구성:\n" +
-        "1) 결론 요약(상방/하방 시나리오)\n" +
-        "2) 상승 요인 3~5개\n" +
-        "3) 주요 위험 3~5개\n" +
-        "4) 정확도/신뢰도 해석(근거 한계 포함)\n" +
-        "5) 다음 체크포인트(데이터 업데이트 조건)\n" +
+        "1) 결론 요약(질문에 대한 직접 답변)\n" +
+        "2) 전망 시나리오: 1개월/3개월/6개월/12개월 (상방/중립/하방, 각 기간 확률 합 100%)\n" +
+        "3) 핵심 근거: 자금 흐름/정책/국제정세/심리/커뮤니티를 분리해 제시\n" +
+        "4) 주요 위험과 한계(불확실성 포함)\n" +
+        "5) 다음 체크포인트(업데이트 트리거)\n" +
         "입력: {{input}}",
     }),
   ];
@@ -379,6 +379,9 @@ export function buildStockPreset(): GraphData {
     { from: { nodeId: "turn-stock-intake", port: "out" }, to: { nodeId: "turn-stock-company", port: "in" } },
     { from: { nodeId: "turn-stock-macro", port: "out" }, to: { nodeId: "turn-stock-risk", port: "in" } },
     { from: { nodeId: "turn-stock-company", port: "out" }, to: { nodeId: "turn-stock-risk", port: "in" } },
+    { from: { nodeId: "turn-stock-intake", port: "out" }, to: { nodeId: "turn-stock-final", port: "in" } },
+    { from: { nodeId: "turn-stock-macro", port: "out" }, to: { nodeId: "turn-stock-final", port: "in" } },
+    { from: { nodeId: "turn-stock-company", port: "out" }, to: { nodeId: "turn-stock-final", port: "in" } },
     { from: { nodeId: "turn-stock-risk", port: "out" }, to: { nodeId: "turn-stock-final", port: "in" } },
   ];
 
