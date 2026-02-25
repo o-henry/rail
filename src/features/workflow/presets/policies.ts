@@ -301,7 +301,7 @@ export function resolvePresetTurnPolicy(kind: PresetKind, nodeId: string): Prese
       return {
         ...DEFAULT_PRESET_TURN_POLICY,
         profile: "synthesis_final",
-        threshold: 86,
+        threshold: 80,
         artifactType: "EvidenceArtifact",
       };
     }

@@ -1066,7 +1066,7 @@ h3 {
   font-size: 0.82rem;
   margin: 8px 6px 0px 6px;
   /* margin: 8px; */
-  border-radius: 8px;
+  border-radius: 4px;
 }
 
 .node-runtime-meta {
@@ -1499,7 +1499,7 @@ h3 {
 }
 
 .inspector-panel {
-  overflow: hidden;
+  overflow: visible;
   max-height: 2200px;
   opacity: 1;
   transform: translateY(0);
@@ -1510,6 +1510,7 @@ h3 {
 }
 
 .inspector-panel.is-hidden {
+  overflow: hidden;
   max-height: 0;
   opacity: 0;
   transform: translateY(-6px);
@@ -1593,6 +1594,21 @@ h3 {
   width: 100%;
 }
 
+.inspector-section input[type="number"] {
+  appearance: textfield;
+  -moz-appearance: textfield;
+  height: 36px;
+  min-height: 36px;
+  max-height: 36px;
+  padding: 0 12px;
+}
+
+.inspector-section input[type="number"]::-webkit-outer-spin-button,
+.inspector-section input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
 .inspector-section .fancy-select-trigger {
   height: 36px;
   min-height: 36px;
@@ -1606,10 +1622,10 @@ h3 {
 }
 
 .inspector-section .fancy-select-option {
-  height: 36px;
   min-height: 36px;
-  padding: 0 10px;
+  padding: 7px 10px;
   font-size: 12px;
+  line-height: 1.35;
 }
 
 .inspector-section label {
@@ -2099,7 +2115,7 @@ h3 {
 .feed-agent-panel-head h3 {
   margin: 0;
   font-size: 16px;
-  font-family: "DialogNanumBody1984", "Noto Sans KR", sans-serif;
+  font-family: "BasicallyAMono", "DialogNanumBody1984", "Noto Sans KR", sans-serif;
   color: #14181f;
 }
 
@@ -2337,7 +2353,7 @@ h3 {
 .feed-agent-rules-head h4 {
   margin: 0;
   font-size: 13px;
-  font-family: "DialogNanumBody1984", "Noto Sans KR", sans-serif;
+  font-family: "BasicallyAMono", "DialogNanumBody1984", "Noto Sans KR", sans-serif;
   color: #1c2431;
 }
 
@@ -2394,6 +2410,7 @@ h3 {
   padding: 18px 20px 30px;
   border-radius: 12px;
   background: #ffffff;
+  font-family: "BasicallyAMono", "DialogNanumBody1984", "Noto Sans KR", sans-serif;
 }
 
 .feed-topbar {
@@ -2414,7 +2431,7 @@ h3 {
 .feed-topbar h2 {
   margin: 0;
   font-size: 20px;
-  font-family: "DialogNanumBody1984", "Noto Sans KR", sans-serif;
+  font-family: "BasicallyAMono", "DialogNanumBody1984", "Noto Sans KR", sans-serif;
   letter-spacing: -0.015em;
   color: #14181f;
 }
@@ -2580,7 +2597,7 @@ h3 {
   color: #4d5662;
   background: transparent;
   box-shadow: none;
-  font-family: "DialogNanumBody1984", "Noto Sans KR", sans-serif;
+  font-family: "BasicallyAMono", "DialogNanumBody1984", "Noto Sans KR", sans-serif;
   font-size: 15px;
   border-bottom: 2px solid transparent;
 }
@@ -2952,7 +2969,7 @@ h3 {
 }
 
 .feed-card-input-toggle:not(.is-expanded) img {
-  transform: rotate(-90deg);
+  transform: rotate(180deg);
 }
 
 .feed-card-input-sources ul {

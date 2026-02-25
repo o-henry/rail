@@ -355,12 +355,6 @@ export function buildStockPreset(): GraphData {
         "주의: 투자 조언 단정 금지, 불확실성 명시.\n" +
         "입력: {{input}}",
     }),
-    makePresetNode("gate-stock", "gate", 1020, 120, {
-      decisionPath: "DECISION",
-      passNodeId: "turn-stock-final",
-      rejectNodeId: "transform-stock-rework",
-      schemaJson: "{\"type\":\"object\",\"required\":[\"DECISION\"]}",
-    }),
     makePresetNode("turn-stock-final", "turn", 1320, 40, {
       model: "GPT-5.3-Codex",
       role: "STOCK SYNTHESIS AGENT",
@@ -375,13 +369,6 @@ export function buildStockPreset(): GraphData {
         "5) 다음 체크포인트(데이터 업데이트 조건)\n" +
         "입력: {{input}}",
     }),
-    makePresetNode("transform-stock-rework", "transform", 1320, 220, {
-      mode: "template",
-      template:
-        "REJECT. 주식 분석 근거가 부족하거나 불확실성 표기가 부족합니다.\n" +
-        "보완 항목(최신 데이터/리스크/근거 날짜)을 먼저 채운 뒤 재분석하세요.\n" +
-        "원문: {{input}}",
-    }),
   ];
 
   const edges: GraphEdge[] = [
@@ -389,9 +376,7 @@ export function buildStockPreset(): GraphData {
     { from: { nodeId: "turn-stock-intake", port: "out" }, to: { nodeId: "turn-stock-company", port: "in" } },
     { from: { nodeId: "turn-stock-macro", port: "out" }, to: { nodeId: "turn-stock-risk", port: "in" } },
     { from: { nodeId: "turn-stock-company", port: "out" }, to: { nodeId: "turn-stock-risk", port: "in" } },
-    { from: { nodeId: "turn-stock-risk", port: "out" }, to: { nodeId: "gate-stock", port: "in" } },
-    { from: { nodeId: "gate-stock", port: "out" }, to: { nodeId: "turn-stock-final", port: "in" } },
-    { from: { nodeId: "gate-stock", port: "out" }, to: { nodeId: "transform-stock-rework", port: "in" } },
+    { from: { nodeId: "turn-stock-risk", port: "out" }, to: { nodeId: "turn-stock-final", port: "in" } },
   ];
 
   return { version: GRAPH_SCHEMA_VERSION, nodes, edges, knowledge: defaultKnowledgeConfig() };

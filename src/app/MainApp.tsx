@@ -13,7 +13,6 @@ import ApprovalModal from "../components/modals/ApprovalModal";
 import PendingWebLoginModal from "../components/modals/PendingWebLoginModal";
 import PendingWebConnectModal from "../components/modals/PendingWebConnectModal";
 import PendingWebTurnModal from "../components/modals/PendingWebTurnModal";
-import StockDisclaimerModal from "../components/modals/StockDisclaimerModal";
 import BridgePage from "../pages/bridge/BridgePage";
 import FeedPage from "../pages/feed/FeedPage";
 import SettingsPage from "../pages/settings/SettingsPage";
@@ -61,6 +60,7 @@ import {
   buildPresetGraphByKind,
   simplifyPresetForSimpleWorkflow,
 } from "../features/workflow/presets";
+import { localizePresetPromptTemplate } from "../features/workflow/presets/promptLocale";
 import {
   approvalDecisionLabel,
   approvalSourceLabel,
@@ -156,14 +156,14 @@ import {
 } from "./mainAppGraphHelpers";
 import { useI18n } from "../i18n";
 import {
-  ARTIFACT_TYPE_OPTIONS,
-  CODEX_MULTI_AGENT_MODE_OPTIONS,
-  COST_PRESET_OPTIONS,
+  getArtifactTypeOptions,
+  getCodexMultiAgentModeOptions,
+  getCostPresetOptions,
   NODE_ANCHOR_SIDES,
-  PRESET_TEMPLATE_META,
-  PRESET_TEMPLATE_OPTIONS,
-  QUALITY_PROFILE_OPTIONS,
-  QUALITY_THRESHOLD_OPTIONS,
+  getPresetTemplateMeta,
+  getPresetTemplateOptions,
+  getQualityProfileOptions,
+  getQualityThresholdOptions,
   buildFeedPost,
   buildSchemaRetryInput,
   buildQualityReport,
@@ -258,7 +258,7 @@ import type {
 } from "./main";
 
 function App() {
-  const { locale, t } = useI18n();
+  const { locale, t, tp } = useI18n();
   const defaultCwd = useMemo(() => loadPersistedCwd("."), []);
   const defaultLoginCompleted = useMemo(() => loadPersistedLoginCompleted(), []);
   const defaultAuthMode = useMemo(() => loadPersistedAuthMode(), []);
@@ -269,12 +269,6 @@ function App() {
     providers: WebProvider[];
     reason: string;
   } | null>(null);
-  const [pendingStockDisclaimer, setPendingStockDisclaimer] = useState<{
-    stage: "preset" | "run";
-    presetKind?: PresetKind;
-  } | null>(null);
-  const [stockDisclaimerChecked, setStockDisclaimerChecked] = useState(false);
-  const [stockDisclaimerAcceptedAt, setStockDisclaimerAcceptedAt] = useState<string>("");
 
   const [cwd, setCwd] = useState(defaultCwd);
   const [model, setModel] = useState<string>(DEFAULT_TURN_MODEL);
@@ -287,7 +281,7 @@ function App() {
     engineStarted,
     setEngineStarted,
     status,
-    setStatus,
+    setStatus: setStatusState,
     running,
     setRunning,
     error,
@@ -566,9 +560,14 @@ function App() {
     KNOWLEDGE_DEFAULT_MAX_CHARS,
   );
 
+  function setStatus(next: string) {
+    setStatusState(tp(next));
+  }
+
   function setError(next: string) {
-    setErrorState(next);
-    const trimmed = next.trim();
+    const localized = tp(next);
+    setErrorState(localized);
+    const trimmed = localized.trim();
     if (!trimmed) {
       return;
     }
@@ -620,13 +619,14 @@ function App() {
   }
 
   function addNodeLog(nodeId: string, message: string) {
+    const localized = tp(message);
     if (collectingRunRef.current) {
       const current = runLogCollectorRef.current[nodeId] ?? [];
-      runLogCollectorRef.current[nodeId] = [...current, message].slice(-500);
+      runLogCollectorRef.current[nodeId] = [...current, localized].slice(-500);
     }
     setNodeStates((prev) => {
       const current = prev[nodeId] ?? { status: "idle", logs: [] };
-      const nextLogs = [...current.logs, message].slice(-300);
+      const nextLogs = [...current.logs, localized].slice(-300);
       return {
         ...prev,
         [nodeId]: {
@@ -1175,8 +1175,9 @@ function App() {
       delete feedReplyFeedbackClearTimerRef.current[postId];
     }
     setFeedReplySubmittingByPost((prev) => ({ ...prev, [postId]: true }));
-    setFeedReplyFeedbackByPost((prev) => ({ ...prev, [postId]: "요청 전송 중..." }));
+    setFeedReplyFeedbackByPost((prev) => ({ ...prev, [postId]: t("feed.followup.sending") }));
     let replyFeedbackText = "";
+    let shouldAutoClearReplyFeedback = false;
     let node = graph.nodes.find((row) => row.id === post.nodeId);
     const existsInCurrentGraph = !!node && node.type === "turn";
 
@@ -1197,15 +1198,15 @@ function App() {
       }
 
       if (!node || node.type !== "turn") {
-        setError("이 포스트의 원본 노드 정보를 찾을 수 없습니다.");
-        replyFeedbackText = "요청 불가: 원본 노드를 찾지 못했습니다.";
+        setError(t("feed.followup.error.nodeNotFound"));
+        replyFeedbackText = t("feed.followup.error.nodeNotFoundShort");
         return;
       }
 
       if (isGraphRunning) {
         if (!existsInCurrentGraph) {
-          setError("현재 실행 중인 그래프에 없는 포스트입니다. 실행 종료 후 추가 요청을 보내세요.");
-          replyFeedbackText = "요청 불가: 현재 실행 그래프에 없는 포스트입니다.";
+          setError(t("feed.followup.error.notInCurrentGraph"));
+          replyFeedbackText = t("feed.followup.error.notInCurrentGraphShort");
           return;
         }
         enqueueNodeRequest(node.id, draft);
@@ -1214,7 +1215,7 @@ function App() {
           [postId]: "",
         }));
         setStatus(`${turnModelLabel(node)} 에이전트 요청을 큐에 추가했습니다.`);
-        replyFeedbackText = "요청이 대기열에 추가되었습니다.";
+        replyFeedbackText = t("feed.followup.queued");
         return;
       }
 
@@ -1227,15 +1228,15 @@ function App() {
       const oneOffRunId = `manual-${Date.now()}`;
       const startedAt = new Date().toISOString();
       const followupInput = [
-        post.question ? `[원래 질문]\n${post.question}` : "",
-        post.summary ? `[이전 결과 요약]\n${post.summary}` : "",
-        `[사용자 추가 요청]\n${draft}`,
+        post.question ? `[${t("feed.followup.originalQuestion")}]\n${post.question}` : "",
+        post.summary ? `[${t("feed.followup.previousSummary")}]\n${post.summary}` : "",
+        `[${t("group.followup")}]\n${draft}`,
       ]
         .filter(Boolean)
         .join("\n\n");
       const oneOffRunFileName = `run-${oneOffRunId}.json`;
 
-      setNodeStatus(node.id, "running", "피드 추가 요청 실행 시작");
+      setNodeStatus(node.id, "running", t("feed.followup.run.started"));
       setNodeRuntimeFields(node.id, {
         status: "running",
         startedAt,
@@ -1253,7 +1254,7 @@ function App() {
       const finishedAt = new Date().toISOString();
       const durationMs = Date.now() - startedAtMs;
       if (!result.ok) {
-        setNodeStatus(node.id, "failed", result.error ?? "피드 추가 요청 실행 실패");
+        setNodeStatus(node.id, "failed", result.error ?? t("feed.followup.run.failed"));
         setNodeRuntimeFields(node.id, {
           status: "failed",
           error: result.error,
@@ -1268,7 +1269,7 @@ function App() {
           node,
           status: "failed",
           createdAt: finishedAt,
-          summary: result.error ?? "피드 추가 요청 실행 실패",
+          summary: result.error ?? t("feed.followup.run.failed"),
           logs: nodeStates[node.id]?.logs ?? [],
           output: effectiveOutput,
           error: result.error,
@@ -1299,10 +1300,10 @@ function App() {
               at: finishedAt,
               nodeId: node.id,
               status: "failed",
-              message: result.error ?? "피드 추가 요청 실행 실패",
+              message: result.error ?? t("feed.followup.run.failed"),
             },
           ],
-          summaryLogs: [`[${node.id}] running`, `[${node.id}] failed: ${result.error ?? "실행 실패"}`],
+          summaryLogs: [`[${node.id}] running`, `[${node.id}] failed: ${result.error ?? t("feed.followup.run.failedShort")}`],
           nodeLogs: {
             [node.id]: nodeStates[node.id]?.logs ?? [],
           },
@@ -1320,7 +1321,7 @@ function App() {
               status: "failed",
               startedAt,
               finishedAt,
-              summary: result.error ?? "피드 추가 요청 실행 실패",
+              summary: result.error ?? t("feed.followup.run.failed"),
             },
           ],
           feedPosts: [failed.post],
@@ -1335,12 +1336,12 @@ function App() {
           },
           ...prev,
         ]);
-        setStatus("피드 추가 요청 실행 실패");
-        replyFeedbackText = "요청 실행 실패";
+        setStatus(t("feed.followup.run.failed"));
+        replyFeedbackText = t("feed.followup.run.failedShort");
         return;
       }
 
-      setNodeStatus(node.id, "done", "피드 추가 요청 실행 완료");
+      setNodeStatus(node.id, "done", t("feed.followup.run.done"));
       setNodeRuntimeFields(node.id, {
         status: "done",
         output: effectiveOutput,
@@ -1355,7 +1356,7 @@ function App() {
         node,
         status: "done",
         createdAt: finishedAt,
-        summary: "피드 추가 요청 실행 완료",
+        summary: t("feed.followup.run.done"),
         logs: nodeStates[node.id]?.logs ?? [],
         output: effectiveOutput,
         durationMs,
@@ -1385,7 +1386,7 @@ function App() {
             at: finishedAt,
             nodeId: node.id,
             status: "done",
-            message: "피드 추가 요청 실행 완료",
+            message: t("feed.followup.run.done"),
           },
         ],
         summaryLogs: [`[${node.id}] running`, `[${node.id}] done`],
@@ -1406,7 +1407,7 @@ function App() {
             status: "done",
             startedAt,
             finishedAt,
-            summary: "피드 추가 요청 실행 완료",
+            summary: t("feed.followup.run.done"),
           },
         ],
         feedPosts: [done.post],
@@ -1421,11 +1422,12 @@ function App() {
         },
         ...prev,
       ]);
-      setStatus("피드 추가 요청 실행 완료");
-      replyFeedbackText = "요청 실행 완료";
+      setStatus(t("feed.followup.run.done"));
+      replyFeedbackText = t("feed.followup.run.doneShort");
+      shouldAutoClearReplyFeedback = true;
     } catch (error) {
-      setError(`피드 추가 요청 실행 실패: ${String(error)}`);
-      replyFeedbackText = "요청 실행 실패";
+      setError(`${t("feed.followup.run.failed")}: ${String(error)}`);
+      replyFeedbackText = t("feed.followup.run.failedShort");
     } finally {
       setFeedReplySubmittingByPost((prev) => {
         if (!(postId in prev)) {
@@ -1440,7 +1442,7 @@ function App() {
           ...prev,
           [postId]: replyFeedbackText,
         }));
-        if (replyFeedbackText.includes("요청 실행 완료")) {
+        if (shouldAutoClearReplyFeedback) {
           const timerId = window.setTimeout(() => {
             setFeedReplyFeedbackByPost((prev) => {
               if (!(postId in prev)) {
@@ -2281,14 +2283,7 @@ function App() {
     getNodeVisualSize,
   });
 
-  function applyPreset(kind: PresetKind, bypassStockDisclaimer = false) {
-    if (kind === "stock" && !bypassStockDisclaimer) {
-      setPendingStockDisclaimer({ stage: "preset", presetKind: kind });
-      setStockDisclaimerChecked(false);
-      setStatus(t("modal.stockDisclaimer.required"));
-      return;
-    }
-
+  function applyPreset(kind: PresetKind) {
     const builtPreset = buildPresetGraphByKind(kind);
     const presetWithPolicies = {
       ...builtPreset,
@@ -2302,12 +2297,18 @@ function App() {
           return node;
         }
         const config = node.config as TurnConfig;
+        const localizedPromptTemplate = localizePresetPromptTemplate(
+          kind,
+          node,
+          locale,
+          String(config.promptTemplate ?? "{{input}}"),
+        );
         return {
           ...node,
           config: {
             ...config,
             promptTemplate: injectOutputLanguageDirective(
-              String(config.promptTemplate ?? "{{input}}"),
+              localizedPromptTemplate,
               locale,
             ),
           },
@@ -2332,11 +2333,8 @@ function App() {
     setIsConnectingDrag(false);
     setMarqueeSelection(null);
     lastAppliedPresetRef.current = { kind, graph: cloneGraph(nextPreset) };
-    const templateMeta = PRESET_TEMPLATE_META.find((row) => row.key === kind);
+    const templateMeta = presetTemplateMeta.find((row) => row.key === kind);
     setStatus(`${templateMeta?.statusLabel ?? "템플릿"} 로드됨`);
-    if (kind !== "stock") {
-      setStockDisclaimerAcceptedAt("");
-    }
   }
 
   function applyCostPreset(preset: CostPreset) {
@@ -4111,7 +4109,7 @@ ${prompt}`;
     );
   }
 
-  async function onRunGraph(skipWebConnectPreflight = false, skipStockDisclaimerCheck = false, acceptedAt = "") {
+  async function onRunGraph(skipWebConnectPreflight = false) {
     if (isGraphRunning && isGraphPaused) {
       pauseRequestedRef.current = false;
       setIsGraphPaused(false);
@@ -4162,16 +4160,7 @@ ${prompt}`;
       }
     }
 
-    const runGroup = inferRunGroupMeta(graph, lastAppliedPresetRef.current);
-    if (runGroup.presetKind === "stock" && !skipStockDisclaimerCheck && !stockDisclaimerAcceptedAt) {
-      setPendingStockDisclaimer({ stage: "run" });
-      setStockDisclaimerChecked(false);
-      setStatus(t("modal.stockDisclaimer.required"));
-      return;
-    }
-
-    const effectiveStockDisclaimerAcceptedAt = acceptedAt || stockDisclaimerAcceptedAt;
-
+    const runGroup = inferRunGroupMeta(graph, lastAppliedPresetRef.current, locale);
     const incomingNodeIds = new Set(graph.edges.map((edge) => edge.to.nodeId));
     const directInputNodeIds = graph.nodes.filter((node) => !incomingNodeIds.has(node.id)).map((node) => node.id);
     if (directInputNodeIds.length !== 1) {
@@ -4223,11 +4212,6 @@ ${prompt}`;
       nodeMetrics: {},
       feedPosts: [],
     };
-    if (runGroup.presetKind === "stock" && effectiveStockDisclaimerAcceptedAt) {
-      runRecord.summaryLogs.push(
-        `[고지] 주식 템플릿 동의 완료 (${effectiveStockDisclaimerAcceptedAt}) - 투자자문 아님 / 정보 제공 목적 / 최종 판단은 사용자 책임`,
-      );
-    }
     setActiveFeedRunMeta({
       runId: runRecord.runId,
       question: workflowQuestion,
@@ -5031,30 +5015,6 @@ ${prompt}`;
     void onRunGraph(true);
   }
 
-  function onConfirmStockDisclaimer() {
-    if (!pendingStockDisclaimer || !stockDisclaimerChecked) {
-      return;
-    }
-    const acceptedAt = new Date().toISOString();
-    const pending = pendingStockDisclaimer;
-    setStockDisclaimerAcceptedAt(acceptedAt);
-    setPendingStockDisclaimer(null);
-    setStockDisclaimerChecked(false);
-    setStatus(t("modal.stockDisclaimer.accepted"));
-
-    if (pending.stage === "preset" && pending.presetKind) {
-      applyPreset(pending.presetKind, true);
-      return;
-    }
-    void onRunGraph(false, true, acceptedAt);
-  }
-
-  function onCancelStockDisclaimer() {
-    setPendingStockDisclaimer(null);
-    setStockDisclaimerChecked(false);
-    setStatus(t("modal.stockDisclaimer.cancelled"));
-  }
-
   function onCancelWebConnectModal() {
     setPendingWebConnectCheck(null);
     setStatus("그래프 실행 대기");
@@ -5195,6 +5155,21 @@ ${prompt}`;
     normalizeQualityThreshold(selectedTurnConfig?.qualityThreshold ?? QUALITY_DEFAULT_THRESHOLD),
   );
   const selectedArtifactType: ArtifactType = toArtifactType(selectedTurnConfig?.artifactType);
+  const qualityProfileOptions = useMemo(() => getQualityProfileOptions(locale), [locale]);
+  const qualityThresholdOptions = useMemo(() => getQualityThresholdOptions(locale), [locale]);
+  const artifactTypeOptions = useMemo(() => getArtifactTypeOptions(locale), [locale]);
+  const costPresetOptions = useMemo(() => getCostPresetOptions(locale), [locale]);
+  const codexMultiAgentModeOptions = useMemo(() => getCodexMultiAgentModeOptions(locale), [locale]);
+  const presetTemplateMeta = useMemo(() => getPresetTemplateMeta(locale), [locale]);
+  const presetTemplateOptions = useMemo(() => getPresetTemplateOptions(locale), [locale]);
+  const knowledgeTopKOptions = useMemo(
+    () => KNOWLEDGE_TOP_K_OPTIONS.map((option) => ({ ...option, label: tp(option.label) })),
+    [locale],
+  );
+  const knowledgeMaxCharsOptions = useMemo(
+    () => KNOWLEDGE_MAX_CHARS_OPTIONS.map((option) => ({ ...option, label: tp(option.label) })),
+    [locale],
+  );
   const outgoingFromSelected = selectedNode
     ? graph.edges
         .filter((edge) => edge.from.nodeId === selectedNode.id)
@@ -5205,7 +5180,7 @@ ${prompt}`;
     const target = graph.nodes.find((node) => node.id === nodeId);
     return {
       value: nodeId,
-      label: target ? nodeSelectionLabel(target) : "연결된 노드",
+      label: target ? nodeSelectionLabel(target) : t("workflow.node.connection"),
     };
   });
   const canResumeGraph = isGraphRunning && isGraphPaused;
@@ -5393,9 +5368,9 @@ ${prompt}`;
 
         {error && (
           <div className="error">
-            <span>오류: {error}</span>
+            <span>{t("feed.status.failed")}: {error}</span>
             <button
-              aria-label="오류 닫기"
+              aria-label={t("common.close")}
               className="error-close"
               onClick={() => setError("")}
               type="button"
@@ -5474,14 +5449,14 @@ ${prompt}`;
             <WorkflowInspectorPane
               canvasFullscreen={canvasFullscreen}
               nodeProps={{
-                artifactTypeOptions: [...ARTIFACT_TYPE_OPTIONS],
+                artifactTypeOptions: [...artifactTypeOptions],
                 cwd,
                 model,
                 nodeSettingsTitle: t("workflow.nodeSettings"),
                 normalizeQualityThreshold,
                 outgoingNodeOptions,
-                qualityProfileOptions: [...QUALITY_PROFILE_OPTIONS],
-                qualityThresholdOptions: [...QUALITY_THRESHOLD_OPTIONS],
+                qualityProfileOptions: [...qualityProfileOptions],
+                qualityThresholdOptions: [...qualityThresholdOptions],
                 selectedArtifactType,
                 selectedNode,
                 selectedQualityProfile,
@@ -5500,7 +5475,7 @@ ${prompt}`;
                 applyGraphChange,
                 applyPreset,
                 costPreset,
-                costPresetOptions: [...COST_PRESET_OPTIONS],
+                costPresetOptions: [...costPresetOptions],
                 defaultKnowledgeConfig,
                 deleteGraph,
                 graphFiles,
@@ -5511,15 +5486,15 @@ ${prompt}`;
                 isPresetKind,
                 knowledgeDefaultMaxChars: KNOWLEDGE_DEFAULT_MAX_CHARS,
                 knowledgeDefaultTopK: KNOWLEDGE_DEFAULT_TOP_K,
-                knowledgeMaxCharsOptions: [...KNOWLEDGE_MAX_CHARS_OPTIONS],
-                knowledgeTopKOptions: [...KNOWLEDGE_TOP_K_OPTIONS],
+                knowledgeMaxCharsOptions: [...knowledgeMaxCharsOptions],
+                knowledgeTopKOptions: [...knowledgeTopKOptions],
                 loadGraph,
                 onCloseRenameGraph,
                 onOpenKnowledgeFilePicker,
                 onOpenRenameGraph,
                 onRemoveKnowledgeFile,
                 onToggleKnowledgeFileEnabled,
-                presetTemplateOptions: [...PRESET_TEMPLATE_OPTIONS],
+                presetTemplateOptions: [...presetTemplateOptions],
                 refreshGraphFiles,
                 renameGraph,
                 saveGraph,
@@ -5557,10 +5532,10 @@ ${prompt}`;
               getWebProviderFromExecutor,
               normalizeWebResultMode,
               cwd,
-              QUALITY_PROFILE_OPTIONS,
+              QUALITY_PROFILE_OPTIONS: qualityProfileOptions,
               normalizeQualityThreshold,
-              QUALITY_THRESHOLD_OPTIONS,
-              ARTIFACT_TYPE_OPTIONS,
+              QUALITY_THRESHOLD_OPTIONS: qualityThresholdOptions,
+              ARTIFACT_TYPE_OPTIONS: artifactTypeOptions,
               toArtifactType,
               feedFilterOpen,
               setFeedFilterOpen,
@@ -5624,7 +5599,7 @@ ${prompt}`;
               model={model}
               modelOptions={TURN_MODEL_OPTIONS}
               codexMultiAgentMode={codexMultiAgentMode}
-              codexMultiAgentModeOptions={[...CODEX_MULTI_AGENT_MODE_OPTIONS]}
+              codexMultiAgentModeOptions={[...codexMultiAgentModeOptions]}
               onCheckUsage={() => void onCheckUsage()}
               onCloseUsageResult={() => setUsageResultClosed(true)}
               onOpenRunsFolder={() => void onOpenRunsFolder()}
@@ -5668,14 +5643,6 @@ ${prompt}`;
             : ""
         }
         reason={pendingWebConnectCheck?.reason ?? ""}
-      />
-
-      <StockDisclaimerModal
-        checked={stockDisclaimerChecked}
-        onCancel={onCancelStockDisclaimer}
-        onChangeChecked={setStockDisclaimerChecked}
-        onConfirm={onConfirmStockDisclaimer}
-        open={Boolean(pendingStockDisclaimer)}
       />
 
       <PendingWebLoginModal
