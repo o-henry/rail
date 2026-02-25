@@ -3543,6 +3543,10 @@ pre {
   font-family: "DialogNanumBody1984", "Noto Sans KR", sans-serif;
 }
 
+.settings-view .controls > h3 {
+  margin-top: 4px;
+}
+
 .bridge-head-panel,
 .bridge-provider-panel,
 .bridge-log-panel {
