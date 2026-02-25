@@ -8,14 +8,12 @@ export function buildValidationPreset(): GraphData {
       role: "PLANNING AGENT",
       cwd: ".",
       promptTemplate:
-        "당신은 검증 설계 에이전트다. 아래 질문을 분석해 검증 계획 JSON만 출력하라.\n" +
-        "출력 형식:\n" +
-        "{\n" +
-        '  "question":"...",\n' +
-        '  "goal":"...",\n' +
-        '  "checkpoints":["...","...","..."],\n' +
-        '  "searchQueries":["...","...","..."]\n' +
-        "}\n" +
+        "당신은 검증 설계 에이전트다. 아래 질문을 분석해 검증 계획을 간결한 항목으로 작성하라.\n" +
+        "형식:\n" +
+        "- question:\n" +
+        "- goal:\n" +
+        "- checkpoints(3~5개):\n" +
+        "- searchQueries(3~5개):\n" +
         "질문: {{input}}",
     }),
     makePresetNode("turn-search-a", "turn", 420, 40, {
@@ -23,9 +21,8 @@ export function buildValidationPreset(): GraphData {
       role: "SEARCH AGENT A",
       cwd: ".",
       promptTemplate:
-        "아래 입력에서 주장에 유리한 근거를 찾아 JSON으로 정리하라.\n" +
-        "출력 형식:\n" +
-        '{ "evidences":[{"claim":"...","evidence":"...","sourceHint":"...","confidence":0.0}] }\n' +
+        "아래 입력에서 주장에 유리한 근거를 구조적으로 정리하라.\n" +
+        "각 항목은 claim / evidence / sourceHint / confidence(0~1)를 포함하라.\n" +
         "조건: 근거가 약하면 confidence를 낮게 주고 추정이라고 표시.\n" +
         "입력: {{input}}",
     }),
@@ -34,9 +31,8 @@ export function buildValidationPreset(): GraphData {
       role: "SEARCH AGENT B",
       cwd: ".",
       promptTemplate:
-        "아래 입력에서 반례/한계/위험요인을 찾아 JSON으로 정리하라.\n" +
-        "출력 형식:\n" +
-        '{ "risks":[{"point":"...","why":"...","confidence":0.0,"mitigation":"..."}] }\n' +
+        "아래 입력에서 반례/한계/위험요인을 구조적으로 정리하라.\n" +
+        "각 항목은 point / why / confidence(0~1) / mitigation을 포함하라.\n" +
         "조건: 모호하면 모호하다고 명시.\n" +
         "입력: {{input}}",
     }),
@@ -96,8 +92,8 @@ export function buildDevelopmentPreset(): GraphData {
       role: "REQUIREMENTS AGENT",
       cwd: ".",
       promptTemplate:
-        "아래 요청을 분석해 요구사항 JSON만 출력하라.\n" +
-        '{ "functional":["..."], "nonFunctional":["..."], "constraints":["..."], "priority":["P0","P1","P2"] }\n' +
+        "아래 요청을 분석해 요구사항을 구조화하라.\n" +
+        "형식: functional / nonFunctional / constraints / priority(P0~P2).\n" +
         "질문: {{input}}",
     }),
     makePresetNode("turn-architecture", "turn", 420, 40, {
@@ -105,8 +101,8 @@ export function buildDevelopmentPreset(): GraphData {
       role: "ARCHITECTURE AGENT",
       cwd: ".",
       promptTemplate:
-        "입력을 바탕으로 현실적인 시스템 설계를 JSON으로 제안하라.\n" +
-        '{ "architecture":"...", "components":[...], "tradeoffs":[...], "risks":[...], "decisionLog":[...] }\n' +
+        "입력을 바탕으로 현실적인 시스템 설계를 제안하라.\n" +
+        "형식: architecture / components / tradeoffs / risks / decisionLog.\n" +
         "과설계 금지, MVP 우선.\n" +
         "입력: {{input}}",
     }),
@@ -190,8 +186,8 @@ export function buildResearchPreset(): GraphData {
       role: "RESEARCH PLANNING AGENT",
       cwd: ".",
       promptTemplate:
-        "질문을 조사 계획으로 분해해 JSON만 출력하라.\n" +
-        '{ "researchGoal":"...", "questions":["..."], "evidenceCriteria":["..."], "riskChecks":["..."] }\n' +
+        "질문을 조사 계획으로 분해하라.\n" +
+        "형식: researchGoal / questions / evidenceCriteria / riskChecks.\n" +
         "질문: {{input}}",
     }),
     makePresetNode("turn-research-collector", "turn", 420, 120, {
@@ -199,8 +195,8 @@ export function buildResearchPreset(): GraphData {
       role: "SOURCE COLLECTION AGENT",
       cwd: ".",
       promptTemplate:
-        "입력 기준으로 핵심 근거 후보를 수집해 JSON으로 정리하라.\n" +
-        '{ "evidences":[{"id":"E1","statement":"...","whyRelevant":"...","confidence":0.0}] }\n' +
+        "입력 기준으로 핵심 근거 후보를 수집해 정리하라.\n" +
+        "각 항목은 id / statement / whyRelevant / confidence(0~1)를 포함하라.\n" +
         "입력: {{input}}",
     }),
     makePresetNode("turn-research-factcheck", "turn", 720, 120, {
@@ -208,8 +204,8 @@ export function buildResearchPreset(): GraphData {
       role: "FACT CHECK AGENT",
       cwd: ".",
       promptTemplate:
-        "수집 근거를 검증하고 JSON으로 출력하라.\n" +
-        '{ "verified":["E1"], "contested":["E2"], "missing":["..."], "notes":["..."] }\n' +
+        "수집 근거를 검증해 정리하라.\n" +
+        "형식: verified / contested / missing / notes.\n" +
         "입력: {{input}}",
     }),
     makePresetNode("transform-research-brief", "transform", 1020, 120, {
@@ -258,7 +254,7 @@ export function buildExpertPreset(): GraphData {
       cwd: ".",
       promptTemplate:
         "질문을 전문가 분석용 브리프로 구조화하라.\n" +
-        '{ "domain":"...", "objective":"...", "constraints":["..."], "successCriteria":["..."] }\n' +
+        "형식: domain / objective / constraints / successCriteria.\n" +
         "입력: {{input}}",
     }),
     makePresetNode("turn-expert-analysis", "turn", 420, 40, {

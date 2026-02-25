@@ -9,7 +9,7 @@ export function buildUnityGamePreset(): GraphData {
       cwd: ".",
       promptTemplate:
         "입력 요청을 유니티 게임 기획 브리프로 구조화하라.\n" +
-        '{ "genre":"...", "coreLoop":"...", "targetPlatform":["..."], "scope":"MVP", "mustHave":["..."] }\n' +
+        "형식: genre / coreLoop / targetPlatform / scope(MVP) / mustHave.\n" +
         "입력: {{input}}",
     }),
     makePresetNode("turn-unity-system", "turn", 420, 40, {
@@ -19,7 +19,6 @@ export function buildUnityGamePreset(): GraphData {
       promptTemplate:
         "유니티 시스템 설계안을 작성하라.\n" +
         "필수: 씬 구조, 게임 상태 관리, 입력 시스템, 데이터 저장 전략.\n" +
-        "출력은 JSON 우선.\n" +
         "입력: {{input}}",
     }),
     makePresetNode("turn-unity-implementation", "turn", 420, 220, {
@@ -89,7 +88,7 @@ export function buildFullstackPreset(): GraphData {
       cwd: ".",
       promptTemplate:
         "요청을 풀스택 제품 명세로 구조화하라.\n" +
-        '{ "personas":["..."], "features":["..."], "nonFunctional":["..."], "mvpScope":["..."] }\n' +
+        "형식: personas / features / nonFunctional / mvpScope.\n" +
         "입력: {{input}}",
     }),
     makePresetNode("turn-fullstack-backend", "turn", 420, 40, {
@@ -183,7 +182,7 @@ export function buildCreativePreset(): GraphData {
       cwd: ".",
       promptTemplate:
         "입력 문제를 창의 탐색용으로 재정의하라.\n" +
-        '{ "coreProblem":"...", "hiddenConstraints":["..."], "challengeStatement":"..." }\n' +
+        "형식: coreProblem / hiddenConstraints / challengeStatement.\n" +
         "입력: {{input}}",
     }),
     makePresetNode("turn-creative-diverge", "turn", 420, 40, {
@@ -243,7 +242,7 @@ export function buildNewsTrendPreset(): GraphData {
       cwd: ".",
       promptTemplate:
         "질문을 최신 뉴스/트렌드 조사 쿼리로 분해하라.\n" +
-        '{ "timeWindow":"최근 7일 또는 30일", "queries":["..."], "mustVerify":["..."] }\n' +
+        "형식: timeWindow(최근 7일/30일) / queries / mustVerify.\n" +
         "입력: {{input}}",
     }),
     makePresetNode("turn-news-scan-a", "turn", 420, 40, {
@@ -318,9 +317,7 @@ export function buildStockPreset(): GraphData {
       cwd: ".",
       promptTemplate:
         "사용자 질문을 주식 분석 실행 브리프로 구조화하라.\n" +
-        "설명 문장 없이 JSON 본문만 출력하라.\n" +
-        "출력 형식(JSON):\n" +
-        '{ "target":"지수/종목", "timeHorizon":"단기/중기/장기", "market":"KR/US", "mustAnswer":["..."], "constraints":["..."] }\n' +
+        "형식: target(지수/종목) / timeHorizon(단기·중기·장기) / market(KR·US) / mustAnswer / constraints.\n" +
         "입력: {{input}}",
     }),
     makePresetNode("turn-stock-macro", "turn", 420, 20, {
