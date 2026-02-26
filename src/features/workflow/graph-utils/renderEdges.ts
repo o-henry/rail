@@ -32,47 +32,9 @@ type BuildCanvasEdgeLinesParams = {
 };
 
 const SIDE_EDGE_PADDING = 8;
-const BUNDLE_SLOT_SPACING = 14;
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
-}
-
-function bundleSlotOffset(index: number, size: number): number {
-  if (size <= 1) {
-    return 0;
-  }
-  return (index - (size - 1) / 2) * BUNDLE_SLOT_SPACING;
-}
-
-function offsetAnchorAlongSide(
-  node: GraphNode,
-  size: NodeVisualSize,
-  side: NodeAnchorSide,
-  point: LogicalPoint,
-  offset: number,
-): LogicalPoint {
-  if (Math.abs(offset) < 0.1) {
-    return point;
-  }
-  if (side === "left" || side === "right") {
-    return {
-      ...point,
-      y: clamp(
-        Math.round(point.y + offset),
-        Math.round(node.position.y + SIDE_EDGE_PADDING),
-        Math.round(node.position.y + size.height - SIDE_EDGE_PADDING),
-      ),
-    };
-  }
-  return {
-    ...point,
-    x: clamp(
-      Math.round(point.x + offset),
-      Math.round(node.position.x + SIDE_EDGE_PADDING),
-      Math.round(node.position.x + size.width - SIDE_EDGE_PADDING),
-    ),
-  };
 }
 
 function buildOrthogonalPolylinePath(points: LogicalPoint[]): string {
@@ -225,52 +187,6 @@ export function buildCanvasEdgeLines(params: BuildCanvasEdgeLinesParams): Canvas
     bundledToAnchorByNodeId.set(nodeId, snapPoint(getNodeAnchorPoint(node, side, size)));
   });
 
-  const fromBundleSlotByEdgeKey = new Map<string, { index: number; size: number }>();
-  groupedFrom.forEach((groupedEntries, fromId) => {
-    if (groupedEntries.length < 2) {
-      return;
-    }
-    const fromSide = bundledFromSideByNodeId.get(fromId);
-    const sorted = [...groupedEntries].sort((a, b) => {
-      const aTo = nodeMap.get(a.edge.to.nodeId);
-      const bTo = nodeMap.get(b.edge.to.nodeId);
-      const aSize = aTo ? getNodeVisualSize(aTo.id) : null;
-      const bSize = bTo ? getNodeVisualSize(bTo.id) : null;
-      const aX = aTo && aSize ? aTo.position.x + aSize.width / 2 : 0;
-      const bX = bTo && bSize ? bTo.position.x + bSize.width / 2 : 0;
-      const aY = aTo && aSize ? aTo.position.y + aSize.height / 2 : 0;
-      const bY = bTo && bSize ? bTo.position.y + bSize.height / 2 : 0;
-      const horizontal = fromSide === "left" || fromSide === "right";
-      return horizontal ? aY - bY : aX - bX;
-    });
-    sorted.forEach((entry, index) => {
-      fromBundleSlotByEdgeKey.set(entry.edgeKey, { index, size: sorted.length });
-    });
-  });
-
-  const toBundleSlotByEdgeKey = new Map<string, { index: number; size: number }>();
-  groupedTo.forEach((groupedEntries, toId) => {
-    if (groupedEntries.length < 2) {
-      return;
-    }
-    const toSide = bundledToSideByNodeId.get(toId);
-    const sorted = [...groupedEntries].sort((a, b) => {
-      const aFrom = nodeMap.get(a.edge.from.nodeId);
-      const bFrom = nodeMap.get(b.edge.from.nodeId);
-      const aSize = aFrom ? getNodeVisualSize(aFrom.id) : null;
-      const bSize = bFrom ? getNodeVisualSize(bFrom.id) : null;
-      const aX = aFrom && aSize ? aFrom.position.x + aSize.width / 2 : 0;
-      const bX = bFrom && bSize ? bFrom.position.x + bSize.width / 2 : 0;
-      const aY = aFrom && aSize ? aFrom.position.y + aSize.height / 2 : 0;
-      const bY = bFrom && bSize ? bFrom.position.y + bSize.height / 2 : 0;
-      const horizontal = toSide === "left" || toSide === "right";
-      return horizontal ? aY - bY : aX - bX;
-    });
-    sorted.forEach((entry, index) => {
-      toBundleSlotByEdgeKey.set(entry.edgeKey, { index, size: sorted.length });
-    });
-  });
-
   return entries
     .map((entry, index) => {
       const edge = entry.edge;
@@ -333,28 +249,6 @@ export function buildCanvasEdgeLines(params: BuildCanvasEdgeLinesParams): Canvas
       }
 
       const edgeKey = entry.edgeKey;
-      const fromSlot = fromBundleSlotByEdgeKey.get(edgeKey);
-      const toSlot = toBundleSlotByEdgeKey.get(edgeKey);
-      if (!hasManualControl && !hasExplicitSides) {
-        if (bundledFromSide && fromSlot) {
-          fromPoint = offsetAnchorAlongSide(
-            fromNode,
-            fromSize,
-            resolvedFromSide,
-            fromPoint,
-            bundleSlotOffset(fromSlot.index, fromSlot.size),
-          );
-        }
-        if (bundledToSide && toSlot) {
-          toPoint = offsetAnchorAlongSide(
-            toNode,
-            toSize,
-            resolvedToSide,
-            toPoint,
-            bundleSlotOffset(toSlot.index, toSlot.size),
-          );
-        }
-      }
       const defaultControl = edgeMidPoint(fromPoint, toPoint);
       const control = defaultControl;
       const hasBundledRouting = !hasManualControl && !hasExplicitSides && Boolean(bundledFromSide || bundledToSide);
