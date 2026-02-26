@@ -96,6 +96,66 @@ export type UsageStats = {
   totalTokens?: number;
 };
 
+export type EvidenceNormalizationStatus = "verified" | "partially_verified" | "unparsed" | "conflict";
+export type ConfidenceBand = "high" | "medium" | "low";
+
+export type EvidenceCitation = {
+  source?: string;
+  url?: string;
+  title?: string;
+  date?: string;
+};
+
+export type EvidenceClaim = {
+  id: string;
+  text: string;
+  metricKey?: string;
+  numericValue?: number;
+  asOf?: string;
+};
+
+export type EvidenceEnvelope = {
+  nodeId: string;
+  provider: string;
+  roleLabel?: string;
+  capturedAt: string;
+  verificationStatus: EvidenceNormalizationStatus;
+  confidence: number;
+  confidenceBand: ConfidenceBand;
+  dataIssues: string[];
+  citations: EvidenceCitation[];
+  claims: EvidenceClaim[];
+  rawText: string;
+  rawRef?: string;
+};
+
+export type EvidenceConflict = {
+  metricKey: string;
+  values: Array<{
+    nodeId: string;
+    claimId: string;
+    value: number;
+  }>;
+  note: string;
+};
+
+export type NodeResponsibilityMemory = {
+  nodeId: string;
+  roleLabel: string;
+  responsibility: string;
+  decisionSummary?: string;
+  openIssues: string[];
+  nextRequests: string[];
+  updatedAt: string;
+};
+
+export type FinalSynthesisPacket = {
+  question: string;
+  evidencePackets: EvidenceEnvelope[];
+  unresolvedConflicts: EvidenceConflict[];
+  runMemory: NodeResponsibilityMemory[];
+};
+
 export type FeedAttachmentKind = "markdown" | "json";
 
 export type FeedAttachment = {
@@ -130,6 +190,13 @@ export type FeedPost = {
   createdAt: string;
   summary: string;
   steps: string[];
+  verificationStatus?: EvidenceNormalizationStatus;
+  confidenceBand?: ConfidenceBand;
+  dataIssues?: string[];
+  rawAttachmentRef?: {
+    markdownKey: string;
+    jsonKey: string;
+  };
   inputSources?: FeedInputSource[];
   inputContext?: {
     preview: string;
@@ -249,6 +316,14 @@ export type RunRecord = {
   qualitySummary?: QualitySummary;
   regression?: RegressionSummary;
   feedPosts?: FeedPost[];
+  normalizedEvidenceByNodeId?: Record<string, EvidenceEnvelope[]>;
+  conflictLedger?: EvidenceConflict[];
+  runMemory?: Record<string, NodeResponsibilityMemory>;
+  finalConfidence?: {
+    score: number;
+    band: ConfidenceBand;
+    rationale: string;
+  };
 };
 
 export type FeedViewPost = FeedPost & {

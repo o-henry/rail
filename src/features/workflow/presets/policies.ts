@@ -344,6 +344,15 @@ export function applyPresetOutputSchemaPolicies(graphData: GraphData): GraphData
       if (node.type !== "turn") {
         return node;
       }
+      if (node.id === "turn-stock-final") {
+        return {
+          ...node,
+          config: {
+            ...(node.config as TurnConfig),
+            outputSchemaJson: "",
+          },
+        };
+      }
       const outputSchemaJson = PRESET_OUTPUT_SCHEMA_BY_NODE_ID[node.id] ?? (node.id.includes("preprocess") ? PREPROCESS_BRIEF_SCHEMA : undefined);
       if (!outputSchemaJson) {
         return node;

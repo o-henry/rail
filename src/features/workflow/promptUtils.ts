@@ -143,6 +143,109 @@ export function extractPromptInputText(input: unknown, depth = 0): string {
   return stringifyInput(input).trim();
 }
 
+export function extractFinalSynthesisInputText(input: unknown): string {
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    return extractPromptInputText(input);
+  }
+  const row = input as Record<string, unknown>;
+  const question = String(row.question ?? "").trim();
+  const packets = Array.isArray(row.evidencePackets) ? row.evidencePackets : [];
+  const conflicts = Array.isArray(row.unresolvedConflicts) ? row.unresolvedConflicts : [];
+  const memory = Array.isArray(row.runMemory) ? row.runMemory : [];
+
+  const packetLines = packets
+    .map((entry, index) => {
+      if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+        return "";
+      }
+      const packet = entry as Record<string, unknown>;
+      const nodeId = String(packet.nodeId ?? `node-${index + 1}`);
+      const roleLabel = String(packet.roleLabel ?? "");
+      const verification = String(packet.verificationStatus ?? "unparsed");
+      const confidence = Number(packet.confidence ?? 0);
+      const confidenceBand = String(packet.confidenceBand ?? "low");
+      const citations = Array.isArray(packet.citations)
+        ? packet.citations
+            .slice(0, 4)
+            .map((row) => {
+              if (typeof row === "string") return row.trim();
+              if (row && typeof row === "object") {
+                const src = extractStringByPaths(row, ["url", "source", "title"]);
+                return src ? src.trim() : "";
+              }
+              return "";
+            })
+            .filter(Boolean)
+        : [];
+      const claims = Array.isArray(packet.claims)
+        ? packet.claims
+            .slice(0, 8)
+            .map((claim) => {
+              if (!claim || typeof claim !== "object") return "";
+              const text = extractStringByPaths(claim, ["text"]) ?? "";
+              return String(text).trim();
+            })
+            .filter(Boolean)
+        : [];
+      const issues = Array.isArray(packet.dataIssues)
+        ? packet.dataIssues.map((issue) => String(issue).trim()).filter(Boolean).slice(0, 6)
+        : [];
+
+      return [
+        `### evidence:${nodeId}`,
+        roleLabel ? `- role: ${roleLabel}` : "",
+        `- verification: ${verification}`,
+        `- confidence: ${Number.isFinite(confidence) ? confidence.toFixed(2) : "0.00"} (${confidenceBand})`,
+        ...(citations.length > 0 ? [`- citations: ${citations.join(" | ")}`] : ["- citations: (none)"]),
+        ...(issues.length > 0 ? [`- dataIssues: ${issues.join(" | ")}`] : []),
+        ...(claims.length > 0 ? ["- claims:", ...claims.map((line) => `  - ${line}`)] : []),
+      ]
+        .filter(Boolean)
+        .join("\n");
+    })
+    .filter(Boolean);
+
+  const conflictLines = conflicts
+    .map((entry) => {
+      if (!entry || typeof entry !== "object") return "";
+      const metricKey = String((entry as Record<string, unknown>).metricKey ?? "").trim();
+      const values = Array.isArray((entry as Record<string, unknown>).values)
+        ? ((entry as Record<string, unknown>).values as unknown[])
+            .map((row) => {
+              if (!row || typeof row !== "object") return "";
+              const nodeId = extractStringByPaths(row, ["nodeId"]) ?? "-";
+              const value = extractStringByPaths(row, ["value"]) ?? "-";
+              return `${nodeId}:${value}`;
+            })
+            .filter(Boolean)
+            .join(", ")
+        : "";
+      if (!metricKey) return "";
+      return `- ${metricKey}: ${values || "(values unavailable)"}`;
+    })
+    .filter(Boolean);
+
+  const memoryLines = memory
+    .map((entry) => {
+      if (!entry || typeof entry !== "object") return "";
+      const nodeId = String((entry as Record<string, unknown>).nodeId ?? "").trim();
+      const roleLabel = String((entry as Record<string, unknown>).roleLabel ?? "").trim();
+      const summary = String((entry as Record<string, unknown>).decisionSummary ?? "").trim();
+      if (!nodeId) return "";
+      return `- ${nodeId}${roleLabel ? ` (${roleLabel})` : ""}: ${summary || "(no summary)"}`;
+    })
+    .filter(Boolean);
+
+  const sections = [
+    question ? `[QUESTION]\n${question}` : "",
+    packetLines.length > 0 ? `[EVIDENCE PACKETS]\n${packetLines.join("\n\n")}` : "",
+    conflictLines.length > 0 ? `[UNRESOLVED CONFLICTS]\n${conflictLines.join("\n")}` : "",
+    memoryLines.length > 0 ? `[RUN MEMORY]\n${memoryLines.join("\n")}` : "",
+  ].filter(Boolean);
+
+  return sections.length > 0 ? sections.join("\n\n") : extractPromptInputText(input);
+}
+
 export function decodeEscapedControlText(input: string): string {
   const source = String(input ?? "");
   if (!source) {
@@ -395,6 +498,7 @@ export function buildReadableDocumentDirective(locale: AppLocale): string {
       "[문서 가독성 포맷 지침]",
       "- 최종 결과는 사람이 읽기 쉬운 Markdown 문서 형식으로 작성하세요.",
       "- 첫 줄에 한 문단 요약을 두고, 이후 `##` 제목으로 섹션을 구분하세요.",
+      "- `## 결론 요약`, `## 핵심 근거`, `## 신뢰도와 한계`, `## 다음 체크포인트` 섹션을 반드시 포함하세요.",
       "- 섹션 내 항목은 문장 나열 대신 bullet(`-`) 또는 번호 목록(`1.`)을 사용하세요.",
       "- 한 문단은 2~4문장 이내로 유지하고, 지나치게 긴 한 줄 텍스트를 금지하세요.",
       "- key:value를 한 줄에 연속 나열하지 말고 줄바꿈해 항목별로 분리하세요.",
@@ -493,6 +597,8 @@ export function buildExpertOrchestrationDirective(
     ],
     synthesis_final: [
       "- 최종안은 결론/근거/리스크·한계/다음 행동 순서로 구조화하라.",
+      "- 사용자 질문에 직접 답하고, 하위 에이전트 평가/점수표/판정 보고는 출력하지 마라.",
+      "- 신뢰도/한계/재검증 포인트를 별도 섹션으로 명시하라.",
     ],
     generic: [],
   };
@@ -509,6 +615,8 @@ export function buildExpertOrchestrationDirective(
     ],
     synthesis_final: [
       "- Structure final output as conclusion, evidence, risks/limits, and next actions.",
+      "- Answer the user question directly; do not output evaluator scorecards or judging reports.",
+      "- Add an explicit section for confidence, limitations, and re-verification triggers.",
     ],
     generic: [],
   };

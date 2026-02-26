@@ -84,6 +84,7 @@ import {
   buildForcedAgentRuleBlock,
   injectOutputLanguageDirective,
   buildOutputSchemaDirective,
+  extractFinalSynthesisInputText,
   extractPromptInputText,
   isLikelyWebPromptEcho,
   replaceInputPlaceholder,
@@ -182,8 +183,13 @@ import {
   isCriticalTurnNode,
   mergeUsageStats,
   normalizeArtifactOutput,
+  normalizeEvidenceEnvelope,
   normalizeWebEvidenceOutput,
   normalizeWebTurnOutput,
+  buildConflictLedger,
+  buildFinalSynthesisPacket,
+  computeFinalConfidence,
+  updateRunMemoryByEnvelope,
   questionSignature,
   resolveProviderByExecutor,
   normalizeQualityThreshold,
@@ -246,6 +252,9 @@ import type {
   FeedInputSource,
   FeedPost,
   FeedViewPost,
+  EvidenceEnvelope,
+  FinalSynthesisPacket,
+  NodeResponsibilityMemory,
   KnowledgeRetrieveResult,
   KnowledgeTraceEntry,
   LoginChatgptResult,
@@ -3735,29 +3744,37 @@ function App() {
     currentInput: unknown,
     outputs: Record<string, unknown>,
     rootInput: string,
-  ): unknown {
+    normalizedEvidenceByNodeId: Record<string, EvidenceEnvelope[]>,
+    runMemory: Record<string, NodeResponsibilityMemory>,
+  ): FinalSynthesisPacket | unknown {
     const incomingEdges = graph.edges.filter((edge) => edge.to.nodeId === nodeId);
     if (incomingEdges.length === 0) {
       return currentInput;
     }
-
     const upstream: Record<string, unknown> = {};
+    const packets: EvidenceEnvelope[] = [];
     for (const edge of incomingEdges) {
       const sourceNodeId = edge.from.nodeId;
       if (!(sourceNodeId in outputs)) {
         continue;
       }
       upstream[sourceNodeId] = outputs[sourceNodeId];
+      const sourcePackets = normalizedEvidenceByNodeId[sourceNodeId] ?? [];
+      if (sourcePackets.length > 0) {
+        packets.push(sourcePackets[sourcePackets.length - 1]);
+      }
     }
 
     if (Object.keys(upstream).length === 0) {
       return currentInput;
     }
-
-    return {
+    const unresolvedConflicts = buildConflictLedger(packets);
+    return buildFinalSynthesisPacket({
       question: rootInput,
-      upstream,
-    };
+      evidencePackets: packets,
+      conflicts: unresolvedConflicts,
+      runMemory,
+    });
   }
 
   function transition(runRecord: RunRecord, nodeId: string, state: NodeExecutionStatus, message?: string) {
@@ -4009,7 +4026,11 @@ ${prompt}`;
     );
     const nodeOllamaModel = String(config.ollamaModel ?? "llama3.1:8b").trim() || "llama3.1:8b";
 
-    const inputText = extractPromptInputText(input);
+    const qualityProfile = inferQualityProfile(node, config);
+    const inputText =
+      qualityProfile === "synthesis_final"
+        ? extractFinalSynthesisInputText(input)
+        : extractPromptInputText(input);
     const queuedRequests = consumeNodeRequests(node.id);
     const queuedRequestBlock =
       queuedRequests.length > 0
@@ -4034,7 +4055,6 @@ ${prompt}`;
       ? `${forcedRuleBlock}\n\n${withKnowledge.prompt}`.trim()
       : withKnowledge.prompt;
     const knowledgeTrace = withKnowledge.trace;
-    const qualityProfile = inferQualityProfile(node, config);
     const orchestrationDirective = buildExpertOrchestrationDirective(locale, qualityProfile);
     if (orchestrationDirective) {
       textToSend = `${orchestrationDirective}\n\n${textToSend}`.trim();
@@ -4730,6 +4750,9 @@ ${prompt}`;
       knowledgeTrace: [],
       nodeMetrics: {},
       feedPosts: [],
+      normalizedEvidenceByNodeId: {},
+      conflictLedger: [],
+      runMemory: {},
     };
     setActiveFeedRunMeta({
       runId: runRecord.runId,
@@ -4825,6 +4848,41 @@ ${prompt}`;
         });
       };
 
+      const appendNodeEvidence = (params: {
+        node: GraphNode;
+        output: unknown;
+        provider?: string;
+        summary?: string;
+        createdAt?: string;
+      }): EvidenceEnvelope => {
+        const envelope = normalizeEvidenceEnvelope({
+          nodeId: params.node.id,
+          roleLabel:
+            params.node.type === "turn"
+              ? turnRoleLabel(params.node)
+              : nodeTypeLabel(params.node.type),
+          provider: params.provider,
+          output: params.output,
+          fallbackCapturedAt: params.createdAt,
+        });
+        normalizedEvidenceByNodeId[params.node.id] = [
+          ...(normalizedEvidenceByNodeId[params.node.id] ?? []),
+          envelope,
+        ];
+        runMemoryByNodeId = updateRunMemoryByEnvelope(runMemoryByNodeId, {
+          nodeId: params.node.id,
+          roleLabel:
+            params.node.type === "turn"
+              ? turnRoleLabel(params.node)
+              : nodeTypeLabel(params.node.type),
+          summary: params.summary,
+          envelope,
+        });
+        runRecord.normalizedEvidenceByNodeId = normalizedEvidenceByNodeId;
+        runRecord.runMemory = runMemoryByNodeId;
+        return envelope;
+      };
+
       const queue: string[] = [];
       indegree.forEach((degree, nodeId) => {
         if (degree === 0) {
@@ -4835,6 +4893,8 @@ ${prompt}`;
       });
 
       const outputs: Record<string, unknown> = {};
+      const normalizedEvidenceByNodeId: Record<string, EvidenceEnvelope[]> = {};
+      let runMemoryByNodeId: Record<string, NodeResponsibilityMemory> = {};
       const skipSet = new Set<string>();
       let lastDoneNodeId = "";
 
@@ -4885,6 +4945,13 @@ ${prompt}`;
           setNodeStatus(nodeId, "cancelled", "취소 요청됨");
           transition(runRecord, nodeId, "cancelled", "취소 요청됨");
           const cancelledAt = new Date().toISOString();
+          const cancelledEvidence = appendNodeEvidence({
+            node,
+            output: nodeInput,
+            provider: "system",
+            summary: t("run.cancelledByUser"),
+            createdAt: cancelledAt,
+          });
           const cancelledFeed = buildFeedPost({
             runId: runRecord.runId,
             node,
@@ -4895,6 +4962,9 @@ ${prompt}`;
             logs: runLogCollectorRef.current[nodeId] ?? [],
             inputSources: nodeInputSources,
             inputData: nodeInput,
+            verificationStatus: cancelledEvidence.verificationStatus,
+            confidenceBand: cancelledEvidence.confidenceBand,
+            dataIssues: cancelledEvidence.dataIssues,
           });
           runRecord.feedPosts?.push(cancelledFeed.post);
           rememberFeedSource(cancelledFeed.post);
@@ -4914,6 +4984,12 @@ ${prompt}`;
             finishedAt: new Date().toISOString(),
           });
           transition(runRecord, nodeId, "skipped", "분기 결과로 건너뜀");
+          appendNodeEvidence({
+            node,
+            output: nodeInput,
+            provider: "system",
+            summary: "분기 결과로 건너뜀",
+          });
           terminalStateByNodeId[nodeId] = "skipped";
           scheduleChildren(nodeId);
           return;
@@ -4930,6 +5006,13 @@ ${prompt}`;
             finishedAt: blockedAtIso,
           });
           transition(runRecord, nodeId, "skipped", blockedReason);
+          const blockedEvidence = appendNodeEvidence({
+            node,
+            output: nodeInput,
+            provider: "system",
+            summary: blockedReason,
+            createdAt: blockedAtIso,
+          });
           const blockedFeed = buildFeedPost({
             runId: runRecord.runId,
             node,
@@ -4940,6 +5023,9 @@ ${prompt}`;
             logs: runLogCollectorRef.current[nodeId] ?? [],
             inputSources: nodeInputSources,
             inputData: nodeInput,
+            verificationStatus: blockedEvidence.verificationStatus,
+            confidenceBand: blockedEvidence.confidenceBand,
+            dataIssues: blockedEvidence.dataIssues,
           });
           runRecord.feedPosts?.push(blockedFeed.post);
           rememberFeedSource(blockedFeed.post);
@@ -4965,7 +5051,14 @@ ${prompt}`;
         transition(runRecord, nodeId, "running");
 
         const input = isFinalTurnNode
-          ? buildFinalTurnInput(nodeId, nodeInput, outputs, workflowQuestion)
+          ? buildFinalTurnInput(
+              nodeId,
+              nodeInput,
+              outputs,
+              workflowQuestion,
+              normalizedEvidenceByNodeId,
+              runMemoryByNodeId,
+            )
           : nodeInput;
 
         if (node.type === "turn") {
@@ -5014,6 +5107,13 @@ ${prompt}`;
               summary: result.error ?? "턴 실행 실패",
             });
             transition(runRecord, nodeId, "failed", result.error ?? "턴 실행 실패");
+            const failedEvidence = appendNodeEvidence({
+              node,
+              output: result.output ?? { error: result.error ?? "턴 실행 실패", input },
+              provider: result.provider,
+              summary: result.error ?? "턴 실행 실패",
+              createdAt: finishedAtIso,
+            });
             const failedFeed = buildFeedPost({
               runId: runRecord.runId,
               node,
@@ -5028,6 +5128,9 @@ ${prompt}`;
               usage: result.usage,
               inputSources: nodeInputSources,
               inputData: input,
+              verificationStatus: failedEvidence.verificationStatus,
+              confidenceBand: failedEvidence.confidenceBand,
+              dataIssues: failedEvidence.dataIssues,
             });
             runRecord.feedPosts?.push(failedFeed.post);
             rememberFeedSource(failedFeed.post);
@@ -5109,6 +5212,13 @@ ${prompt}`;
                 summary: lowQualitySummary,
               });
               transition(runRecord, nodeId, "low_quality", lowQualitySummary);
+              const lowQualityEvidence = appendNodeEvidence({
+                node,
+                output: normalizedOutput,
+                provider: result.provider,
+                summary: lowQualitySummary,
+                createdAt: finishedAtIso,
+              });
               const lowQualityFeed = buildFeedPost({
                 runId: runRecord.runId,
                 node,
@@ -5123,6 +5233,9 @@ ${prompt}`;
                 qualityReport: finalQualityReport,
                 inputSources: nodeInputSources,
                 inputData: input,
+                verificationStatus: lowQualityEvidence.verificationStatus,
+                confidenceBand: lowQualityEvidence.confidenceBand,
+                dataIssues: lowQualityEvidence.dataIssues,
               });
               runRecord.feedPosts?.push(lowQualityFeed.post);
               rememberFeedSource(lowQualityFeed.post);
@@ -5175,6 +5288,13 @@ ${prompt}`;
             summary: t("run.turnCompleted"),
           });
           transition(runRecord, nodeId, "done", t("run.turnCompleted"));
+          const doneEvidence = appendNodeEvidence({
+            node,
+            output: normalizedOutput,
+            provider: result.provider,
+            summary: t("run.turnCompleted"),
+            createdAt: finishedAtIso,
+          });
           const doneFeed = buildFeedPost({
             runId: runRecord.runId,
             node,
@@ -5189,6 +5309,9 @@ ${prompt}`;
             qualityReport,
             inputSources: nodeInputSources,
             inputData: input,
+            verificationStatus: doneEvidence.verificationStatus,
+            confidenceBand: doneEvidence.confidenceBand,
+            dataIssues: doneEvidence.dataIssues,
           });
           runRecord.feedPosts?.push(doneFeed.post);
           rememberFeedSource(doneFeed.post);
@@ -5214,6 +5337,13 @@ ${prompt}`;
               durationMs: Date.now() - startedAtMs,
             });
             transition(runRecord, nodeId, "failed", result.error ?? "변환 실패");
+            const transformFailedEvidence = appendNodeEvidence({
+              node,
+              output: result.output ?? { error: result.error ?? "변환 실패", input },
+              provider: "transform",
+              summary: result.error ?? "변환 실패",
+              createdAt: finishedAtIso,
+            });
             const transformFailedFeed = buildFeedPost({
               runId: runRecord.runId,
               node,
@@ -5226,6 +5356,9 @@ ${prompt}`;
               durationMs: Date.now() - startedAtMs,
               inputSources: nodeInputSources,
               inputData: input,
+              verificationStatus: transformFailedEvidence.verificationStatus,
+              confidenceBand: transformFailedEvidence.confidenceBand,
+              dataIssues: transformFailedEvidence.dataIssues,
             });
             runRecord.feedPosts?.push(transformFailedFeed.post);
             rememberFeedSource(transformFailedFeed.post);
@@ -5248,6 +5381,13 @@ ${prompt}`;
           });
           setNodeStatus(nodeId, "done", "변환 완료");
           transition(runRecord, nodeId, "done", "변환 완료");
+          const transformDoneEvidence = appendNodeEvidence({
+            node,
+            output: result.output,
+            provider: "transform",
+            summary: "변환 완료",
+            createdAt: finishedAtIso,
+          });
           const transformDoneFeed = buildFeedPost({
             runId: runRecord.runId,
             node,
@@ -5259,6 +5399,9 @@ ${prompt}`;
             durationMs: Date.now() - startedAtMs,
             inputSources: nodeInputSources,
             inputData: input,
+            verificationStatus: transformDoneEvidence.verificationStatus,
+            confidenceBand: transformDoneEvidence.confidenceBand,
+            dataIssues: transformDoneEvidence.dataIssues,
           });
           runRecord.feedPosts?.push(transformDoneFeed.post);
           rememberFeedSource(transformDoneFeed.post);
@@ -5291,6 +5434,13 @@ ${prompt}`;
             durationMs: Date.now() - startedAtMs,
           });
           transition(runRecord, nodeId, "failed", gateResult.error ?? "분기 실패");
+          const gateFailedEvidence = appendNodeEvidence({
+            node,
+            output: gateResult.output ?? { error: gateResult.error ?? "분기 실패", input },
+            provider: "gate",
+            summary: gateResult.error ?? "분기 실패",
+            createdAt: finishedAtIso,
+          });
           const gateFailedFeed = buildFeedPost({
             runId: runRecord.runId,
             node,
@@ -5303,6 +5453,9 @@ ${prompt}`;
             durationMs: Date.now() - startedAtMs,
             inputSources: nodeInputSources,
             inputData: input,
+            verificationStatus: gateFailedEvidence.verificationStatus,
+            confidenceBand: gateFailedEvidence.confidenceBand,
+            dataIssues: gateFailedEvidence.dataIssues,
           });
           runRecord.feedPosts?.push(gateFailedFeed.post);
           rememberFeedSource(gateFailedFeed.post);
@@ -5325,6 +5478,13 @@ ${prompt}`;
         });
         setNodeStatus(nodeId, "done", gateResult.message ?? "분기 완료");
         transition(runRecord, nodeId, "done", gateResult.message ?? "분기 완료");
+        const gateDoneEvidence = appendNodeEvidence({
+          node,
+          output: gateResult.output,
+          provider: "gate",
+          summary: gateResult.message ?? "분기 완료",
+          createdAt: finishedAtIso,
+        });
         const gateDoneFeed = buildFeedPost({
           runId: runRecord.runId,
           node,
@@ -5336,6 +5496,9 @@ ${prompt}`;
           durationMs: Date.now() - startedAtMs,
           inputSources: nodeInputSources,
           inputData: input,
+          verificationStatus: gateDoneEvidence.verificationStatus,
+          confidenceBand: gateDoneEvidence.confidenceBand,
+          dataIssues: gateDoneEvidence.dataIssues,
         });
         runRecord.feedPosts?.push(gateDoneFeed.post);
         rememberFeedSource(gateDoneFeed.post);
@@ -5438,6 +5601,11 @@ ${prompt}`;
       }
 
       runRecord.nodeLogs = runLogCollectorRef.current;
+      const allEvidencePackets = Object.values(normalizedEvidenceByNodeId).flat();
+      runRecord.normalizedEvidenceByNodeId = normalizedEvidenceByNodeId;
+      runRecord.runMemory = runMemoryByNodeId;
+      runRecord.conflictLedger = buildConflictLedger(allEvidencePackets);
+      runRecord.finalConfidence = computeFinalConfidence(allEvidencePackets, runRecord.conflictLedger);
       if (runRecord.nodeMetrics && Object.keys(runRecord.nodeMetrics).length > 0) {
         runRecord.qualitySummary = summarizeQualityMetrics(runRecord.nodeMetrics);
       }
