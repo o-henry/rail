@@ -49,11 +49,19 @@ export function buildValidationPreset(): GraphData {
     }),
     makePresetNode("gate-decision", "gate", 1020, 120, {
       decisionPath: "DECISION",
-      passNodeId: "turn-final",
+      passNodeId: "transform-validation-brief",
       rejectNodeId: "transform-reject",
       schemaJson: "{\"type\":\"object\",\"required\":[\"DECISION\"]}",
     }),
-    makePresetNode("turn-final", "turn", 1320, 40, {
+    makePresetNode("transform-validation-brief", "transform", 1180, 40, {
+      mode: "template",
+      template:
+        "검증 PASS 요약 브리프\n" +
+        "- 판정 근거와 핵심 가정만 정리\n" +
+        "- 불확실성/누락 항목 분리\n" +
+        "입력: {{input}}",
+    }),
+    makePresetNode("turn-final", "turn", 1460, 40, {
       model: "GPT-5.3-Codex",
       role: "SYNTHESIS AGENT",
       cwd: ".",
@@ -78,7 +86,8 @@ export function buildValidationPreset(): GraphData {
     { from: { nodeId: "turn-search-a", port: "out" }, to: { nodeId: "turn-judge", port: "in" } },
     { from: { nodeId: "turn-search-b", port: "out" }, to: { nodeId: "turn-judge", port: "in" } },
     { from: { nodeId: "turn-judge", port: "out" }, to: { nodeId: "gate-decision", port: "in" } },
-    { from: { nodeId: "gate-decision", port: "out" }, to: { nodeId: "turn-final", port: "in" } },
+    { from: { nodeId: "gate-decision", port: "out" }, to: { nodeId: "transform-validation-brief", port: "in" } },
+    { from: { nodeId: "transform-validation-brief", port: "out" }, to: { nodeId: "turn-final", port: "in" } },
     { from: { nodeId: "gate-decision", port: "out" }, to: { nodeId: "transform-reject", port: "in" } },
   ];
 
@@ -126,11 +135,19 @@ export function buildDevelopmentPreset(): GraphData {
     }),
     makePresetNode("gate-quality", "gate", 1020, 120, {
       decisionPath: "DECISION",
-      passNodeId: "turn-final-dev",
+      passNodeId: "transform-dev-brief",
       rejectNodeId: "transform-rework",
       schemaJson: "{\"type\":\"object\",\"required\":[\"DECISION\"]}",
     }),
-    makePresetNode("turn-final-dev", "turn", 1320, 40, {
+    makePresetNode("transform-dev-brief", "transform", 1180, 40, {
+      mode: "template",
+      template:
+        "개발 PASS 브리프\n" +
+        "- 구현/테스트/운영 관점 핵심 합의점\n" +
+        "- 리스크와 차단 이슈 요약\n" +
+        "입력: {{input}}",
+    }),
+    makePresetNode("turn-final-dev", "turn", 1460, 40, {
       model: "GPT-5.3-Codex",
       role: "DEV SYNTHESIS AGENT",
       cwd: ".",
@@ -168,6 +185,10 @@ export function buildDevelopmentPreset(): GraphData {
     },
     {
       from: { nodeId: "gate-quality", port: "out" },
+      to: { nodeId: "transform-dev-brief", port: "in" },
+    },
+    {
+      from: { nodeId: "transform-dev-brief", port: "out" },
       to: { nodeId: "turn-final-dev", port: "in" },
     },
     {
@@ -277,11 +298,19 @@ export function buildExpertPreset(): GraphData {
     }),
     makePresetNode("gate-expert", "gate", 720, 120, {
       decisionPath: "DECISION",
-      passNodeId: "turn-expert-final",
+      passNodeId: "transform-expert-brief",
       rejectNodeId: "transform-expert-rework",
       schemaJson: "{\"type\":\"object\",\"required\":[\"DECISION\"]}",
     }),
-    makePresetNode("turn-expert-final", "turn", 1020, 40, {
+    makePresetNode("transform-expert-brief", "transform", 900, 40, {
+      mode: "template",
+      template:
+        "전문가 PASS 브리프\n" +
+        "- 적용 가능한 전략 요지\n" +
+        "- 취약점/보완 포인트 요약\n" +
+        "입력: {{input}}",
+    }),
+    makePresetNode("turn-expert-final", "turn", 1180, 40, {
       model: "GPT-5.3-Codex",
       role: "EXPERT SYNTHESIS AGENT",
       cwd: ".",
@@ -301,7 +330,8 @@ export function buildExpertPreset(): GraphData {
     { from: { nodeId: "turn-expert-intake", port: "out" }, to: { nodeId: "turn-expert-review", port: "in" } },
     { from: { nodeId: "turn-expert-analysis", port: "out" }, to: { nodeId: "gate-expert", port: "in" } },
     { from: { nodeId: "turn-expert-review", port: "out" }, to: { nodeId: "gate-expert", port: "in" } },
-    { from: { nodeId: "gate-expert", port: "out" }, to: { nodeId: "turn-expert-final", port: "in" } },
+    { from: { nodeId: "gate-expert", port: "out" }, to: { nodeId: "transform-expert-brief", port: "in" } },
+    { from: { nodeId: "transform-expert-brief", port: "out" }, to: { nodeId: "turn-expert-final", port: "in" } },
     { from: { nodeId: "gate-expert", port: "out" }, to: { nodeId: "transform-expert-rework", port: "in" } },
   ];
 

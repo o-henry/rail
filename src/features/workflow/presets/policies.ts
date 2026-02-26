@@ -303,6 +303,14 @@ export function resolvePresetTurnPolicy(kind: PresetKind, nodeId: string): Prese
         artifactType: "EvidenceArtifact",
       };
     }
+    if (key.includes("merge")) {
+      return {
+        ...DEFAULT_PRESET_TURN_POLICY,
+        profile: "synthesis_final",
+        threshold: 82,
+        artifactType: "EvidenceArtifact",
+      };
+    }
     if (key.includes("final")) {
       return {
         ...DEFAULT_PRESET_TURN_POLICY,

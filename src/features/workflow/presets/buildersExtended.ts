@@ -41,11 +41,19 @@ export function buildUnityGamePreset(): GraphData {
     }),
     makePresetNode("gate-unity", "gate", 1020, 120, {
       decisionPath: "DECISION",
-      passNodeId: "turn-unity-final",
+      passNodeId: "transform-unity-brief",
       rejectNodeId: "transform-unity-rework",
       schemaJson: "{\"type\":\"object\",\"required\":[\"DECISION\"]}",
     }),
-    makePresetNode("turn-unity-final", "turn", 1320, 40, {
+    makePresetNode("transform-unity-brief", "transform", 1180, 40, {
+      mode: "template",
+      template:
+        "UNITY PASS 브리프\n" +
+        "- 시스템/구현/QA 핵심합의 정리\n" +
+        "- 스프린트 적용 전 위험요소 요약\n" +
+        "입력: {{input}}",
+    }),
+    makePresetNode("turn-unity-final", "turn", 1460, 40, {
       model: "GPT-5.3-Codex",
       role: "UNITY FINALIZATION AGENT",
       cwd: ".",
@@ -73,7 +81,8 @@ export function buildUnityGamePreset(): GraphData {
       to: { nodeId: "turn-unity-qa", port: "in" },
     },
     { from: { nodeId: "turn-unity-qa", port: "out" }, to: { nodeId: "gate-unity", port: "in" } },
-    { from: { nodeId: "gate-unity", port: "out" }, to: { nodeId: "turn-unity-final", port: "in" } },
+    { from: { nodeId: "gate-unity", port: "out" }, to: { nodeId: "transform-unity-brief", port: "in" } },
+    { from: { nodeId: "transform-unity-brief", port: "out" }, to: { nodeId: "turn-unity-final", port: "in" } },
     { from: { nodeId: "gate-unity", port: "out" }, to: { nodeId: "transform-unity-rework", port: "in" } },
   ];
 
@@ -120,11 +129,19 @@ export function buildFullstackPreset(): GraphData {
     }),
     makePresetNode("gate-fullstack", "gate", 1020, 120, {
       decisionPath: "DECISION",
-      passNodeId: "turn-fullstack-final",
+      passNodeId: "transform-fullstack-brief",
       rejectNodeId: "transform-fullstack-rework",
       schemaJson: "{\"type\":\"object\",\"required\":[\"DECISION\"]}",
     }),
-    makePresetNode("turn-fullstack-final", "turn", 1320, 40, {
+    makePresetNode("transform-fullstack-brief", "transform", 1180, 40, {
+      mode: "template",
+      template:
+        "FULLSTACK PASS 브리프\n" +
+        "- 백엔드/프론트/운영 핵심결정 정리\n" +
+        "- 배포 전 검증 항목 요약\n" +
+        "입력: {{input}}",
+    }),
+    makePresetNode("turn-fullstack-final", "turn", 1460, 40, {
       model: "GPT-5.3-Codex",
       role: "FULLSTACK DELIVERY AGENT",
       cwd: ".",
@@ -163,6 +180,10 @@ export function buildFullstackPreset(): GraphData {
     },
     {
       from: { nodeId: "gate-fullstack", port: "out" },
+      to: { nodeId: "transform-fullstack-brief", port: "in" },
+    },
+    {
+      from: { nodeId: "transform-fullstack-brief", port: "out" },
       to: { nodeId: "turn-fullstack-final", port: "in" },
     },
     {
@@ -276,11 +297,19 @@ export function buildNewsTrendPreset(): GraphData {
     }),
     makePresetNode("gate-news", "gate", 1020, 120, {
       decisionPath: "DECISION",
-      passNodeId: "turn-news-final",
+      passNodeId: "transform-news-brief",
       rejectNodeId: "transform-news-rework",
       schemaJson: "{\"type\":\"object\",\"required\":[\"DECISION\"]}",
     }),
-    makePresetNode("turn-news-final", "turn", 1320, 40, {
+    makePresetNode("transform-news-brief", "transform", 1180, 40, {
+      mode: "template",
+      template:
+        "NEWS PASS 브리프\n" +
+        "- 확인된 신호와 충돌 신호 분리\n" +
+        "- 최종 브리핑 전 최신성 체크포인트 요약\n" +
+        "입력: {{input}}",
+    }),
+    makePresetNode("turn-news-final", "turn", 1460, 40, {
       model: "GPT-5.3-Codex",
       role: "NEWS SYNTHESIS AGENT",
       cwd: ".",
@@ -302,7 +331,8 @@ export function buildNewsTrendPreset(): GraphData {
     { from: { nodeId: "turn-news-scan-a", port: "out" }, to: { nodeId: "turn-news-check", port: "in" } },
     { from: { nodeId: "turn-news-scan-b", port: "out" }, to: { nodeId: "turn-news-check", port: "in" } },
     { from: { nodeId: "turn-news-check", port: "out" }, to: { nodeId: "gate-news", port: "in" } },
-    { from: { nodeId: "gate-news", port: "out" }, to: { nodeId: "turn-news-final", port: "in" } },
+    { from: { nodeId: "gate-news", port: "out" }, to: { nodeId: "transform-news-brief", port: "in" } },
+    { from: { nodeId: "transform-news-brief", port: "out" }, to: { nodeId: "turn-news-final", port: "in" } },
     { from: { nodeId: "gate-news", port: "out" }, to: { nodeId: "transform-news-rework", port: "in" } },
   ];
 
@@ -356,7 +386,19 @@ export function buildStockPreset(): GraphData {
         "주의: 투자 조언 단정 금지, 불확실성 명시.\n" +
         "입력: {{input}}",
     }),
-    makePresetNode("turn-stock-final", "turn", 1320, 40, {
+    makePresetNode("turn-stock-merge", "turn", 1020, 120, {
+      model: "GPT-5.3-Codex-Spark",
+      role: "STOCK ORCHESTRATION BRIDGE AGENT",
+      cwd: ".",
+      promptTemplate:
+        "입력의 분석 결과들을 통합 브리프로 정리하라.\n" +
+        "요구사항:\n" +
+        "1) 메타/로그/채점 문구 제거\n" +
+        "2) 공통 지표 기준선 정리(충돌 항목은 conflict로 분리)\n" +
+        "3) 최종 답변용 핵심 evidence packet 요약\n" +
+        "입력: {{input}}",
+    }),
+    makePresetNode("turn-stock-final", "turn", 1380, 120, {
       model: "GPT-5.3-Codex",
       role: "STOCK SYNTHESIS AGENT",
       cwd: ".",
@@ -378,10 +420,11 @@ export function buildStockPreset(): GraphData {
     { from: { nodeId: "turn-stock-intake", port: "out" }, to: { nodeId: "turn-stock-company", port: "in" } },
     { from: { nodeId: "turn-stock-macro", port: "out" }, to: { nodeId: "turn-stock-risk", port: "in" } },
     { from: { nodeId: "turn-stock-company", port: "out" }, to: { nodeId: "turn-stock-risk", port: "in" } },
-    { from: { nodeId: "turn-stock-intake", port: "out" }, to: { nodeId: "turn-stock-final", port: "in" } },
-    { from: { nodeId: "turn-stock-macro", port: "out" }, to: { nodeId: "turn-stock-final", port: "in" } },
-    { from: { nodeId: "turn-stock-company", port: "out" }, to: { nodeId: "turn-stock-final", port: "in" } },
-    { from: { nodeId: "turn-stock-risk", port: "out" }, to: { nodeId: "turn-stock-final", port: "in" } },
+    { from: { nodeId: "turn-stock-intake", port: "out" }, to: { nodeId: "turn-stock-merge", port: "in" } },
+    { from: { nodeId: "turn-stock-macro", port: "out" }, to: { nodeId: "turn-stock-merge", port: "in" } },
+    { from: { nodeId: "turn-stock-company", port: "out" }, to: { nodeId: "turn-stock-merge", port: "in" } },
+    { from: { nodeId: "turn-stock-risk", port: "out" }, to: { nodeId: "turn-stock-merge", port: "in" } },
+    { from: { nodeId: "turn-stock-merge", port: "out" }, to: { nodeId: "turn-stock-final", port: "in" } },
   ];
 
   return { version: GRAPH_SCHEMA_VERSION, nodes, edges, knowledge: defaultKnowledgeConfig() };
