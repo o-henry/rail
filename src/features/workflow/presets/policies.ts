@@ -376,6 +376,35 @@ export function applyPresetOutputSchemaPolicies(graphData: GraphData): GraphData
   };
 }
 
+export function enforcePresetTopology(kind: PresetKind, graphData: GraphData): GraphData {
+  if (kind !== "stock") {
+    return graphData;
+  }
+  const nodeIdSet = new Set(graphData.nodes.map((node) => node.id));
+  const hasFinal = nodeIdSet.has("turn-stock-final");
+  const hasMerge = nodeIdSet.has("turn-stock-merge");
+  if (!hasFinal) {
+    return graphData;
+  }
+
+  const nextEdges = graphData.edges.filter(
+    (edge) => !(edge.to.nodeId === "turn-stock-final" && edge.from.nodeId !== "turn-stock-merge"),
+  );
+  const hasMergeToFinal = nextEdges.some(
+    (edge) => edge.from.nodeId === "turn-stock-merge" && edge.to.nodeId === "turn-stock-final",
+  );
+  if (hasMerge && !hasMergeToFinal) {
+    nextEdges.push({
+      from: { nodeId: "turn-stock-merge", port: "out" },
+      to: { nodeId: "turn-stock-final", port: "in" },
+    });
+  }
+  return {
+    ...graphData,
+    edges: nextEdges,
+  };
+}
+
 export function simplifyPresetForSimpleWorkflow(graphData: GraphData, simpleWorkflowUi: boolean): GraphData {
   if (!simpleWorkflowUi) {
     return graphData;

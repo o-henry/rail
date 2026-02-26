@@ -11,11 +11,12 @@ import {
 import {
   applyPresetOutputSchemaPolicies,
   applyPresetTurnPolicies,
+  enforcePresetTopology,
   simplifyPresetForSimpleWorkflow,
 } from "./presets/policies";
 import { prependPreprocessAgent } from "./presets/preprocess";
 
-export { applyPresetOutputSchemaPolicies, applyPresetTurnPolicies, simplifyPresetForSimpleWorkflow };
+export { applyPresetOutputSchemaPolicies, applyPresetTurnPolicies, enforcePresetTopology, simplifyPresetForSimpleWorkflow };
 
 export function buildPresetGraphByKind(kind: PresetKind): GraphData {
   let base: GraphData;

@@ -60,6 +60,7 @@ import {
   applyPresetOutputSchemaPolicies,
   applyPresetTurnPolicies,
   buildPresetGraphByKind,
+  enforcePresetTopology,
   simplifyPresetForSimpleWorkflow,
 } from "../features/workflow/presets";
 import { localizePresetPromptTemplate } from "../features/workflow/presets/promptLocale";
@@ -188,8 +189,10 @@ import {
   normalizeWebTurnOutput,
   buildConflictLedger,
   buildFinalSynthesisPacket,
+  buildInternalMemorySnippetsFromRun,
   computeFinalConfidence,
   updateRunMemoryByEnvelope,
+  rankInternalMemorySnippets,
   questionSignature,
   resolveProviderByExecutor,
   normalizeQualityThreshold,
@@ -254,6 +257,8 @@ import type {
   FeedViewPost,
   EvidenceEnvelope,
   FinalSynthesisPacket,
+  InternalMemorySnippet,
+  InternalMemoryTraceEntry,
   NodeResponsibilityMemory,
   KnowledgeRetrieveResult,
   KnowledgeTraceEntry,
@@ -507,6 +512,8 @@ function App() {
     () => Boolean((window as Window & { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__),
     [],
   );
+  const internalMemoryCorpusRef = useRef<InternalMemorySnippet[]>([]);
+  const activeRunPresetKindRef = useRef<PresetKind | undefined>(undefined);
   const webTurnPanel = useFloatingPanel({
     enabled: Boolean(pendingWebTurn),
     panelRef: webTurnFloatingRef,
@@ -2442,7 +2449,8 @@ function App() {
       ...builtPreset,
       nodes: applyPresetTurnPolicies(kind, builtPreset.nodes),
     });
-    const preset = simplifyPresetForSimpleWorkflow(presetWithPolicies, SIMPLE_WORKFLOW_UI);
+    const topologySafePreset = enforcePresetTopology(kind, presetWithPolicies);
+    const preset = simplifyPresetForSimpleWorkflow(topologySafePreset, SIMPLE_WORKFLOW_UI);
     const localizedPreset = {
       ...preset,
       nodes: preset.nodes.map((node) => {
@@ -3719,6 +3727,39 @@ function App() {
     }
   }
 
+  async function loadInternalMemoryCorpus(presetKind?: PresetKind): Promise<InternalMemorySnippet[]> {
+    try {
+      const files = await invoke<string[]>("run_list");
+      const candidates = files
+        .slice()
+        .sort((a, b) => b.localeCompare(a))
+        .slice(0, 48);
+      const snippets: InternalMemorySnippet[] = [];
+      for (const file of candidates) {
+        let loaded: RunRecord;
+        try {
+          loaded = normalizeRunRecord(await invoke<RunRecord>("run_load", { name: file })) as RunRecord;
+        } catch {
+          continue;
+        }
+        if (!loaded || !loaded.runId) {
+          continue;
+        }
+        if (presetKind && loaded.workflowPresetKind && loaded.workflowPresetKind !== presetKind) {
+          continue;
+        }
+        snippets.push(...buildInternalMemorySnippetsFromRun(loaded, { maxPerRun: 12 }));
+        if (snippets.length >= 360) {
+          break;
+        }
+      }
+      return snippets.slice(0, 360);
+    } catch (error) {
+      setError(`내부 메모리 로드 실패: ${String(error)}`);
+      return [];
+    }
+  }
+
   function nodeInputFor(
     nodeId: string,
     outputs: Record<string, unknown>,
@@ -3943,18 +3984,53 @@ function App() {
     node: GraphNode,
     prompt: string,
     config: TurnConfig,
-  ): Promise<{ prompt: string; trace: KnowledgeTraceEntry[] }> {
+  ): Promise<{
+    prompt: string;
+    trace: KnowledgeTraceEntry[];
+    memoryTrace: InternalMemoryTraceEntry[];
+  }> {
     const knowledgeEnabled = config.knowledgeEnabled !== false;
     if (!knowledgeEnabled) {
-      return { prompt, trace: [] };
+      return { prompt, trace: [], memoryTrace: [] };
     }
 
-    if (enabledKnowledgeFiles.length === 0) {
-      return { prompt, trace: [] };
+    const nodeRoleHint = node.type === "turn" ? turnRoleLabel(node) : nodeTypeLabel(node.type);
+    let mergedPrompt = prompt;
+    const memoryTrace: InternalMemoryTraceEntry[] = [];
+
+    const rankedMemory = rankInternalMemorySnippets({
+      query: `${workflowQuestion}\n${prompt}`,
+      snippets: internalMemoryCorpusRef.current,
+      nodeId: node.id,
+      roleLabel: nodeRoleHint,
+      topK: 3,
+      presetKind: activeRunPresetKindRef.current,
+    });
+    if (rankedMemory.length > 0) {
+      const memoryLines = rankedMemory.map(
+        ({ snippet, score }) =>
+          `- [run: ${snippet.runId}${snippet.nodeId ? ` / ${snippet.nodeId}` : ""} / score: ${score.toFixed(2)}] ${snippet.text}`,
+      );
+      mergedPrompt = `[내부 실행 메모리]
+${memoryLines.join("\n")}
+[/내부 실행 메모리]
+
+[요청]
+${mergedPrompt}`.trim();
+      addNodeLog(node.id, `[메모리] 과거 실행 메모리 ${rankedMemory.length}개 반영`);
+      memoryTrace.push(
+        ...rankedMemory.map((entry) => ({
+          nodeId: node.id,
+          snippetId: entry.snippet.id,
+          sourceRunId: entry.snippet.runId,
+          score: Math.round(entry.score * 1000) / 1000,
+          reason: entry.reason,
+        })),
+      );
     }
 
-    if (graphKnowledge.topK <= 0) {
-      return { prompt, trace: [] };
+    if (enabledKnowledgeFiles.length === 0 || graphKnowledge.topK <= 0) {
+      return { prompt: mergedPrompt, trace: [], memoryTrace };
     }
 
     try {
@@ -3971,18 +4047,18 @@ function App() {
 
       if (result.snippets.length === 0) {
         addNodeLog(node.id, "[첨부] 관련 문단을 찾지 못해 기본 프롬프트로 실행합니다.");
-        return { prompt, trace: [] };
+        return { prompt: mergedPrompt, trace: [], memoryTrace };
       }
 
       const contextLines = result.snippets.map(
         (snippet) => `- [source: ${snippet.fileName}#${snippet.chunkIndex}] ${snippet.text}`,
       );
-      const mergedPrompt = `[첨부 참고자료]
+      const promptWithAttachments = `[첨부 참고자료]
 ${contextLines.join("\n")}
 [/첨부 참고자료]
 
 [요청]
-${prompt}`;
+${mergedPrompt}`.trim();
 
       addNodeLog(node.id, `[첨부] ${result.snippets.length}개 문단 반영`);
 
@@ -3994,10 +4070,10 @@ ${prompt}`;
         score: snippet.score,
       }));
 
-      return { prompt: mergedPrompt, trace };
+      return { prompt: promptWithAttachments, trace, memoryTrace };
     } catch (error) {
       addNodeLog(node.id, `[첨부] 검색 실패: ${String(error)}`);
-      return { prompt, trace: [] };
+      return { prompt: mergedPrompt, trace: [], memoryTrace };
     }
   }
 
@@ -4014,6 +4090,7 @@ ${prompt}`;
     executor: TurnExecutor;
     provider: string;
     knowledgeTrace?: KnowledgeTraceEntry[];
+    memoryTrace?: InternalMemoryTraceEntry[];
   }> {
     const config = node.config as TurnConfig;
     const executor = getTurnExecutor(config);
@@ -4055,6 +4132,7 @@ ${prompt}`;
       ? `${forcedRuleBlock}\n\n${withKnowledge.prompt}`.trim()
       : withKnowledge.prompt;
     const knowledgeTrace = withKnowledge.trace;
+    const memoryTrace = withKnowledge.memoryTrace;
     const orchestrationDirective = buildExpertOrchestrationDirective(locale, qualityProfile);
     if (orchestrationDirective) {
       textToSend = `${orchestrationDirective}\n\n${textToSend}`.trim();
@@ -4109,6 +4187,7 @@ ${prompt}`;
           executor,
           provider: "ollama",
           knowledgeTrace,
+          memoryTrace,
         };
       } catch (error) {
         return {
@@ -4117,6 +4196,7 @@ ${prompt}`;
           executor,
           provider: "ollama",
           knowledgeTrace,
+          memoryTrace,
         };
       }
     }
@@ -4163,6 +4243,7 @@ ${prompt}`;
             executor,
             provider: webProvider,
             knowledgeTrace,
+            memoryTrace,
           };
         };
         try {
@@ -4215,6 +4296,7 @@ ${prompt}`;
                   executor,
                   provider: webProvider,
                   knowledgeTrace,
+                  memoryTrace,
                 };
               }
 
@@ -4284,6 +4366,7 @@ ${prompt}`;
                 executor,
                 provider: webProvider,
                 knowledgeTrace,
+                memoryTrace,
               };
             }
 
@@ -4299,6 +4382,7 @@ ${prompt}`;
                   executor,
                   provider: webProvider,
                   knowledgeTrace,
+                  memoryTrace,
                 };
               }
               return {
@@ -4307,6 +4391,7 @@ ${prompt}`;
                 executor,
                 provider: webProvider,
                 knowledgeTrace,
+                memoryTrace,
               };
             }
 
@@ -4328,6 +4413,7 @@ ${prompt}`;
                   executor,
                   provider: webProvider,
                   knowledgeTrace,
+                  memoryTrace,
                 };
               }
               return {
@@ -4336,6 +4422,7 @@ ${prompt}`;
                 executor,
                 provider: webProvider,
                 knowledgeTrace,
+                memoryTrace,
               };
             }
             return requestManualFallback(`[WEB] 웹 연결 예외: ${String(error)}`);
@@ -4363,6 +4450,7 @@ ${prompt}`;
           executor,
           provider: webProvider,
           knowledgeTrace,
+          memoryTrace,
         };
       }
       setNodeStatus(node.id, "waiting_user", `${webProvider} 응답 입력 대기`);
@@ -4379,6 +4467,7 @@ ${prompt}`;
         executor,
         provider: webProvider,
         knowledgeTrace,
+        memoryTrace,
       }));
     }
 
@@ -4398,6 +4487,7 @@ ${prompt}`;
         executor,
         provider: "codex",
         knowledgeTrace,
+        memoryTrace,
       };
     }
 
@@ -4439,6 +4529,7 @@ ${prompt}`;
         executor: "codex",
         provider: "codex",
         knowledgeTrace,
+        memoryTrace,
       };
     }
 
@@ -4464,6 +4555,7 @@ ${prompt}`;
         executor: "codex",
         provider: "codex",
         knowledgeTrace,
+        memoryTrace,
       };
     }
 
@@ -4495,6 +4587,7 @@ ${prompt}`;
       executor: "codex",
       provider: "codex",
       knowledgeTrace,
+      memoryTrace,
     };
   }
 
@@ -4748,6 +4841,7 @@ ${prompt}`;
       threadTurnMap: {},
       providerTrace: [],
       knowledgeTrace: [],
+      internalMemoryTrace: [],
       nodeMetrics: {},
       feedPosts: [],
       normalizedEvidenceByNodeId: {},
@@ -4762,8 +4856,13 @@ ${prompt}`;
       groupKind: runGroup.kind,
       presetKind: runGroup.presetKind,
     });
+    activeRunPresetKindRef.current = runGroup.presetKind;
 
     try {
+      internalMemoryCorpusRef.current = await loadInternalMemoryCorpus(runGroup.presetKind);
+      if (internalMemoryCorpusRef.current.length > 0) {
+        setStatus(`그래프 실행 시작 (내부 메모리 ${internalMemoryCorpusRef.current.length}개 로드)`);
+      }
       const requiresCodexEngine = graph.nodes.some((node) => {
         if (node.type !== "turn") {
           return false;
@@ -5084,6 +5183,9 @@ ${prompt}`;
           }
           if (result.knowledgeTrace && result.knowledgeTrace.length > 0) {
             runRecord.knowledgeTrace?.push(...result.knowledgeTrace);
+          }
+          if (result.memoryTrace && result.memoryTrace.length > 0) {
+            runRecord.internalMemoryTrace?.push(...result.memoryTrace);
           }
           if (!result.ok) {
             const finishedAtIso = new Date().toISOString();
@@ -5669,6 +5771,8 @@ ${prompt}`;
       setSuspendedWebResponseDraft("");
       setPendingWebLogin(null);
       setWebResponseDraft("");
+      internalMemoryCorpusRef.current = [];
+      activeRunPresetKindRef.current = undefined;
       activeTurnNodeIdRef.current = "";
       setIsGraphRunning(false);
       setIsGraphPaused(false);

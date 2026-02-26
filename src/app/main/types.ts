@@ -90,6 +90,25 @@ export type KnowledgeTraceEntry = {
   score: number;
 };
 
+export type InternalMemorySnippet = {
+  id: string;
+  runId: string;
+  presetKind?: PresetKind;
+  nodeId?: string;
+  roleLabel?: string;
+  text: string;
+  updatedAt: string;
+  confidenceBand?: ConfidenceBand;
+};
+
+export type InternalMemoryTraceEntry = {
+  nodeId: string;
+  snippetId: string;
+  sourceRunId: string;
+  score: number;
+  reason: string;
+};
+
 export type UsageStats = {
   inputTokens?: number;
   outputTokens?: number;
@@ -312,6 +331,7 @@ export type RunRecord = {
     summary?: string;
   }>;
   knowledgeTrace?: KnowledgeTraceEntry[];
+  internalMemoryTrace?: InternalMemoryTraceEntry[];
   nodeMetrics?: Record<string, NodeMetric>;
   qualitySummary?: QualitySummary;
   regression?: RegressionSummary;
