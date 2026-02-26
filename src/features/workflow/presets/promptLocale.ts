@@ -14,7 +14,6 @@ function localizedPresetIntent(kind: PresetKind, locale: AppLocale): string {
     if (kind === "unityGame") return "deliver a Unity game development plan";
     if (kind === "fullstack") return "deliver a full-stack product implementation";
     if (kind === "creative") return "convert creative ideas into executable proposals";
-    if (kind === "stock") return "support stock/market analysis for decision making";
     return "support news/trend-based judgment";
   }
   if (locale === "jp") {
@@ -25,7 +24,6 @@ function localizedPresetIntent(kind: PresetKind, locale: AppLocale): string {
     if (kind === "unityGame") return "Unityゲーム開発計画を作成する";
     if (kind === "fullstack") return "フルスタック製品の実装計画を作る";
     if (kind === "creative") return "創造的アイデアを実行可能な提案に変換する";
-    if (kind === "stock") return "株式/市場分析による判断を支援する";
     return "ニュース/トレンドに基づく判断を支援する";
   }
   if (kind === "validation") return "得出可验证结论";
@@ -35,7 +33,6 @@ function localizedPresetIntent(kind: PresetKind, locale: AppLocale): string {
   if (kind === "unityGame") return "制定 Unity 游戏开发方案";
   if (kind === "fullstack") return "制定全栈产品实现方案";
   if (kind === "creative") return "将创意转化为可执行提案";
-  if (kind === "stock") return "支持股票/市场分析决策";
   return "支持基于新闻/趋势的判断";
 }
 

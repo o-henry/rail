@@ -18,8 +18,7 @@ export type PresetKind =
   | "unityGame"
   | "fullstack"
   | "creative"
-  | "newsTrend"
-  | "stock";
+  | "newsTrend";
 
 export type CostPreset = "conservative" | "balanced" | "aggressive";
 export type WebAutomationMode = "bridgeAssisted" | "auto" | "manualPasteJson" | "manualPasteText";
@@ -148,8 +147,7 @@ export function isPresetKind(value: string): value is PresetKind {
     value === "unityGame" ||
     value === "fullstack" ||
     value === "creative" ||
-    value === "newsTrend" ||
-    value === "stock"
+    value === "newsTrend"
   );
 }
 

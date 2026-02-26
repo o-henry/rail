@@ -10,7 +10,6 @@ export function presetIntentByKind(kind: PresetKind): string {
   if (kind === "unityGame") return "유니티 게임 개발 실행";
   if (kind === "fullstack") return "풀스택 제품 구현";
   if (kind === "creative") return "창의 아이디어를 실행 가능한 제안으로 전환";
-  if (kind === "stock") return "주식/시장 분석 기반 투자 판단 지원";
   return "뉴스/트렌드 기반 판단";
 }
 

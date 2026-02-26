@@ -120,7 +120,6 @@ const PRESET_TEMPLATE_META_KEYS: ReadonlyArray<{
   { key: "fullstack", labelKey: "preset.fullstack", statusLabelKey: "preset.fullstack" },
   { key: "creative", labelKey: "preset.creative", statusLabelKey: "preset.creative" },
   { key: "newsTrend", labelKey: "preset.newsTrend", statusLabelKey: "preset.newsTrend" },
-  { key: "stock", labelKey: "preset.stock", statusLabelKey: "preset.stock" },
 ];
 
 export function getPresetTemplateMeta(

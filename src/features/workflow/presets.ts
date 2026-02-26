@@ -5,18 +5,16 @@ import {
   buildCreativePreset,
   buildFullstackPreset,
   buildNewsTrendPreset,
-  buildStockPreset,
   buildUnityGamePreset,
 } from "./presets/buildersExtended";
 import {
   applyPresetOutputSchemaPolicies,
   applyPresetTurnPolicies,
-  enforcePresetTopology,
   simplifyPresetForSimpleWorkflow,
 } from "./presets/policies";
 import { prependPreprocessAgent } from "./presets/preprocess";
 
-export { applyPresetOutputSchemaPolicies, applyPresetTurnPolicies, enforcePresetTopology, simplifyPresetForSimpleWorkflow };
+export { applyPresetOutputSchemaPolicies, applyPresetTurnPolicies, simplifyPresetForSimpleWorkflow };
 
 export function buildPresetGraphByKind(kind: PresetKind): GraphData {
   let base: GraphData;
@@ -34,8 +32,6 @@ export function buildPresetGraphByKind(kind: PresetKind): GraphData {
     base = buildCreativePreset();
   } else if (kind === "newsTrend") {
     base = buildNewsTrendPreset();
-  } else if (kind === "stock") {
-    base = buildStockPreset();
   } else {
     base = buildExpertPreset();
   }

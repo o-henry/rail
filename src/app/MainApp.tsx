@@ -60,7 +60,6 @@ import {
   applyPresetOutputSchemaPolicies,
   applyPresetTurnPolicies,
   buildPresetGraphByKind,
-  enforcePresetTopology,
   simplifyPresetForSimpleWorkflow,
 } from "../features/workflow/presets";
 import { localizePresetPromptTemplate } from "../features/workflow/presets/promptLocale";
@@ -2449,8 +2448,7 @@ function App() {
       ...builtPreset,
       nodes: applyPresetTurnPolicies(kind, builtPreset.nodes),
     });
-    const topologySafePreset = enforcePresetTopology(kind, presetWithPolicies);
-    const preset = simplifyPresetForSimpleWorkflow(topologySafePreset, SIMPLE_WORKFLOW_UI);
+    const preset = simplifyPresetForSimpleWorkflow(presetWithPolicies, SIMPLE_WORKFLOW_UI);
     const localizedPreset = {
       ...preset,
       nodes: preset.nodes.map((node) => {
