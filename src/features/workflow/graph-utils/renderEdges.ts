@@ -254,30 +254,42 @@ export function buildCanvasEdgeLines(params: BuildCanvasEdgeLinesParams): Canvas
       const hasBundledRouting = !hasManualControl && !hasExplicitSides && Boolean(bundledFromSide || bundledToSide);
 
       let path: string;
-      if (hasBundledRouting && fromHorizontal && toHorizontal) {
-        const gap = Math.max(24, Math.round(Math.abs(toPoint.x - fromPoint.x) * 0.38));
+      if (hasBundledRouting && toHorizontal) {
+        const fromCenterX = fromNode.position.x + fromSize.width / 2;
+        const virtualFromSide: NodeAnchorSide = toPoint.x >= fromCenterX ? "right" : "left";
+        const virtualFromPoint = fromHorizontal
+          ? fromPoint
+          : snapPoint(getNodeAnchorPoint(fromNode, virtualFromSide, fromSize));
+        fromPoint = virtualFromPoint;
+        const gap = Math.max(24, Math.round(Math.abs(toPoint.x - virtualFromPoint.x) * 0.38));
         const laneX = bundledFromSide
-          ? (resolvedFromSide === "right" ? fromPoint.x + gap : fromPoint.x - gap)
+          ? (resolvedFromSide === "right" ? virtualFromPoint.x + gap : virtualFromPoint.x - gap)
           : bundledToSide
             ? (resolvedToSide === "left" ? toPoint.x - gap : toPoint.x + gap)
-            : Math.round((fromPoint.x + toPoint.x) / 2);
+            : Math.round((virtualFromPoint.x + toPoint.x) / 2);
         const points = compressCollinear([
-          fromPoint,
-          { x: laneX, y: fromPoint.y },
+          virtualFromPoint,
+          { x: laneX, y: virtualFromPoint.y },
           { x: laneX, y: toPoint.y },
           toPoint,
         ]);
         path = buildOrthogonalPolylinePath(points);
-      } else if (hasBundledRouting && fromVertical && toVertical) {
-        const gap = Math.max(24, Math.round(Math.abs(toPoint.y - fromPoint.y) * 0.38));
+      } else if (hasBundledRouting && toVertical) {
+        const fromCenterY = fromNode.position.y + fromSize.height / 2;
+        const virtualFromSide: NodeAnchorSide = toPoint.y >= fromCenterY ? "bottom" : "top";
+        const virtualFromPoint = fromVertical
+          ? fromPoint
+          : snapPoint(getNodeAnchorPoint(fromNode, virtualFromSide, fromSize));
+        fromPoint = virtualFromPoint;
+        const gap = Math.max(24, Math.round(Math.abs(toPoint.y - virtualFromPoint.y) * 0.38));
         const laneY = bundledFromSide
-          ? (resolvedFromSide === "bottom" ? fromPoint.y + gap : fromPoint.y - gap)
+          ? (resolvedFromSide === "bottom" ? virtualFromPoint.y + gap : virtualFromPoint.y - gap)
           : bundledToSide
             ? (resolvedToSide === "top" ? toPoint.y - gap : toPoint.y + gap)
-            : Math.round((fromPoint.y + toPoint.y) / 2);
+            : Math.round((virtualFromPoint.y + toPoint.y) / 2);
         const points = compressCollinear([
-          fromPoint,
-          { x: fromPoint.x, y: laneY },
+          virtualFromPoint,
+          { x: virtualFromPoint.x, y: laneY },
           { x: toPoint.x, y: laneY },
           toPoint,
         ]);
