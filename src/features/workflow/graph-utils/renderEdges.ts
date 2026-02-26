@@ -213,8 +213,10 @@ export function buildCanvasEdgeLines(params: BuildCanvasEdgeLinesParams): Canvas
         ? (bundledToAnchorByNodeId.get(toNode.id) ?? snapPoint(getNodeAnchorPoint(toNode, resolvedToSide, toSize)))
         : snapPoint(getNodeAnchorPoint(toNode, resolvedToSide, toSize));
 
-      const fromHorizontal = resolvedFromSide === "left" || resolvedFromSide === "right";
-      const toHorizontal = resolvedToSide === "left" || resolvedToSide === "right";
+      const routeFromSide = bundledFromSide ?? resolvedFromSide;
+      const routeToSide = bundledToSide ?? resolvedToSide;
+      const fromHorizontal = routeFromSide === "left" || routeFromSide === "right";
+      const toHorizontal = routeToSide === "left" || routeToSide === "right";
       const fromVertical = !fromHorizontal;
       const toVertical = !toHorizontal;
 
@@ -251,7 +253,7 @@ export function buildCanvasEdgeLines(params: BuildCanvasEdgeLinesParams): Canvas
       const edgeKey = entry.edgeKey;
       const defaultControl = edgeMidPoint(fromPoint, toPoint);
       const control = defaultControl;
-      const hasBundledRouting = !hasManualControl && !hasExplicitSides && Boolean(bundledFromSide || bundledToSide);
+      const hasBundledRouting = !hasManualControl && Boolean(bundledFromSide || bundledToSide);
 
       let path: string;
       if (hasBundledRouting && toHorizontal) {
@@ -263,9 +265,9 @@ export function buildCanvasEdgeLines(params: BuildCanvasEdgeLinesParams): Canvas
         fromPoint = virtualFromPoint;
         const gap = Math.max(24, Math.round(Math.abs(toPoint.x - virtualFromPoint.x) * 0.38));
         const laneX = bundledFromSide
-          ? (resolvedFromSide === "right" ? virtualFromPoint.x + gap : virtualFromPoint.x - gap)
+          ? (routeFromSide === "right" ? virtualFromPoint.x + gap : virtualFromPoint.x - gap)
           : bundledToSide
-            ? (resolvedToSide === "left" ? toPoint.x - gap : toPoint.x + gap)
+            ? (routeToSide === "left" ? toPoint.x - gap : toPoint.x + gap)
             : Math.round((virtualFromPoint.x + toPoint.x) / 2);
         const points = compressCollinear([
           virtualFromPoint,
@@ -283,9 +285,9 @@ export function buildCanvasEdgeLines(params: BuildCanvasEdgeLinesParams): Canvas
         fromPoint = virtualFromPoint;
         const gap = Math.max(24, Math.round(Math.abs(toPoint.y - virtualFromPoint.y) * 0.38));
         const laneY = bundledFromSide
-          ? (resolvedFromSide === "bottom" ? virtualFromPoint.y + gap : virtualFromPoint.y - gap)
+          ? (routeFromSide === "bottom" ? virtualFromPoint.y + gap : virtualFromPoint.y - gap)
           : bundledToSide
-            ? (resolvedToSide === "top" ? toPoint.y - gap : toPoint.y + gap)
+            ? (routeToSide === "top" ? toPoint.y - gap : toPoint.y + gap)
             : Math.round((virtualFromPoint.y + toPoint.y) / 2);
         const points = compressCollinear([
           virtualFromPoint,
