@@ -8,7 +8,6 @@ type BridgePageProps = {
   onCopyConnectCode: () => void;
   onRefreshStatus: () => void;
   onRestartBridge: () => void;
-  onRotateToken: () => void;
 };
 
 export default function BridgePage(props: BridgePageProps) {

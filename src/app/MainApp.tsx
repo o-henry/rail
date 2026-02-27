@@ -1,4 +1,6 @@
 import {
+  useCallback,
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -736,8 +738,6 @@ function App() {
 
   const {
     ensureEngineStarted,
-    onStartEngine,
-    onStopEngine,
     refreshAuthStateFromEngine,
     onCheckUsage,
     onLoginCodex,
@@ -746,7 +746,6 @@ function App() {
     onCloseProviderChildView,
     refreshWebWorkerHealth,
     refreshWebBridgeStatus,
-    onRotateWebBridgeToken,
     onRestartWebBridge,
     onCopyWebBridgeConnectCode,
     onOpenProviderSession,
@@ -790,6 +789,28 @@ function App() {
     setWebWorkerBusy,
     setWebBridgeConnectCode,
   });
+  const autoEngineStartRequestedRef = useRef(false);
+
+  useEffect(() => {
+    if (!hasTauriRuntime || engineStarted) {
+      return;
+    }
+    const resolvedCwd = String(cwd ?? "").trim();
+    if (!resolvedCwd || resolvedCwd === ".") {
+      return;
+    }
+    if (autoEngineStartRequestedRef.current) {
+      return;
+    }
+    autoEngineStartRequestedRef.current = true;
+    void ensureEngineStarted()
+      .then(() => refreshAuthStateFromEngine(true))
+      .then(() => setStatus("준비됨"))
+      .catch((error) => {
+        autoEngineStartRequestedRef.current = false;
+        setError(toErrorText(error));
+      });
+  }, [cwd, engineStarted, ensureEngineStarted, hasTauriRuntime, refreshAuthStateFromEngine, setError, setStatus]);
 
   const batchScheduler = useBatchScheduler({
     enabled: hasTauriRuntime,
@@ -1571,6 +1592,20 @@ function App() {
     { key: "error_posts", label: t("feed.category.error_posts") },
   ];
 
+  const loadFeedInspectorRuleDocs = useCallback(
+    (nodeCwd: string) =>
+      loadAgentRuleDocs({
+        nodeCwd,
+        cwd,
+        cacheTtlMs: AGENT_RULE_CACHE_TTL_MS,
+        maxDocs: AGENT_RULE_MAX_DOCS,
+        maxDocChars: AGENT_RULE_MAX_DOC_CHARS,
+        agentRulesCacheRef,
+        invokeFn: invoke,
+      }),
+    [cwd, agentRulesCacheRef],
+  );
+
   useFeedInspectorEffects({
     groupedFeedRuns,
     setFeedGroupExpandedByRunId,
@@ -1588,16 +1623,7 @@ function App() {
     feedInspectorRuleCwd,
     setFeedInspectorRuleDocs,
     setFeedInspectorRuleLoading,
-    loadAgentRuleDocsForCwd: (nodeCwd) =>
-      loadAgentRuleDocs({
-        nodeCwd,
-        cwd,
-        cacheTtlMs: AGENT_RULE_CACHE_TTL_MS,
-        maxDocs: AGENT_RULE_MAX_DOCS,
-        maxDocChars: AGENT_RULE_MAX_DOC_CHARS,
-        agentRulesCacheRef,
-        invokeFn: invoke,
-      }),
+    loadAgentRuleDocsForCwd: loadFeedInspectorRuleDocs,
   });
 
   const viewportWidth = Math.ceil(canvasLogicalViewport.width);
@@ -1922,8 +1948,6 @@ function App() {
               onSetModel={setModel}
               onSetCodexMultiAgentMode={(next) => setCodexMultiAgentMode(normalizeCodexMultiAgentMode(next))}
               onSetThemeMode={(next) => setThemeMode(normalizeThemeMode(next))}
-              onStartEngine={() => void onStartEngine()}
-              onStopEngine={() => void onStopEngine()}
               onToggleCodexLogin={() => void onLoginCodex()}
               running={running}
               status={status}
@@ -1937,7 +1961,6 @@ function App() {
               onCopyConnectCode={() => void onCopyWebBridgeConnectCode()}
               onRefreshStatus={() => void refreshWebBridgeStatus()}
               onRestartBridge={() => void onRestartWebBridge()}
-              onRotateToken={() => void onRotateWebBridgeToken()}
               status={webBridgeStatus}
             />
             {/* {lastSavedRunFile && <div>최근 실행 파일: {formatRunFileLabel(lastSavedRunFile)}</div>} */}

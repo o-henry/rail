@@ -34,11 +34,16 @@ export function useEngineEventListeners(params: any) {
           if (payload.method === "account/updated") {
             const mode = params.extractAuthMode(payload.params);
             if (mode) {
-              params.authLoginRequiredProbeCountRef.current = 0;
-              params.lastAuthenticatedAtRef.current = Date.now();
               params.setAuthMode(mode);
-              params.setLoginCompleted(true);
-              params.setStatus(`계정 상태 갱신 수신 (인증 모드=${mode})`);
+              if (mode !== "unknown") {
+                params.authLoginRequiredProbeCountRef.current = 0;
+                params.lastAuthenticatedAtRef.current = Date.now();
+                params.setLoginCompleted(true);
+                params.setStatus(`계정 상태 갱신 수신 (인증 모드=${mode})`);
+              } else {
+                params.setLoginCompleted(false);
+                params.setStatus("계정 상태 갱신 수신 (로그인 필요)");
+              }
             } else {
               params.setStatus("계정 상태 갱신 수신 (인증 모드 미확인)");
             }

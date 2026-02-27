@@ -23,8 +23,6 @@ type SettingsPageProps = {
   onSetModel: (next: string) => void;
   onSetCodexMultiAgentMode: (next: string) => void;
   onSetThemeMode: (next: string) => void;
-  onStartEngine: () => void;
-  onStopEngine: () => void;
   onCheckUsage: () => void;
   onToggleCodexLogin: () => void;
   onCloseUsageResult: () => void;
@@ -55,8 +53,6 @@ export default function SettingsPage({
   onSetModel,
   onSetCodexMultiAgentMode,
   onSetThemeMode,
-  onStartEngine,
-  onStopEngine,
   onCheckUsage,
   onToggleCodexLogin,
   onCloseUsageResult,
@@ -120,16 +116,6 @@ export default function SettingsPage({
       )}
       {!compact && (
         <div className="button-row">
-          <button
-            className="settings-engine-button settings-account-button"
-            disabled={running || isGraphRunning}
-            onClick={engineStarted ? onStopEngine : onStartEngine}
-            type="button"
-          >
-            <span className="settings-button-label">
-              {engineStarted ? t("settings.engine.stop") : t("settings.engine.start")}
-            </span>
-          </button>
           <button
             className="settings-usage-button settings-account-button"
             disabled={running || isGraphRunning}

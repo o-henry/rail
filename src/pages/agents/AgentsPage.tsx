@@ -22,13 +22,24 @@ export default function AgentsPage({ onQuickAction }: AgentsPageProps) {
   const [draft, setDraft] = useState("");
   const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([]);
   const [isModelMenuOpen, setIsModelMenuOpen] = useState(false);
-  const [selectedModel, setSelectedModel] = useState(t("agents.model.label"));
+  const [isReasonMenuOpen, setIsReasonMenuOpen] = useState(false);
+  const [selectedModel, setSelectedModel] = useState("5.3-Codex");
+  const [selectedReasonLevel, setSelectedReasonLevel] = useState("보통");
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const modelMenuRef = useRef<HTMLDivElement | null>(null);
+  const reasonMenuRef = useRef<HTMLDivElement | null>(null);
   const modelOptions = useMemo(
-    () => [t("agents.model.label"), "GPT-5.2-Codex High", "GPT-5.2-Codex Standard"],
-    [t],
+    () => [
+      "5.3-Codex",
+      "5.3-Codex-Spark",
+      "5.2-Codex",
+      "5.1-Codex-Max",
+      "5.2",
+      "5.1-Codex-Mini",
+    ],
+    [],
   );
+  const reasonLevelOptions = useMemo(() => ["낮음", "보통", "높음"], []);
 
   const activeThread = useMemo(
     () => threads.find((thread) => thread.id === activeThreadId) ?? threads[0] ?? null,
@@ -42,21 +53,27 @@ export default function AgentsPage({ onQuickAction }: AgentsPageProps) {
   }, [modelOptions, selectedModel]);
 
   useEffect(() => {
-    if (!isModelMenuOpen) {
+    if (!isModelMenuOpen && !isReasonMenuOpen) {
       return;
     }
     const onPointerDown = (event: PointerEvent) => {
       if (!modelMenuRef.current?.contains(event.target as Node)) {
         setIsModelMenuOpen(false);
       }
+      if (!reasonMenuRef.current?.contains(event.target as Node)) {
+        setIsReasonMenuOpen(false);
+      }
     };
     window.addEventListener("pointerdown", onPointerDown);
     return () => window.removeEventListener("pointerdown", onPointerDown);
-  }, [isModelMenuOpen]);
+  }, [isModelMenuOpen, isReasonMenuOpen]);
 
   const onAddThread = () => {
     const nextIndex = threads.length + 1;
-    const next: AgentThread = { id: `agent-${nextIndex}`, name: `Agent ${nextIndex}` };
+    const next: AgentThread = {
+      id: `agent-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      name: `Agent ${nextIndex}`,
+    };
     setThreads((prev) => [...prev, next]);
     setActiveThreadId(next.id);
   };
@@ -78,7 +95,8 @@ export default function AgentsPage({ onQuickAction }: AgentsPageProps) {
     const filePrefix =
       attachedFiles.length > 0 ? `files: ${attachedFiles.map((file) => file.name).join(", ")}\n` : "";
     const content = `${filePrefix}${text}`.trim();
-    const payload = activeThread ? `[${activeThread.name}] ${content}` : content;
+    const promptWithConfig = `[model=${selectedModel}, reason=${selectedReasonLevel}] ${content}`;
+    const payload = activeThread ? `[${activeThread.name}] ${promptWithConfig}` : promptWithConfig;
     onQuickAction(payload);
     setDraft("");
     setAttachedFiles([]);
@@ -136,7 +154,10 @@ export default function AgentsPage({ onQuickAction }: AgentsPageProps) {
         </button>
       </div>
 
-      <section className={`agents-grid${threads.length === 1 ? " is-single" : ""}`} aria-label="Agents grid">
+      <section
+        className={`agents-grid${threads.length === 1 ? " is-single" : threads.length === 2 ? " is-two" : ""}`}
+        aria-label="Agents grid"
+      >
         {threads.map((thread) => (
           <article
             key={thread.id}
@@ -229,6 +250,41 @@ export default function AgentsPage({ onQuickAction }: AgentsPageProps) {
                         type="button"
                       >
                         {model}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+            <div
+              className={`agents-reason-dropdown${isReasonMenuOpen ? " is-open" : ""}`}
+              ref={reasonMenuRef}
+            >
+              <button
+                aria-expanded={isReasonMenuOpen}
+                aria-haspopup="listbox"
+                className="agents-reason-button"
+                onClick={() => setIsReasonMenuOpen((prev) => !prev)}
+                type="button"
+              >
+                <span>{`이성 수준 · ${selectedReasonLevel}`}</span>
+                <img alt="" aria-hidden="true" src="/down-arrow.svg" />
+              </button>
+              {isReasonMenuOpen && (
+                <ul aria-label="Reasoning level" className="agents-reason-menu" role="listbox">
+                  {reasonLevelOptions.map((level) => (
+                    <li key={level}>
+                      <button
+                        aria-selected={level === selectedReasonLevel}
+                        className={level === selectedReasonLevel ? "is-selected" : ""}
+                        onClick={() => {
+                          setSelectedReasonLevel(level);
+                          setIsReasonMenuOpen(false);
+                        }}
+                        role="option"
+                        type="button"
+                      >
+                        {level}
                       </button>
                     </li>
                   ))}

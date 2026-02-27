@@ -715,16 +715,18 @@ h3 {
 .question-input {
   display: grid;
   grid-template-rows: auto auto;
-  border-radius: 8px;
-  background: var(--surface-panel);
+  border-radius: 10px;
+  background: white;
   overflow: hidden;
+  box-shadow: 0 3px 10px rgba(15, 24, 34, 0.06);
+  padding: 10px 12px 8px;
 }
 
 .question-input textarea {
   width: 100%;
-  min-height: 56px;
-  max-height: 164px;
-  padding: 14px 12px 16px;
+  min-height: 42px;
+  max-height: 110px;
+  padding: 4px 2px;
   border-radius: 0;
   border: 0;
   background: transparent;
@@ -751,12 +753,72 @@ h3 {
 }
 
 .question-input-footer {
-  min-height: 42px;
-  padding: 10px 10px;
-  /* border-top: 1px solid #e5eaf0; */
+  min-height: 40px;
+  padding: 0;
   display: flex;
-  justify-content: flex-end;
   align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.workflow-question-input .agents-composer-left {
+  min-width: 0;
+  overflow: auto;
+  padding-bottom: 1px;
+}
+
+.workflow-question-input .agents-composer-left::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}
+
+.workflow-question-input .question-create-button {
+  flex: 0 0 auto;
+}
+
+.workflow-question-input .question-create-icon {
+  width: 12px;
+  height: 12px;
+}
+
+.workflow-question-input .agents-model-dropdown,
+.workflow-question-input .agents-reason-dropdown {
+  width: 210px;
+}
+
+.workflow-question-input .agents-model-menu,
+.workflow-question-input .agents-reason-menu {
+  width: 100%;
+  min-width: 0;
+}
+
+.workflow-question-input .agents-model-button,
+.workflow-question-input .agents-reason-button {
+  width: 100%;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.workflow-question-input .agents-model-button span,
+.workflow-question-input .agents-reason-button span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workflow-question-input .agents-file-chip {
+  max-width: 210px;
+}
+
+.workflow-question-input .agents-send-button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.workflow-question-input .agents-send-button:disabled .question-create-icon {
+  filter: grayscale(1);
+  opacity: 0.72;
 }
 
 .question-create-button {
@@ -764,22 +826,20 @@ h3 {
   min-width: 30px;
   height: 30px;
   min-height: 30px;
-  border-radius: 5px;
+  border-radius: 999px;
   padding: 0;
   display: inline-grid;
   place-items: center;
 }
-.question-create-button:disabled {
-  background: #eaedf2;
-}
 
 .question-create-icon {
-  width: 14px;
-  height: 14px;
+  width: 12px;
+  height: 12px;
   display: block;
   object-fit: contain;
   filter: brightness(0) invert(1);
 }
+
 .question-create-button:disabled .question-create-icon {
   filter: grayscale(1);
   opacity: 0.72;
@@ -2182,7 +2242,7 @@ h3 {
 
 .settings-refresh-button {
   /* background: #f4f6f9; */
-  background: white;
+  background: var(--surface-panel);
   color: #3f4b5a;
   /* border: 1px solid #d6dde8; */
 }
@@ -2202,18 +2262,24 @@ h3 {
 }
 
 .settings-refresh-icon-button {
-  width: 30px;
-  min-width: 30px;
+  width: auto;
+  min-width: 118px;
   height: 30px;
   min-height: 30px;
-  padding: 0;
-  margin-top: 4px;
+  padding: 0 10px;
+  margin-top: 0;
+  gap: 6px;
 }
 
 .settings-refresh-icon {
   width: 14px;
   height: 14px;
   display: block;
+}
+
+.settings-refresh-label {
+  font-size: 11px;
+  line-height: 1;
 }
 
 .web-automation-head {
@@ -3986,7 +4052,7 @@ h3 {
   grid-template-rows: clamp(158px, 15cqw, 250px) minmax(0, 1fr) minmax(0, 1fr);
   grid-template-areas:
     "workflow workflow approvals approvals webConnect webConnect schedules schedules marketSummary marketSummary marketSummary marketSummary"
-    "globalHeadlines globalHeadlines globalHeadlines industryTrendRadar industryTrendRadar industryTrendRadar communityHotTopics communityHotTopics communityHotTopics communityHotTopics reliabilityPanel reliabilityPanel"
+    "globalHeadlines globalHeadlines globalHeadlines industryTrendRadar industryTrendRadar industryTrendRadar communityHotTopics communityHotTopics communityHotTopics communityHotTopics communityHotTopics communityHotTopics"
     "eventCalendar eventCalendar eventCalendar eventCalendar riskAlertBoard riskAlertBoard riskAlertBoard riskAlertBoard devEcosystem devEcosystem devEcosystem devEcosystem";
 }
 
@@ -4093,7 +4159,7 @@ h3 {
 
 .dashboard-widget-head h3 {
   margin: 0;
-  font-size: 0.89rem;
+  font-size: 0.92rem;
   line-height: 1.2;
 }
 
@@ -4121,8 +4187,7 @@ h3 {
 }
 
 .dashboard-area-globalHeadlines,
-.dashboard-area-industryTrendRadar,
-.dashboard-area-reliabilityPanel {
+.dashboard-area-industryTrendRadar {
   background: linear-gradient(160deg, rgba(255, 255, 255, 0.66), rgba(245, 248, 252, 0.92));
 }
 
@@ -4284,7 +4349,7 @@ h3 {
 
 :root[data-theme="light"] .panel-card {
   border: 0;
-  border-radius: 5px;
+  border-radius: 10px;
   background: var(--surface);
   box-shadow: none;
 }
@@ -4322,8 +4387,7 @@ h3 {
 }
 
 :root[data-theme="dark"] .dashboard-area-globalHeadlines,
-:root[data-theme="dark"] .dashboard-area-industryTrendRadar,
-:root[data-theme="dark"] .dashboard-area-reliabilityPanel {
+:root[data-theme="dark"] .dashboard-area-industryTrendRadar {
   background: linear-gradient(155deg, rgba(48, 53, 62, 0.78), rgba(41, 45, 52, 0.95));
 }
 
@@ -4395,11 +4459,15 @@ h3 {
   min-height: 0;
   overflow: auto;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(420px, 1fr));
-  grid-auto-rows: minmax(360px, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-auto-rows: 360px;
   gap: 10px;
-  align-content: stretch;
+  align-content: start;
   padding-right: 2px;
+}
+
+.agents-grid.is-two {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .agents-grid.is-single {
@@ -4451,10 +4519,10 @@ h3 {
 
 .agents-grid-card-log {
   min-height: 0;
-  border: 1px solid var(--surface-strong);
+  /* border: 1px solid var(--surface-strong); */
   border-radius: 10px;
   background: var(--surface);
-  padding: 12px;
+  padding: 12px 0;
   overflow: auto;
 }
 
@@ -4493,13 +4561,15 @@ h3 {
 }
 
 .agents-composer {
-  border-radius: 24px;
-  border: 1px solid var(--surface-strong);
-  background: var(--surface-panel);
+  border-radius: 10px;
+  /* border: 1px solid var(--surface-strong); */
+  /* background: var(--surface-panel); */
+  background: white;
   padding: 10px 12px 8px;
   display: grid;
   gap: 8px;
   box-shadow: 0 3px 10px rgba(15, 24, 34, 0.06);
+  margin: 0px 0 6px 0;
 }
 
 .agents-file-input {
@@ -4586,9 +4656,11 @@ h3 {
   height: 14px;
 }
 
-.agents-model-button {
+.agents-model-button,
+.agents-reason-button {
   min-height: 30px;
   height: 30px;
+  width: 100%;
   border-radius: 16px;
   border: 1px solid var(--surface-strong);
   background: var(--surface-soft);
@@ -4596,30 +4668,44 @@ h3 {
   padding: 0 11px;
   display: inline-flex;
   align-items: center;
+  justify-content: space-between;
   gap: 8px;
   font-size: 12px;
 }
 
-.agents-model-dropdown {
-  position: relative;
+.agents-model-button span,
+.agents-reason-button span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.agents-model-dropdown.is-open .agents-model-button img {
+.agents-model-dropdown,
+.agents-reason-dropdown {
+  position: relative;
+  width: 210px;
+}
+
+.agents-model-dropdown.is-open .agents-model-button img,
+.agents-reason-dropdown.is-open .agents-reason-button img {
   transform: rotate(180deg);
 }
 
-.agents-model-button img {
+.agents-model-button img,
+.agents-reason-button img {
   width: 10px;
   height: 10px;
   opacity: 0.7;
   transition: transform 120ms ease;
 }
 
-.agents-model-menu {
+.agents-model-menu,
+.agents-reason-menu {
   position: absolute;
   left: 0;
   bottom: calc(100% + 8px);
-  min-width: 220px;
+  width: 100%;
+  min-width: 0;
   list-style: none;
   margin: 0;
   padding: 6px;
@@ -4630,12 +4716,14 @@ h3 {
   z-index: 15;
 }
 
-.agents-model-menu li {
+.agents-model-menu li,
+.agents-reason-menu li {
   margin: 0;
   padding: 0;
 }
 
-.agents-model-menu button {
+.agents-model-menu button,
+.agents-reason-menu button {
   width: 100%;
   min-height: 30px;
   border: 0;
@@ -4648,7 +4736,9 @@ h3 {
 }
 
 .agents-model-menu button:hover,
-.agents-model-menu button.is-selected {
+.agents-model-menu button.is-selected,
+.agents-reason-menu button:hover,
+.agents-reason-menu button.is-selected {
   background: var(--surface-soft);
 }
 
@@ -5107,9 +5197,13 @@ pre {
       "workflow workflow approvals approvals webConnect webConnect"
       "schedules schedules marketSummary marketSummary marketSummary marketSummary"
       "globalHeadlines globalHeadlines globalHeadlines industryTrendRadar industryTrendRadar industryTrendRadar"
-      "communityHotTopics communityHotTopics communityHotTopics communityHotTopics reliabilityPanel reliabilityPanel"
+      "communityHotTopics communityHotTopics communityHotTopics communityHotTopics communityHotTopics communityHotTopics"
       "eventCalendar eventCalendar riskAlertBoard riskAlertBoard devEcosystem devEcosystem"
       "eventCalendar eventCalendar riskAlertBoard riskAlertBoard devEcosystem devEcosystem";
+  }
+
+  .agents-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
@@ -5157,7 +5251,6 @@ pre {
       "globalHeadlines"
       "industryTrendRadar"
       "communityHotTopics"
-      "reliabilityPanel"
       "eventCalendar"
       "riskAlertBoard"
       "devEcosystem";

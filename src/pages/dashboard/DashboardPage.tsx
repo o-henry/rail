@@ -76,15 +76,6 @@ export default function DashboardPage(props: DashboardPageProps) {
         ],
       },
       {
-        topic: "reliabilityPanel",
-        badgeKey: "dashboard.widget.badge.trust",
-        itemKeys: [
-          "dashboard.widget.reliabilityPanel.item1",
-          "dashboard.widget.reliabilityPanel.item2",
-          "dashboard.widget.reliabilityPanel.item3",
-        ],
-      },
-      {
         topic: "eventCalendar",
         badgeKey: "dashboard.widget.badge.events",
         itemKeys: [

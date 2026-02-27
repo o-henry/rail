@@ -26,7 +26,6 @@ type BridgePanelProps = {
   onRefreshStatus: () => void;
   onCopyConnectCode: () => void;
   onRestartBridge: () => void;
-  onRotateToken: () => void;
 };
 
 function BridgePanel({
@@ -37,7 +36,6 @@ function BridgePanel({
   onRefreshStatus,
   onCopyConnectCode,
   onRestartBridge,
-  onRotateToken,
 }: BridgePanelProps) {
   const { t } = useI18n();
   const bridgeUrl = `http://127.0.0.1:${status.port}`;
@@ -76,6 +74,7 @@ function BridgePanel({
             type="button"
           >
             <img alt="" aria-hidden="true" className="settings-refresh-icon" src="/reload.svg" />
+            <span className="settings-refresh-label">{t("bridge.refresh.title")}</span>
           </button>
         </div>
         <div className="settings-badges">
@@ -109,14 +108,6 @@ function BridgePanel({
             type="button"
           >
             <span className="settings-button-label">{t("bridge.restart")}</span>
-          </button>
-          <button
-            className="settings-account-button"
-            disabled={busy}
-            onClick={onRotateToken}
-            type="button"
-          >
-            <span className="settings-button-label">{t("bridge.rotateToken")}</span>
           </button>
         </div>
         {connectCode && (

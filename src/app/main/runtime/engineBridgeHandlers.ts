@@ -1,4 +1,21 @@
 export function createEngineBridgeHandlers(params: any) {
+  function inferLoginStateFromUsage(raw: unknown): boolean | null {
+    if (!raw || typeof raw !== "object") {
+      return null;
+    }
+    const record = raw as Record<string, unknown>;
+    if (record.requiresOpenaiAuth === true) {
+      return false;
+    }
+    if ("account" in record && record.account == null) {
+      return false;
+    }
+    if ("account" in record && record.account && typeof record.account === "object") {
+      return true;
+    }
+    return null;
+  }
+
   async function ensureEngineStarted() {
     if (params.engineStarted) {
       return;
@@ -66,13 +83,6 @@ export function createEngineBridgeHandlers(params: any) {
           params.setStatus(mode ? `로그인 상태 확인됨 (인증 모드=${mode})` : "로그인 상태 확인됨");
         }
       } else if (result.state === "login_required") {
-        if (params.loginCompleted) {
-          params.authLoginRequiredProbeCountRef.current = 0;
-          if (!silent) {
-            params.setStatus("로그인 상태 유지 (재확인 필요)");
-          }
-          return result;
-        }
         const now = Date.now();
         const nextProbeCount = params.authLoginRequiredProbeCountRef.current + 1;
         params.authLoginRequiredProbeCountRef.current = nextProbeCount;
@@ -80,7 +90,9 @@ export function createEngineBridgeHandlers(params: any) {
           params.lastAuthenticatedAtRef.current > 0 &&
           now - params.lastAuthenticatedAtRef.current < params.authLoginRequiredGraceMs;
         const shouldKeepSession =
-          params.loginCompleted && (withinGraceWindow || nextProbeCount < params.authLoginRequiredConfirmCount);
+          params.loginCompleted &&
+          params.lastAuthenticatedAtRef.current > 0 &&
+          (withinGraceWindow || nextProbeCount < params.authLoginRequiredConfirmCount);
 
         if (shouldKeepSession) {
           if (!silent) {
@@ -120,7 +132,14 @@ export function createEngineBridgeHandlers(params: any) {
         params.setLoginCompleted(true);
       } else if (probed?.state === "login_required" && !params.loginCompleted) {
         params.setLoginCompleted(false);
-      } else if (mode) {
+      } else if (mode && mode !== "unknown") {
+        params.setLoginCompleted(true);
+      }
+      const inferredLogin = inferLoginStateFromUsage(result.raw);
+      if (inferredLogin === false) {
+        params.setLoginCompleted(false);
+        params.setAuthMode("unknown");
+      } else if (inferredLogin === true) {
         params.setLoginCompleted(true);
       }
       params.setUsageInfoText(params.formatUsageInfoForDisplay(result.raw));
@@ -283,6 +302,9 @@ export function createEngineBridgeHandlers(params: any) {
       if (health?.bridge) {
         const next = params.toWebBridgeStatus(health.bridge);
         params.setWebBridgeStatus(next);
+        if (!silent) {
+          params.setStatus("웹 연결 상태 동기화 완료");
+        }
         return next;
       }
       return null;
@@ -291,6 +313,9 @@ export function createEngineBridgeHandlers(params: any) {
       const raw = await invokeBridgeRpcWithRecovery("web_bridge_status");
       const next = params.toWebBridgeStatus(raw);
       params.setWebBridgeStatus(next);
+      if (!silent) {
+        params.setStatus("웹 연결 상태 동기화 완료");
+      }
       return next;
     } catch (error) {
       if (!silent) {

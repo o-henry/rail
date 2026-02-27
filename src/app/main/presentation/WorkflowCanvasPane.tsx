@@ -3,6 +3,7 @@ import { useI18n } from "../../../i18n";
 import type { MarqueeSelection, NodeRunState, PendingWebTurn } from "../types";
 import type { GraphNode, NodeAnchorSide, NodeExecutionStatus } from "../../../features/workflow/types";
 import WorkflowCanvasNodesLayer from "./WorkflowCanvasNodesLayer";
+import WorkflowQuestionComposer from "./WorkflowQuestionComposer";
 
 type EdgeLine = {
   key: string;
@@ -328,28 +329,14 @@ export default function WorkflowCanvasPane({
       </div>
 
       <div className="canvas-topbar">
-        <div className="question-input">
-          <textarea
-            disabled={isWorkflowBusy}
-            onChange={(e) => setWorkflowQuestion(e.currentTarget.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                if (!canRunGraphNow) return;
-                void onRunGraph();
-              }
-            }}
-            placeholder={t("workflow.question.placeholder")}
-            ref={questionInputRef}
-            rows={1}
-            value={workflowQuestion}
-          />
-          <div className="question-input-footer">
-            <button className="primary-action question-create-button" disabled={!canRunGraphNow} onClick={() => void onRunGraph()} type="button">
-              <img alt="" aria-hidden="true" className="question-create-icon" src="/up.svg" />
-            </button>
-          </div>
-        </div>
+        <WorkflowQuestionComposer
+          canRunGraphNow={canRunGraphNow}
+          isWorkflowBusy={isWorkflowBusy}
+          onRunGraph={onRunGraph}
+          questionInputRef={questionInputRef}
+          setWorkflowQuestion={setWorkflowQuestion}
+          workflowQuestion={workflowQuestion}
+        />
       </div>
     </section>
   );
