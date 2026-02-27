@@ -229,6 +229,7 @@ import { createCanvasConnectionHandlers } from "./main/canvasConnectionHandlers"
 import { createCoreStateHandlers } from "./main/coreStateHandlers";
 import { createFeedKnowledgeHandlers } from "./main/feedKnowledgeHandlers";
 import { useMainAppStateEffects } from "./main/useMainAppStateEffects";
+import { createRunGraphControlHandlers } from "./main/runGraphControlHandlers";
 import {
   PAUSE_ERROR_TOKEN,
   appendRunTransition,
@@ -1752,116 +1753,64 @@ function App() {
     });
   }
 
-  async function prepareRunGraphStart(
-    skipWebConnectPreflight: boolean,
-  ): Promise<ReturnType<typeof inferRunGroupMeta> | null> {
-    const resolvedCwd = String(cwd ?? "").trim();
-    if (!resolvedCwd || resolvedCwd === ".") {
-      setError("작업 경로(CWD)를 먼저 선택하세요.");
-      setStatus("그래프 실행 대기");
-      return null;
-    }
-
-    if (!skipWebConnectPreflight) {
-      const requiredWebProviders = collectRequiredWebProviders(graph.nodes);
-      if (requiredWebProviders.length > 0) {
-        const bridgeStatusLatest = (await refreshWebBridgeStatus(true, true)) ?? webBridgeStatus;
-        const connectedProviderSet = new Set(
-          (bridgeStatusLatest.connectedProviders ?? []).map((row: any) => row.provider),
-        );
-        const missingProviders = requiredWebProviders.filter((provider) => !connectedProviderSet.has(provider));
-        const reasons = buildWebConnectPreflightReasons({
-          bridgeRunning: Boolean(bridgeStatusLatest.running),
-          tokenMasked: Boolean(bridgeStatusLatest.tokenMasked),
-          extensionOriginPolicy: bridgeStatusLatest.extensionOriginPolicy,
-          extensionOriginAllowlistConfigured: bridgeStatusLatest.extensionOriginAllowlistConfigured,
-          missingProviders,
-          webProviderLabelFn: webProviderLabel,
-          t,
-        });
-
-        if (reasons.length > 0) {
-          setPendingWebConnectCheck({
-            providers: requiredWebProviders,
-            reason: reasons.join("\n"),
-          });
-          setError("");
-          setStatus("웹 연결 확인 필요");
-          return null;
-        }
-      }
-    }
-
-    const runGroup = inferRunGroupMeta(graph, lastAppliedPresetRef.current, locale);
-    const directInputNodeIds = findDirectInputNodeIds(graph);
-    if (directInputNodeIds.length !== 1) {
-      setError(
-        `질문 직접 입력 노드는 1개여야 합니다. 현재 ${directInputNodeIds.length}개입니다. 노드 연결을 정리하세요.`,
-      );
-      setStatus("그래프 실행 대기");
-      return null;
-    }
-    return runGroup;
-  }
-
-  function cleanupRunGraphExecutionState() {
-    for (const timerId of Object.values(webBridgeStageWarnTimerRef.current)) {
-      window.clearTimeout(timerId);
-    }
-    webBridgeStageWarnTimerRef.current = {};
-    activeWebPromptRef.current = {};
-    activeWebNodeByProviderRef.current = {};
-    turnTerminalResolverRef.current = null;
-    webTurnResolverRef.current = null;
-    webLoginResolverRef.current = null;
-    clearQueuedWebTurnRequests("실행이 종료되어 대기 중인 웹 응답 입력을 취소했습니다.");
-    manualInputWaitNoticeByNodeRef.current = {};
-    setPendingWebTurn(null);
-    setSuspendedWebTurn(null);
-    setSuspendedWebResponseDraft("");
-    setPendingWebLogin(null);
-    setWebResponseDraft("");
-    internalMemoryCorpusRef.current = [];
-    activeRunPresetKindRef.current = undefined;
-    activeTurnNodeIdRef.current = "";
-    setIsGraphRunning(false);
-    setIsGraphPaused(false);
-    setIsRunStarting(false);
-    runStartGuardRef.current = false;
-    cancelRequestedRef.current = false;
-    pauseRequestedRef.current = false;
-    collectingRunRef.current = false;
-    setActiveFeedRunMeta(null);
-  }
-
-  async function handleRunPauseIfNeeded(
-    activeTasks: Map<string, Promise<void>>,
-    pauseStatusShown: boolean,
-  ): Promise<{ handled: boolean; pauseStatusShown: boolean }> {
-    if (!pauseRequestedRef.current) {
-      return { handled: false, pauseStatusShown };
-    }
-    if (activeTasks.size > 0) {
-      await Promise.race(activeTasks.values());
-      return { handled: true, pauseStatusShown };
-    }
-    if (!pauseStatusShown) {
-      pauseStatusShown = true;
-      setIsGraphPaused(true);
-      setStatus("그래프 실행 일시정지됨");
-    }
-    await new Promise<void>((resolve) => {
-      const intervalId = window.setInterval(() => {
-        if (!pauseRequestedRef.current) {
-          window.clearInterval(intervalId);
-          resolve();
-        }
-      }, 120);
-    });
-    setIsGraphPaused(false);
-    setStatus("그래프 실행 재개");
-    return { handled: true, pauseStatusShown: false };
-  }
+  const {
+    prepareRunGraphStart,
+    cleanupRunGraphExecutionState,
+    handleRunPauseIfNeeded,
+    onCancelGraphRun,
+  } = createRunGraphControlHandlers({
+    cwd,
+    setError,
+    setStatus,
+    collectRequiredWebProviders,
+    graph,
+    refreshWebBridgeStatus,
+    webBridgeStatus,
+    buildWebConnectPreflightReasons,
+    webProviderLabel,
+    t,
+    setPendingWebConnectCheck,
+    inferRunGroupMeta,
+    lastAppliedPresetRef,
+    locale,
+    findDirectInputNodeIds,
+    webBridgeStageWarnTimerRef,
+    activeWebPromptRef,
+    activeWebNodeByProviderRef,
+    turnTerminalResolverRef,
+    webTurnResolverRef,
+    webLoginResolverRef,
+    clearQueuedWebTurnRequests,
+    manualInputWaitNoticeByNodeRef,
+    setPendingWebTurn,
+    setSuspendedWebTurn,
+    setSuspendedWebResponseDraft,
+    setPendingWebLogin,
+    setWebResponseDraft,
+    internalMemoryCorpusRef,
+    activeRunPresetKindRef,
+    activeTurnNodeIdRef,
+    setIsGraphRunning,
+    setIsGraphPaused,
+    setIsRunStarting,
+    runStartGuardRef,
+    cancelRequestedRef,
+    pauseRequestedRef,
+    collectingRunRef,
+    setActiveFeedRunMeta,
+    isGraphRunning,
+    pendingWebLogin,
+    resolvePendingWebLogin,
+    invokeFn: invoke,
+    addNodeLog,
+    clearWebBridgeStageWarnTimer,
+    pendingWebTurn,
+    suspendedWebTurn,
+    resolvePendingWebTurn,
+    pauseErrorToken: PAUSE_ERROR_TOKEN,
+    nodeStates,
+    cancelGraphRun,
+  });
 
   async function onRunGraph(skipWebConnectPreflight = false) {
     if (isGraphRunning && isGraphPaused) {
@@ -2701,29 +2650,6 @@ function App() {
     } finally {
       cleanupRunGraphExecutionState();
     }
-  }
-  async function onCancelGraphRun() {
-    pauseRequestedRef.current = true;
-    await cancelGraphRun({
-      isGraphRunning,
-      setIsGraphPaused,
-      setStatus,
-      pendingWebLogin: Boolean(pendingWebLogin),
-      resolvePendingWebLogin,
-      activeWebNodeByProvider: activeWebNodeByProviderRef.current,
-      invokeFn: invoke,
-      addNodeLog,
-      clearWebBridgeStageWarnTimer,
-      activeWebPromptByProvider: activeWebPromptRef.current,
-      setError,
-      pendingWebTurn,
-      suspendedWebTurn,
-      clearQueuedWebTurnRequests,
-      resolvePendingWebTurn,
-      pauseErrorToken: PAUSE_ERROR_TOKEN,
-      activeTurnNodeId: activeTurnNodeIdRef.current,
-      nodeStates,
-    });
   }
   const edgeLines = buildCanvasEdgeLines({
     entries: canvasDisplayEdges,
