@@ -1,7 +1,15 @@
 import { useMemo } from "react";
 import { useI18n } from "../../i18n";
 
-export type DashboardDetailTopic = "news" | "trend" | "stock";
+export type DashboardDetailTopic =
+  | "globalHeadlines"
+  | "marketSummary"
+  | "industryTrendRadar"
+  | "communityHotTopics"
+  | "reliabilityPanel"
+  | "eventCalendar"
+  | "riskAlertBoard"
+  | "devEcosystem";
 
 type DashboardDetailPageProps = {
   topic: DashboardDetailTopic;

@@ -58,7 +58,7 @@ export default function StockWidgetChart({ data }: StockWidgetChartProps) {
   }, [data]);
 
   if (!data || !chart) {
-    return <div className="dashboard-stock-chart-empty">{t("dashboard.widget.stock.chart.empty")}</div>;
+    return <div className="dashboard-stock-chart-empty">{t("dashboard.widget.marketSummary.chart.empty")}</div>;
   }
 
   const up = chart.delta >= 0;
@@ -74,7 +74,7 @@ export default function StockWidgetChart({ data }: StockWidgetChartProps) {
         </span>
       </div>
       <svg
-        aria-label={t("dashboard.widget.stock.chart.aria")}
+        aria-label={t("dashboard.widget.marketSummary.chart.aria")}
         className="dashboard-stock-chart-svg"
         viewBox={`0 0 ${chart.width} ${chart.height}`}
       >
@@ -101,7 +101,7 @@ export default function StockWidgetChart({ data }: StockWidgetChartProps) {
         <span>{data.labels[data.labels.length - 1]}</span>
       </div>
       <div className="dashboard-stock-chart-source">
-        {t("dashboard.widget.stock.chart.source")}
+        {t("dashboard.widget.marketSummary.chart.source")}
         {data.sourceSummary ? `: ${data.sourceSummary}` : ""}
       </div>
     </div>

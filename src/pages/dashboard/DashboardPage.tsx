@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { useI18n } from "../../i18n";
 import StockWidgetChart from "./StockWidgetChart";
 import { buildDashboardStockChartData, type DashboardStockDocumentPost } from "./stockWidgetChartData";
+import type { DashboardDetailTopic } from "./DashboardDetailPage";
 
 type DashboardPageProps = {
   cwd: string;
@@ -11,7 +12,7 @@ type DashboardPageProps = {
   connectedProviderCount: number;
   scheduleCount: number;
   enabledScheduleCount: number;
-  onOpenDetail: (topic: "news" | "trend" | "stock") => void;
+  onOpenDetail: (topic: DashboardDetailTopic) => void;
   stockDocumentPosts: DashboardStockDocumentPost[];
 };
 
@@ -21,11 +22,94 @@ type DashboardCard = {
   caption: string;
 };
 
+type DashboardWidget = {
+  topic: DashboardDetailTopic;
+  badgeKey: string;
+  itemKeys: [string, string, string];
+};
+
 export default function DashboardPage(props: DashboardPageProps) {
   const { t } = useI18n();
   const stockChartData = useMemo(
     () => buildDashboardStockChartData(props.stockDocumentPosts),
     [props.stockDocumentPosts],
+  );
+  const widgets = useMemo<DashboardWidget[]>(
+    () => [
+      {
+        topic: "globalHeadlines",
+        badgeKey: "dashboard.widget.badge.global",
+        itemKeys: [
+          "dashboard.widget.globalHeadlines.item1",
+          "dashboard.widget.globalHeadlines.item2",
+          "dashboard.widget.globalHeadlines.item3",
+        ],
+      },
+      {
+        topic: "industryTrendRadar",
+        badgeKey: "dashboard.widget.badge.radar",
+        itemKeys: [
+          "dashboard.widget.industryTrendRadar.item1",
+          "dashboard.widget.industryTrendRadar.item2",
+          "dashboard.widget.industryTrendRadar.item3",
+        ],
+      },
+      {
+        topic: "marketSummary",
+        badgeKey: "dashboard.widget.badge.market",
+        itemKeys: [
+          "dashboard.widget.marketSummary.item1",
+          "dashboard.widget.marketSummary.item2",
+          "dashboard.widget.marketSummary.item3",
+        ],
+      },
+      {
+        topic: "communityHotTopics",
+        badgeKey: "dashboard.widget.badge.community",
+        itemKeys: [
+          "dashboard.widget.communityHotTopics.item1",
+          "dashboard.widget.communityHotTopics.item2",
+          "dashboard.widget.communityHotTopics.item3",
+        ],
+      },
+      {
+        topic: "reliabilityPanel",
+        badgeKey: "dashboard.widget.badge.trust",
+        itemKeys: [
+          "dashboard.widget.reliabilityPanel.item1",
+          "dashboard.widget.reliabilityPanel.item2",
+          "dashboard.widget.reliabilityPanel.item3",
+        ],
+      },
+      {
+        topic: "eventCalendar",
+        badgeKey: "dashboard.widget.badge.events",
+        itemKeys: [
+          "dashboard.widget.eventCalendar.item1",
+          "dashboard.widget.eventCalendar.item2",
+          "dashboard.widget.eventCalendar.item3",
+        ],
+      },
+      {
+        topic: "riskAlertBoard",
+        badgeKey: "dashboard.widget.badge.risk",
+        itemKeys: [
+          "dashboard.widget.riskAlertBoard.item1",
+          "dashboard.widget.riskAlertBoard.item2",
+          "dashboard.widget.riskAlertBoard.item3",
+        ],
+      },
+      {
+        topic: "devEcosystem",
+        badgeKey: "dashboard.widget.badge.dev",
+        itemKeys: [
+          "dashboard.widget.devEcosystem.item1",
+          "dashboard.widget.devEcosystem.item2",
+          "dashboard.widget.devEcosystem.item3",
+        ],
+      },
+    ],
+    [],
   );
 
   const cards = useMemo<DashboardCard[]>(
@@ -79,47 +163,28 @@ export default function DashboardPage(props: DashboardPageProps) {
       </section>
 
       <section className="dashboard-widget-grid">
-        <button
-          className="panel-card dashboard-widget-card dashboard-widget-button"
-          onClick={() => props.onOpenDetail("news")}
-          type="button"
-        >
-          <div className="dashboard-widget-head">
-            <h3>{t("dashboard.widget.news.title")}</h3>
-            <span>{t("dashboard.widget.badge.live")}</span>
-          </div>
-          <ul>
-            <li>{t("dashboard.widget.news.item1")}</li>
-            <li>{t("dashboard.widget.news.item2")}</li>
-            <li>{t("dashboard.widget.news.item3")}</li>
-          </ul>
-        </button>
-        <button
-          className="panel-card dashboard-widget-card dashboard-widget-button"
-          onClick={() => props.onOpenDetail("trend")}
-          type="button"
-        >
-          <div className="dashboard-widget-head">
-            <h3>{t("dashboard.widget.trend.title")}</h3>
-            <span>{t("dashboard.widget.badge.signal")}</span>
-          </div>
-          <ul>
-            <li>{t("dashboard.widget.trend.item1")}</li>
-            <li>{t("dashboard.widget.trend.item2")}</li>
-            <li>{t("dashboard.widget.trend.item3")}</li>
-          </ul>
-        </button>
-        <button
-          className="panel-card dashboard-widget-card dashboard-widget-button"
-          onClick={() => props.onOpenDetail("stock")}
-          type="button"
-        >
-          <div className="dashboard-widget-head">
-            <h3>{t("dashboard.widget.stock.title")}</h3>
-            <span>{t("dashboard.widget.badge.market")}</span>
-          </div>
-          <StockWidgetChart data={stockChartData} />
-        </button>
+        {widgets.map((widget) => (
+          <button
+            className="panel-card dashboard-widget-card dashboard-widget-button"
+            key={widget.topic}
+            onClick={() => props.onOpenDetail(widget.topic)}
+            type="button"
+          >
+            <div className="dashboard-widget-head">
+              <h3>{t(`dashboard.widget.${widget.topic}.title`)}</h3>
+              <span>{t(widget.badgeKey)}</span>
+            </div>
+            {widget.topic === "marketSummary" ? (
+              <StockWidgetChart data={stockChartData} />
+            ) : (
+              <ul>
+                {widget.itemKeys.map((key) => (
+                  <li key={key}>{t(key)}</li>
+                ))}
+              </ul>
+            )}
+          </button>
+        ))}
       </section>
     </section>
   );
