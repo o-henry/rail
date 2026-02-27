@@ -694,7 +694,7 @@ h3 {
   height: 100%;
   margin: 0 10px 10px;
   display: grid;
-  background: var(--surface-panel);
+  background: transparent;
   grid-template-columns: minmax(0, 1fr) 300px;
   gap: 10px;
   overflow: hidden;
@@ -1672,6 +1672,8 @@ h3 {
 
 .inspector-pane {
   min-height: 0;
+  height: 100%;
+  align-self: stretch;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   gap: 0;
