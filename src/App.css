@@ -1915,8 +1915,8 @@ h3 {
 
 .settings-view .controls .fancy-select-trigger:focus,
 .settings-view .controls .fancy-select-trigger:focus-visible {
-  border-color: #5f88d7;
-  box-shadow: 0 0 0 1px rgba(95, 136, 215, 0.28);
+  border-color: var(--surface-strong);
+  box-shadow: none;
 }
 
 :root[data-theme="dark"] .settings-view .controls .fancy-select-trigger {
@@ -1930,8 +1930,15 @@ h3 {
 
 :root[data-theme="dark"] .settings-view .controls .fancy-select-trigger:focus,
 :root[data-theme="dark"] .settings-view .controls .fancy-select-trigger:focus-visible {
-  border-color: #81b8ff;
-  box-shadow: 0 0 0 1px rgba(129, 184, 255, 0.32);
+  border-color: #4a4f58;
+  box-shadow: none;
+}
+
+/* Requested UX: hide keyboard focus ring/outline across interactive controls. */
+:where(button, input, textarea, select, a, summary, [role="button"], [tabindex], .fancy-select-trigger):focus,
+:where(button, input, textarea, select, a, summary, [role="button"], [tabindex], .fancy-select-trigger):focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
 }
 
 .lowercase-path-input {
