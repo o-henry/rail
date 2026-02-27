@@ -2,7 +2,7 @@ export const THEME_MODE_STORAGE_KEY = "rail.settings.theme_mode";
 
 export type ThemeModeValue = "light" | "dark";
 export const THEME_MODE_META_COLOR: Record<ThemeModeValue, string> = {
-  light: "#ffffff",
+  light: "#f6f6f6",
   dark: "#1e1e1e",
 };
 
