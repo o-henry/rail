@@ -176,6 +176,41 @@ export function createRunRecord(params: {
   };
 }
 
+export function resolveFinalNodeId(params: {
+  graph: GraphData;
+  transitions: RunRecord["transitions"];
+  lastDoneNodeId: string;
+}): string {
+  const outgoingNodeIdSet = new Set(params.graph.edges.map((edge) => edge.from.nodeId));
+  const sinkNodeIds = params.graph.nodes
+    .map((node) => node.id)
+    .filter((nodeId) => !outgoingNodeIdSet.has(nodeId));
+  if (sinkNodeIds.length === 1) {
+    return sinkNodeIds[0];
+  }
+  if (sinkNodeIds.length > 1) {
+    const sinkSet = new Set(sinkNodeIds);
+    for (let index = params.transitions.length - 1; index >= 0; index -= 1) {
+      const row = params.transitions[index];
+      if (sinkSet.has(row.nodeId)) {
+        return row.nodeId;
+      }
+    }
+  }
+  return params.lastDoneNodeId || "";
+}
+
+export function buildFinalNodeFailureReason(params: {
+  finalNodeId: string;
+  finalNodeState?: NodeExecutionStatus;
+  nodeStatusLabelFn: (state: NodeExecutionStatus) => string;
+}): string {
+  if (params.finalNodeId && params.finalNodeState) {
+    return `최종 노드(${params.finalNodeId}) 상태=${params.nodeStatusLabelFn(params.finalNodeState)}`;
+  }
+  return "최종 노드를 확정하지 못했습니다.";
+}
+
 export function isPauseSignalError(input: unknown): boolean {
   const text = String(input ?? "").toLowerCase();
   if (!text) {

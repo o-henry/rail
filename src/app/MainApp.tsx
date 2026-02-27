@@ -229,6 +229,8 @@ import {
   createRunNodeStateSnapshot,
   createRunRecord,
   findDirectInputNodeIds,
+  resolveFinalNodeId,
+  buildFinalNodeFailureReason,
   isPauseSignalError,
 } from "./main/runGraphExecutionUtils";
 import {
@@ -4738,36 +4740,21 @@ function App() {
       if (runRecord.nodeMetrics && Object.keys(runRecord.nodeMetrics).length > 0) {
         runRecord.qualitySummary = summarizeQualityMetrics(runRecord.nodeMetrics);
       }
-      const outgoingNodeIdSet = new Set(graph.edges.map((edge) => edge.from.nodeId));
-      const sinkNodeIds = graph.nodes
-        .map((node) => node.id)
-        .filter((nodeId) => !outgoingNodeIdSet.has(nodeId));
-      let finalNodeId = "";
-      if (sinkNodeIds.length === 1) {
-        finalNodeId = sinkNodeIds[0];
-      } else if (sinkNodeIds.length > 1) {
-        const sinkSet = new Set(sinkNodeIds);
-        for (let index = runRecord.transitions.length - 1; index >= 0; index -= 1) {
-          const row = runRecord.transitions[index];
-          if (!sinkSet.has(row.nodeId)) {
-            continue;
-          }
-          finalNodeId = row.nodeId;
-          break;
-        }
-      }
-      if (!finalNodeId && lastDoneNodeId) {
-        finalNodeId = lastDoneNodeId;
-      }
+      const finalNodeId = resolveFinalNodeId({
+        graph,
+        transitions: runRecord.transitions,
+        lastDoneNodeId,
+      });
       const finalNodeState = finalNodeId ? terminalStateByNodeId[finalNodeId] : undefined;
       if (finalNodeId && (finalNodeState === "done" || finalNodeState === "low_quality") && finalNodeId in outputs) {
         runRecord.finalAnswer = extractFinalAnswer(outputs[finalNodeId]);
         setStatus(finalNodeState === "low_quality" ? t("run.graphCompletedLowQuality") : "그래프 실행 완료");
       } else {
-        const reason =
-          finalNodeId && finalNodeState
-            ? `최종 노드(${finalNodeId}) 상태=${nodeStatusLabel(finalNodeState)}`
-            : "최종 노드를 확정하지 못했습니다.";
+        const reason = buildFinalNodeFailureReason({
+          finalNodeId,
+          finalNodeState,
+          nodeStatusLabelFn: nodeStatusLabel,
+        });
         setStatus(`그래프 실행 실패 (${reason})`);
         setError(`최종 노드 실패: ${reason}`);
       }
