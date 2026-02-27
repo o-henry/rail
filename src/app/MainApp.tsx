@@ -1889,6 +1889,7 @@ function App() {
             onOpenWorkflow={() => setWorkspaceTab("workflow")}
             pendingApprovalsCount={pendingApprovals.length}
             scheduleCount={batchScheduler.schedules.length}
+            stockDocumentPosts={feedPosts}
             webBridgeRunning={webBridgeStatus.running}
           />
         )}

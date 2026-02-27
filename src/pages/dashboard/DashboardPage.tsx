@@ -1,5 +1,7 @@
 import { useMemo } from "react";
 import { useI18n } from "../../i18n";
+import StockWidgetChart from "./StockWidgetChart";
+import { buildDashboardStockChartData, type DashboardStockDocumentPost } from "./stockWidgetChartData";
 
 type DashboardPageProps = {
   cwd: string;
@@ -15,6 +17,7 @@ type DashboardPageProps = {
   onOpenBridge: () => void;
   onOpenSettings: () => void;
   onOpenDetail: (topic: "news" | "trend" | "stock") => void;
+  stockDocumentPosts: DashboardStockDocumentPost[];
 };
 
 type DashboardCard = {
@@ -25,6 +28,10 @@ type DashboardCard = {
 
 export default function DashboardPage(props: DashboardPageProps) {
   const { t } = useI18n();
+  const stockChartData = useMemo(
+    () => buildDashboardStockChartData(props.stockDocumentPosts),
+    [props.stockDocumentPosts],
+  );
 
   const cards = useMemo<DashboardCard[]>(
     () => [
@@ -116,11 +123,7 @@ export default function DashboardPage(props: DashboardPageProps) {
             <h3>{t("dashboard.widget.stock.title")}</h3>
             <span>{t("dashboard.widget.badge.market")}</span>
           </div>
-          <ul>
-            <li>{t("dashboard.widget.stock.item1")}</li>
-            <li>{t("dashboard.widget.stock.item2")}</li>
-            <li>{t("dashboard.widget.stock.item3")}</li>
-          </ul>
+          <StockWidgetChart data={stockChartData} />
         </button>
       </section>
 
