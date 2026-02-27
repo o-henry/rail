@@ -228,6 +228,7 @@ import { createCanvasConnectionHandlers } from "./main/canvasConnectionHandlers"
 import { createCoreStateHandlers } from "./main/coreStateHandlers";
 import { createFeedKnowledgeHandlers } from "./main/feedKnowledgeHandlers";
 import { useMainAppStateEffects } from "./main/useMainAppStateEffects";
+import { useEngineEventListeners } from "./main/useEngineEventListeners";
 import { createRunGraphControlHandlers } from "./main/runGraphControlHandlers";
 import { createRunGraphRunner } from "./main/runGraphRunner";
 import {
@@ -272,9 +273,6 @@ import { executeTurnNodeWithContext } from "./main/executeTurnNode";
 import type {
   ApprovalDecision,
   CanvasDisplayEdge,
-  EngineApprovalRequestEvent,
-  EngineLifecycleEvent,
-  EngineNotificationEvent,
   FeedCategory,
   InternalMemorySnippet,
   RunRecord,
@@ -752,242 +750,6 @@ function App() {
   }, []);
 
   useEffect(() => {
-    let cancelled = false;
-    if (!hasTauriRuntime) {
-      return () => {
-        cancelled = true;
-      };
-    }
-
-    const attach = async () => {
-      const unlistenNotification = await listen<EngineNotificationEvent>(
-        "engine://notification",
-        (event) => {
-          try {
-            const payload = event.payload;
-
-            if (payload.method === "item/agentMessage/delta") {
-              const delta = extractDeltaText(payload.params);
-              const activeNodeId = activeTurnNodeIdRef.current;
-              if (activeNodeId && delta) {
-                activeRunDeltaRef.current[activeNodeId] =
-                  (activeRunDeltaRef.current[activeNodeId] ?? "") + delta;
-              }
-            }
-
-            if (payload.method === "account/login/completed") {
-              authLoginRequiredProbeCountRef.current = 0;
-              lastAuthenticatedAtRef.current = Date.now();
-              setLoginCompleted(true);
-              setStatus("로그인 완료 이벤트 수신");
-              void refreshAuthStateFromEngine(true);
-            }
-
-            if (payload.method === "account/updated") {
-              const mode = extractAuthMode(payload.params);
-              if (mode) {
-                authLoginRequiredProbeCountRef.current = 0;
-                lastAuthenticatedAtRef.current = Date.now();
-                setAuthMode(mode);
-                setLoginCompleted(true);
-                setStatus(`계정 상태 갱신 수신 (인증 모드=${mode})`);
-              } else {
-                setStatus("계정 상태 갱신 수신 (인증 모드 미확인)");
-              }
-            }
-
-            if (payload.method === "web/progress") {
-              const message = extractStringByPaths(payload.params, ["message", "stage", "error"]);
-              const stage = extractStringByPaths(payload.params, ["stage"]);
-              const provider = extractStringByPaths(payload.params, ["provider"])?.toLowerCase() ?? "";
-              const providerKey = provider && WEB_PROVIDER_OPTIONS.includes(provider as WebProvider)
-                ? (provider as WebProvider)
-                : null;
-              const activeWebNodeId = providerKey
-                ? activeWebNodeByProviderRef.current[providerKey]
-                : "";
-              const hasBridgeStage = Boolean(stage?.startsWith("bridge_"));
-              const progressMessage = hasBridgeStage
-                ? normalizeWebBridgeProgressMessage(stage ?? "", message ?? "")
-                : (message ?? "");
-              if (activeWebNodeId && progressMessage && stage !== "bridge_waiting_user_send") {
-                addNodeLog(activeWebNodeId, `[WEB] ${progressMessage}`);
-              }
-              if (hasBridgeStage) {
-                const prefix = providerKey
-                  ? `[${providerKey.toUpperCase()}] `
-                  : "";
-                const line = `${prefix}${progressMessage || stage}`;
-                setWebBridgeLogs((prev) => [`${new Date().toLocaleTimeString()} ${line}`, ...prev].slice(0, 120));
-                if (providerKey && stage === "bridge_queued") {
-                  setStatus(`${webProviderLabel(providerKey)} 작업 대기열 등록됨`);
-                  scheduleWebBridgeStageWarn(
-                    providerKey,
-                    WEB_BRIDGE_CLAIM_WARN_MS,
-                    `${webProviderLabel(providerKey)} 탭에서 작업 수신이 지연되고 있습니다.`,
-                    "[WEB] 작업 수신 지연: 해당 서비스 탭이 열려 있고 확장이 활성화되어 있는지 확인하세요.",
-                    () => {
-                      const prompt = activeWebPromptRef.current[providerKey];
-                      if (!prompt) {
-                        return;
-                      }
-                      void navigator.clipboard
-                        .writeText(prompt)
-                        .then(() => {
-                          const activeWebNodeId = activeWebNodeByProviderRef.current[providerKey];
-                          if (activeWebNodeId) {
-                            addNodeLog(activeWebNodeId, "[WEB] 자동 주입 지연으로 프롬프트를 클립보드에 복사했습니다.");
-                          }
-                        })
-                        .catch(() => {
-                          // clipboard permission can be denied depending on runtime context
-                        });
-                    },
-                  );
-                } else if (providerKey && stage === "bridge_claimed") {
-                  setStatus(`${webProviderLabel(providerKey)} 탭 연결됨, 프롬프트 주입 중`);
-                  scheduleWebBridgeStageWarn(
-                    providerKey,
-                    WEB_BRIDGE_PROMPT_FILLED_WARN_MS,
-                    `${webProviderLabel(providerKey)} 프롬프트 자동 주입이 지연되고 있습니다.`,
-                    "[WEB] 프롬프트 자동 주입 지연: 입력창 탐지 실패 가능성이 있습니다. 웹 탭을 새로고침 후 다시 실행하세요.",
-                  );
-                } else if (providerKey && stage === "bridge_prompt_filled") {
-                  clearWebBridgeStageWarnTimer(providerKey);
-                  setStatus(`${webProviderLabel(providerKey)} 프롬프트 자동 주입 완료`);
-                } else if (providerKey && stage === "bridge_waiting_user_send") {
-                  clearWebBridgeStageWarnTimer(providerKey);
-                  setStatus(`${webProviderLabel(providerKey)} 자동 전송 확인 중`);
-                  scheduleWebBridgeStageWarn(
-                    providerKey,
-                    1_600,
-                    `${webProviderLabel(providerKey)} 탭에서 전송 1회가 필요합니다.`,
-                    "[WEB] 자동 전송이 확인되지 않아 사용자 전송 클릭을 기다립니다.",
-                  );
-                } else if (providerKey && stage === "bridge_extension_error") {
-                  clearWebBridgeStageWarnTimer(providerKey);
-                  setStatus(`${webProviderLabel(providerKey)} 웹 연결 오류 - 확장 연결 상태를 확인하세요.`);
-                } else if (providerKey && stage === "bridge_done") {
-                  clearWebBridgeStageWarnTimer(providerKey);
-                  setStatus(`${webProviderLabel(providerKey)} 응답 수집 완료`);
-                } else if (
-                  providerKey &&
-                  (stage === "bridge_failed" ||
-                    stage === "bridge_timeout" ||
-                    stage === "bridge_cancelled" ||
-                    stage === "bridge_error")
-                ) {
-                  clearWebBridgeStageWarnTimer(providerKey);
-                }
-              }
-            }
-
-            if (payload.method === "web/worker/ready") {
-              setWebWorkerHealth((prev) => ({ ...prev, running: true }));
-            }
-
-            if (payload.method === "web/worker/stopped") {
-              setWebWorkerHealth((prev) => ({ ...prev, running: false, activeProvider: null }));
-            }
-
-            const terminal = isTurnTerminalEvent(payload.method, payload.params);
-            if (terminal && turnTerminalResolverRef.current) {
-              const resolve = turnTerminalResolverRef.current;
-              turnTerminalResolverRef.current = null;
-              resolve(terminal);
-            }
-          } catch (handlerError) {
-            reportSoftError("notification handler failed", handlerError);
-          }
-        },
-      );
-
-      const unlistenApprovalRequest = await listen<EngineApprovalRequestEvent>(
-        "engine://approval_request",
-        (event) => {
-          try {
-            const payload = event.payload;
-            setPendingApprovals((prev) => {
-              if (prev.some((item) => item.requestId === payload.requestId)) {
-                return prev;
-              }
-              return [
-                ...prev,
-                {
-                  requestId: payload.requestId,
-                  source: "remote",
-                  method: payload.method,
-                  params: payload.params,
-                },
-              ];
-            });
-            setStatus(`승인 요청 수신 (${payload.method})`);
-          } catch (handlerError) {
-            reportSoftError("approval handler failed", handlerError);
-          }
-        },
-      );
-
-      const unlistenLifecycle = await listen<EngineLifecycleEvent>(
-        "engine://lifecycle",
-        (event) => {
-          try {
-            const payload = event.payload;
-            const msg = payload.message ? ` (${payload.message})` : "";
-            setStatus(`${lifecycleStateLabel(payload.state)}${msg}`);
-
-            if (payload.state === "ready") {
-              setEngineStarted(true);
-              void refreshAuthStateFromEngine(true);
-            }
-            if (payload.state === "stopped" || payload.state === "disconnected") {
-              setEngineStarted(false);
-              markCodexNodesStatusOnEngineIssue("cancelled", "엔진 중지 또는 연결 끊김");
-              setUsageInfoText("");
-              setPendingApprovals([]);
-              setApprovalSubmitting(false);
-            }
-            if (payload.state === "parseError" || payload.state === "readError" || payload.state === "stderrError") {
-              markCodexNodesStatusOnEngineIssue("failed", "엔진/프로토콜 오류");
-            }
-          } catch (handlerError) {
-            reportSoftError("lifecycle handler failed", handlerError);
-          }
-        },
-      );
-
-      if (cancelled) {
-        unlistenNotification();
-        unlistenApprovalRequest();
-        unlistenLifecycle();
-      }
-
-      return () => {
-        unlistenNotification();
-        unlistenApprovalRequest();
-        unlistenLifecycle();
-      };
-    };
-
-    let detach: (() => void) | undefined;
-    attach()
-      .then((fn) => {
-        detach = fn;
-      })
-      .catch((e) => {
-        reportSoftError("event listen failed", e);
-      });
-
-    return () => {
-      cancelled = true;
-      if (detach) {
-        detach();
-      }
-    };
-  }, [hasTauriRuntime]);
-
-
-  useEffect(() => {
     refreshGraphFiles();
     refreshFeedTimeline();
   }, []);
@@ -1057,6 +819,43 @@ function App() {
     toWebBridgeStatus,
     setWebWorkerBusy,
     setWebBridgeConnectCode,
+  });
+
+  useEngineEventListeners({
+    hasTauriRuntime,
+    listenFn: listen,
+    extractDeltaText,
+    activeTurnNodeIdRef,
+    activeRunDeltaRef,
+    authLoginRequiredProbeCountRef,
+    lastAuthenticatedAtRef,
+    setLoginCompleted,
+    setStatus,
+    refreshAuthStateFromEngine,
+    extractAuthMode,
+    setAuthMode,
+    extractStringByPaths,
+    webProviderOptions: WEB_PROVIDER_OPTIONS,
+    activeWebNodeByProviderRef,
+    normalizeWebBridgeProgressMessage,
+    addNodeLog,
+    setWebBridgeLogs,
+    webProviderLabel,
+    scheduleWebBridgeStageWarn,
+    activeWebPromptRef,
+    webBridgeClaimWarnMs: WEB_BRIDGE_CLAIM_WARN_MS,
+    webBridgePromptFilledWarnMs: WEB_BRIDGE_PROMPT_FILLED_WARN_MS,
+    clearWebBridgeStageWarnTimer,
+    setWebWorkerHealth,
+    isTurnTerminalEvent,
+    turnTerminalResolverRef,
+    reportSoftError,
+    setPendingApprovals,
+    lifecycleStateLabel,
+    setEngineStarted,
+    markCodexNodesStatusOnEngineIssue,
+    setUsageInfoText,
+    setApprovalSubmitting,
   });
 
 
