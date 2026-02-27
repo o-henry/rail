@@ -21,7 +21,6 @@ const NAV_ITEMS: NavItem[] = [
   { tab: "workflow", label: "nav.workflow.short", ariaLabel: "nav.workflow.title", title: "nav.workflow.title" },
   { tab: "feed", label: "nav.feed", ariaLabel: "nav.feed", title: "nav.feed" },
   { tab: "agents", label: "nav.agents", ariaLabel: "nav.agents", title: "nav.agents" },
-  { tab: "bridge", label: "nav.bridge", ariaLabel: "nav.bridge", title: "nav.bridge" },
   { tab: "settings", label: "nav.settings", ariaLabel: "nav.settings", title: "nav.settings" },
 ];
 const SHOW_LANGUAGE_SWITCH = false;
