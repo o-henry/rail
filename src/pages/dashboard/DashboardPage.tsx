@@ -26,7 +26,7 @@ type DashboardCard = {
 type DashboardWidget = {
   topic: DashboardDetailTopic;
   badgeKey: string;
-  itemKeys: [string, string, string];
+  itemKeys: string[];
 };
 
 export default function DashboardPage(props: DashboardPageProps) {
@@ -71,6 +71,8 @@ export default function DashboardPage(props: DashboardPageProps) {
           "dashboard.widget.communityHotTopics.item1",
           "dashboard.widget.communityHotTopics.item2",
           "dashboard.widget.communityHotTopics.item3",
+          "dashboard.widget.communityHotTopics.item4",
+          "dashboard.widget.communityHotTopics.item5",
         ],
       },
       {
