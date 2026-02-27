@@ -50,7 +50,6 @@ import {
   type TurnConfig,
   type TurnExecutor,
   type WebProvider,
-  type WebResultMode,
 } from "../features/workflow/domain";
 import {
   applyPresetOutputSchemaPolicies,
@@ -88,7 +87,6 @@ import {
   autoArrangeGraphLayout,
   buildCanvasEdgeLines,
   buildRoundedEdgePath,
-  buildSimpleReadonlyTurnEdges,
   cloneGraph,
   getAutoConnectionSides,
   getGraphEdgeKey,
@@ -107,7 +105,6 @@ import {
   CODEX_MULTI_AGENT_MODE_STORAGE_KEY,
   LOGIN_COMPLETED_STORAGE_KEY,
   WORKSPACE_CWD_STORAGE_KEY,
-  closestNumericOptionValue,
   extractAuthMode,
   extractDeltaText,
   extractStringByPaths,
@@ -231,6 +228,9 @@ import { useEngineEventListeners } from "./main/useEngineEventListeners";
 import { useMainAppRuntimeEffects } from "./main/useMainAppRuntimeEffects";
 import { createRunGraphControlHandlers } from "./main/runGraphControlHandlers";
 import { createRunGraphRunner } from "./main/runGraphRunner";
+import { createWorkflowPresetHandlers } from "./main/workflowPresetHandlers";
+import { createWebTurnRunHandlers } from "./main/webTurnRunHandlers";
+import { useCanvasGraphDerivedState } from "./main/useCanvasGraphDerivedState";
 import {
   PAUSE_ERROR_TOKEN,
   appendRunTransition,
@@ -271,8 +271,6 @@ import {
 } from "./main/turnExecutionUtils";
 import { executeTurnNodeWithContext } from "./main/executeTurnNode";
 import type {
-  ApprovalDecision,
-  CanvasDisplayEdge,
   FeedCategory,
   InternalMemorySnippet,
   RunRecord,
@@ -528,68 +526,26 @@ function App() {
   });
 
   const activeApproval = pendingApprovals[0];
-  const canvasNodes = useMemo(() => {
-    if (!SIMPLE_WORKFLOW_UI) {
-      return graph.nodes;
-    }
-    return graph.nodes.filter((node) => node.type === "turn");
-  }, [graph.nodes]);
-  const canvasNodeIdSet = useMemo(() => new Set(canvasNodes.map((node) => node.id)), [canvasNodes]);
-  const canvasNodeMap = useMemo(() => new Map(canvasNodes.map((node) => [node.id, node])), [canvasNodes]);
-  const canvasEdges = useMemo(() => {
-    if (!SIMPLE_WORKFLOW_UI) {
-      return graph.edges;
-    }
-    return graph.edges.filter(
-      (edge) => canvasNodeIdSet.has(edge.from.nodeId) && canvasNodeIdSet.has(edge.to.nodeId),
-    );
-  }, [graph.edges, canvasNodeIdSet]);
-  const canvasDisplayEdges = useMemo<CanvasDisplayEdge[]>(() => {
-    const editableEdges: CanvasDisplayEdge[] = canvasEdges.map((edge) => ({
-      edge,
-      edgeKey: getGraphEdgeKey(edge),
-      readOnly: false,
-    }));
-    if (!SIMPLE_WORKFLOW_UI) {
-      return editableEdges;
-    }
-
-    const editablePairSet = new Set(
-      editableEdges.map((row) => `${row.edge.from.nodeId}->${row.edge.to.nodeId}`),
-    );
-    const readonlyPairs = buildSimpleReadonlyTurnEdges(graph, canvasNodeIdSet).filter(
-      (pair) => !editablePairSet.has(`${pair.fromId}->${pair.toId}`),
-    );
-    const readonlyEdges: CanvasDisplayEdge[] = readonlyPairs.map((pair) => ({
-      edge: {
-        from: { nodeId: pair.fromId, port: "out" },
-        to: { nodeId: pair.toId, port: "in" },
-      },
-      edgeKey: `readonly:${pair.fromId}->${pair.toId}`,
-      readOnly: true,
-    }));
-
-    return [...editableEdges, ...readonlyEdges];
-  }, [canvasEdges, canvasNodeIdSet, graph]);
-  const selectedEdgeNodeIdSet = useMemo(() => {
-    const selected = canvasDisplayEdges.find((row) => row.edgeKey === selectedEdgeKey);
-    if (!selected) {
-      return new Set<string>();
-    }
-    return new Set([selected.edge.from.nodeId, selected.edge.to.nodeId]);
-  }, [canvasDisplayEdges, selectedEdgeKey]);
-  const selectedNode = canvasNodes.find((node) => node.id === selectedNodeId) ?? null;
-  const questionDirectInputNodeIds = useMemo(() => {
-    const incomingNodeIds = new Set(graph.edges.map((edge) => edge.to.nodeId));
-    return new Set(graph.nodes.filter((node) => !incomingNodeIds.has(node.id)).map((node) => node.id));
-  }, [graph.edges, graph.nodes]);
-  const graphKnowledge = normalizeKnowledgeConfig(graph.knowledge);
-  const enabledKnowledgeFiles = graphKnowledge.files.filter((row) => row.enabled);
-  const selectedKnowledgeMaxCharsOption = closestNumericOptionValue(
-    KNOWLEDGE_MAX_CHARS_OPTIONS,
-    graphKnowledge.maxChars,
-    KNOWLEDGE_DEFAULT_MAX_CHARS,
-  );
+  const {
+    canvasNodes,
+    canvasNodeIdSet,
+    canvasNodeMap,
+    canvasDisplayEdges,
+    selectedEdgeNodeIdSet,
+    selectedNode,
+    questionDirectInputNodeIds,
+    graphKnowledge,
+    enabledKnowledgeFiles,
+    selectedKnowledgeMaxCharsOption,
+  } = useCanvasGraphDerivedState({
+    graph,
+    selectedNodeId,
+    selectedEdgeKey,
+    simpleWorkflowUi: SIMPLE_WORKFLOW_UI,
+    normalizeKnowledgeConfig,
+    knowledgeMaxCharsOptions: KNOWLEDGE_MAX_CHARS_OPTIONS,
+    knowledgeDefaultMaxChars: KNOWLEDGE_DEFAULT_MAX_CHARS,
+  });
 
   const {
     setStatus,
@@ -644,6 +600,43 @@ function App() {
     webBridgeStageWarnTimerRef,
     activeWebNodeByProviderRef,
   });
+
+  let webTurnRunHandlers: ReturnType<typeof createWebTurnRunHandlers> | null = null;
+
+  function resolvePendingWebTurn(result: { ok: boolean; output?: unknown; error?: string }) {
+    if (!webTurnRunHandlers) {
+      return;
+    }
+    webTurnRunHandlers.resolvePendingWebTurn(result);
+  }
+
+  function clearQueuedWebTurnRequests(reason: string) {
+    if (!webTurnRunHandlers) {
+      return;
+    }
+    webTurnRunHandlers.clearQueuedWebTurnRequests(reason);
+  }
+
+  function clearDetachedWebTurnResolver(reason: string) {
+    if (!webTurnRunHandlers) {
+      return;
+    }
+    webTurnRunHandlers.clearDetachedWebTurnResolver(reason);
+  }
+
+  async function executeTurnNode(node: GraphNode, input: unknown) {
+    if (!webTurnRunHandlers) {
+      return { ok: false, error: "턴 실행 핸들러가 초기화되지 않았습니다." };
+    }
+    return webTurnRunHandlers.executeTurnNode(node, input);
+  }
+
+  async function saveRunRecord(runRecord: RunRecord) {
+    if (!webTurnRunHandlers) {
+      return;
+    }
+    await webTurnRunHandlers.saveRunRecord(runRecord);
+  }
 
   const {
     refreshGraphFiles,
@@ -900,35 +893,56 @@ function App() {
     t,
   });
 
-  async function onRespondApproval(decision: ApprovalDecision) {
-    if (!activeApproval) {
-      return;
-    }
-
-    setError("");
-    setApprovalSubmitting(true);
-    try {
-      await invoke("approval_respond", {
-        requestId: activeApproval.requestId,
-        result: {
-          decision,
-        },
-      });
-      setPendingApprovals((prev) => prev.slice(1));
-      setStatus(`승인 응답 전송 (${approvalDecisionLabel(decision)})`);
-    } catch (e) {
-      setError(String(e));
-    } finally {
-      setApprovalSubmitting(false);
-    }
-  }
-
-  function pickDefaultCanvasNodeId(nodes: GraphNode[]): string {
-    if (!SIMPLE_WORKFLOW_UI) {
-      return nodes[0]?.id ?? "";
-    }
-    return nodes.find((node) => node.type === "turn")?.id ?? "";
-  }
+  const {
+    onRespondApproval,
+    pickDefaultCanvasNodeId,
+    applyPreset,
+    applyCostPreset,
+  } = createWorkflowPresetHandlers({
+    activeApproval,
+    invokeFn: invoke,
+    setError,
+    setApprovalSubmitting,
+    setPendingApprovals,
+    setStatus,
+    approvalDecisionLabel,
+    simpleWorkflowUi: SIMPLE_WORKFLOW_UI,
+    buildPresetGraphByKind,
+    applyPresetOutputSchemaPolicies,
+    applyPresetTurnPolicies,
+    simplifyPresetForSimpleWorkflow,
+    localizePresetPromptTemplate,
+    locale,
+    injectOutputLanguageDirective,
+    autoArrangeGraphLayout,
+    normalizeKnowledgeConfig,
+    graph,
+    setGraph,
+    cloneGraph,
+    setUndoStack,
+    setRedoStack,
+    setNodeSelection,
+    setSelectedEdgeKey,
+    setNodeStates,
+    setConnectFromNodeId,
+    setConnectFromSide,
+    setConnectPreviewStartPoint,
+    setConnectPreviewPoint,
+    setIsConnectingDrag,
+    setMarqueeSelection,
+    lastAppliedPresetRef,
+    presetTemplateMeta: getPresetTemplateMeta(locale),
+    setCostPreset,
+    setModel,
+    costPresetDefaultModel: COST_PRESET_DEFAULT_MODEL,
+    costPresetLabel,
+    getTurnExecutor,
+    getCostPresetTargetModel,
+    isCriticalTurnNode,
+    toTurnModelDisplayName,
+    defaultTurnModel: DEFAULT_TURN_MODEL,
+    applyGraphChange,
+  });
 
   const {
     addNode,
@@ -965,109 +979,6 @@ function App() {
     getNodeVisualSize,
   });
 
-  function applyPreset(kind: PresetKind) {
-    const builtPreset = buildPresetGraphByKind(kind);
-    const presetWithPolicies = applyPresetOutputSchemaPolicies({
-      ...builtPreset,
-      nodes: applyPresetTurnPolicies(kind, builtPreset.nodes),
-    });
-    const preset = simplifyPresetForSimpleWorkflow(presetWithPolicies, SIMPLE_WORKFLOW_UI);
-    const localizedPreset = {
-      ...preset,
-      nodes: preset.nodes.map((node) => {
-        if (node.type !== "turn") {
-          return node;
-        }
-        const config = node.config as TurnConfig;
-        const localizedPromptTemplate = localizePresetPromptTemplate(
-          kind,
-          node,
-          locale,
-          String(config.promptTemplate ?? "{{input}}"),
-        );
-        return {
-          ...node,
-          config: {
-            ...config,
-            promptTemplate: injectOutputLanguageDirective(
-              localizedPromptTemplate,
-              locale,
-            ),
-          },
-        };
-      }),
-    };
-    const nextPreset = autoArrangeGraphLayout({
-      ...localizedPreset,
-      knowledge: normalizeKnowledgeConfig(graph.knowledge),
-    });
-    setGraph(cloneGraph(nextPreset));
-    setUndoStack([]);
-    setRedoStack([]);
-    const initialNodeId = pickDefaultCanvasNodeId(nextPreset.nodes);
-    setNodeSelection(initialNodeId ? [initialNodeId] : [], initialNodeId || undefined);
-    setSelectedEdgeKey("");
-    setNodeStates({});
-    setConnectFromNodeId("");
-    setConnectFromSide(null);
-    setConnectPreviewStartPoint(null);
-    setConnectPreviewPoint(null);
-    setIsConnectingDrag(false);
-    setMarqueeSelection(null);
-    lastAppliedPresetRef.current = { kind, graph: cloneGraph(nextPreset) };
-    const templateMeta = presetTemplateMeta.find((row) => row.key === kind);
-    setStatus(`${templateMeta?.statusLabel ?? "템플릿"} 로드됨`);
-  }
-
-  function applyCostPreset(preset: CostPreset) {
-    const codexTurnNodes = graph.nodes.filter((node) => {
-      if (node.type !== "turn") {
-        return false;
-      }
-      const config = node.config as TurnConfig;
-      return getTurnExecutor(config) === "codex";
-    });
-
-    setCostPreset(preset);
-    setModel(COST_PRESET_DEFAULT_MODEL[preset]);
-
-    if (codexTurnNodes.length === 0) {
-      setStatus(`비용 프리셋(${costPresetLabel(preset)}) 적용 대상이 없습니다.`);
-      return;
-    }
-
-    let changed = 0;
-    const nextNodes = graph.nodes.map((node) => {
-      if (node.type !== "turn") {
-        return node;
-      }
-      const config = node.config as TurnConfig;
-      if (getTurnExecutor(config) !== "codex") {
-        return node;
-      }
-      const targetModel = getCostPresetTargetModel(preset, isCriticalTurnNode(node));
-      const currentModel = toTurnModelDisplayName(String(config.model ?? DEFAULT_TURN_MODEL));
-      if (currentModel === targetModel) {
-        return node;
-      }
-      changed += 1;
-      return {
-        ...node,
-        config: {
-          ...config,
-          model: targetModel,
-        },
-      };
-    });
-
-    if (changed === 0) {
-      setStatus(`비용 프리셋(${costPresetLabel(preset)}) 이미 적용됨`);
-      return;
-    }
-
-    applyGraphChange((prev) => ({ ...prev, nodes: nextNodes }));
-    setStatus(`비용 프리셋(${costPresetLabel(preset)}) 적용: ${changed}/${codexTurnNodes.length}개 노드`);
-  }
 
   const {
     clampCanvasZoom,
@@ -1284,146 +1195,72 @@ function App() {
     setPanMode,
     graph,
   });
-
-
-  async function saveRunRecord(runRecord: RunRecord) {
-    const fileName = `run-${runRecord.runId}.json`;
-    try {
-      await exportRunFeedMarkdownFiles({
-        runRecord,
-        cwd,
-        invokeFn: invoke,
-        feedRawAttachment: feedRawAttachmentRef.current,
-        setError,
-      });
-      await persistRunRecordFile(fileName, runRecord);
-      setLastSavedRunFile(fileName);
-      await refreshFeedTimeline();
-    } catch (e) {
-      setError(String(e));
-    }
-  }
-
-  function resolvePendingWebTurn(result: { ok: boolean; output?: unknown; error?: string }) {
-    resolvePendingWebTurnAction({
-      result,
-      pendingWebTurn,
-      webTurnResolverRef,
-      webTurnQueueRef,
-      webTurnPanel,
-      manualInputWaitNoticeByNodeRef,
-      setPendingWebTurn,
-      setSuspendedWebTurn,
-      setSuspendedWebResponseDraft,
-      setWebResponseDraft,
-      setStatus,
-      webProviderLabelFn: webProviderLabel,
-      webTurnFloatingDefaultX: WEB_TURN_FLOATING_DEFAULT_X,
-      webTurnFloatingDefaultY: WEB_TURN_FLOATING_DEFAULT_Y,
-    });
-  }
-
-  function clearQueuedWebTurnRequests(reason: string) {
-    clearQueuedWebTurnRequestsAction(reason, webTurnQueueRef);
-  }
-
-  function clearDetachedWebTurnResolver(reason: string) {
-    clearDetachedWebTurnResolverAction({
-      reason,
-      pendingWebTurn,
-      suspendedWebTurn,
-      webTurnResolverRef,
-    });
-  }
-
-  async function requestWebTurnResponse(
-    nodeId: string,
-    provider: WebProvider,
-    prompt: string,
-    mode: WebResultMode,
-  ): Promise<{ ok: boolean; output?: unknown; error?: string }> {
-    return requestWebTurnResponseAction({
-      nodeId,
-      provider,
-      prompt,
-      mode,
-      pendingWebTurn,
-      suspendedWebTurn,
-      suspendedWebResponseDraft,
-      webTurnResolverRef,
-      webTurnQueueRef,
-      webTurnPanel,
-      manualInputWaitNoticeByNodeRef,
-      setPendingWebTurn,
-      setWebResponseDraft,
-      setSuspendedWebTurn,
-      setSuspendedWebResponseDraft,
-      setStatus,
-      addNodeLog,
-      webProviderLabelFn: webProviderLabel,
-      clearDetachedWebTurnResolver,
-      webTurnFloatingDefaultX: WEB_TURN_FLOATING_DEFAULT_X,
-      webTurnFloatingDefaultY: WEB_TURN_FLOATING_DEFAULT_Y,
-    });
-  }
-
-  async function executeTurnNode(node: GraphNode, input: unknown) {
-    return executeTurnNodeWithContext(node, input, {
-      model,
-      cwd,
-      locale,
-      workflowQuestion,
-      codexMultiAgentMode,
-      forceAgentRulesAllTurns: FORCE_AGENT_RULES_ALL_TURNS,
-      turnOutputSchemaEnabled: TURN_OUTPUT_SCHEMA_ENABLED,
-      pauseErrorToken: PAUSE_ERROR_TOKEN,
-      nodeStates,
-      activeRunPresetKindRef,
-      internalMemoryCorpusRef,
-      activeWebNodeByProviderRef,
-      activeWebPromptRef,
-      activeWebProviderByNodeRef,
-      activeWebPromptByNodeRef,
-      manualWebFallbackNodeRef,
-      pauseRequestedRef,
-      cancelRequestedRef,
-      activeTurnNodeIdRef,
-      activeRunDeltaRef,
-      turnTerminalResolverRef,
-      consumeNodeRequests,
-      addNodeLog,
-      setStatus,
-      setNodeStatus,
-      setNodeRuntimeFields,
-      requestWebTurnResponse,
-      ensureWebWorkerReady,
-      clearWebBridgeStageWarnTimer,
-      loadAgentRuleDocs: async (nodeCwd) =>
-        loadAgentRuleDocs({
-          nodeCwd,
-          cwd,
-          cacheTtlMs: AGENT_RULE_CACHE_TTL_MS,
-          maxDocs: AGENT_RULE_MAX_DOCS,
-          maxDocChars: AGENT_RULE_MAX_DOC_CHARS,
-          agentRulesCacheRef,
-          invokeFn: invoke,
-        }),
-      injectKnowledgeContext: (params) =>
-        injectKnowledgeContext({
-          ...params,
-          workflowQuestion,
-          activeRunPresetKind: activeRunPresetKindRef.current,
-          internalMemoryCorpus: internalMemoryCorpusRef.current,
-          enabledKnowledgeFiles,
-          graphKnowledge,
-          addNodeLog,
-          invokeFn: invoke,
-        }),
-      invokeFn: invoke,
-      openUrlFn: openUrl,
-      t,
-    });
-  }
+  webTurnRunHandlers = createWebTurnRunHandlers({
+    exportRunFeedMarkdownFiles,
+    cwd,
+    invokeFn: invoke,
+    feedRawAttachmentRef,
+    setError,
+    persistRunRecordFile,
+    setLastSavedRunFile,
+    refreshFeedTimeline,
+    resolvePendingWebTurnAction,
+    pendingWebTurn,
+    webTurnResolverRef,
+    webTurnQueueRef,
+    webTurnPanel,
+    manualInputWaitNoticeByNodeRef,
+    setPendingWebTurn,
+    setSuspendedWebTurn,
+    setSuspendedWebResponseDraft,
+    setWebResponseDraft,
+    setStatus,
+    webProviderLabel,
+    webTurnFloatingDefaultX: WEB_TURN_FLOATING_DEFAULT_X,
+    webTurnFloatingDefaultY: WEB_TURN_FLOATING_DEFAULT_Y,
+    clearQueuedWebTurnRequestsAction,
+    clearDetachedWebTurnResolverAction,
+    suspendedWebTurn,
+    suspendedWebResponseDraft,
+    requestWebTurnResponseAction,
+    addNodeLog,
+    executeTurnNodeWithContext,
+    model,
+    locale,
+    workflowQuestion,
+    codexMultiAgentMode,
+    forceAgentRulesAllTurns: FORCE_AGENT_RULES_ALL_TURNS,
+    turnOutputSchemaEnabled: TURN_OUTPUT_SCHEMA_ENABLED,
+    pauseErrorToken: PAUSE_ERROR_TOKEN,
+    nodeStates,
+    activeRunPresetKindRef,
+    internalMemoryCorpusRef,
+    activeWebNodeByProviderRef,
+    activeWebPromptRef,
+    activeWebProviderByNodeRef,
+    activeWebPromptByNodeRef,
+    manualWebFallbackNodeRef,
+    pauseRequestedRef,
+    cancelRequestedRef,
+    activeTurnNodeIdRef,
+    activeRunDeltaRef,
+    turnTerminalResolverRef,
+    consumeNodeRequests,
+    setNodeStatus,
+    setNodeRuntimeFields,
+    ensureWebWorkerReady,
+    clearWebBridgeStageWarnTimer,
+    loadAgentRuleDocs,
+    agentRuleCacheTtlMs: AGENT_RULE_CACHE_TTL_MS,
+    agentRuleMaxDocs: AGENT_RULE_MAX_DOCS,
+    agentRuleMaxDocChars: AGENT_RULE_MAX_DOC_CHARS,
+    agentRulesCacheRef,
+    injectKnowledgeContext,
+    enabledKnowledgeFiles,
+    graphKnowledge,
+    openUrlFn: openUrl,
+    t,
+  });
 
   const {
     prepareRunGraphStart,
@@ -1594,7 +1431,6 @@ function App() {
   const artifactTypeOptions = useMemo(() => getArtifactTypeOptions(locale), [locale]);
   const costPresetOptions = useMemo(() => getCostPresetOptions(locale), [locale]);
   const codexMultiAgentModeOptions = useMemo(() => getCodexMultiAgentModeOptions(locale), [locale]);
-  const presetTemplateMeta = useMemo(() => getPresetTemplateMeta(locale), [locale]);
   const presetTemplateOptions = useMemo(() => getPresetTemplateOptions(locale), [locale]);
   const knowledgeTopKOptions = useMemo(
     () => KNOWLEDGE_TOP_K_OPTIONS.map((option) => ({ ...option, label: tp(option.label) })),
