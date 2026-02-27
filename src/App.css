@@ -4594,7 +4594,7 @@ pre {
 
 .bridge-code-card {
   display: grid;
-  gap: 8px;
+  gap: 4px;
   background: #f6f6f6;
   border-radius: 12px;
   /* padding: 8px; */
@@ -4612,13 +4612,13 @@ pre {
 .bridge-code-textarea {
   width: 100%;
   resize: vertical;
-  min-height: 120px;
+  min-height: 96px;
   border: 0;
   border-radius: 6px;
   background: #ffffff;
   align-content: center;
   color: #1f2730;
-  padding: 10px;
+  padding: 8px;
   font-family: "BasicallyAMono", "Noto Sans KR", monospace;
   font-size: 12px;
   line-height: 1.35;

@@ -134,7 +134,7 @@ function BridgePanel({
               className="bridge-code-textarea"
               onFocus={(event) => event.currentTarget.select()}
               readOnly
-              rows={6}
+              rows={4}
               value={connectCode}
             />
           </div>
