@@ -1,12 +1,12 @@
-import { buildConflictLedger, buildFinalSynthesisPacket } from "../mainAppRuntimeHelpers";
-import { getWebProviderFromExecutor, getTurnExecutor, type TurnConfig, type WebProvider } from "../../features/workflow/domain";
-import type { GraphEdge, GraphNode, NodeAnchorSide, NodeExecutionStatus } from "../../features/workflow/types";
+import { buildConflictLedger, buildFinalSynthesisPacket } from "../../mainAppRuntimeHelpers";
+import { getWebProviderFromExecutor, getTurnExecutor, type TurnConfig, type WebProvider } from "../../../features/workflow/domain";
+import type { GraphEdge, GraphNode, NodeAnchorSide, NodeExecutionStatus } from "../../../features/workflow/types";
 import type {
   EvidenceEnvelope,
   FinalSynthesisPacket,
   NodeResponsibilityMemory,
   RunRecord,
-} from "./types";
+} from "../types";
 export const PAUSE_ERROR_TOKEN = "__PAUSED_BY_USER__";
 
 export function buildNodeInputForNode(params: {

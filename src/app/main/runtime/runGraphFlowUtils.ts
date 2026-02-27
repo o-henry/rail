@@ -1,5 +1,5 @@
-import { getWebProviderFromExecutor, getTurnExecutor, type TurnConfig, type WebProvider } from "../../features/workflow/domain";
-import type { GraphData, GraphEdge, GraphNode, NodeExecutionStatus } from "../../features/workflow/types";
+import { getWebProviderFromExecutor, getTurnExecutor, type TurnConfig, type WebProvider } from "../../../features/workflow/domain";
+import type { GraphData, GraphEdge, GraphNode, NodeExecutionStatus } from "../../../features/workflow/types";
 import type {
   CodexMultiAgentMode,
   EvidenceEnvelope,
@@ -8,7 +8,7 @@ import type {
   NodeResponsibilityMemory,
   NodeRunState,
   RunRecord,
-} from "./types";
+} from "../types";
 
 export function graphRequiresCodexEngine(nodes: GraphNode[]): boolean {
   return nodes.some((node) => node.type === "turn" && getTurnExecutor(node.config as TurnConfig) === "codex");

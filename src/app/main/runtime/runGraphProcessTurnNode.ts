@@ -1,4 +1,4 @@
-import type { QualityReport } from "./types";
+import type { QualityReport } from "../types";
 
 export async function handleRunGraphTurnNode(params: any): Promise<boolean> {
   const {

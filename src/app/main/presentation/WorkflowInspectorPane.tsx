@@ -1,6 +1,6 @@
 import WorkflowInspectorTools from "./WorkflowInspectorTools";
 import WorkflowNodeInspector from "./WorkflowNodeInspector";
-import type { WorkflowInspectorNodeProps, WorkflowInspectorToolsProps } from "./workflowInspectorTypes";
+import type { WorkflowInspectorNodeProps, WorkflowInspectorToolsProps } from "../workflowInspectorTypes";
 
 type WorkflowInspectorPaneProps = {
   canvasFullscreen: boolean;

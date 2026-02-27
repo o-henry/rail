@@ -1,6 +1,6 @@
-import type { FeedViewPost } from "./types";
-import type { GraphNode } from "../../features/workflow/types";
-import type { WorkflowInspectorNodeProps, WorkflowInspectorToolsProps } from "./workflowInspectorTypes";
+import type { FeedViewPost } from "../types";
+import type { GraphNode } from "../../../features/workflow/types";
+import type { WorkflowInspectorNodeProps, WorkflowInspectorToolsProps } from "../workflowInspectorTypes";
 
 export function buildWorkflowInspectorPaneProps(params: {
   nodeProps: WorkflowInspectorNodeProps;

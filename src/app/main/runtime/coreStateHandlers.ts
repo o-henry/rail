@@ -1,6 +1,6 @@
-import type { GraphData, NodeExecutionStatus } from "../../features/workflow/types";
-import type { TurnConfig } from "../../features/workflow/domain";
-import type { NodeRunState, NodeVisualSize, RunRecord } from "./types";
+import type { GraphData, NodeExecutionStatus } from "../../../features/workflow/types";
+import type { TurnConfig } from "../../../features/workflow/domain";
+import type { NodeRunState, NodeVisualSize, RunRecord } from "../types";
 
 export function createCoreStateHandlers(params: any) {
   function setStatus(next: string) {

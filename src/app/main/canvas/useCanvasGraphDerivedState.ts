@@ -1,8 +1,8 @@
 import { useMemo } from "react";
-import { buildSimpleReadonlyTurnEdges, getGraphEdgeKey } from "../../features/workflow/graph-utils";
-import type { GraphData, GraphEdge, GraphNode, KnowledgeConfig } from "../../features/workflow/types";
-import { closestNumericOptionValue } from "../mainAppUtils";
-import type { CanvasDisplayEdge } from "./index";
+import { buildSimpleReadonlyTurnEdges, getGraphEdgeKey } from "../../../features/workflow/graph-utils";
+import type { GraphData, GraphEdge, GraphNode, KnowledgeConfig } from "../../../features/workflow/types";
+import { closestNumericOptionValue } from "../../mainAppUtils";
+import type { CanvasDisplayEdge } from "../index";
 
 export function useCanvasGraphDerivedState(params: any) {
   const canvasNodes = useMemo<GraphNode[]>(() => {

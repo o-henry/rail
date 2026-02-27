@@ -1,6 +1,6 @@
 import type { MutableRefObject } from "react";
-import type { PendingWebTurn } from "./types";
-import type { WebProvider, WebResultMode } from "../../features/workflow/domain";
+import type { PendingWebTurn } from "../types";
+import type { WebProvider, WebResultMode } from "../../../features/workflow/domain";
 
 type WebTurnRequest = {
   turn: PendingWebTurn;

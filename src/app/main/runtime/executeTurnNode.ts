@@ -1,5 +1,5 @@
 import type { MutableRefObject } from "react";
-import { extractStringByPaths } from "../../shared/lib/valueUtils";
+import { extractStringByPaths } from "../../../shared/lib/valueUtils";
 import {
   buildCodexMultiAgentDirective,
   buildExpertOrchestrationDirective,
@@ -13,13 +13,13 @@ import {
   isLikelyWebPromptEcho,
   replaceInputPlaceholder,
   stringifyInput,
-} from "../../features/workflow/promptUtils";
+} from "../../../features/workflow/promptUtils";
 import {
   codexMultiAgentModeLabel,
   extractDeltaText,
   extractUsageStats,
   resolveNodeCwd,
-} from "../mainAppUtils";
+} from "../../mainAppUtils";
 import {
   getTurnExecutor,
   getWebProviderFromExecutor,
@@ -32,17 +32,17 @@ import {
   type TurnConfig,
   type TurnExecutor,
   type WebProvider,
-} from "../../features/workflow/domain";
-import { normalizeWebEvidenceOutput } from "../mainAppRuntimeHelpers";
+} from "../../../features/workflow/domain";
+import { normalizeWebEvidenceOutput } from "../../mainAppRuntimeHelpers";
 import type {
   InternalMemoryTraceEntry,
   KnowledgeTraceEntry,
   ThreadStartResult,
   UsageStats,
   WebProviderRunResult,
-} from "./types";
-import type { GraphNode } from "../../features/workflow/types";
-import type { TurnTerminal } from "../mainAppGraphHelpers";
+} from "../types";
+import type { GraphNode } from "../../../features/workflow/types";
+import type { TurnTerminal } from "../../mainAppGraphHelpers";
 export type ExecuteTurnNodeResult = {
   ok: boolean;
   output?: unknown;

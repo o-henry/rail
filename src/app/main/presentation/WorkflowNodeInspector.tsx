@@ -1,15 +1,15 @@
-import FancySelect from "../../components/FancySelect";
+import FancySelect from "../../../components/FancySelect";
 import {
   getWebProviderFromExecutor,
   normalizeWebResultMode,
   toTurnModelDisplayName,
   type TurnConfig,
-} from "../../features/workflow/domain";
-import { turnRoleLabel } from "../../features/workflow/labels";
-import type { GateConfig, TransformConfig } from "../../features/workflow/types";
-import { useI18n } from "../../i18n";
-import { InspectorSectionTitle } from "../mainAppGraphHelpers";
-import type { WorkflowInspectorNodeProps } from "./workflowInspectorTypes";
+} from "../../../features/workflow/domain";
+import { turnRoleLabel } from "../../../features/workflow/labels";
+import type { GateConfig, TransformConfig } from "../../../features/workflow/types";
+import { useI18n } from "../../../i18n";
+import { InspectorSectionTitle } from "../../mainAppGraphHelpers";
+import type { WorkflowInspectorNodeProps } from "../workflowInspectorTypes";
 
 export default function WorkflowNodeInspector({
   simpleWorkflowUI,

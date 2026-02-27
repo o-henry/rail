@@ -1,7 +1,7 @@
 import type { Dispatch, KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent, RefObject, SetStateAction, WheelEvent as ReactWheelEvent } from "react";
-import { useI18n } from "../../i18n";
-import type { MarqueeSelection, NodeRunState, PendingWebTurn } from "./types";
-import type { GraphNode, NodeAnchorSide, NodeExecutionStatus } from "../../features/workflow/types";
+import { useI18n } from "../../../i18n";
+import type { MarqueeSelection, NodeRunState, PendingWebTurn } from "../types";
+import type { GraphNode, NodeAnchorSide, NodeExecutionStatus } from "../../../features/workflow/types";
 import WorkflowCanvasNodesLayer from "./WorkflowCanvasNodesLayer";
 
 type EdgeLine = {

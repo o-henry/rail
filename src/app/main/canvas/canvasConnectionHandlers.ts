@@ -1,6 +1,6 @@
 import type { MouseEvent as ReactMouseEvent } from "react";
-import type { GraphNode, NodeAnchorSide } from "../../features/workflow/types";
-import type { LogicalPoint } from "./types";
+import type { GraphNode, NodeAnchorSide } from "../../../features/workflow/types";
+import type { LogicalPoint } from "../types";
 
 export function createCanvasConnectionHandlers(params: any) {
   function clampCanvasZoom(nextZoom: number): number {

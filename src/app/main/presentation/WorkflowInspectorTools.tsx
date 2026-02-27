@@ -1,8 +1,8 @@
-import FancySelect from "../../components/FancySelect";
-import { knowledgeStatusMeta } from "../../features/workflow/labels";
-import { useI18n } from "../../i18n";
-import { InspectorSectionTitle } from "../mainAppGraphHelpers";
-import type { WorkflowInspectorToolsProps } from "./workflowInspectorTypes";
+import FancySelect from "../../../components/FancySelect";
+import { knowledgeStatusMeta } from "../../../features/workflow/labels";
+import { useI18n } from "../../../i18n";
+import { InspectorSectionTitle } from "../../mainAppGraphHelpers";
+import type { WorkflowInspectorToolsProps } from "../workflowInspectorTypes";
 
 export default function WorkflowInspectorTools({
   simpleWorkflowUI,

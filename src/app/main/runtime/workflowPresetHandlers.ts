@@ -1,4 +1,4 @@
-import type { GraphNode } from "../../features/workflow/types";
+import type { GraphNode } from "../../../features/workflow/types";
 
 export function createWorkflowPresetHandlers(params: any) {
   async function onRespondApproval(decision: any) {

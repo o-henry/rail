@@ -1,6 +1,6 @@
-import { openUrl, revealItemInDir } from "../../shared/tauri";
-import type { KnowledgeFileRef } from "../../features/workflow/types";
-import type { FeedViewPost, RunRecord } from "./types";
+import { openUrl, revealItemInDir } from "../../../shared/tauri";
+import type { KnowledgeFileRef } from "../../../features/workflow/types";
+import type { FeedViewPost, RunRecord } from "../types";
 
 export function createFeedKnowledgeHandlers(params: any) {
   async function refreshGraphFiles() {

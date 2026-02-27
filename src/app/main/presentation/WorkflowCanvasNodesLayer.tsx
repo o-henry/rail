@@ -1,7 +1,7 @@
 import type { MouseEvent as ReactMouseEvent } from "react";
-import { useI18n } from "../../i18n";
-import type { GraphNode, NodeAnchorSide, NodeExecutionStatus } from "../../features/workflow/types";
-import type { MarqueeSelection, NodeRunState } from "./types";
+import { useI18n } from "../../../i18n";
+import type { GraphNode, NodeAnchorSide, NodeExecutionStatus } from "../../../features/workflow/types";
+import type { MarqueeSelection, NodeRunState } from "../types";
 
 type WorkflowCanvasNodesLayerProps = {
   canvasNodes: GraphNode[];

@@ -199,35 +199,35 @@ import {
   WEB_TURN_FLOATING_MIN_VISIBLE_HEIGHT,
   WEB_TURN_FLOATING_MIN_VISIBLE_WIDTH,
 } from "./main";
-import WorkflowCanvasPane from "./main/WorkflowCanvasPane";
-import WorkflowInspectorPane from "./main/WorkflowInspectorPane";
-import { buildFeedPageVm, buildWorkflowInspectorPaneProps } from "./main/mainAppPropsBuilders";
+import WorkflowCanvasPane from "./main/presentation/WorkflowCanvasPane";
+import WorkflowInspectorPane from "./main/presentation/WorkflowInspectorPane";
+import { buildFeedPageVm, buildWorkflowInspectorPaneProps } from "./main/presentation/mainAppPropsBuilders";
 import {
   cancelFeedReplyFeedbackClearTimer,
   scheduleFeedReplyFeedbackAutoClear,
-} from "./main/feedFollowupUtils";
-import { ensureFeedRunRecordFromCache, submitFeedAgentRequest as submitFeedAgentRequestAction } from "./main/feedFollowupActions";
+} from "./main/runtime/feedFollowupUtils";
+import { ensureFeedRunRecordFromCache, submitFeedAgentRequest as submitFeedAgentRequestAction } from "./main/runtime/feedFollowupActions";
 import {
   clearDetachedWebTurnResolverAction,
   clearQueuedWebTurnRequestsAction,
   requestWebTurnResponseAction,
   resolvePendingWebTurnAction,
-} from "./main/webTurnQueueActions";
-import { createWebInteractionHandlers } from "./main/webInteractionHandlers";
-import { createEngineBridgeHandlers } from "./main/engineBridgeHandlers";
-import { createCanvasDragZoomHandlers } from "./main/canvasDragZoomHandlers";
-import { createCanvasConnectionHandlers } from "./main/canvasConnectionHandlers";
-import { createCoreStateHandlers } from "./main/coreStateHandlers";
-import { createFeedKnowledgeHandlers } from "./main/feedKnowledgeHandlers";
-import { useMainAppStateEffects } from "./main/useMainAppStateEffects";
-import { useEngineEventListeners } from "./main/useEngineEventListeners";
-import { useMainAppRuntimeEffects } from "./main/useMainAppRuntimeEffects";
-import { createRunGraphControlHandlers } from "./main/runGraphControlHandlers";
-import { createRunGraphRunner } from "./main/runGraphRunner";
-import { createWorkflowPresetHandlers } from "./main/workflowPresetHandlers";
-import { createWebTurnRunHandlers } from "./main/webTurnRunHandlers";
-import { useCanvasGraphDerivedState } from "./main/useCanvasGraphDerivedState";
-import { MainAppModals } from "./main/MainAppModals";
+} from "./main/runtime/webTurnQueueActions";
+import { createWebInteractionHandlers } from "./main/runtime/webInteractionHandlers";
+import { createEngineBridgeHandlers } from "./main/runtime/engineBridgeHandlers";
+import { createCanvasDragZoomHandlers } from "./main/canvas/canvasDragZoomHandlers";
+import { createCanvasConnectionHandlers } from "./main/canvas/canvasConnectionHandlers";
+import { createCoreStateHandlers } from "./main/runtime/coreStateHandlers";
+import { createFeedKnowledgeHandlers } from "./main/runtime/feedKnowledgeHandlers";
+import { useMainAppStateEffects } from "./main/canvas/useMainAppStateEffects";
+import { useEngineEventListeners } from "./main/runtime/useEngineEventListeners";
+import { useMainAppRuntimeEffects } from "./main/runtime/useMainAppRuntimeEffects";
+import { createRunGraphControlHandlers } from "./main/runtime/runGraphControlHandlers";
+import { createRunGraphRunner } from "./main/runtime/runGraphRunner";
+import { createWorkflowPresetHandlers } from "./main/runtime/workflowPresetHandlers";
+import { createWebTurnRunHandlers } from "./main/runtime/webTurnRunHandlers";
+import { useCanvasGraphDerivedState } from "./main/canvas/useCanvasGraphDerivedState";
+import { MainAppModals } from "./main/presentation/MainAppModals";
 import {
   PAUSE_ERROR_TOKEN,
   appendRunTransition,
@@ -237,7 +237,7 @@ import {
   cancelGraphRun,
   collectRequiredWebProviders,
   isPauseSignalError,
-} from "./main/runGraphExecutionUtils";
+} from "./main/runtime/runGraphExecutionUtils";
 import {
   appendNodeEvidenceWithMemory,
   buildFinalNodeFailureReason,
@@ -254,19 +254,19 @@ import {
   resolveFinalNodeId,
   scheduleRunnableGraphNodes,
   scheduleChildrenWhenReady,
-} from "./main/runGraphFlowUtils";
+} from "./main/runtime/runGraphFlowUtils";
 import {
   buildRegressionSummary,
   exportRunFeedMarkdownFiles,
   loadInternalMemoryCorpus,
   persistRunRecordFile as persistRunRecordFileHelper,
-} from "./main/runHistoryUtils";
+} from "./main/runtime/runHistoryUtils";
 import {
   executeTurnNodeWithOutputSchemaRetry,
   injectKnowledgeContext,
   loadAgentRuleDocs,
-} from "./main/turnExecutionUtils";
-import { executeTurnNodeWithContext } from "./main/executeTurnNode";
+} from "./main/runtime/turnExecutionUtils";
+import { executeTurnNodeWithContext } from "./main/runtime/executeTurnNode";
 import type {
   FeedCategory,
   InternalMemorySnippet,

@@ -1,7 +1,7 @@
-import ApprovalModal from "../../components/modals/ApprovalModal";
-import PendingWebConnectModal from "../../components/modals/PendingWebConnectModal";
-import PendingWebLoginModal from "../../components/modals/PendingWebLoginModal";
-import PendingWebTurnModal from "../../components/modals/PendingWebTurnModal";
+import ApprovalModal from "../../../components/modals/ApprovalModal";
+import PendingWebConnectModal from "../../../components/modals/PendingWebConnectModal";
+import PendingWebLoginModal from "../../../components/modals/PendingWebLoginModal";
+import PendingWebTurnModal from "../../../components/modals/PendingWebTurnModal";
 
 export function MainAppModals(props: any) {
   return (

@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import type { NodeVisualSize } from "./types";
+import type { NodeVisualSize } from "../types";
 
 export function useMainAppStateEffects(params: any) {
   useEffect(() => {

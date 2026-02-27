@@ -1,8 +1,8 @@
 import type { Dispatch, MutableRefObject, SetStateAction } from "react";
 import { executeTurnNodeWithOutputSchemaRetry } from "./turnExecutionUtils";
 import { resolveTurnNodeForFollowup, buildFollowupInputText, buildFollowupDoneRunRecord, buildFollowupFailedRunRecord } from "./feedFollowupUtils";
-import type { FeedPost, FeedViewPost, NodeRunState, RunRecord } from "./types";
-import type { GraphNode, NodeExecutionStatus } from "../../features/workflow/types";
+import type { FeedPost, FeedViewPost, NodeRunState, RunRecord } from "../types";
+import type { GraphNode, NodeExecutionStatus } from "../../../features/workflow/types";
 
 type InvokeFn = <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
 
