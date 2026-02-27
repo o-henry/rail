@@ -37,14 +37,6 @@ const TEMP_LINE_ALLOWLIST = new Map([
     },
   ],
   [
-    "src/app/mainAppUtils.ts",
-    {
-      maxLines: 900,
-      expiresOn: "2026-04-30",
-      reason: "Shared utility split in progress",
-    },
-  ],
-  [
     "src/pages/feed/FeedPage.tsx",
     {
       maxLines: 980,
