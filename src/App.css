@@ -711,11 +711,11 @@ h3 {
   min-height: 0;
   display: grid;
   grid-template-rows: minmax(0, 1fr) auto;
-  gap: 14px;
-  padding: 12px;
+  gap: 12px;
+  padding: 0;
   border: 0;
-  border-radius: 12px;
-  background: var(--surface);
+  border-radius: 0;
+  background: transparent;
   overflow: hidden;
 }
 
@@ -724,19 +724,23 @@ h3 {
   min-width: 0;
   min-height: 0;
   height: 100%;
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: var(--panel-shadow);
+  overflow: hidden;
 }
 
 .canvas-only-layout .canvas-pane {
   padding: 0;
-  border-radius: 8px;
+  border-radius: 0;
 }
 
 .canvas-topbar {
   display: grid;
   gap: 8px;
-  margin-top: 2px;
-  padding-top: 10px;
-  border-top: 1px solid var(--surface-strong);
+  margin: 0;
+  padding: 0;
+  border: 0;
 }
 
 .question-input {
