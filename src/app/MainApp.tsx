@@ -3786,23 +3786,14 @@ function App() {
     });
   }
 
-  async function onRunGraph(skipWebConnectPreflight = false) {
-    if (isGraphRunning && isGraphPaused) {
-      pauseRequestedRef.current = false;
-      setIsGraphPaused(false);
-      setStatus("그래프 실행 재개");
-      return;
-    }
-
-    if (isGraphRunning || runStartGuardRef.current) {
-      return;
-    }
-
+  async function prepareRunGraphStart(
+    skipWebConnectPreflight: boolean,
+  ): Promise<ReturnType<typeof inferRunGroupMeta> | null> {
     const resolvedCwd = String(cwd ?? "").trim();
     if (!resolvedCwd || resolvedCwd === ".") {
       setError("작업 경로(CWD)를 먼저 선택하세요.");
       setStatus("그래프 실행 대기");
-      return;
+      return null;
     }
 
     if (!skipWebConnectPreflight) {
@@ -3830,7 +3821,7 @@ function App() {
           });
           setError("");
           setStatus("웹 연결 확인 필요");
-          return;
+          return null;
         }
       }
     }
@@ -3842,6 +3833,25 @@ function App() {
         `질문 직접 입력 노드는 1개여야 합니다. 현재 ${directInputNodeIds.length}개입니다. 노드 연결을 정리하세요.`,
       );
       setStatus("그래프 실행 대기");
+      return null;
+    }
+    return runGroup;
+  }
+
+  async function onRunGraph(skipWebConnectPreflight = false) {
+    if (isGraphRunning && isGraphPaused) {
+      pauseRequestedRef.current = false;
+      setIsGraphPaused(false);
+      setStatus("그래프 실행 재개");
+      return;
+    }
+
+    if (isGraphRunning || runStartGuardRef.current) {
+      return;
+    }
+
+    const runGroup = await prepareRunGraphStart(skipWebConnectPreflight);
+    if (!runGroup) {
       return;
     }
 
