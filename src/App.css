@@ -3942,7 +3942,7 @@ h3 {
 }
 
 .settings-view {
-  margin: 0 10px 10px;
+  margin: 0 20rem 10px;
   display: grid;
   gap: 36px;
   align-content: start;
@@ -4702,7 +4702,14 @@ pre {
   overflow: auto;
 }
 
-.bridge-view h2 {
+.bridge-embedded {
+  display: grid;
+  gap: 36px;
+  align-content: start;
+}
+
+.bridge-view h2,
+.bridge-embedded h2 {
   font-size: 14px;
   /* font-family: Galmuri14; */
   font-family: "DialogNanumBody1984";

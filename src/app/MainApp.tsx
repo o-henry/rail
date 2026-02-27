@@ -1757,8 +1757,9 @@ function App() {
     ? `${latestBatchRun.status.toUpperCase()} · ${new Date(latestBatchRun.startedAt).toLocaleString(locale)}`
     : t("dashboard.value.none");
   const onSelectWorkspaceTab = (tab: WorkspaceTab) => {
-    setWorkspaceTab(tab);
-    if (tab !== "dashboard") {
+    const nextTab = tab === "bridge" ? "settings" : tab;
+    setWorkspaceTab(nextTab);
+    if (nextTab !== "dashboard") {
       setDashboardDetailTopic(null);
     }
   };
@@ -1882,7 +1883,7 @@ function App() {
             enabledScheduleCount={batchScheduler.schedules.filter((item) => item.status === "enabled").length}
             isGraphRunning={isGraphRunning}
             lastBatchSummary={lastBatchSummary}
-            onOpenBridge={() => setWorkspaceTab("bridge")}
+            onOpenBridge={() => setWorkspaceTab("settings")}
             onOpenDetail={(topic) => setDashboardDetailTopic(topic)}
             onOpenFeed={() => setWorkspaceTab("feed")}
             onOpenSettings={() => setWorkspaceTab("settings")}
@@ -1939,20 +1940,18 @@ function App() {
               usageInfoText={usageInfoText}
               usageResultClosed={usageResultClosed}
             />
+            <BridgePage
+              busy={webWorkerBusy}
+              connectCode={webBridgeConnectCode}
+              embedded
+              onCopyConnectCode={() => void onCopyWebBridgeConnectCode()}
+              onRefreshStatus={() => void refreshWebBridgeStatus()}
+              onRestartBridge={() => void onRestartWebBridge()}
+              onRotateToken={() => void onRotateWebBridgeToken()}
+              status={webBridgeStatus}
+            />
             {/* {lastSavedRunFile && <div>최근 실행 파일: {formatRunFileLabel(lastSavedRunFile)}</div>} */}
           </section>
-        )}
-
-        {workspaceTab === "bridge" && (
-          <BridgePage
-            busy={webWorkerBusy}
-            connectCode={webBridgeConnectCode}
-            onCopyConnectCode={() => void onCopyWebBridgeConnectCode()}
-            onRefreshStatus={() => void refreshWebBridgeStatus()}
-            onRestartBridge={() => void onRestartWebBridge()}
-            onRotateToken={() => void onRotateWebBridgeToken()}
-            status={webBridgeStatus}
-          />
         )}
 
       </section>
@@ -1979,7 +1978,7 @@ function App() {
         setPendingWebConnectCheck={setPendingWebConnectCheck}
         setStatus={setStatus}
         setWebResponseDraft={setWebResponseDraft}
-        setWorkspaceTab={setWorkspaceTab}
+        setWorkspaceTab={(next: WorkspaceTab) => setWorkspaceTab(next === "bridge" ? "settings" : next)}
         t={t}
         webProviderLabel={webProviderLabel}
         webResponseDraft={webResponseDraft}

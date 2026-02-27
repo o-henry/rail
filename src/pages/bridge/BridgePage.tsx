@@ -3,6 +3,7 @@ import BridgePanel from "../../components/BridgePanel";
 type BridgePageProps = {
   busy: boolean;
   connectCode: string;
+  embedded?: boolean;
   status: Parameters<typeof BridgePanel>[0]["status"];
   onCopyConnectCode: () => void;
   onRefreshStatus: () => void;

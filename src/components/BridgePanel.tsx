@@ -22,6 +22,7 @@ type BridgePanelProps = {
   status: WebBridgeStatus;
   connectCode: string;
   busy: boolean;
+  embedded?: boolean;
   onRefreshStatus: () => void;
   onCopyConnectCode: () => void;
   onRestartBridge: () => void;
@@ -32,6 +33,7 @@ function BridgePanel({
   status,
   connectCode,
   busy,
+  embedded = false,
   onRefreshStatus,
   onCopyConnectCode,
   onRestartBridge,
@@ -40,8 +42,8 @@ function BridgePanel({
   const { t } = useI18n();
   const bridgeUrl = `http://127.0.0.1:${status.port}`;
 
-  return (
-    <section className="panel-card settings-view bridge-view workspace-tab-panel">
+  const content = (
+    <>
       <section className="controls bridge-head-panel">
         <div className="web-automation-head">
           <div className="bridge-head-title-row">
@@ -178,6 +180,16 @@ function BridgePanel({
           ))}
         </div>
       </section> */}
+    </>
+  );
+
+  if (embedded) {
+    return <section className="bridge-embedded">{content}</section>;
+  }
+
+  return (
+    <section className="panel-card settings-view bridge-view workspace-tab-panel">
+      {content}
     </section>
   );
 }
