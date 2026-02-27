@@ -33,7 +33,8 @@ function upsertThemeColorMeta(themeMode: ThemeModeValue) {
     themeColorMeta.setAttribute("name", "theme-color");
     document.head.appendChild(themeColorMeta);
   }
-  themeColorMeta.setAttribute("content", THEME_MODE_META_COLOR[themeMode]);
+  const bgApp = getComputedStyle(document.documentElement).getPropertyValue("--bg-app").trim();
+  themeColorMeta.setAttribute("content", bgApp || THEME_MODE_META_COLOR[themeMode]);
 }
 
 export function applyThemeModeToDocument(themeMode: ThemeModeValue) {
