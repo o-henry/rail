@@ -5,7 +5,7 @@ import {
   useState,
 } from "react";
 import "../App.css";
-import { invoke, listen, openUrl, revealItemInDir } from "../shared/tauri";
+import { invoke, listen, openUrl } from "../shared/tauri";
 import AppNav from "../components/AppNav";
 import ApprovalModal from "../components/modals/ApprovalModal";
 import PendingWebLoginModal from "../components/modals/PendingWebLoginModal";
@@ -102,7 +102,6 @@ import {
 } from "../features/workflow/graph-utils";
 import type {
   GraphNode,
-  KnowledgeFileRef,
   NodeExecutionStatus,
 } from "../features/workflow/types";
 import {
@@ -228,6 +227,7 @@ import { createEngineBridgeHandlers } from "./main/engineBridgeHandlers";
 import { createCanvasDragZoomHandlers } from "./main/canvasDragZoomHandlers";
 import { createCanvasConnectionHandlers } from "./main/canvasConnectionHandlers";
 import { createCoreStateHandlers } from "./main/coreStateHandlers";
+import { createFeedKnowledgeHandlers } from "./main/feedKnowledgeHandlers";
 import {
   PAUSE_ERROR_TOKEN,
   appendRunTransition,
@@ -275,7 +275,6 @@ import type {
   EngineNotificationEvent,
   FeedCategory,
   FeedInputSource,
-  FeedViewPost,
   EvidenceEnvelope,
   InternalMemorySnippet,
   NodeResponsibilityMemory,
@@ -653,6 +652,62 @@ function App() {
   });
 
   const {
+    refreshGraphFiles,
+    refreshFeedTimeline,
+    onOpenRunsFolder,
+    onOpenFeedMarkdownFile,
+    ensureFeedRunRecord,
+    onSubmitFeedAgentRequest,
+    onOpenKnowledgeFilePicker,
+    onRemoveKnowledgeFile,
+    onToggleKnowledgeFileEnabled,
+  } = createFeedKnowledgeHandlers({
+    hasTauriRuntime,
+    invokeFn: invoke,
+    setGraphFiles,
+    setFeedPosts,
+    setFeedLoading,
+    setStatus,
+    setError,
+    toOpenRunsFolderErrorMessage,
+    feedRunCacheRef,
+    normalizeRunRecordFn: normalizeRunRecord,
+    ensureFeedRunRecordFromCacheFn: ensureFeedRunRecordFromCache,
+    submitFeedAgentRequestAction,
+    graph,
+    isGraphRunning,
+    workflowQuestion,
+    cwd,
+    nodeStates,
+    feedReplyDraftByPost,
+    feedReplySubmittingByPost,
+    feedRawAttachmentRef,
+    feedReplyFeedbackClearTimerRef,
+    setFeedReplySubmittingByPost,
+    setFeedReplyFeedbackByPost,
+    setFeedReplyDraftByPost,
+    setNodeStatus,
+    setNodeRuntimeFields,
+    addNodeLog,
+    enqueueNodeRequest,
+    persistRunRecordFile,
+    executeTurnNode,
+    validateSimpleSchemaFn: validateSimpleSchema,
+    turnOutputSchemaEnabled: TURN_OUTPUT_SCHEMA_ENABLED,
+    turnOutputSchemaMaxRetry: TURN_OUTPUT_SCHEMA_MAX_RETRY,
+    graphSchemaVersion: GRAPH_SCHEMA_VERSION,
+    defaultKnowledgeConfig,
+    buildFeedPostFn: buildFeedPost,
+    feedAttachmentRawKeyFn: feedAttachmentRawKey,
+    exportRunFeedMarkdownFilesFn: exportRunFeedMarkdownFiles,
+    cancelFeedReplyFeedbackClearTimerFn: cancelFeedReplyFeedbackClearTimer,
+    scheduleFeedReplyFeedbackAutoClearFn: scheduleFeedReplyFeedbackAutoClear,
+    turnModelLabelFn: turnModelLabel,
+    t,
+    applyGraphChange,
+  });
+
+  const {
     onShareFeedPost,
     onDeleteFeedRunGroup,
     onSubmitFeedRunGroupRename,
@@ -935,151 +990,6 @@ function App() {
     };
   }, [hasTauriRuntime]);
 
-  async function refreshGraphFiles() {
-    if (!hasTauriRuntime) {
-      setGraphFiles([]);
-      return;
-    }
-    try {
-      const files = await invoke<string[]>("graph_list");
-      setGraphFiles(files);
-    } catch (e) {
-      setError(String(e));
-    }
-  }
-
-  async function refreshFeedTimeline() {
-    if (!hasTauriRuntime) {
-      setFeedPosts([]);
-      setFeedLoading(false);
-      return;
-    }
-    setFeedLoading(true);
-    try {
-      const files = await invoke<string[]>("run_list");
-      const sorted = [...files].sort((a, b) => b.localeCompare(a)).slice(0, 120);
-      const loaded = await Promise.all(
-        sorted.map(async (file) => {
-          try {
-            const rawRun = await invoke<RunRecord>("run_load", { name: file });
-            return { file, run: normalizeRunRecord(rawRun) };
-          } catch {
-            return null;
-          }
-        }),
-      );
-      const nextCache: Record<string, RunRecord> = {};
-      const mergedPosts: FeedViewPost[] = [];
-      for (const row of loaded) {
-        if (!row) {
-          continue;
-        }
-        nextCache[row.file] = row.run;
-        const runQuestion = row.run.question;
-        const posts = row.run.feedPosts ?? [];
-        for (const post of posts) {
-          mergedPosts.push({
-            ...post,
-            sourceFile: row.file,
-            question: runQuestion,
-          });
-        }
-      }
-      mergedPosts.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-      feedRunCacheRef.current = nextCache;
-      setFeedPosts(mergedPosts);
-    } catch (e) {
-      setError(`피드 로드 실패: ${String(e)}`);
-    } finally {
-      setFeedLoading(false);
-    }
-  }
-
-  async function onOpenRunsFolder() {
-    setError("");
-    try {
-      const runsDir = await invoke<string>("run_directory");
-      await revealItemInDir(runsDir);
-      setStatus("실행 기록 폴더 열림");
-    } catch (e) {
-      setError(toOpenRunsFolderErrorMessage(e));
-    }
-  }
-
-  async function onOpenFeedMarkdownFile(post: FeedViewPost) {
-    setError("");
-    const attachments = Array.isArray(post.attachments) ? post.attachments : [];
-    const markdownAttachment = attachments.find((attachment) => attachment.kind === "markdown");
-    const filePath = String(markdownAttachment?.filePath ?? "").trim();
-    if (!filePath) {
-      setError("문서 파일 경로를 찾지 못했습니다.");
-      return;
-    }
-    try {
-      const normalizedUrl =
-        filePath.startsWith("file://") ? filePath : `file://${encodeURI(filePath).replace(/#/g, "%23")}`;
-      await openUrl(normalizedUrl);
-      setStatus("문서 파일 열림");
-    } catch (error) {
-      try {
-        await revealItemInDir(filePath);
-        setStatus("문서 파일 위치 열림");
-      } catch {
-        setError(`문서 파일 열기 실패: ${String(error)}`);
-      }
-    }
-  }
-
-  async function ensureFeedRunRecord(sourceFile: string): Promise<RunRecord | null> {
-    return ensureFeedRunRecordFromCache({
-      sourceFile,
-      feedRunCacheRef,
-      invokeFn: invoke,
-      normalizeRunRecordFn: normalizeRunRecord,
-    });
-  }
-
-  async function onSubmitFeedAgentRequest(post: FeedViewPost) {
-    await submitFeedAgentRequestAction({
-      post,
-      graphNodes: graph.nodes,
-      isGraphRunning,
-      workflowQuestion,
-      cwd,
-      nodeStates,
-      feedReplyDraftByPost,
-      feedReplySubmittingByPost,
-      feedRunCacheRef,
-      feedRawAttachmentRef,
-      feedReplyFeedbackClearTimerRef,
-      setFeedReplySubmittingByPost,
-      setFeedReplyFeedbackByPost,
-      setFeedReplyDraftByPost,
-      setFeedPosts,
-      setError,
-      setStatus,
-      setNodeStatus,
-      setNodeRuntimeFields,
-      addNodeLog,
-      enqueueNodeRequest,
-      persistRunRecordFile,
-      invokeFn: invoke,
-      executeTurnNode,
-      validateSimpleSchemaFn: validateSimpleSchema,
-      turnOutputSchemaEnabled: TURN_OUTPUT_SCHEMA_ENABLED,
-      turnOutputSchemaMaxRetry: TURN_OUTPUT_SCHEMA_MAX_RETRY,
-      graphSchemaVersion: GRAPH_SCHEMA_VERSION,
-      defaultKnowledgeConfig,
-      buildFeedPostFn: buildFeedPost,
-      feedAttachmentRawKeyFn: feedAttachmentRawKey,
-      exportRunFeedMarkdownFilesFn: exportRunFeedMarkdownFiles,
-      normalizeRunRecordFn: normalizeRunRecord,
-      cancelFeedReplyFeedbackClearTimerFn: cancelFeedReplyFeedbackClearTimer,
-      scheduleFeedReplyFeedbackAutoClearFn: scheduleFeedReplyFeedbackAutoClear,
-      turnModelLabelFn: turnModelLabel,
-      t,
-    });
-  }
 
   useEffect(() => {
     refreshGraphFiles();
@@ -1153,74 +1063,6 @@ function App() {
     setWebBridgeConnectCode,
   });
 
-  async function attachKnowledgeFiles(paths: string[]) {
-    const uniquePaths = Array.from(new Set(paths.map((path) => path.trim()).filter(Boolean)));
-    if (uniquePaths.length === 0) {
-      setError("선택한 파일 경로를 읽지 못했습니다. 다시 선택해주세요.");
-      return;
-    }
-
-    setError("");
-    try {
-      const probed = await invoke<KnowledgeFileRef[]>("knowledge_probe", { paths: uniquePaths });
-      applyGraphChange((prev) => {
-        const existingByPath = new Map(
-          (prev.knowledge?.files ?? []).map((row) => [row.path, row] as const),
-        );
-        for (const row of probed) {
-          const existing = existingByPath.get(row.path);
-          existingByPath.set(row.path, {
-            ...row,
-            enabled: existing ? existing.enabled : row.enabled,
-          });
-        }
-        return {
-          ...prev,
-          knowledge: {
-            ...(prev.knowledge ?? defaultKnowledgeConfig()),
-            files: Array.from(existingByPath.values()),
-          },
-        };
-      });
-      setStatus(`첨부 자료 ${uniquePaths.length}개 추가됨`);
-    } catch (error) {
-      setError(`첨부 자료 추가 실패: ${String(error)}`);
-    }
-  }
-
-  async function onOpenKnowledgeFilePicker() {
-    try {
-      const selectedPaths = await invoke<string[]>("dialog_pick_knowledge_files");
-      if (selectedPaths.length === 0) {
-        return;
-      }
-      await attachKnowledgeFiles(selectedPaths);
-    } catch (error) {
-      setError(`첨부 파일 선택 실패: ${String(error)}`);
-    }
-  }
-
-  function onRemoveKnowledgeFile(fileId: string) {
-    applyGraphChange((prev) => ({
-      ...prev,
-      knowledge: {
-        ...(prev.knowledge ?? defaultKnowledgeConfig()),
-        files: (prev.knowledge?.files ?? []).filter((row) => row.id !== fileId),
-      },
-    }));
-  }
-
-  function onToggleKnowledgeFileEnabled(fileId: string) {
-    applyGraphChange((prev) => ({
-      ...prev,
-      knowledge: {
-        ...(prev.knowledge ?? defaultKnowledgeConfig()),
-        files: (prev.knowledge?.files ?? []).map((row) =>
-          row.id === fileId ? { ...row, enabled: !row.enabled } : row,
-        ),
-      },
-    }));
-  }
 
   useEffect(() => {
     if (workspaceTab === "workflow") {
