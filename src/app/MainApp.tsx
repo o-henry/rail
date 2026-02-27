@@ -21,6 +21,7 @@ import WorkflowPage from "../pages/workflow/WorkflowPage";
 import { useFloatingPanel } from "../features/ui/useFloatingPanel";
 import { useExecutionState } from "./hooks/useExecutionState";
 import { useFeedRunActions } from "./hooks/useFeedRunActions";
+import { useFeedInspectorEffects } from "./hooks/useFeedInspectorEffects";
 import { useFeedState } from "./hooks/useFeedState";
 import { useGraphFileActions } from "./hooks/useGraphFileActions";
 import { useGraphState } from "./hooks/useGraphState";
@@ -4965,7 +4966,6 @@ function App() {
     turnModelLabelFn: turnModelLabel,
   });
 
-  const groupedFeedRunIdsKey = groupedFeedRuns.map((group) => group.runId).join("|");
   const feedCategoryMeta: Array<{ key: FeedCategory; label: string }> = [
     { key: "all_posts", label: t("feed.category.all_posts") },
     { key: "completed_posts", label: t("feed.category.completed_posts") },
@@ -4973,119 +4973,34 @@ function App() {
     { key: "error_posts", label: t("feed.category.error_posts") },
   ];
 
-  useEffect(() => {
-    setFeedGroupExpandedByRunId((prev) => {
-      const next: Record<string, boolean> = {};
-      let changed = false;
-      for (const runId of groupedFeedRuns.map((group) => group.runId)) {
-        if (Object.prototype.hasOwnProperty.call(prev, runId)) {
-          next[runId] = prev[runId];
-        } else {
-          next[runId] = true;
-          changed = true;
-        }
-      }
-      for (const runId of Object.keys(prev)) {
-        if (!Object.prototype.hasOwnProperty.call(next, runId)) {
-          changed = true;
-        }
-      }
-      if (!changed && Object.keys(prev).length === Object.keys(next).length) {
-        return prev;
-      }
-      return next;
-    });
-    setFeedGroupRenameRunId((prev) =>
-      prev && groupedFeedRuns.some((group) => group.runId === prev) ? prev : null,
-    );
-  }, [groupedFeedRunIdsKey]);
-
-  useEffect(() => {
-    if (workspaceTab !== "feed") {
-      return;
-    }
-    setFeedInspectorPostId((prev) => {
-      if (currentFeedPosts.length === 0) {
-        return "";
-      }
-      if (prev && currentFeedPosts.some((post) => post.id === prev)) {
-        return prev;
-      }
-      return currentFeedPosts[0].id;
-    });
-  }, [currentFeedPosts, workspaceTab]);
-
-  useEffect(() => {
-    let cancelled = false;
-    if (!feedInspectorPost) {
-      setFeedInspectorSnapshotNode(null);
-      return () => {
-        cancelled = true;
-      };
-    }
-    if (feedInspectorGraphNode) {
-      setFeedInspectorSnapshotNode(null);
-      return () => {
-        cancelled = true;
-      };
-    }
-    if (!feedInspectorPostSourceFile) {
-      setFeedInspectorSnapshotNode(null);
-      return () => {
-        cancelled = true;
-      };
-    }
-
-    const loadSnapshotNode = async () => {
-      const run = await ensureFeedRunRecord(feedInspectorPostSourceFile);
-      if (cancelled) {
-        return;
-      }
-      const snapshotNode = run?.graphSnapshot.nodes.find((node) => node.id === feedInspectorPostNodeId) ?? null;
-      setFeedInspectorSnapshotNode(snapshotNode);
-    };
-    void loadSnapshotNode();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [feedInspectorGraphNode, feedInspectorPostKey, feedInspectorPostNodeId, feedInspectorPostSourceFile]);
-
-  useEffect(() => {
-    let cancelled = false;
-    if (workspaceTab !== "feed" || !feedInspectorRuleCwd) {
-      setFeedInspectorRuleDocs([]);
-      setFeedInspectorRuleLoading(false);
-      return () => {
-        cancelled = true;
-      };
-    }
-    setFeedInspectorRuleLoading(true);
-    const loadDocs = async () => {
-      try {
-        const docs = await loadAgentRuleDocs({
-          nodeCwd: feedInspectorRuleCwd,
-          cwd,
-          cacheTtlMs: AGENT_RULE_CACHE_TTL_MS,
-          maxDocs: AGENT_RULE_MAX_DOCS,
-          maxDocChars: AGENT_RULE_MAX_DOC_CHARS,
-          agentRulesCacheRef,
-          invokeFn: invoke,
-        });
-        if (!cancelled) {
-          setFeedInspectorRuleDocs(docs);
-        }
-      } finally {
-        if (!cancelled) {
-          setFeedInspectorRuleLoading(false);
-        }
-      }
-    };
-    void loadDocs();
-    return () => {
-      cancelled = true;
-    };
-  }, [feedInspectorRuleCwd, workspaceTab, feedInspectorPostKey]);
+  useFeedInspectorEffects({
+    groupedFeedRuns,
+    setFeedGroupExpandedByRunId,
+    setFeedGroupRenameRunId,
+    workspaceTab,
+    currentFeedPosts,
+    setFeedInspectorPostId,
+    feedInspectorPost,
+    feedInspectorGraphNode,
+    feedInspectorPostSourceFile,
+    feedInspectorPostNodeId,
+    feedInspectorPostKey,
+    ensureFeedRunRecord,
+    setFeedInspectorSnapshotNode,
+    feedInspectorRuleCwd,
+    setFeedInspectorRuleDocs,
+    setFeedInspectorRuleLoading,
+    loadAgentRuleDocsForCwd: (nodeCwd) =>
+      loadAgentRuleDocs({
+        nodeCwd,
+        cwd,
+        cacheTtlMs: AGENT_RULE_CACHE_TTL_MS,
+        maxDocs: AGENT_RULE_MAX_DOCS,
+        maxDocChars: AGENT_RULE_MAX_DOC_CHARS,
+        agentRulesCacheRef,
+        invokeFn: invoke,
+      }),
+  });
 
   const viewportWidth = Math.ceil(canvasLogicalViewport.width);
   const viewportHeight = Math.ceil(canvasLogicalViewport.height);
