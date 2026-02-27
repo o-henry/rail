@@ -1,7 +1,7 @@
 import { buildConflictLedger, buildFinalSynthesisPacket } from "../mainAppRuntimeHelpers";
 import { getWebProviderFromExecutor, getTurnExecutor, type TurnConfig, type WebProvider } from "../../features/workflow/domain";
-import type { GraphEdge, GraphNode, NodeAnchorSide, NodeExecutionStatus } from "../../features/workflow/types";
-import type { EvidenceEnvelope, FinalSynthesisPacket, NodeResponsibilityMemory, RunRecord } from "./types";
+import type { GraphData, GraphEdge, GraphNode, NodeAnchorSide, NodeExecutionStatus } from "../../features/workflow/types";
+import type { EvidenceEnvelope, FinalSynthesisPacket, NodeResponsibilityMemory, NodeRunState, RunRecord } from "./types";
 
 export const PAUSE_ERROR_TOKEN = "__PAUSED_BY_USER__";
 
@@ -97,6 +97,83 @@ export function collectRequiredWebProviders(nodes: GraphNode[]): WebProvider[] {
     }
   }
   return Array.from(providers);
+}
+
+export function buildWebConnectPreflightReasons(params: {
+  bridgeRunning: boolean;
+  tokenMasked: boolean;
+  extensionOriginPolicy?: string;
+  extensionOriginAllowlistConfigured?: boolean;
+  missingProviders: WebProvider[];
+  webProviderLabelFn: (provider: WebProvider) => string;
+  t: (key: string, vars?: Record<string, string | number>) => string;
+}): string[] {
+  const reasons: string[] = [];
+  if (!params.bridgeRunning || !params.tokenMasked) {
+    reasons.push(params.t("modal.webConnectReasonNotRunning"));
+  }
+  if (params.extensionOriginPolicy === "allowlist" && params.extensionOriginAllowlistConfigured === false) {
+    reasons.push(params.t("modal.webConnectReasonPolicy"));
+  }
+  if (params.missingProviders.length > 0) {
+    reasons.push(
+      params.t("modal.webConnectReasonMissingProviders", {
+        providers: params.missingProviders.map((provider) => params.webProviderLabelFn(provider)).join(", "),
+      }),
+    );
+  }
+  return reasons;
+}
+
+export function findDirectInputNodeIds(graph: GraphData): string[] {
+  const incomingNodeIds = new Set(graph.edges.map((edge) => edge.to.nodeId));
+  return graph.nodes.filter((node) => !incomingNodeIds.has(node.id)).map((node) => node.id);
+}
+
+export function createRunNodeStateSnapshot(nodes: GraphNode[]): {
+  nodeStates: Record<string, NodeRunState>;
+  runLogs: Record<string, string[]>;
+} {
+  const nodeStates: Record<string, NodeRunState> = {};
+  const runLogs: Record<string, string[]> = {};
+  for (const node of nodes) {
+    nodeStates[node.id] = {
+      status: "idle",
+      logs: [],
+    };
+    runLogs[node.id] = [];
+  }
+  return { nodeStates, runLogs };
+}
+
+export function createRunRecord(params: {
+  graph: GraphData;
+  question: string;
+  workflowGroupName?: string;
+  workflowGroupKind?: RunRecord["workflowGroupKind"];
+  workflowPresetKind?: RunRecord["workflowPresetKind"];
+}): RunRecord {
+  return {
+    runId: `${Date.now()}`,
+    question: params.question,
+    startedAt: new Date().toISOString(),
+    workflowGroupName: params.workflowGroupName,
+    workflowGroupKind: params.workflowGroupKind,
+    workflowPresetKind: params.workflowPresetKind,
+    graphSnapshot: params.graph,
+    transitions: [],
+    summaryLogs: [],
+    nodeLogs: {},
+    threadTurnMap: {},
+    providerTrace: [],
+    knowledgeTrace: [],
+    internalMemoryTrace: [],
+    nodeMetrics: {},
+    feedPosts: [],
+    normalizedEvidenceByNodeId: {},
+    conflictLedger: [],
+    runMemory: {},
+  };
 }
 
 export function isPauseSignalError(input: unknown): boolean {

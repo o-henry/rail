@@ -222,9 +222,13 @@ import {
   appendRunTransition,
   buildConnectPreviewLine,
   buildFinalTurnInputPacket,
+  buildWebConnectPreflightReasons,
   buildNodeInputForNode,
   cancelGraphRun,
   collectRequiredWebProviders,
+  createRunNodeStateSnapshot,
+  createRunRecord,
+  findDirectInputNodeIds,
   isPauseSignalError,
 } from "./main/runGraphExecutionUtils";
 import {
@@ -3798,24 +3802,15 @@ function App() {
           (bridgeStatusLatest.connectedProviders ?? []).map((row) => row.provider),
         );
         const missingProviders = requiredWebProviders.filter((provider) => !connectedProviderSet.has(provider));
-
-        const reasons: string[] = [];
-        if (!bridgeStatusLatest.running || !bridgeStatusLatest.tokenMasked) {
-          reasons.push(t("modal.webConnectReasonNotRunning"));
-        }
-        if (
-          bridgeStatusLatest.extensionOriginPolicy === "allowlist" &&
-          bridgeStatusLatest.extensionOriginAllowlistConfigured === false
-        ) {
-          reasons.push(t("modal.webConnectReasonPolicy"));
-        }
-        if (missingProviders.length > 0) {
-          reasons.push(
-            t("modal.webConnectReasonMissingProviders", {
-              providers: missingProviders.map((provider) => webProviderLabel(provider)).join(", "),
-            }),
-          );
-        }
+        const reasons = buildWebConnectPreflightReasons({
+          bridgeRunning: Boolean(bridgeStatusLatest.running),
+          tokenMasked: Boolean(bridgeStatusLatest.tokenMasked),
+          extensionOriginPolicy: bridgeStatusLatest.extensionOriginPolicy,
+          extensionOriginAllowlistConfigured: bridgeStatusLatest.extensionOriginAllowlistConfigured,
+          missingProviders,
+          webProviderLabelFn: webProviderLabel,
+          t,
+        });
 
         if (reasons.length > 0) {
           setPendingWebConnectCheck({
@@ -3830,8 +3825,7 @@ function App() {
     }
 
     const runGroup = inferRunGroupMeta(graph, lastAppliedPresetRef.current, locale);
-    const incomingNodeIds = new Set(graph.edges.map((edge) => edge.to.nodeId));
-    const directInputNodeIds = graph.nodes.filter((node) => !incomingNodeIds.has(node.id)).map((node) => node.id);
+    const directInputNodeIds = findDirectInputNodeIds(graph);
     if (directInputNodeIds.length !== 1) {
       setError(
         `질문 직접 입력 노드는 1개여야 합니다. 현재 ${directInputNodeIds.length}개입니다. 노드 연결을 정리하세요.`,
@@ -3851,40 +3845,17 @@ function App() {
     pauseRequestedRef.current = false;
     collectingRunRef.current = true;
 
-    const initialState: Record<string, NodeRunState> = {};
-    graph.nodes.forEach((node) => {
-      initialState[node.id] = {
-        status: "idle",
-        logs: [],
-      };
-    });
-    runLogCollectorRef.current = graph.nodes.reduce<Record<string, string[]>>((acc, node) => {
-      acc[node.id] = [];
-      return acc;
-    }, {});
-    setNodeStates(initialState);
+    const runStateSnapshot = createRunNodeStateSnapshot(graph.nodes);
+    runLogCollectorRef.current = runStateSnapshot.runLogs;
+    setNodeStates(runStateSnapshot.nodeStates);
 
-    const runRecord: RunRecord = {
-      runId: `${Date.now()}`,
+    const runRecord: RunRecord = createRunRecord({
+      graph,
       question: workflowQuestion,
-      startedAt: new Date().toISOString(),
       workflowGroupName: runGroup.name,
       workflowGroupKind: runGroup.kind,
       workflowPresetKind: runGroup.presetKind,
-      graphSnapshot: graph,
-      transitions: [],
-      summaryLogs: [],
-      nodeLogs: {},
-      threadTurnMap: {},
-      providerTrace: [],
-      knowledgeTrace: [],
-      internalMemoryTrace: [],
-      nodeMetrics: {},
-      feedPosts: [],
-      normalizedEvidenceByNodeId: {},
-      conflictLedger: [],
-      runMemory: {},
-    };
+    });
     setActiveFeedRunMeta({
       runId: runRecord.runId,
       question: workflowQuestion,
