@@ -13,7 +13,7 @@ export const ZH_MESSAGES: Dictionary = {
     "nav.bridge": "网页连接",
     "nav.settings": "设置",
     "nav.language": "语言",
-    "settings.title": "引擎与账号",
+    "settings.title": "设置",
     "settings.engine.connected": "引擎已连接",
     "settings.engine.waiting": "引擎待机",
     "settings.login.done": "已登录",

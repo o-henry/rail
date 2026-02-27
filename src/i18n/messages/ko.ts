@@ -13,7 +13,7 @@ export const KO_MESSAGES: Dictionary = {
     "nav.bridge": "웹 연결",
     "nav.settings": "설정",
     "nav.language": "언어",
-    "settings.title": "엔진 및 계정",
+    "settings.title": "설정",
     "settings.engine.connected": "엔진 연결됨",
     "settings.engine.waiting": "엔진 대기",
     "settings.login.done": "로그인 완료",

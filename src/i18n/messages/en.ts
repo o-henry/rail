@@ -13,7 +13,7 @@ export const EN_MESSAGES: Dictionary = {
     "nav.bridge": "Web Connect",
     "nav.settings": "Settings",
     "nav.language": "Language",
-    "settings.title": "Engine & Account",
+    "settings.title": "Settings",
     "settings.engine.connected": "Engine Connected",
     "settings.engine.waiting": "Engine Idle",
     "settings.login.done": "Logged In",

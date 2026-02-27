@@ -13,7 +13,7 @@ export const JA_MESSAGES: Dictionary = {
     "nav.bridge": "Web連携",
     "nav.settings": "設定",
     "nav.language": "言語",
-    "settings.title": "エンジンとアカウント",
+    "settings.title": "設定",
     "settings.engine.connected": "エンジン接続済み",
     "settings.engine.waiting": "エンジン待機",
     "settings.login.done": "ログイン完了",
