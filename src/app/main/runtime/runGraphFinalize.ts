@@ -25,6 +25,9 @@ export async function finalizeRunGraphExecution(params: any) {
     saveRunRecord,
     normalizeRunRecord,
     feedRunCacheRef,
+    buildRunMissionFlow,
+    buildRunApprovalSnapshot,
+    buildRunUnityArtifacts,
   } = params;
 
   if (cancelRequestedRef.current) {
@@ -73,6 +76,32 @@ export async function finalizeRunGraphExecution(params: any) {
     setStatus(`그래프 실행 실패 (${reason})`);
     setError(`최종 노드 실패: ${reason}`);
   }
+
+  runRecord.approvalQueueSnapshot = buildRunApprovalSnapshot(runRecord.transitions);
+  const pendingApprovals = (runRecord.approvalQueueSnapshot ?? []).filter((row: any) => row.status === "pending").length;
+  runRecord.missionFlow = buildRunMissionFlow({
+    hasDecomposed: graph.nodes.length > 0,
+    pendingApprovals,
+    hasExecutionStarted: runRecord.transitions.some((row: any) => row.status === "running"),
+    hasExecutionCompleted: true,
+    hasSummary: Boolean(runRecord.finalAnswer),
+  });
+  const unityArtifacts = buildRunUnityArtifacts(runRecord);
+  runRecord.unityTaskBundle = unityArtifacts.unityTaskBundle;
+  runRecord.patchBundle = unityArtifacts.patchBundle;
+  runRecord.batchRuns = runRecord.batchRuns ?? [];
+  runRecord.collaborationTrace = [
+    ...(runRecord.collaborationTrace ?? []),
+    {
+      at: new Date().toISOString(),
+      kind: "collaboration",
+      summary: runRecord.finalAnswer ? "summary completed" : "summary failed",
+      payload: {
+        finalNodeId,
+        finalNodeState,
+      },
+    },
+  ];
 
   runRecord.finishedAt = new Date().toISOString();
   runRecord.regression = await buildRegressionSummary({

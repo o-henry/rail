@@ -19,6 +19,14 @@ export function createRunGraphRunner(params: any) {
       return;
     }
 
+    const unifiedInputResult = params.validateUnifiedRunInput(params.workflowQuestion, params.locale);
+    if (!unifiedInputResult.ok) {
+      params.setError(unifiedInputResult.errors.join("\n"));
+      params.setStatus("그래프 실행 대기");
+      return;
+    }
+    const workflowQuestion = unifiedInputResult.value.normalizedText;
+
     params.runStartGuardRef.current = true;
     params.setPendingWebConnectCheck(null);
     params.setIsRunStarting(true);
@@ -36,14 +44,31 @@ export function createRunGraphRunner(params: any) {
 
     const runRecord = params.createRunRecord({
       graph: params.graph,
-      question: params.workflowQuestion,
+      question: workflowQuestion,
       workflowGroupName: runGroup.name,
       workflowGroupKind: runGroup.kind,
       workflowPresetKind: runGroup.presetKind,
     });
+    runRecord.collaborationTrace = [
+      {
+        at: runRecord.startedAt,
+        kind: "decompose",
+        summary: "rail compatible dag snapshot",
+        payload: params.buildRailCompatibleDagSnapshot(params.graph),
+      },
+    ];
+    runRecord.missionFlow = params.buildRunMissionFlow({
+      hasDecomposed: params.graph.nodes.length > 0,
+      pendingApprovals: 0,
+      hasExecutionStarted: true,
+      hasExecutionCompleted: false,
+      hasSummary: false,
+    });
+    runRecord.approvalQueueSnapshot = [];
+    runRecord.batchRuns = [];
     params.setActiveFeedRunMeta({
       runId: runRecord.runId,
-      question: params.workflowQuestion,
+      question: workflowQuestion,
       startedAt: runRecord.startedAt,
       groupName: runGroup.name,
       groupKind: runGroup.kind,
@@ -126,7 +151,7 @@ export function createRunGraphRunner(params: any) {
       const processNode = createRunGraphProcessNode({
         nodeMap,
         graph: params.graph,
-        workflowQuestion: params.workflowQuestion,
+        workflowQuestion,
         latestFeedSourceByNodeId,
         turnRoleLabel: params.turnRoleLabel,
         nodeTypeLabel: params.nodeTypeLabel,
@@ -230,6 +255,9 @@ export function createRunGraphRunner(params: any) {
         saveRunRecord: params.saveRunRecord,
         normalizeRunRecord: params.normalizeRunRecord,
         feedRunCacheRef: params.feedRunCacheRef,
+        buildRunMissionFlow: params.buildRunMissionFlow,
+        buildRunApprovalSnapshot: params.buildRunApprovalSnapshot,
+        buildRunUnityArtifacts: params.buildRunUnityArtifacts,
       });
     } catch (e) {
       params.markCodexNodesStatusOnEngineIssue("failed", `그래프 실행 실패: ${String(e)}`, true);

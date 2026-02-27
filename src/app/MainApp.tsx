@@ -226,8 +226,18 @@ import { createRunGraphControlHandlers } from "./main/runtime/runGraphControlHan
 import { createRunGraphRunner } from "./main/runtime/runGraphRunner";
 import { createWorkflowPresetHandlers } from "./main/runtime/workflowPresetHandlers";
 import { createWebTurnRunHandlers } from "./main/runtime/webTurnRunHandlers";
+import { useBatchScheduler } from "./main/runtime/useBatchScheduler";
 import { useCanvasGraphDerivedState } from "./main/canvas/useCanvasGraphDerivedState";
 import { MainAppModals } from "./main/presentation/MainAppModals";
+import {
+  buildRailCompatibleDagSnapshot,
+  buildRunApprovalSnapshot,
+  buildRunMissionFlow,
+  buildRunUnityArtifacts,
+  evaluateApprovalDecisionGate,
+  validateUnifiedRunInput,
+} from "./main/runtime/orchestrationRuntimeAdapter";
+import type { BatchSchedule, BatchTriggerType } from "../features/orchestration/types";
 import {
   PAUSE_ERROR_TOKEN,
   appendRunTransition,
@@ -270,6 +280,7 @@ import { executeTurnNodeWithContext } from "./main/runtime/executeTurnNode";
 import type {
   FeedCategory,
   InternalMemorySnippet,
+  WebProviderRunResult,
   RunRecord,
 } from "./main";
 
@@ -771,6 +782,38 @@ function App() {
     setWebBridgeConnectCode,
   });
 
+  const batchScheduler = useBatchScheduler({
+    enabled: hasTauriRuntime,
+    setStatus,
+    providerAvailable: (provider: string) => {
+      const webProvider = String(provider).replace(/^web\//, "");
+      return (webBridgeStatus.connectedProviders ?? []).some((row) => row.provider === webProvider);
+    },
+    runBatchSchedule: async (schedule: BatchSchedule, trigger: BatchTriggerType) => {
+      const webProvider = String(schedule.provider).replace(/^web\//, "");
+      try {
+        const result = await invoke<WebProviderRunResult>("web_provider_run", {
+          provider: webProvider,
+          prompt: schedule.query,
+          timeoutMs: 90_000,
+          mode: "auto",
+        });
+        if (result.ok) {
+          return { ok: true };
+        }
+        if (trigger !== "schedule") {
+          await onOpenProviderSession(webProvider as WebProvider);
+        }
+        return { ok: false, reason: result.error ?? "manual fallback required" };
+      } catch (error) {
+        if (trigger !== "schedule") {
+          await onOpenProviderSession(webProvider as WebProvider);
+        }
+        return { ok: false, reason: `manual fallback required: ${String(error)}` };
+      }
+    },
+  });
+
   useEngineEventListeners({
     hasTauriRuntime,
     listenFn: listen,
@@ -939,6 +982,7 @@ function App() {
     toTurnModelDisplayName,
     defaultTurnModel: DEFAULT_TURN_MODEL,
     applyGraphChange,
+    evaluateApprovalDecisionGate,
   });
 
   const {
@@ -1318,7 +1362,7 @@ function App() {
     cancelGraphRun,
   });
 
-  const onRunGraph = createRunGraphRunner({
+  const onRunGraphCore = createRunGraphRunner({
     isGraphRunning,
     isGraphPaused,
     pauseRequestedRef,
@@ -1338,6 +1382,7 @@ function App() {
     setNodeStates,
     createRunRecord,
     workflowQuestion,
+    locale,
     setActiveFeedRunMeta,
     activeRunPresetKindRef,
     loadInternalMemoryCorpus,
@@ -1392,9 +1437,18 @@ function App() {
     saveRunRecord,
     normalizeRunRecord,
     feedRunCacheRef,
+    validateUnifiedRunInput,
+    buildRailCompatibleDagSnapshot,
+    buildRunMissionFlow,
+    buildRunApprovalSnapshot,
+    buildRunUnityArtifacts,
     markCodexNodesStatusOnEngineIssue,
     cleanupRunGraphExecutionState,
   });
+  const onRunGraph = async (skipWebConnectPreflight = false) => {
+    batchScheduler.triggerByUserEvent();
+    await onRunGraphCore(skipWebConnectPreflight);
+  };
   const edgeLines = buildCanvasEdgeLines({
     entries: canvasDisplayEdges,
     nodeMap: canvasNodeMap,

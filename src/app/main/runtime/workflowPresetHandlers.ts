@@ -6,6 +6,16 @@ export function createWorkflowPresetHandlers(params: any) {
       return;
     }
 
+    const gateDecision = params.evaluateApprovalDecisionGate({
+      approval: params.activeApproval,
+      decision,
+    });
+    const isAcceptDecision = decision === "accept" || decision === "acceptForSession";
+    if (isAcceptDecision && !gateDecision.allowed) {
+      params.setError(`승인 게이트 차단: ${gateDecision.reason}`);
+      return;
+    }
+
     params.setError("");
     params.setApprovalSubmitting(true);
     try {
