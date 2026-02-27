@@ -230,6 +230,9 @@ import {
   createRunRecord,
   findDirectInputNodeIds,
   resolveFinalNodeId,
+  buildGraphExecutionIndex,
+  enqueueZeroIndegreeNodes,
+  scheduleChildrenWhenReady,
   buildFinalNodeFailureReason,
   isPauseSignalError,
 } from "./main/runGraphExecutionUtils";
@@ -3887,27 +3890,8 @@ function App() {
         await ensureEngineStarted();
       }
 
-      const nodeMap = new Map(graph.nodes.map((node) => [node.id, node]));
-      const indegree = new Map<string, number>();
-      const adjacency = new Map<string, string[]>();
-      const incoming = new Map<string, string[]>();
+      const { nodeMap, indegree, adjacency, incoming } = buildGraphExecutionIndex(graph);
       const terminalStateByNodeId: Record<string, NodeExecutionStatus> = {};
-
-      for (const node of graph.nodes) {
-        indegree.set(node.id, 0);
-        adjacency.set(node.id, []);
-        incoming.set(node.id, []);
-      }
-
-      for (const edge of graph.edges) {
-        indegree.set(edge.to.nodeId, (indegree.get(edge.to.nodeId) ?? 0) + 1);
-        const children = adjacency.get(edge.from.nodeId) ?? [];
-        children.push(edge.to.nodeId);
-        adjacency.set(edge.from.nodeId, children);
-        const parents = incoming.get(edge.to.nodeId) ?? [];
-        parents.push(edge.from.nodeId);
-        incoming.set(edge.to.nodeId, parents);
-      }
 
       const latestFeedSourceByNodeId = new Map<string, FeedInputSource>();
       const resolveFeedInputSources = (targetNodeId: string): FeedInputSource[] => {
@@ -3997,12 +3981,13 @@ function App() {
       };
 
       const queue: string[] = [];
-      indegree.forEach((degree, nodeId) => {
-        if (degree === 0) {
-          queue.push(nodeId);
+      enqueueZeroIndegreeNodes({
+        indegree,
+        queue,
+        onQueued: (nodeId) => {
           setNodeStatus(nodeId, "queued");
           appendRunTransition(runRecord, nodeId, "queued");
-        }
+        },
       });
 
       const outputs: Record<string, unknown> = {};
@@ -4017,16 +4002,16 @@ function App() {
       let pauseStatusShown = false;
 
       const scheduleChildren = (nodeId: string) => {
-        const children = adjacency.get(nodeId) ?? [];
-        for (const childId of children) {
-          const next = (indegree.get(childId) ?? 0) - 1;
-          indegree.set(childId, next);
-          if (next === 0) {
-            queue.push(childId);
+        scheduleChildrenWhenReady({
+          nodeId,
+          adjacency,
+          indegree,
+          queue,
+          onQueued: (childId) => {
             setNodeStatus(childId, "queued");
             appendRunTransition(runRecord, childId, "queued");
-          }
-        }
+          },
+        });
       };
 
       const processNode = async (nodeId: string): Promise<void> => {

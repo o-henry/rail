@@ -211,6 +211,67 @@ export function buildFinalNodeFailureReason(params: {
   return "최종 노드를 확정하지 못했습니다.";
 }
 
+export function buildGraphExecutionIndex(graph: GraphData): {
+  nodeMap: Map<string, GraphNode>;
+  indegree: Map<string, number>;
+  adjacency: Map<string, string[]>;
+  incoming: Map<string, string[]>;
+} {
+  const nodeMap = new Map(graph.nodes.map((node) => [node.id, node]));
+  const indegree = new Map<string, number>();
+  const adjacency = new Map<string, string[]>();
+  const incoming = new Map<string, string[]>();
+
+  for (const node of graph.nodes) {
+    indegree.set(node.id, 0);
+    adjacency.set(node.id, []);
+    incoming.set(node.id, []);
+  }
+
+  for (const edge of graph.edges) {
+    indegree.set(edge.to.nodeId, (indegree.get(edge.to.nodeId) ?? 0) + 1);
+    const children = adjacency.get(edge.from.nodeId) ?? [];
+    children.push(edge.to.nodeId);
+    adjacency.set(edge.from.nodeId, children);
+    const parents = incoming.get(edge.to.nodeId) ?? [];
+    parents.push(edge.from.nodeId);
+    incoming.set(edge.to.nodeId, parents);
+  }
+
+  return { nodeMap, indegree, adjacency, incoming };
+}
+
+export function enqueueZeroIndegreeNodes(params: {
+  indegree: Map<string, number>;
+  queue: string[];
+  onQueued: (nodeId: string) => void;
+}) {
+  params.indegree.forEach((degree, nodeId) => {
+    if (degree === 0) {
+      params.queue.push(nodeId);
+      params.onQueued(nodeId);
+    }
+  });
+}
+
+export function scheduleChildrenWhenReady(params: {
+  nodeId: string;
+  adjacency: Map<string, string[]>;
+  indegree: Map<string, number>;
+  queue: string[];
+  onQueued: (nodeId: string) => void;
+}) {
+  const children = params.adjacency.get(params.nodeId) ?? [];
+  for (const childId of children) {
+    const next = (params.indegree.get(childId) ?? 0) - 1;
+    params.indegree.set(childId, next);
+    if (next === 0) {
+      params.queue.push(childId);
+      params.onQueued(childId);
+    }
+  }
+}
+
 export function isPauseSignalError(input: unknown): boolean {
   const text = String(input ?? "").toLowerCase();
   if (!text) {
