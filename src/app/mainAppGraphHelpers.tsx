@@ -183,14 +183,7 @@ export function toWebBridgeStatus(raw: unknown): WebBridgeStatus {
 
 export function NavIcon({ tab, active = false }: { tab: WorkspaceTab; active?: boolean }) {
   if (tab === "dashboard") {
-    return (
-      <svg aria-hidden="true" fill="none" height="20" viewBox="0 0 24 24" width="20">
-        <rect height="7" rx="1.5" stroke="currentColor" strokeWidth="1.5" width="7" x="3.5" y="3.5" />
-        <rect height="7" rx="1.5" stroke="currentColor" strokeWidth="1.5" width="9" x="11.5" y="3.5" />
-        <rect height="9" rx="1.5" stroke="currentColor" strokeWidth="1.5" width="7" x="3.5" y="11.5" />
-        <rect height="9" rx="1.5" stroke="currentColor" strokeWidth="1.5" width="9" x="11.5" y="11.5" />
-      </svg>
-    );
+    return <img alt="" aria-hidden="true" className="nav-workflow-image" src="/home.svg" />;
   }
   if (tab === "workflow") {
     return (

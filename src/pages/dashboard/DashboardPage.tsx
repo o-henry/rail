@@ -65,11 +65,6 @@ export default function DashboardPage(props: DashboardPageProps) {
 
   return (
     <section className="dashboard-layout workspace-tab-panel">
-      <article className="panel-card dashboard-hero">
-        <h1>{t("dashboard.title")}</h1>
-        <p>{t("dashboard.subtitle")}</p>
-      </article>
-
       <section className="dashboard-grid">
         {cards.map((card) => (
           <article className="panel-card dashboard-card" key={card.title}>
@@ -78,6 +73,42 @@ export default function DashboardPage(props: DashboardPageProps) {
             <p>{card.caption}</p>
           </article>
         ))}
+      </section>
+
+      <section className="dashboard-widget-grid">
+        <article className="panel-card dashboard-widget-card">
+          <div className="dashboard-widget-head">
+            <h3>{t("dashboard.widget.news.title")}</h3>
+            <span>{t("dashboard.widget.badge.live")}</span>
+          </div>
+          <ul>
+            <li>{t("dashboard.widget.news.item1")}</li>
+            <li>{t("dashboard.widget.news.item2")}</li>
+            <li>{t("dashboard.widget.news.item3")}</li>
+          </ul>
+        </article>
+        <article className="panel-card dashboard-widget-card">
+          <div className="dashboard-widget-head">
+            <h3>{t("dashboard.widget.trend.title")}</h3>
+            <span>{t("dashboard.widget.badge.signal")}</span>
+          </div>
+          <ul>
+            <li>{t("dashboard.widget.trend.item1")}</li>
+            <li>{t("dashboard.widget.trend.item2")}</li>
+            <li>{t("dashboard.widget.trend.item3")}</li>
+          </ul>
+        </article>
+        <article className="panel-card dashboard-widget-card">
+          <div className="dashboard-widget-head">
+            <h3>{t("dashboard.widget.stock.title")}</h3>
+            <span>{t("dashboard.widget.badge.market")}</span>
+          </div>
+          <ul>
+            <li>{t("dashboard.widget.stock.item1")}</li>
+            <li>{t("dashboard.widget.stock.item2")}</li>
+            <li>{t("dashboard.widget.stock.item3")}</li>
+          </ul>
+        </article>
       </section>
 
       <article className="panel-card dashboard-footer">
