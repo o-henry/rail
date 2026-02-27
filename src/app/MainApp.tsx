@@ -223,6 +223,12 @@ import {
 } from "./main/feedFollowupUtils";
 import { ensureFeedRunRecordFromCache, submitFeedAgentRequest as submitFeedAgentRequestAction } from "./main/feedFollowupActions";
 import {
+  clearDetachedWebTurnResolverAction,
+  clearQueuedWebTurnRequestsAction,
+  requestWebTurnResponseAction,
+  resolvePendingWebTurnAction,
+} from "./main/webTurnQueueActions";
+import {
   PAUSE_ERROR_TOKEN,
   appendRunTransition,
   buildConnectPreviewLine,
@@ -3326,53 +3332,35 @@ function App() {
   }
 
   function resolvePendingWebTurn(result: { ok: boolean; output?: unknown; error?: string }) {
-    if (pendingWebTurn?.nodeId) {
-      delete manualInputWaitNoticeByNodeRef.current[pendingWebTurn.nodeId];
-    }
-    const resolver = webTurnResolverRef.current;
-    webTurnResolverRef.current = null;
-    webTurnPanel.clearDragging();
-    const nextQueued = webTurnQueueRef.current.shift() ?? null;
-    if (nextQueued) {
-      setPendingWebTurn(nextQueued.turn);
-      setSuspendedWebTurn(null);
-      setSuspendedWebResponseDraft("");
-      setWebResponseDraft("");
-      webTurnResolverRef.current = nextQueued.resolve;
-      webTurnPanel.setPosition({
-        x: WEB_TURN_FLOATING_DEFAULT_X,
-        y: WEB_TURN_FLOATING_DEFAULT_Y,
-      });
-      setStatus(`${webProviderLabel(nextQueued.turn.provider)} 웹 응답 입력 창을 상단에 표시했습니다.`);
-    } else {
-      setPendingWebTurn(null);
-      setSuspendedWebTurn(null);
-      setSuspendedWebResponseDraft("");
-      setWebResponseDraft("");
-    }
-    if (resolver) {
-      resolver(result);
-    }
+    resolvePendingWebTurnAction({
+      result,
+      pendingWebTurn,
+      webTurnResolverRef,
+      webTurnQueueRef,
+      webTurnPanel,
+      manualInputWaitNoticeByNodeRef,
+      setPendingWebTurn,
+      setSuspendedWebTurn,
+      setSuspendedWebResponseDraft,
+      setWebResponseDraft,
+      setStatus,
+      webProviderLabelFn: webProviderLabel,
+      webTurnFloatingDefaultX: WEB_TURN_FLOATING_DEFAULT_X,
+      webTurnFloatingDefaultY: WEB_TURN_FLOATING_DEFAULT_Y,
+    });
   }
 
   function clearQueuedWebTurnRequests(reason: string) {
-    const queued = [...webTurnQueueRef.current];
-    webTurnQueueRef.current = [];
-    for (const request of queued) {
-      request.resolve({ ok: false, error: reason });
-    }
+    clearQueuedWebTurnRequestsAction(reason, webTurnQueueRef);
   }
 
   function clearDetachedWebTurnResolver(reason: string) {
-    if (pendingWebTurn || suspendedWebTurn) {
-      return;
-    }
-    const resolver = webTurnResolverRef.current;
-    if (!resolver) {
-      return;
-    }
-    webTurnResolverRef.current = null;
-    resolver({ ok: false, error: reason });
+    clearDetachedWebTurnResolverAction({
+      reason,
+      pendingWebTurn,
+      suspendedWebTurn,
+      webTurnResolverRef,
+    });
   }
 
   async function requestWebTurnResponse(
@@ -3381,64 +3369,28 @@ function App() {
     prompt: string,
     mode: WebResultMode,
   ): Promise<{ ok: boolean; output?: unknown; error?: string }> {
-    const turn = {
+    return requestWebTurnResponseAction({
       nodeId,
       provider,
       prompt,
       mode,
-    };
-    return new Promise((resolve) => {
-      clearDetachedWebTurnResolver("이전 웹 입력 세션을 정리하고 새 요청으로 교체했습니다.");
-      if (
-        pendingWebTurn &&
-        !webTurnResolverRef.current &&
-        (pendingWebTurn.nodeId !== nodeId || pendingWebTurn.provider !== provider)
-      ) {
-        setPendingWebTurn(null);
-        setWebResponseDraft("");
-      }
-      if (
-        pendingWebTurn?.nodeId === nodeId &&
-        pendingWebTurn.provider === provider &&
-        !webTurnResolverRef.current
-      ) {
-        webTurnResolverRef.current = resolve;
-        delete manualInputWaitNoticeByNodeRef.current[nodeId];
-        setStatus(`${webProviderLabel(provider)} 수동 입력 창이 실행 흐름에 연결되었습니다.`);
-        return;
-      }
-      if (
-        suspendedWebTurn?.nodeId === nodeId &&
-        suspendedWebTurn.provider === provider &&
-        !webTurnResolverRef.current
-      ) {
-        setPendingWebTurn(suspendedWebTurn);
-        setWebResponseDraft(suspendedWebResponseDraft);
-        setSuspendedWebTurn(null);
-        setSuspendedWebResponseDraft("");
-        webTurnResolverRef.current = resolve;
-        delete manualInputWaitNoticeByNodeRef.current[nodeId];
-        webTurnPanel.setPosition({
-          x: WEB_TURN_FLOATING_DEFAULT_X,
-          y: WEB_TURN_FLOATING_DEFAULT_Y,
-        });
-        setStatus(`${webProviderLabel(provider)} 수동 입력 창이 실행 흐름에 연결되었습니다.`);
-        return;
-      }
-      if (!pendingWebTurn && !webTurnResolverRef.current) {
-        setWebResponseDraft("");
-        setSuspendedWebTurn(null);
-        setSuspendedWebResponseDraft("");
-        setPendingWebTurn(turn);
-        webTurnResolverRef.current = resolve;
-        webTurnPanel.setPosition({
-          x: WEB_TURN_FLOATING_DEFAULT_X,
-          y: WEB_TURN_FLOATING_DEFAULT_Y,
-        });
-        return;
-      }
-      webTurnQueueRef.current.push({ turn, resolve });
-      addNodeLog(nodeId, `[WEB] 수동 입력 대기열 등록 (${webTurnQueueRef.current.length})`);
+      pendingWebTurn,
+      suspendedWebTurn,
+      suspendedWebResponseDraft,
+      webTurnResolverRef,
+      webTurnQueueRef,
+      webTurnPanel,
+      manualInputWaitNoticeByNodeRef,
+      setPendingWebTurn,
+      setWebResponseDraft,
+      setSuspendedWebTurn,
+      setSuspendedWebResponseDraft,
+      setStatus,
+      addNodeLog,
+      webProviderLabelFn: webProviderLabel,
+      clearDetachedWebTurnResolver,
+      webTurnFloatingDefaultX: WEB_TURN_FLOATING_DEFAULT_X,
+      webTurnFloatingDefaultY: WEB_TURN_FLOATING_DEFAULT_Y,
     });
   }
 
