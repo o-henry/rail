@@ -4120,27 +4120,6 @@ h3 {
   background: var(--bg-app);
 }
 
-:root[data-theme="light"] .app-shell::before {
-  content: "";
-  position: absolute;
-  inset: -14%;
-  z-index: 0;
-  pointer-events: none;
-  opacity: 0.7;
-  background:
-    radial-gradient(circle at 14% 22%, rgba(156, 176, 236, 0.36), transparent 46%),
-    radial-gradient(circle at 82% 30%, rgba(196, 209, 252, 0.42), transparent 44%),
-    radial-gradient(circle at 62% 78%, rgba(176, 201, 255, 0.3), transparent 46%),
-    linear-gradient(135deg, rgba(246, 249, 255, 0.96) 0%, rgba(228, 236, 251, 0.78) 100%);
-  transform: translate3d(0, 0, 0) scale(1.02);
-  animation: light-shell-gradient-drift 22s ease-in-out infinite alternate;
-}
-
-:root[data-theme="light"] .app-shell > * {
-  position: relative;
-  z-index: 1;
-}
-
 :root[data-theme="light"] .left-nav {
   border: 0;
   background: transparent;
@@ -4182,21 +4161,6 @@ h3 {
 :root[data-theme="light"] .dashboard-widget-button:hover {
   transform: translateY(-1px);
   box-shadow: none;
-}
-
-@keyframes light-shell-gradient-drift {
-  0% {
-    transform: translate3d(-3%, -1.5%, 0) scale(1.02);
-    background-position: 0% 50%;
-  }
-  50% {
-    transform: translate3d(2.5%, 1.8%, 0) scale(1.05);
-    background-position: 60% 45%;
-  }
-  100% {
-    transform: translate3d(4%, -2.2%, 0) scale(1.03);
-    background-position: 100% 55%;
-  }
 }
 
 .agents-layout {

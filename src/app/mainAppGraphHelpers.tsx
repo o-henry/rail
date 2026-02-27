@@ -187,7 +187,7 @@ export function NavIcon({ tab, active = false }: { tab: WorkspaceTab; active?: b
   }
   if (tab === "workflow") {
     return (
-      <img alt="" aria-hidden="true" className="nav-workflow-image" src="/workflow.svg" />
+      <img alt="" aria-hidden="true" className="nav-workflow-image" src="/node-svgrepo-com.svg" />
     );
   }
   if (tab === "feed") {
@@ -202,14 +202,7 @@ export function NavIcon({ tab, active = false }: { tab: WorkspaceTab; active?: b
   }
   if (tab === "agents") {
     return (
-      <svg aria-hidden="true" fill="none" height="20" viewBox="0 0 24 24" width="20">
-        <path
-          d="M8.5 5.5h7a3 3 0 013 3v7a3 3 0 01-3 3h-7a3 3 0 01-3-3v-7a3 3 0 013-3z"
-          stroke="currentColor"
-          strokeWidth="1.6"
-        />
-        <path d="M9.5 12h5M12 9.5v5" stroke="currentColor" strokeLinecap="round" strokeWidth="1.6" />
-      </svg>
+      <img alt="" aria-hidden="true" className="nav-workflow-image" src="/workflow.svg" />
     );
   }
   if (tab === "settings") {
