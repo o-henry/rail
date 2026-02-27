@@ -1,0 +1,206 @@
+import type { MouseEvent as ReactMouseEvent } from "react";
+import { useI18n } from "../../i18n";
+import type { GraphNode, NodeAnchorSide, NodeExecutionStatus } from "../../features/workflow/types";
+import type { MarqueeSelection, NodeRunState } from "./types";
+
+type WorkflowCanvasNodesLayerProps = {
+  canvasNodes: GraphNode[];
+  nodeStates: Record<string, NodeRunState>;
+  selectedNodeIds: string[];
+  draggingNodeIds: string[];
+  isConnectingDrag: boolean;
+  selectedEdgeNodeIdSet: Set<string>;
+  questionDirectInputNodeIds: Set<string>;
+  setNodeSelection: (nodeIds: string[], focusedNodeId?: string) => void;
+  setSelectedEdgeKey: (edgeKey: string) => void;
+  isNodeDragAllowedTarget: (target: EventTarget | null) => boolean;
+  onNodeDragStart: (event: ReactMouseEvent<HTMLDivElement>, nodeId: string) => void;
+  nodeAnchorSides: readonly NodeAnchorSide[];
+  onNodeAnchorDragStart: (event: ReactMouseEvent<HTMLButtonElement>, nodeId: string, side: NodeAnchorSide) => void;
+  onNodeAnchorDrop: (event: ReactMouseEvent<HTMLButtonElement>, nodeId: string, side: NodeAnchorSide) => void;
+  selectedEdgeKey: string;
+  onAssignSelectedEdgeAnchor: (nodeId: string, side: NodeAnchorSide) => boolean;
+  nodeCardSummary: (node: GraphNode) => string;
+  turnModelLabel: (node: GraphNode) => string;
+  turnRoleLabel: (node: GraphNode) => string;
+  nodeTypeLabel: (type: GraphNode["type"]) => string;
+  deleteNode: (nodeId: string) => void;
+  nodeStatusLabel: (status: NodeExecutionStatus) => string;
+  formatNodeElapsedTime: (state: NodeRunState | undefined, nowMs: number) => string;
+  runtimeNowMs: number;
+  onOpenFeedFromNode: (nodeId: string) => void;
+  onOpenWebInputForNode: (nodeId: string) => void;
+  marqueeSelection: MarqueeSelection | null;
+};
+
+export default function WorkflowCanvasNodesLayer({
+  canvasNodes,
+  nodeStates,
+  selectedNodeIds,
+  draggingNodeIds,
+  isConnectingDrag,
+  selectedEdgeNodeIdSet,
+  questionDirectInputNodeIds,
+  setNodeSelection,
+  setSelectedEdgeKey,
+  isNodeDragAllowedTarget,
+  onNodeDragStart,
+  nodeAnchorSides,
+  onNodeAnchorDragStart,
+  onNodeAnchorDrop,
+  selectedEdgeKey,
+  onAssignSelectedEdgeAnchor,
+  nodeCardSummary,
+  turnModelLabel,
+  turnRoleLabel,
+  nodeTypeLabel,
+  deleteNode,
+  nodeStatusLabel,
+  formatNodeElapsedTime,
+  runtimeNowMs,
+  onOpenFeedFromNode,
+  onOpenWebInputForNode,
+  marqueeSelection,
+}: WorkflowCanvasNodesLayerProps) {
+  const { t } = useI18n();
+
+  return (
+    <>
+      {canvasNodes.map((node) => {
+        const runState = nodeStates[node.id];
+        const nodeStatus = runState?.status ?? "idle";
+        const nodeSummary = nodeCardSummary(node);
+        const isNodeSelected = selectedNodeIds.includes(node.id);
+        const isNodeDragging = draggingNodeIds.includes(node.id);
+        const showNodeAnchors = isNodeSelected || isConnectingDrag || selectedEdgeNodeIdSet.has(node.id);
+        const receivesQuestionDirectly = questionDirectInputNodeIds.has(node.id);
+        const isWebTurnNode = node.type === "turn" && String(node.config?.executor ?? "").startsWith("web_");
+        return (
+          <div
+            className={`graph-node node-${node.type} ${isNodeSelected ? "selected" : ""} ${isNodeDragging ? "is-dragging" : ""}`.trim()}
+            data-node-id={node.id}
+            key={node.id}
+            onClick={(event) => {
+              if (event.shiftKey) {
+                const toggled = selectedNodeIds.includes(node.id)
+                  ? selectedNodeIds.filter((id) => id !== node.id)
+                  : [...selectedNodeIds, node.id];
+                setNodeSelection(toggled, node.id);
+              } else {
+                setNodeSelection([node.id], node.id);
+              }
+              setSelectedEdgeKey("");
+            }}
+            onMouseDown={(event) => {
+              if (!isNodeDragAllowedTarget(event.target)) return;
+              if (event.button !== 0 || isConnectingDrag) return;
+              onNodeDragStart(event, node.id);
+            }}
+            style={{
+              left: node.position.x,
+              top: node.position.y,
+              transition: isNodeDragging
+                ? "none"
+                : "left 220ms cubic-bezier(0.22, 1, 0.36, 1), top 220ms cubic-bezier(0.22, 1, 0.36, 1)",
+            }}
+          >
+            <div className="node-head">
+              <div className="node-head-main">
+                {node.type === "turn" ? (
+                  <>
+                    <div className="node-head-title-row">
+                      <strong>{turnModelLabel(node)}</strong>
+                    </div>
+                    <span className="node-head-subtitle">{turnRoleLabel(node)}</span>
+                  </>
+                ) : (
+                  <div className="node-head-title-row">
+                    <strong className={node.type === "gate" ? "gate-node-title" : undefined}>{nodeTypeLabel(node.type)}</strong>
+                  </div>
+                )}
+              </div>
+              <button onClick={() => deleteNode(node.id)} type="button">{t("common.delete")}</button>
+            </div>
+            <div className="node-body">
+              {nodeSummary ? <div className="node-summary-row"><div>{nodeSummary}</div></div> : null}
+              <div className="node-runtime-meta">
+                <div>
+                  {t("workflow.node.completion")}: {" "}
+                  {nodeStatus === "done"
+                    ? t("label.status.done")
+                    : nodeStatus === "low_quality"
+                      ? t("label.status.low_quality")
+                      : nodeStatus === "failed"
+                        ? t("label.status.failed")
+                        : nodeStatus === "cancelled"
+                          ? t("label.status.cancelled")
+                          : t("label.status.idle")}
+                </div>
+                <div>{t("workflow.node.elapsed")}: {formatNodeElapsedTime(runState, runtimeNowMs)}</div>
+              </div>
+              <button className="node-feed-link" onClick={() => onOpenFeedFromNode(node.id)} type="button">{t("workflow.node.outputInFeed")}</button>
+            </div>
+            <div className="node-wait-slot">
+              <span className={`status-pill status-${nodeStatus}`}>{nodeStatusLabel(nodeStatus)}</span>
+              <div className="node-wait-actions">
+                {receivesQuestionDirectly && (
+                  <span className="node-input-chip">
+                    <span className="node-input-chip-text">{t("workflow.node.inputDirect")}</span>
+                  </span>
+                )}
+                {isWebTurnNode && (
+                  <button
+                    className="node-manual-web-input-button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onOpenWebInputForNode(node.id);
+                    }}
+                    title={t("workflow.node.manualWebInput")}
+                    type="button"
+                  >
+                    {t("workflow.node.manualWebInput")}
+                  </button>
+                )}
+              </div>
+            </div>
+            {showNodeAnchors && (
+              <div className="node-anchors">
+                {nodeAnchorSides.map((side) => (
+                  <button
+                    aria-label={`${t("workflow.node.connection")} ${side}`}
+                    className={`node-anchor node-anchor-${side}`}
+                    key={`${node.id}-${side}`}
+                    onMouseDown={(e) => {
+                      if (!isConnectingDrag && selectedEdgeKey) {
+                        const applied = onAssignSelectedEdgeAnchor(node.id, side);
+                        if (applied) {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          return;
+                        }
+                      }
+                      onNodeAnchorDragStart(e, node.id, side);
+                    }}
+                    onMouseUp={(e) => onNodeAnchorDrop(e, node.id, side)}
+                    type="button"
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })}
+      {marqueeSelection && (
+        <div
+          className="marquee-selection"
+          style={{
+            left: Math.min(marqueeSelection.start.x, marqueeSelection.current.x),
+            top: Math.min(marqueeSelection.start.y, marqueeSelection.current.y),
+            width: Math.abs(marqueeSelection.current.x - marqueeSelection.start.x),
+            height: Math.abs(marqueeSelection.current.y - marqueeSelection.start.y),
+          }}
+        />
+      )}
+    </>
+  );
+}

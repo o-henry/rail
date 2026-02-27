@@ -171,32 +171,21 @@ import {
   getQualityProfileOptions,
   getQualityThresholdOptions,
   buildFeedPost,
-  buildSchemaRetryInput,
   buildQualityReport,
   defaultKnowledgeConfig,
   executeGateNode,
   executeTransformNode,
-  extractSchemaValidationTarget,
   feedAttachmentRawKey,
-  graphSignature,
   inferRunGroupMeta,
   isCriticalTurnNode,
-  mergeUsageStats,
-  normalizeArtifactOutput,
   normalizeEvidenceEnvelope,
   normalizeWebEvidenceOutput,
   normalizeWebTurnOutput,
   buildConflictLedger,
-  buildFinalSynthesisPacket,
-  buildInternalMemorySnippetsFromRun,
   computeFinalConfidence,
   updateRunMemoryByEnvelope,
-  rankInternalMemorySnippets,
-  questionSignature,
-  resolveProviderByExecutor,
   normalizeQualityThreshold,
   normalizeRunRecord,
-  sanitizeRunRecordForSave,
   summarizeQualityMetrics,
 } from "./mainAppRuntimeHelpers";
 import {
@@ -241,9 +230,29 @@ import {
 } from "./main";
 import WorkflowCanvasPane from "./main/WorkflowCanvasPane";
 import WorkflowInspectorPane from "./main/WorkflowInspectorPane";
+import { buildFeedPageVm, buildWorkflowInspectorPaneProps } from "./main/mainAppPropsBuilders";
+import {
+  PAUSE_ERROR_TOKEN,
+  appendRunTransition,
+  buildConnectPreviewLine,
+  buildFinalTurnInputPacket,
+  buildNodeInputForNode,
+  cancelGraphRun,
+  collectRequiredWebProviders,
+  isPauseSignalError,
+} from "./main/runGraphExecutionUtils";
+import {
+  buildRegressionSummary,
+  exportRunFeedMarkdownFiles,
+  loadInternalMemoryCorpus,
+  persistRunRecordFile as persistRunRecordFileHelper,
+} from "./main/runHistoryUtils";
+import {
+  executeTurnNodeWithOutputSchemaRetry,
+  injectKnowledgeContext,
+  loadAgentRuleDocs,
+} from "./main/turnExecutionUtils";
 import type {
-  AgentRuleDoc,
-  AgentRulesReadResult,
   ApprovalDecision,
   AuthProbeResult,
   CanvasDisplayEdge,
@@ -255,11 +264,9 @@ import type {
   FeedPost,
   FeedViewPost,
   EvidenceEnvelope,
-  FinalSynthesisPacket,
   InternalMemorySnippet,
   InternalMemoryTraceEntry,
   NodeResponsibilityMemory,
-  KnowledgeRetrieveResult,
   KnowledgeTraceEntry,
   LoginChatgptResult,
   LogicalPoint,
@@ -267,7 +274,6 @@ import type {
   NodeRunState,
   NodeVisualSize,
   QualityReport,
-  RegressionSummary,
   RunRecord,
   ThreadStartResult,
   UsageCheckResult,
@@ -602,6 +608,14 @@ function App() {
     }
     const at = new Date().toISOString();
     setErrorLogs((prev) => [`[${at}] ${trimmed}`, ...prev].slice(0, 600));
+  }
+
+  function persistRunRecordFile(name: string, runRecord: RunRecord) {
+    return persistRunRecordFileHelper({
+      invokeFn: invoke,
+      name,
+      runRecord,
+    });
   }
 
   const {
@@ -1335,7 +1349,15 @@ function App() {
         error: undefined,
       });
       const startedAtMs = Date.now();
-      const turnExecution = await executeTurnNodeWithOutputSchemaRetry(node, followupInput);
+      const turnExecution = await executeTurnNodeWithOutputSchemaRetry({
+        node,
+        input: followupInput,
+        executeTurnNode,
+        addNodeLog,
+        validateSimpleSchema,
+        outputSchemaEnabled: TURN_OUTPUT_SCHEMA_ENABLED,
+        maxRetryDefault: TURN_OUTPUT_SCHEMA_MAX_RETRY,
+      });
       const result = turnExecution.result;
       const effectiveOutput = turnExecution.normalizedOutput ?? result.output;
       for (const warning of turnExecution.artifactWarnings) {
@@ -1417,8 +1439,14 @@ function App() {
           ],
           feedPosts: [failed.post],
         };
-        await exportRunFeedMarkdownFiles(failedRunRecord);
-        await persistRunRecordFile(oneOffRunFileName, failedRunRecord);
+          await exportRunFeedMarkdownFiles({
+            runRecord: failedRunRecord,
+            cwd,
+            invokeFn: invoke,
+            feedRawAttachment: feedRawAttachmentRef.current,
+            setError,
+          });
+          await persistRunRecordFile(oneOffRunFileName, failedRunRecord);
         feedRunCacheRef.current[oneOffRunFileName] = normalizeRunRecord(failedRunRecord);
         setFeedPosts((prev) => [
           {
@@ -1505,7 +1533,13 @@ function App() {
         ],
         feedPosts: [done.post],
       };
-      await exportRunFeedMarkdownFiles(doneRunRecord);
+      await exportRunFeedMarkdownFiles({
+        runRecord: doneRunRecord,
+        cwd,
+        invokeFn: invoke,
+        feedRawAttachment: feedRawAttachmentRef.current,
+        setError,
+      });
       await persistRunRecordFile(oneOffRunFileName, doneRunRecord);
       feedRunCacheRef.current[oneOffRunFileName] = normalizeRunRecord(doneRunRecord);
       setFeedPosts((prev) => [
@@ -3562,271 +3596,21 @@ function App() {
     };
   }, [isConnectingDrag, connectFromNodeId, canvasZoom]);
 
-  async function persistRunRecordFile(name: string, runRecord: RunRecord) {
-    await invoke("run_save", {
-      name,
-      run: sanitizeRunRecordForSave(runRecord),
-    });
-  }
-
-  function toSafeMarkdownToken(input: string, fallback: string) {
-    const normalized = String(input ?? "")
-      .trim()
-      .replace(/\s+/g, "-")
-      .replace(/[^a-zA-Z0-9._-]+/g, "-")
-      .replace(/-+/g, "-")
-      .replace(/^[-_.]+|[-_.]+$/g, "");
-    return normalized || fallback;
-  }
-
-  async function exportRunFeedMarkdownFiles(runRecord: RunRecord) {
-    const posts = Array.isArray(runRecord.feedPosts) ? runRecord.feedPosts : [];
-    if (posts.length === 0) {
-      return;
-    }
-    const nodeMap = new Map(runRecord.graphSnapshot.nodes.map((node) => [node.id, node]));
-    const outgoingCountByNodeId = new Map<string, number>();
-    for (const edge of runRecord.graphSnapshot.edges ?? []) {
-      const sourceNodeId = String(edge?.from?.nodeId ?? "").trim();
-      if (!sourceNodeId) {
-        continue;
-      }
-      outgoingCountByNodeId.set(sourceNodeId, (outgoingCountByNodeId.get(sourceNodeId) ?? 0) + 1);
-    }
-    const finalTurnNodeIds = new Set(
-      runRecord.graphSnapshot.nodes
-        .filter((node) => node.type === "turn" && (outgoingCountByNodeId.get(node.id) ?? 0) === 0)
-        .map((node) => node.id),
-    );
-    const failures: string[] = [];
-    const finalDocNameCountByCwd = new Map<string, number>();
-
-    for (let index = 0; index < posts.length; index += 1) {
-      const post = posts[index];
-      const markdownRaw =
-        feedRawAttachmentRef.current[feedAttachmentRawKey(post.id, "markdown")] ??
-        post.attachments.find((attachment) => attachment.kind === "markdown")?.content ??
-        "";
-      const content = String(markdownRaw ?? "").trim();
-      if (!content) {
-        continue;
-      }
-
-      const node = nodeMap.get(post.nodeId);
-      const nodeCwd =
-        node?.type === "turn"
-          ? resolveNodeCwd(String((node.config as TurnConfig)?.cwd ?? cwd), cwd)
-          : cwd;
-      const targetCwd = nodeCwd || cwd;
-      const nodeToken = toSafeMarkdownToken(post.nodeId, `node-${index + 1}`);
-      const roleToken = toSafeMarkdownToken(post.roleLabel || post.agentName || "agent", "agent");
-      const statusToken = toSafeMarkdownToken(post.status, "status");
-      const createdAtToken = toSafeMarkdownToken(
-        String(post.createdAt || runRecord.startedAt || new Date().toISOString()).replace(/[:]/g, "-"),
-        `time-${index + 1}`,
-      );
-      const isFinalDocument = Boolean((post as any).isFinalDocument) || finalTurnNodeIds.has(String(post.nodeId ?? ""));
-      let fileName = `rail-${runRecord.runId}-${String(index + 1).padStart(2, "0")}-${nodeToken}-${roleToken}-${statusToken}-${createdAtToken}.md`;
-      if (isFinalDocument) {
-        const nextCount = (finalDocNameCountByCwd.get(targetCwd) ?? 0) + 1;
-        finalDocNameCountByCwd.set(targetCwd, nextCount);
-        fileName = nextCount === 1 ? "최종 문서.md" : `최종 문서-${nextCount}.md`;
-      }
-
-      try {
-        const writtenPath = await invoke<string>("workspace_write_markdown", {
-          cwd: targetCwd,
-          name: fileName,
-          content,
-        });
-        const markdownAttachment = post.attachments.find((attachment) => attachment.kind === "markdown");
-        if (markdownAttachment) {
-          markdownAttachment.filePath = String(writtenPath ?? "").trim();
-        }
-      } catch (error) {
-        failures.push(`${post.nodeId}: ${String(error)}`);
-      }
-    }
-
-    if (failures.length > 0) {
-      setError(`일부 Markdown 저장 실패 (${failures.length}개): ${failures[0]}`);
-    }
-  }
-
   async function saveRunRecord(runRecord: RunRecord) {
     const fileName = `run-${runRecord.runId}.json`;
     try {
-      await exportRunFeedMarkdownFiles(runRecord);
+      await exportRunFeedMarkdownFiles({
+        runRecord,
+        cwd,
+        invokeFn: invoke,
+        feedRawAttachment: feedRawAttachmentRef.current,
+        setError,
+      });
       await persistRunRecordFile(fileName, runRecord);
       setLastSavedRunFile(fileName);
       await refreshFeedTimeline();
     } catch (e) {
       setError(String(e));
-    }
-  }
-
-  async function buildRegressionSummary(currentRun: RunRecord): Promise<RegressionSummary> {
-    if (!currentRun.qualitySummary) {
-      return { status: "unknown", note: "비교할 품질 요약이 없습니다." };
-    }
-
-    try {
-      const files = await invoke<string[]>("run_list");
-      const currentFile = `run-${currentRun.runId}.json`;
-      const targetSignature = graphSignature(currentRun.graphSnapshot);
-      const targetQuestion = questionSignature(currentRun.question);
-      const sortedCandidates = files
-        .filter((file) => file !== currentFile)
-        .sort((a, b) => b.localeCompare(a))
-        .slice(0, 30);
-
-      for (const file of sortedCandidates) {
-        const previous = await invoke<RunRecord>("run_load", { name: file });
-        if (!previous.qualitySummary) {
-          continue;
-        }
-        if (graphSignature(previous.graphSnapshot) !== targetSignature) {
-          continue;
-        }
-        if (questionSignature(previous.question) !== targetQuestion) {
-          continue;
-        }
-
-        const avgScoreDelta =
-          Math.round((currentRun.qualitySummary.avgScore - previous.qualitySummary.avgScore) * 100) /
-          100;
-        const passRateDelta =
-          Math.round((currentRun.qualitySummary.passRate - previous.qualitySummary.passRate) * 100) /
-          100;
-
-        let status: RegressionSummary["status"] = "stable";
-        if (avgScoreDelta >= 3 || passRateDelta >= 8) {
-          status = "improved";
-        } else if (avgScoreDelta <= -5 || passRateDelta <= -12) {
-          status = "degraded";
-        }
-
-        return {
-          baselineRunId: previous.runId,
-          avgScoreDelta,
-          passRateDelta,
-          status,
-          note:
-            status === "improved"
-              ? "이전 실행 대비 품질이 개선되었습니다."
-              : status === "degraded"
-                ? "이전 실행 대비 품질이 악화되었습니다."
-                : "이전 실행과 유사한 품질입니다.",
-        };
-      }
-      return { status: "unknown", note: "비교 가능한 이전 실행이 없습니다." };
-    } catch (error) {
-      return { status: "unknown", note: `회귀 비교 실패: ${String(error)}` };
-    }
-  }
-
-  async function loadInternalMemoryCorpus(presetKind?: PresetKind): Promise<InternalMemorySnippet[]> {
-    try {
-      const files = await invoke<string[]>("run_list");
-      const candidates = files
-        .slice()
-        .sort((a, b) => b.localeCompare(a))
-        .slice(0, 48);
-      const snippets: InternalMemorySnippet[] = [];
-      for (const file of candidates) {
-        let loaded: RunRecord;
-        try {
-          loaded = normalizeRunRecord(await invoke<RunRecord>("run_load", { name: file })) as RunRecord;
-        } catch {
-          continue;
-        }
-        if (!loaded || !loaded.runId) {
-          continue;
-        }
-        if (presetKind && loaded.workflowPresetKind && loaded.workflowPresetKind !== presetKind) {
-          continue;
-        }
-        snippets.push(...buildInternalMemorySnippetsFromRun(loaded, { maxPerRun: 12 }));
-        if (snippets.length >= 360) {
-          break;
-        }
-      }
-      return snippets.slice(0, 360);
-    } catch (error) {
-      setError(`내부 메모리 로드 실패: ${String(error)}`);
-      return [];
-    }
-  }
-
-  function nodeInputFor(
-    nodeId: string,
-    outputs: Record<string, unknown>,
-    rootInput: string,
-  ): unknown {
-    const incoming = graph.edges.filter((edge) => edge.to.nodeId === nodeId);
-    if (incoming.length === 0) {
-      return rootInput;
-    }
-    if (incoming.length === 1) {
-      return outputs[incoming[0].from.nodeId] ?? null;
-    }
-
-    const merged: Record<string, unknown> = {};
-    for (const edge of incoming) {
-      merged[edge.from.nodeId] = outputs[edge.from.nodeId];
-    }
-    return merged;
-  }
-
-  function buildFinalTurnInput(
-    nodeId: string,
-    currentInput: unknown,
-    outputs: Record<string, unknown>,
-    rootInput: string,
-    normalizedEvidenceByNodeId: Record<string, EvidenceEnvelope[]>,
-    runMemory: Record<string, NodeResponsibilityMemory>,
-  ): FinalSynthesisPacket | unknown {
-    const incomingEdges = graph.edges.filter((edge) => edge.to.nodeId === nodeId);
-    if (incomingEdges.length === 0) {
-      return currentInput;
-    }
-    const upstream: Record<string, unknown> = {};
-    const packets: EvidenceEnvelope[] = [];
-    for (const edge of incomingEdges) {
-      const sourceNodeId = edge.from.nodeId;
-      if (!(sourceNodeId in outputs)) {
-        continue;
-      }
-      upstream[sourceNodeId] = outputs[sourceNodeId];
-      const sourcePackets = normalizedEvidenceByNodeId[sourceNodeId] ?? [];
-      if (sourcePackets.length > 0) {
-        packets.push(sourcePackets[sourcePackets.length - 1]);
-      }
-    }
-
-    if (Object.keys(upstream).length === 0) {
-      return currentInput;
-    }
-    const unresolvedConflicts = buildConflictLedger(packets);
-    return buildFinalSynthesisPacket({
-      question: rootInput,
-      evidencePackets: packets,
-      conflicts: unresolvedConflicts,
-      runMemory,
-    });
-  }
-
-  function transition(runRecord: RunRecord, nodeId: string, state: NodeExecutionStatus, message?: string) {
-    runRecord.transitions.push({
-      at: new Date().toISOString(),
-      nodeId,
-      status: state,
-      message,
-    });
-    if (message) {
-      runRecord.summaryLogs.push(`[${nodeId}] ${state}: ${message}`);
-    } else {
-      runRecord.summaryLogs.push(`[${nodeId}] ${state}`);
     }
   }
 
@@ -3947,134 +3731,6 @@ function App() {
     });
   }
 
-  async function loadAgentRuleDocs(nodeCwd: string): Promise<AgentRuleDoc[]> {
-    const cwdKey = resolveNodeCwd(nodeCwd, cwd);
-    if (!cwdKey) {
-      return [];
-    }
-
-    const cached = agentRulesCacheRef.current[cwdKey];
-    if (cached && Date.now() - cached.loadedAt <= AGENT_RULE_CACHE_TTL_MS) {
-      return cached.docs;
-    }
-
-    try {
-      const result = await invoke<AgentRulesReadResult>("agent_rules_read", {
-        cwd: cwdKey,
-        baseCwd: cwd,
-      });
-      const docs = (result.docs ?? [])
-        .filter((row) => row && typeof row.path === "string" && typeof row.content === "string")
-        .slice(0, AGENT_RULE_MAX_DOCS)
-        .map((row) => ({
-          path: String(row.path).trim() || "unknown.md",
-          content: String(row.content).slice(0, AGENT_RULE_MAX_DOC_CHARS).trim(),
-        }))
-        .filter((row) => row.content.length > 0);
-      agentRulesCacheRef.current[cwdKey] = { loadedAt: Date.now(), docs };
-      return docs;
-    } catch {
-      return [];
-    }
-  }
-
-  async function injectKnowledgeContext(
-    node: GraphNode,
-    prompt: string,
-    config: TurnConfig,
-  ): Promise<{
-    prompt: string;
-    trace: KnowledgeTraceEntry[];
-    memoryTrace: InternalMemoryTraceEntry[];
-  }> {
-    const knowledgeEnabled = config.knowledgeEnabled !== false;
-    if (!knowledgeEnabled) {
-      return { prompt, trace: [], memoryTrace: [] };
-    }
-
-    const nodeRoleHint = node.type === "turn" ? turnRoleLabel(node) : nodeTypeLabel(node.type);
-    let mergedPrompt = prompt;
-    const memoryTrace: InternalMemoryTraceEntry[] = [];
-
-    const rankedMemory = rankInternalMemorySnippets({
-      query: `${workflowQuestion}\n${prompt}`,
-      snippets: internalMemoryCorpusRef.current,
-      nodeId: node.id,
-      roleLabel: nodeRoleHint,
-      topK: 3,
-      presetKind: activeRunPresetKindRef.current,
-    });
-    if (rankedMemory.length > 0) {
-      const memoryLines = rankedMemory.map(
-        ({ snippet, score }) =>
-          `- [run: ${snippet.runId}${snippet.nodeId ? ` / ${snippet.nodeId}` : ""} / score: ${score.toFixed(2)}] ${snippet.text}`,
-      );
-      mergedPrompt = `[내부 실행 메모리]
-${memoryLines.join("\n")}
-[/내부 실행 메모리]
-
-[요청]
-${mergedPrompt}`.trim();
-      addNodeLog(node.id, `[메모리] 과거 실행 메모리 ${rankedMemory.length}개 반영`);
-      memoryTrace.push(
-        ...rankedMemory.map((entry) => ({
-          nodeId: node.id,
-          snippetId: entry.snippet.id,
-          sourceRunId: entry.snippet.runId,
-          score: Math.round(entry.score * 1000) / 1000,
-          reason: entry.reason,
-        })),
-      );
-    }
-
-    if (enabledKnowledgeFiles.length === 0 || graphKnowledge.topK <= 0) {
-      return { prompt: mergedPrompt, trace: [], memoryTrace };
-    }
-
-    try {
-      const result = await invoke<KnowledgeRetrieveResult>("knowledge_retrieve", {
-        files: enabledKnowledgeFiles,
-        query: prompt,
-        topK: graphKnowledge.topK,
-        maxChars: graphKnowledge.maxChars,
-      });
-
-      for (const warning of result.warnings) {
-        addNodeLog(node.id, `[첨부] ${warning}`);
-      }
-
-      if (result.snippets.length === 0) {
-        addNodeLog(node.id, "[첨부] 관련 문단을 찾지 못해 기본 프롬프트로 실행합니다.");
-        return { prompt: mergedPrompt, trace: [], memoryTrace };
-      }
-
-      const contextLines = result.snippets.map(
-        (snippet) => `- [source: ${snippet.fileName}#${snippet.chunkIndex}] ${snippet.text}`,
-      );
-      const promptWithAttachments = `[첨부 참고자료]
-${contextLines.join("\n")}
-[/첨부 참고자료]
-
-[요청]
-${mergedPrompt}`.trim();
-
-      addNodeLog(node.id, `[첨부] ${result.snippets.length}개 문단 반영`);
-
-      const trace = result.snippets.map((snippet) => ({
-        nodeId: node.id,
-        fileId: snippet.fileId,
-        fileName: snippet.fileName,
-        chunkIndex: snippet.chunkIndex,
-        score: snippet.score,
-      }));
-
-      return { prompt: promptWithAttachments, trace, memoryTrace };
-    } catch (error) {
-      addNodeLog(node.id, `[첨부] 검색 실패: ${String(error)}`);
-      return { prompt: mergedPrompt, trace: [], memoryTrace };
-    }
-  }
-
   async function executeTurnNode(
     node: GraphNode,
     input: unknown,
@@ -4118,14 +3774,33 @@ ${mergedPrompt}`.trim();
       ? replaceInputPlaceholder(promptTemplate, inputText)
       : `${promptTemplate}${inputText ? `\n${inputText}` : ""}`;
     const promptWithRequests = `${basePrompt}${queuedRequestBlock}`.trim();
-    const agentRuleDocs = await loadAgentRuleDocs(nodeCwd);
+    const agentRuleDocs = await loadAgentRuleDocs({
+      nodeCwd,
+      cwd,
+      cacheTtlMs: AGENT_RULE_CACHE_TTL_MS,
+      maxDocs: AGENT_RULE_MAX_DOCS,
+      maxDocChars: AGENT_RULE_MAX_DOC_CHARS,
+      agentRulesCacheRef,
+      invokeFn: invoke,
+    });
     const shouldForceAgentRules =
       FORCE_AGENT_RULES_ALL_TURNS || inferQualityProfile(node, config) === "code_implementation";
     if (agentRuleDocs.length > 0 && shouldForceAgentRules) {
       addNodeLog(node.id, `[규칙] agent/skill 문서 ${agentRuleDocs.length}개 강제 적용`);
     }
     const forcedRuleBlock = shouldForceAgentRules ? buildForcedAgentRuleBlock(agentRuleDocs) : "";
-    const withKnowledge = await injectKnowledgeContext(node, promptWithRequests, config);
+    const withKnowledge = await injectKnowledgeContext({
+      node,
+      prompt: promptWithRequests,
+      config,
+      workflowQuestion,
+      activeRunPresetKind: activeRunPresetKindRef.current,
+      internalMemoryCorpus: internalMemoryCorpusRef.current,
+      enabledKnowledgeFiles,
+      graphKnowledge,
+      addNodeLog,
+      invokeFn: invoke,
+    });
     let textToSend = forcedRuleBlock
       ? `${forcedRuleBlock}\n\n${withKnowledge.prompt}`.trim()
       : withKnowledge.prompt;
@@ -4589,149 +4264,6 @@ ${mergedPrompt}`.trim();
     };
   }
 
-  async function executeTurnNodeWithOutputSchemaRetry(
-    node: GraphNode,
-    input: unknown,
-    options?: { maxRetry?: number },
-  ): Promise<{
-    result: Awaited<ReturnType<typeof executeTurnNode>>;
-    normalizedOutput?: unknown;
-    artifactWarnings: string[];
-  }> {
-    const config = node.config as TurnConfig;
-    const executor = getTurnExecutor(config);
-    const provider = resolveProviderByExecutor(executor);
-    const artifactType = toArtifactType(config.artifactType);
-    const warnings: string[] = [];
-    const schemaRaw = TURN_OUTPUT_SCHEMA_ENABLED ? String(config.outputSchemaJson ?? "").trim() : "";
-
-    let parsedSchema: unknown | null = null;
-    if (schemaRaw) {
-      try {
-        parsedSchema = JSON.parse(schemaRaw);
-      } catch (error) {
-        return {
-          result: {
-            ok: false,
-            error: `출력 스키마 JSON 형식 오류: ${String(error)}`,
-            executor,
-            provider,
-          },
-          artifactWarnings: warnings,
-        };
-      }
-    }
-
-    let result = await executeTurnNode(node, input);
-    if (!result.ok) {
-      return { result, artifactWarnings: warnings };
-    }
-
-    let normalized = normalizeArtifactOutput(node.id, artifactType, result.output);
-    warnings.push(...normalized.warnings);
-    let normalizedOutput = normalized.output;
-    if (!parsedSchema) {
-      return { result, normalizedOutput, artifactWarnings: warnings };
-    }
-
-    let schemaErrors = validateSimpleSchema(parsedSchema, extractSchemaValidationTarget(normalizedOutput));
-    if (schemaErrors.length === 0) {
-      return { result, normalizedOutput, artifactWarnings: warnings };
-    }
-
-    const maxRetry = Math.max(0, options?.maxRetry ?? TURN_OUTPUT_SCHEMA_MAX_RETRY);
-    addNodeLog(node.id, `[스키마] 검증 실패: ${schemaErrors.join("; ")}`);
-    if (maxRetry > 0) {
-      addNodeLog(node.id, `[스키마] 재질문 ${maxRetry}회 제한 내에서 재시도합니다.`);
-    } else {
-      addNodeLog(node.id, "[스키마] 자동 재질문이 비활성화되어 즉시 실패 처리합니다.");
-    }
-
-    let attempts = 0;
-    let accumulatedUsage = result.usage;
-
-    while (attempts < maxRetry && schemaErrors.length > 0) {
-      attempts += 1;
-      const retryInput = buildSchemaRetryInput(input, normalizedOutput, parsedSchema, schemaErrors);
-      const retryResult = await executeTurnNode(node, retryInput);
-      accumulatedUsage = mergeUsageStats(accumulatedUsage, retryResult.usage);
-      result = {
-        ...retryResult,
-        usage: accumulatedUsage,
-      };
-      if (!result.ok) {
-        return {
-          result: {
-            ...result,
-            error: `출력 스키마 재질문 실패: ${result.error ?? "턴 실행 실패"}`,
-          },
-          normalizedOutput,
-          artifactWarnings: warnings,
-        };
-      }
-
-      normalized = normalizeArtifactOutput(node.id, artifactType, result.output);
-      warnings.push(...normalized.warnings);
-      normalizedOutput = normalized.output;
-      schemaErrors = validateSimpleSchema(parsedSchema, extractSchemaValidationTarget(normalizedOutput));
-    }
-
-    if (schemaErrors.length > 0) {
-      return {
-        result: {
-          ...result,
-          ok: false,
-          output: normalizedOutput,
-          error: `출력 스키마 검증 실패: ${schemaErrors.join("; ")}`,
-          usage: accumulatedUsage,
-        },
-        normalizedOutput,
-        artifactWarnings: warnings,
-      };
-    }
-
-    addNodeLog(node.id, "[스키마] 출력 스키마 검증 PASS");
-    return {
-      result: {
-        ...result,
-        output: normalizedOutput,
-        usage: accumulatedUsage,
-      },
-      normalizedOutput,
-      artifactWarnings: warnings,
-    };
-  }
-
-  function collectRequiredWebProviders(): WebProvider[] {
-    const providers = new Set<WebProvider>();
-    for (const node of graph.nodes) {
-      if (node.type !== "turn") {
-        continue;
-      }
-      const executor = getTurnExecutor(node.config as TurnConfig);
-      const provider = getWebProviderFromExecutor(executor);
-      if (provider) {
-        providers.add(provider);
-      }
-    }
-    return Array.from(providers);
-  }
-
-  const PAUSE_ERROR_TOKEN = "__PAUSED_BY_USER__";
-
-  function isPauseSignalError(input: unknown): boolean {
-    const text = String(input ?? "").toLowerCase();
-    if (!text) {
-      return false;
-    }
-    return (
-      text.includes(PAUSE_ERROR_TOKEN.toLowerCase()) ||
-      text.includes("cancelled") ||
-      text.includes("취소") ||
-      text.includes("interrupt")
-    );
-  }
-
   async function onRunGraph(skipWebConnectPreflight = false) {
     if (isGraphRunning && isGraphPaused) {
       pauseRequestedRef.current = false;
@@ -4752,7 +4284,7 @@ ${mergedPrompt}`.trim();
     }
 
     if (!skipWebConnectPreflight) {
-      const requiredWebProviders = collectRequiredWebProviders();
+      const requiredWebProviders = collectRequiredWebProviders(graph.nodes);
       if (requiredWebProviders.length > 0) {
         const bridgeStatusLatest = (await refreshWebBridgeStatus(true, true)) ?? webBridgeStatus;
         const connectedProviderSet = new Set(
@@ -4857,7 +4389,11 @@ ${mergedPrompt}`.trim();
     activeRunPresetKindRef.current = runGroup.presetKind;
 
     try {
-      internalMemoryCorpusRef.current = await loadInternalMemoryCorpus(runGroup.presetKind);
+      internalMemoryCorpusRef.current = await loadInternalMemoryCorpus({
+        invokeFn: invoke,
+        presetKind: runGroup.presetKind,
+        onError: setError,
+      });
       if (internalMemoryCorpusRef.current.length > 0) {
         setStatus(`그래프 실행 시작 (내부 메모리 ${internalMemoryCorpusRef.current.length}개 로드)`);
       }
@@ -4985,7 +4521,7 @@ ${mergedPrompt}`.trim();
         if (degree === 0) {
           queue.push(nodeId);
           setNodeStatus(nodeId, "queued");
-          transition(runRecord, nodeId, "queued");
+          appendRunTransition(runRecord, nodeId, "queued");
         }
       });
 
@@ -5008,7 +4544,7 @@ ${mergedPrompt}`.trim();
           if (next === 0) {
             queue.push(childId);
             setNodeStatus(childId, "queued");
-            transition(runRecord, childId, "queued");
+            appendRunTransition(runRecord, childId, "queued");
           }
         }
       };
@@ -5020,7 +4556,12 @@ ${mergedPrompt}`.trim();
         }
 
         const nodeInputSources = resolveFeedInputSources(nodeId);
-        const nodeInput = nodeInputFor(nodeId, outputs, workflowQuestion);
+        const nodeInput = buildNodeInputForNode({
+          edges: graph.edges,
+          nodeId,
+          outputs,
+          rootInput: workflowQuestion,
+        });
         const isFinalTurnNode = node.type === "turn" && (adjacency.get(nodeId)?.length ?? 0) === 0;
 
         if (pauseRequestedRef.current) {
@@ -5031,7 +4572,7 @@ ${mergedPrompt}`.trim();
             finishedAt: undefined,
             durationMs: undefined,
           });
-          transition(runRecord, nodeId, "queued", pauseMessage);
+          appendRunTransition(runRecord, nodeId, "queued", pauseMessage);
           if (!queue.includes(nodeId)) {
             queue.push(nodeId);
           }
@@ -5040,7 +4581,7 @@ ${mergedPrompt}`.trim();
 
         if (cancelRequestedRef.current) {
           setNodeStatus(nodeId, "cancelled", "취소 요청됨");
-          transition(runRecord, nodeId, "cancelled", "취소 요청됨");
+          appendRunTransition(runRecord, nodeId, "cancelled", "취소 요청됨");
           const cancelledAt = new Date().toISOString();
           const cancelledEvidence = appendNodeEvidence({
             node,
@@ -5080,7 +4621,7 @@ ${mergedPrompt}`.trim();
             status: "skipped",
             finishedAt: new Date().toISOString(),
           });
-          transition(runRecord, nodeId, "skipped", "분기 결과로 건너뜀");
+          appendRunTransition(runRecord, nodeId, "skipped", "분기 결과로 건너뜀");
           appendNodeEvidence({
             node,
             output: nodeInput,
@@ -5102,7 +4643,7 @@ ${mergedPrompt}`.trim();
             status: "skipped",
             finishedAt: blockedAtIso,
           });
-          transition(runRecord, nodeId, "skipped", blockedReason);
+          appendRunTransition(runRecord, nodeId, "skipped", blockedReason);
           const blockedEvidence = appendNodeEvidence({
             node,
             output: nodeInput,
@@ -5145,23 +4686,33 @@ ${mergedPrompt}`.trim();
           durationMs: undefined,
           usage: undefined,
         });
-        transition(runRecord, nodeId, "running");
+        appendRunTransition(runRecord, nodeId, "running");
 
         const input = isFinalTurnNode
-          ? buildFinalTurnInput(
+          ? buildFinalTurnInputPacket({
+              edges: graph.edges,
               nodeId,
-              nodeInput,
+              currentInput: nodeInput,
               outputs,
-              workflowQuestion,
+              rootInput: workflowQuestion,
               normalizedEvidenceByNodeId,
-              runMemoryByNodeId,
-            )
+              runMemory: runMemoryByNodeId,
+            })
           : nodeInput;
 
         if (node.type === "turn") {
           const hasOutputSchema = String((node.config as TurnConfig).outputSchemaJson ?? "").trim().length > 0;
-          const turnExecution = await executeTurnNodeWithOutputSchemaRetry(node, input, {
-            maxRetry: isFinalTurnNode || hasOutputSchema ? 1 : 0,
+          const turnExecution = await executeTurnNodeWithOutputSchemaRetry({
+            node,
+            input,
+            executeTurnNode,
+            addNodeLog,
+            validateSimpleSchema,
+            outputSchemaEnabled: TURN_OUTPUT_SCHEMA_ENABLED,
+            maxRetryDefault: TURN_OUTPUT_SCHEMA_MAX_RETRY,
+            options: {
+              maxRetry: isFinalTurnNode || hasOutputSchema ? 1 : 0,
+            },
           });
           let result = turnExecution.result;
           if (!result.ok && pauseRequestedRef.current && isPauseSignalError(result.error)) {
@@ -5173,7 +4724,7 @@ ${mergedPrompt}`.trim();
               finishedAt: undefined,
               durationMs: undefined,
             });
-            transition(runRecord, nodeId, "queued", pauseMessage);
+            appendRunTransition(runRecord, nodeId, "queued", pauseMessage);
             if (!queue.includes(nodeId)) {
               queue.push(nodeId);
             }
@@ -5206,7 +4757,7 @@ ${mergedPrompt}`.trim();
               finishedAt: finishedAtIso,
               summary: result.error ?? "턴 실행 실패",
             });
-            transition(runRecord, nodeId, "failed", result.error ?? "턴 실행 실패");
+            appendRunTransition(runRecord, nodeId, "failed", result.error ?? "턴 실행 실패");
             const failedEvidence = appendNodeEvidence({
               node,
               output: result.output ?? { error: result.error ?? "턴 실행 실패", input },
@@ -5311,7 +4862,7 @@ ${mergedPrompt}`.trim();
                 finishedAt: finishedAtIso,
                 summary: lowQualitySummary,
               });
-              transition(runRecord, nodeId, "low_quality", lowQualitySummary);
+              appendRunTransition(runRecord, nodeId, "low_quality", lowQualitySummary);
               const lowQualityEvidence = appendNodeEvidence({
                 node,
                 output: normalizedOutput,
@@ -5387,7 +4938,7 @@ ${mergedPrompt}`.trim();
             finishedAt: finishedAtIso,
             summary: t("run.turnCompleted"),
           });
-          transition(runRecord, nodeId, "done", t("run.turnCompleted"));
+          appendRunTransition(runRecord, nodeId, "done", t("run.turnCompleted"));
           const doneEvidence = appendNodeEvidence({
             node,
             output: normalizedOutput,
@@ -5436,7 +4987,7 @@ ${mergedPrompt}`.trim();
               finishedAt: finishedAtIso,
               durationMs: Date.now() - startedAtMs,
             });
-            transition(runRecord, nodeId, "failed", result.error ?? "변환 실패");
+            appendRunTransition(runRecord, nodeId, "failed", result.error ?? "변환 실패");
             const transformFailedEvidence = appendNodeEvidence({
               node,
               output: result.output ?? { error: result.error ?? "변환 실패", input },
@@ -5480,7 +5031,7 @@ ${mergedPrompt}`.trim();
             durationMs: Date.now() - startedAtMs,
           });
           setNodeStatus(nodeId, "done", "변환 완료");
-          transition(runRecord, nodeId, "done", "변환 완료");
+          appendRunTransition(runRecord, nodeId, "done", "변환 완료");
           const transformDoneEvidence = appendNodeEvidence({
             node,
             output: result.output,
@@ -5533,7 +5084,7 @@ ${mergedPrompt}`.trim();
             finishedAt: finishedAtIso,
             durationMs: Date.now() - startedAtMs,
           });
-          transition(runRecord, nodeId, "failed", gateResult.error ?? "분기 실패");
+          appendRunTransition(runRecord, nodeId, "failed", gateResult.error ?? "분기 실패");
           const gateFailedEvidence = appendNodeEvidence({
             node,
             output: gateResult.output ?? { error: gateResult.error ?? "분기 실패", input },
@@ -5577,7 +5128,7 @@ ${mergedPrompt}`.trim();
           durationMs: Date.now() - startedAtMs,
         });
         setNodeStatus(nodeId, "done", gateResult.message ?? "분기 완료");
-        transition(runRecord, nodeId, "done", gateResult.message ?? "분기 완료");
+        appendRunTransition(runRecord, nodeId, "done", gateResult.message ?? "분기 완료");
         const gateDoneEvidence = appendNodeEvidence({
           node,
           output: gateResult.output,
@@ -5743,7 +5294,10 @@ ${mergedPrompt}`.trim();
         setError(`최종 노드 실패: ${reason}`);
       }
       runRecord.finishedAt = new Date().toISOString();
-      runRecord.regression = await buildRegressionSummary(runRecord);
+      runRecord.regression = await buildRegressionSummary({
+        currentRun: runRecord,
+        invokeFn: invoke,
+      });
       await saveRunRecord(runRecord);
       const normalizedRunRecord = normalizeRunRecord(runRecord);
       const runFileName = `run-${runRecord.runId}.json`;
@@ -5782,148 +5336,44 @@ ${mergedPrompt}`.trim();
       setActiveFeedRunMeta(null);
     }
   }
-
-  function onOpenWebConnectFromModal() {
-    setPendingWebConnectCheck(null);
-    setWorkspaceTab("bridge");
-    void refreshWebBridgeStatus(false, true);
-  }
-
-  function onContinueRunWithoutWebConnect() {
-    if (!pendingWebConnectCheck) {
-      return;
-    }
-    setPendingWebConnectCheck(null);
-    void onRunGraph(true);
-  }
-
-  function onCancelWebConnectModal() {
-    setPendingWebConnectCheck(null);
-    setStatus("그래프 실행 대기");
-  }
-
   async function onCancelGraphRun() {
-    if (!isGraphRunning) {
-      return;
-    }
     pauseRequestedRef.current = true;
-    setIsGraphPaused(true);
-    setStatus("일시정지 요청됨");
-
-    if (pendingWebLogin) {
-      resolvePendingWebLogin(false);
-      // continue to ensure active work is interrupted too.
-    }
-
-    const activeWebProviders = Object.keys(activeWebNodeByProviderRef.current) as WebProvider[];
-    if (activeWebProviders.length > 0) {
-      for (const provider of activeWebProviders) {
-        const activeWebNodeId = activeWebNodeByProviderRef.current[provider];
-        try {
-          await invoke("web_provider_cancel", { provider });
-          if (activeWebNodeId) {
-            addNodeLog(activeWebNodeId, "[WEB] 취소 요청 전송");
-          }
-          clearWebBridgeStageWarnTimer(provider);
-          delete activeWebPromptRef.current[provider];
-          delete activeWebNodeByProviderRef.current[provider];
-        } catch (e) {
-          setError(String(e));
-        }
-      }
-    }
-
-    if (pendingWebTurn) {
-      clearQueuedWebTurnRequests(PAUSE_ERROR_TOKEN);
-      resolvePendingWebTurn({ ok: false, error: PAUSE_ERROR_TOKEN });
-      return;
-    }
-    if (suspendedWebTurn) {
-      clearQueuedWebTurnRequests(PAUSE_ERROR_TOKEN);
-      resolvePendingWebTurn({ ok: false, error: PAUSE_ERROR_TOKEN });
-      return;
-    }
-
-    const activeNodeId = activeTurnNodeIdRef.current;
-    if (!activeNodeId) {
-      return;
-    }
-
-    const active = nodeStates[activeNodeId];
-    if (!active?.threadId) {
-      return;
-    }
-
-    try {
-      await invoke("turn_interrupt", { threadId: active.threadId });
-      addNodeLog(activeNodeId, "turn_interrupt 요청 전송");
-    } catch (e) {
-      setError(String(e));
-    }
+    await cancelGraphRun({
+      isGraphRunning,
+      setIsGraphPaused,
+      setStatus,
+      pendingWebLogin: Boolean(pendingWebLogin),
+      resolvePendingWebLogin,
+      activeWebNodeByProvider: activeWebNodeByProviderRef.current,
+      invokeFn: invoke,
+      addNodeLog,
+      clearWebBridgeStageWarnTimer,
+      activeWebPromptByProvider: activeWebPromptRef.current,
+      setError,
+      pendingWebTurn,
+      suspendedWebTurn,
+      clearQueuedWebTurnRequests,
+      resolvePendingWebTurn,
+      pauseErrorToken: PAUSE_ERROR_TOKEN,
+      activeTurnNodeId: activeTurnNodeIdRef.current,
+      nodeStates,
+    });
   }
-
-  function onOpenFeedFromNode(nodeId: string) {
-    setWorkspaceTab("feed");
-    setFeedCategory("all_posts");
-    setFeedStatusFilter("all");
-    setFeedKeyword("");
-    setStatus(`피드에서 ${nodeId} 노드 결과를 확인하세요.`);
-  }
-
-  function onSelectFeedInspectorPost(post: FeedViewPost) {
-    setFeedInspectorPostId(post.id);
-    const graphNode = graph.nodes.find((node) => node.id === post.nodeId);
-    if (graphNode) {
-      setNodeSelection([graphNode.id], graphNode.id);
-    }
-  }
-
   const edgeLines = buildCanvasEdgeLines({
     entries: canvasDisplayEdges,
     nodeMap: canvasNodeMap,
     getNodeVisualSize,
   });
-  const connectPreviewLine = (() => {
-    if (!connectFromNodeId || !connectPreviewPoint) {
-      return null;
-    }
-    const startPoint = (() => {
-      if (connectPreviewStartPoint) {
-        return connectPreviewStartPoint;
-      }
-      const fromNode = canvasNodeMap.get(connectFromNodeId);
-      if (!fromNode) {
-        return null;
-      }
-      return getNodeAnchorPoint(
-        fromNode,
-        connectFromSide ?? "right",
-        getNodeVisualSize(fromNode.id),
-      );
-    })();
-    if (!startPoint) {
-      return null;
-    }
-    const dx = connectPreviewPoint.x - startPoint.x;
-    const dy = connectPreviewPoint.y - startPoint.y;
-    const guessedToSide: NodeAnchorSide =
-      Math.abs(dx) >= Math.abs(dy)
-        ? dx >= 0
-          ? "left"
-          : "right"
-        : dy >= 0
-          ? "top"
-          : "bottom";
-    return buildRoundedEdgePath(
-      startPoint.x,
-      startPoint.y,
-      connectPreviewPoint.x,
-      connectPreviewPoint.y,
-      false,
-      connectFromSide ?? "right",
-      guessedToSide,
-    );
-  })();
+  const connectPreviewLine = buildConnectPreviewLine({
+    connectFromNodeId,
+    connectPreviewPoint,
+    connectPreviewStartPoint,
+    connectFromSide,
+    canvasNodeMap,
+    getNodeVisualSize,
+    getNodeAnchorPointFn: getNodeAnchorPoint,
+    buildRoundedEdgePathFn: buildRoundedEdgePath,
+  });
 
   const selectedTurnConfig: TurnConfig | null =
     selectedNode?.type === "turn" ? (selectedNode.config as TurnConfig) : null;
@@ -6107,7 +5557,15 @@ ${mergedPrompt}`.trim();
     setFeedInspectorRuleLoading(true);
     const loadDocs = async () => {
       try {
-        const docs = await loadAgentRuleDocs(feedInspectorRuleCwd);
+        const docs = await loadAgentRuleDocs({
+          nodeCwd: feedInspectorRuleCwd,
+          cwd,
+          cacheTtlMs: AGENT_RULE_CACHE_TTL_MS,
+          maxDocs: AGENT_RULE_MAX_DOCS,
+          maxDocChars: AGENT_RULE_MAX_DOC_CHARS,
+          agentRulesCacheRef,
+          invokeFn: invoke,
+        });
         if (!cancelled) {
           setFeedInspectorRuleDocs(docs);
         }
@@ -6140,6 +5598,140 @@ ${mergedPrompt}`.trim();
   );
   const boundedStageWidth = Math.min(stageWidth, MAX_STAGE_WIDTH);
   const boundedStageHeight = Math.min(stageHeight, MAX_STAGE_HEIGHT);
+  const workflowInspectorPaneProps = buildWorkflowInspectorPaneProps({
+    nodeProps: {
+      artifactTypeOptions: [...artifactTypeOptions],
+      cwd,
+      model,
+      nodeSettingsTitle: t("workflow.nodeSettings"),
+      normalizeQualityThreshold,
+      outgoingNodeOptions,
+      qualityProfileOptions: [...qualityProfileOptions],
+      qualityThresholdOptions: [...qualityThresholdOptions],
+      selectedArtifactType,
+      selectedNode,
+      selectedQualityProfile,
+      selectedQualityThresholdOption,
+      selectedTurnConfig,
+      selectedTurnExecutor,
+      simpleWorkflowUI: SIMPLE_WORKFLOW_UI,
+      turnExecutorLabel,
+      turnExecutorOptions: [...TURN_EXECUTOR_OPTIONS],
+      turnModelOptions: [...TURN_MODEL_OPTIONS],
+      updateSelectedNodeConfig,
+    },
+    toolsProps: {
+      addNode,
+      applyCostPreset,
+      applyGraphChange,
+      applyPreset,
+      costPreset,
+      costPresetOptions: [...costPresetOptions],
+      defaultKnowledgeConfig,
+      deleteGraph,
+      graphFiles,
+      graphKnowledge,
+      graphRenameDraft,
+      graphRenameOpen,
+      isCostPreset,
+      isPresetKind,
+      knowledgeDefaultMaxChars: KNOWLEDGE_DEFAULT_MAX_CHARS,
+      knowledgeDefaultTopK: KNOWLEDGE_DEFAULT_TOP_K,
+      knowledgeMaxCharsOptions: [...knowledgeMaxCharsOptions],
+      knowledgeTopKOptions: [...knowledgeTopKOptions],
+      loadGraph,
+      onCloseRenameGraph,
+      onOpenKnowledgeFilePicker,
+      onOpenRenameGraph,
+      onRemoveKnowledgeFile,
+      onToggleKnowledgeFileEnabled,
+      presetTemplateOptions: [...presetTemplateOptions],
+      refreshGraphFiles,
+      renameGraph,
+      saveGraph,
+      selectedGraphFileName,
+      selectedKnowledgeMaxCharsOption,
+      setGraphFileName,
+      setGraphRenameDraft,
+      setSelectedGraphFileName,
+      simpleWorkflowUI: SIMPLE_WORKFLOW_UI,
+    },
+  });
+  const feedPageVm = buildFeedPageVm({
+    feedInspectorTurnNode,
+    feedInspectorPost,
+    feedInspectorEditable,
+    feedInspectorEditableNodeId,
+    feedInspectorTurnExecutor,
+    feedInspectorTurnConfig,
+    feedInspectorQualityProfile,
+    feedInspectorQualityThresholdOption,
+    feedInspectorPromptTemplate,
+    updateNodeConfigById,
+    turnModelLabel,
+    turnRoleLabel,
+    TURN_EXECUTOR_OPTIONS,
+    turnExecutorLabel,
+    TURN_MODEL_OPTIONS,
+    toTurnModelDisplayName,
+    DEFAULT_TURN_MODEL,
+    getWebProviderFromExecutor,
+    normalizeWebResultMode,
+    cwd,
+    QUALITY_PROFILE_OPTIONS: qualityProfileOptions,
+    normalizeQualityThreshold,
+    QUALITY_THRESHOLD_OPTIONS: qualityThresholdOptions,
+    ARTIFACT_TYPE_OPTIONS: artifactTypeOptions,
+    toArtifactType,
+    feedFilterOpen,
+    setFeedFilterOpen,
+    setFeedStatusFilter,
+    setFeedExecutorFilter,
+    setFeedPeriodFilter,
+    setFeedKeyword,
+    feedStatusFilter,
+    feedExecutorFilter,
+    feedPeriodFilter,
+    feedKeyword,
+    feedCategoryMeta,
+    feedCategory,
+    feedCategoryPosts,
+    setFeedCategory,
+    feedShareMenuPostId,
+    setFeedShareMenuPostId,
+    feedLoading,
+    currentFeedPosts,
+    groupedFeedRuns,
+    feedGroupExpandedByRunId,
+    setFeedGroupExpandedByRunId,
+    feedGroupRenameRunId,
+    setFeedGroupRenameRunId,
+    setFeedGroupRenameDraft,
+    feedGroupRenameDraft,
+    onSubmitFeedRunGroupRename,
+    toHumanReadableFeedText,
+    hashStringToHue,
+    buildFeedAvatarLabel,
+    pendingNodeRequests,
+    feedReplyDraftByPost,
+    feedReplySubmittingByPost,
+    feedReplyFeedbackByPost,
+    feedExpandedByPost,
+    onShareFeedPost,
+    onDeleteFeedRunGroup,
+    setFeedExpandedByPost,
+    formatFeedInputSourceLabel,
+    formatRunDateTime,
+    formatRelativeFeedTime,
+    formatDuration,
+    formatUsage,
+    setFeedReplyDraftByPost,
+    onSubmitFeedAgentRequest,
+    onOpenFeedMarkdownFile,
+    graphNodes: graph.nodes,
+    setFeedInspectorPostId,
+    setNodeSelection,
+  });
   return (
     <main className={`app-shell ${canvasFullscreen ? "canvas-fullscreen-mode" : ""}`}>
       <AppNav
@@ -6203,7 +5795,13 @@ ${mergedPrompt}`.trim();
               onNodeAnchorDragStart={onNodeAnchorDragStart}
               onNodeAnchorDrop={onNodeAnchorDrop}
               onNodeDragStart={onNodeDragStart}
-              onOpenFeedFromNode={onOpenFeedFromNode}
+              onOpenFeedFromNode={(nodeId) => {
+                setWorkspaceTab("feed");
+                setFeedCategory("all_posts");
+                setFeedStatusFilter("all");
+                setFeedKeyword("");
+                setStatus(`피드에서 ${nodeId} 노드 결과를 확인하세요.`);
+              }}
               onOpenWebInputForNode={onOpenWebInputForNode}
               onClearGraph={onClearGraphCanvas}
               onRedoGraph={onRedoGraph}
@@ -6237,143 +5835,14 @@ ${mergedPrompt}`.trim();
 
             <WorkflowInspectorPane
               canvasFullscreen={canvasFullscreen}
-              nodeProps={{
-                artifactTypeOptions: [...artifactTypeOptions],
-                cwd,
-                model,
-                nodeSettingsTitle: t("workflow.nodeSettings"),
-                normalizeQualityThreshold,
-                outgoingNodeOptions,
-                qualityProfileOptions: [...qualityProfileOptions],
-                qualityThresholdOptions: [...qualityThresholdOptions],
-                selectedArtifactType,
-                selectedNode,
-                selectedQualityProfile,
-                selectedQualityThresholdOption,
-                selectedTurnConfig,
-                selectedTurnExecutor,
-                simpleWorkflowUI: SIMPLE_WORKFLOW_UI,
-                turnExecutorLabel,
-                turnExecutorOptions: [...TURN_EXECUTOR_OPTIONS],
-                turnModelOptions: [...TURN_MODEL_OPTIONS],
-                updateSelectedNodeConfig,
-              }}
-              toolsProps={{
-                addNode,
-                applyCostPreset,
-                applyGraphChange,
-                applyPreset,
-                costPreset,
-                costPresetOptions: [...costPresetOptions],
-                defaultKnowledgeConfig,
-                deleteGraph,
-                graphFiles,
-                graphKnowledge,
-                graphRenameDraft,
-                graphRenameOpen,
-                isCostPreset,
-                isPresetKind,
-                knowledgeDefaultMaxChars: KNOWLEDGE_DEFAULT_MAX_CHARS,
-                knowledgeDefaultTopK: KNOWLEDGE_DEFAULT_TOP_K,
-                knowledgeMaxCharsOptions: [...knowledgeMaxCharsOptions],
-                knowledgeTopKOptions: [...knowledgeTopKOptions],
-                loadGraph,
-                onCloseRenameGraph,
-                onOpenKnowledgeFilePicker,
-                onOpenRenameGraph,
-                onRemoveKnowledgeFile,
-                onToggleKnowledgeFileEnabled,
-                presetTemplateOptions: [...presetTemplateOptions],
-                refreshGraphFiles,
-                renameGraph,
-                saveGraph,
-                selectedGraphFileName,
-                selectedKnowledgeMaxCharsOption,
-                setGraphFileName,
-                setGraphRenameDraft,
-                setSelectedGraphFileName,
-                simpleWorkflowUI: SIMPLE_WORKFLOW_UI,
-              }}
+              nodeProps={workflowInspectorPaneProps.nodeProps}
+              toolsProps={workflowInspectorPaneProps.toolsProps}
             />
           </WorkflowPage>
         )}
 
         {workspaceTab === "feed" && (
-          <FeedPage
-            vm={{
-              feedInspectorTurnNode,
-              feedInspectorPost,
-              feedInspectorEditable,
-              feedInspectorEditableNodeId,
-              feedInspectorTurnExecutor,
-              feedInspectorTurnConfig,
-              feedInspectorQualityProfile,
-              feedInspectorQualityThresholdOption,
-              feedInspectorPromptTemplate,
-              updateNodeConfigById,
-              turnModelLabel,
-              turnRoleLabel,
-              TURN_EXECUTOR_OPTIONS,
-              turnExecutorLabel,
-              TURN_MODEL_OPTIONS,
-              toTurnModelDisplayName,
-              DEFAULT_TURN_MODEL,
-              getWebProviderFromExecutor,
-              normalizeWebResultMode,
-              cwd,
-              QUALITY_PROFILE_OPTIONS: qualityProfileOptions,
-              normalizeQualityThreshold,
-              QUALITY_THRESHOLD_OPTIONS: qualityThresholdOptions,
-              ARTIFACT_TYPE_OPTIONS: artifactTypeOptions,
-              toArtifactType,
-              feedFilterOpen,
-              setFeedFilterOpen,
-              setFeedStatusFilter,
-              setFeedExecutorFilter,
-              setFeedPeriodFilter,
-              setFeedKeyword,
-              feedStatusFilter,
-              feedExecutorFilter,
-              feedPeriodFilter,
-              feedKeyword,
-              feedCategoryMeta,
-              feedCategory,
-              feedCategoryPosts,
-              setFeedCategory,
-              feedShareMenuPostId,
-              setFeedShareMenuPostId,
-              feedLoading,
-              currentFeedPosts,
-              groupedFeedRuns,
-              feedGroupExpandedByRunId,
-              setFeedGroupExpandedByRunId,
-              feedGroupRenameRunId,
-              setFeedGroupRenameRunId,
-              setFeedGroupRenameDraft,
-              feedGroupRenameDraft,
-              onSubmitFeedRunGroupRename,
-              toHumanReadableFeedText,
-              hashStringToHue,
-              buildFeedAvatarLabel,
-              pendingNodeRequests,
-              feedReplyDraftByPost,
-              feedReplySubmittingByPost,
-              feedReplyFeedbackByPost,
-              feedExpandedByPost,
-              onSelectFeedInspectorPost,
-              onShareFeedPost,
-              onDeleteFeedRunGroup,
-              setFeedExpandedByPost,
-              formatFeedInputSourceLabel,
-              formatRunDateTime,
-              formatRelativeFeedTime,
-              formatDuration,
-              formatUsage,
-              setFeedReplyDraftByPost,
-              onSubmitFeedAgentRequest,
-              onOpenFeedMarkdownFile,
-            }}
-          />
+          <FeedPage vm={feedPageVm} />
         )}
 
         {workspaceTab === "settings" && (
@@ -6423,9 +5892,22 @@ ${mergedPrompt}`.trim();
       </section>
 
       <PendingWebConnectModal
-        onCancel={onCancelWebConnectModal}
-        onContinue={onContinueRunWithoutWebConnect}
-        onOpenBridgeTab={onOpenWebConnectFromModal}
+        onCancel={() => {
+          setPendingWebConnectCheck(null);
+          setStatus("그래프 실행 대기");
+        }}
+        onContinue={() => {
+          if (!pendingWebConnectCheck) {
+            return;
+          }
+          setPendingWebConnectCheck(null);
+          void onRunGraph(true);
+        }}
+        onOpenBridgeTab={() => {
+          setPendingWebConnectCheck(null);
+          setWorkspaceTab("bridge");
+          void refreshWebBridgeStatus(false, true);
+        }}
         open={Boolean(pendingWebConnectCheck)}
         providersLabel={
           pendingWebConnectCheck
