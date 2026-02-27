@@ -233,6 +233,8 @@ import {
   buildGraphExecutionIndex,
   enqueueZeroIndegreeNodes,
   scheduleChildrenWhenReady,
+  resolveFeedInputSources as resolveFeedInputSourcesForNode,
+  rememberFeedSource,
   buildFinalNodeFailureReason,
   isPauseSignalError,
 } from "./main/runGraphExecutionUtils";
@@ -257,7 +259,6 @@ import type {
   EngineNotificationEvent,
   FeedCategory,
   FeedInputSource,
-  FeedPost,
   FeedViewPost,
   EvidenceEnvelope,
   InternalMemorySnippet,
@@ -3894,56 +3895,6 @@ function App() {
       const terminalStateByNodeId: Record<string, NodeExecutionStatus> = {};
 
       const latestFeedSourceByNodeId = new Map<string, FeedInputSource>();
-      const resolveFeedInputSources = (targetNodeId: string): FeedInputSource[] => {
-        const incomingEdges = graph.edges.filter((edge) => edge.to.nodeId === targetNodeId);
-        if (incomingEdges.length === 0) {
-          return [
-            {
-              kind: "question",
-              agentName: "사용자 입력 질문",
-              summary: workflowQuestion.trim() || undefined,
-            },
-          ];
-        }
-        const seenNodeIds = new Set<string>();
-        const sources: FeedInputSource[] = [];
-        for (const edge of incomingEdges) {
-          const sourceNodeId = edge.from.nodeId;
-          if (!sourceNodeId || seenNodeIds.has(sourceNodeId)) {
-            continue;
-          }
-          seenNodeIds.add(sourceNodeId);
-          const known = latestFeedSourceByNodeId.get(sourceNodeId);
-          const sourceNode = nodeMap.get(sourceNodeId);
-          const sourceRoleLabel =
-            sourceNode?.type === "turn"
-              ? turnRoleLabel(sourceNode)
-              : sourceNode
-                ? nodeTypeLabel(sourceNode.type)
-                : known?.roleLabel;
-          const sourceAgentName = known?.agentName ?? (sourceNode ? nodeSelectionLabel(sourceNode) : sourceNodeId);
-          sources.push({
-            kind: "node",
-            nodeId: sourceNodeId,
-            agentName: sourceAgentName,
-            roleLabel: sourceRoleLabel,
-            summary: known?.summary,
-            sourcePostId: known?.sourcePostId,
-          });
-        }
-        return sources;
-      };
-
-      const rememberFeedSource = (post: FeedPost) => {
-        latestFeedSourceByNodeId.set(post.nodeId, {
-          kind: "node",
-          nodeId: post.nodeId,
-          agentName: post.agentName,
-          roleLabel: post.roleLabel,
-          summary: post.summary,
-          sourcePostId: post.id,
-        });
-      };
 
       const appendNodeEvidence = (params: {
         node: GraphNode;
@@ -4020,7 +3971,16 @@ function App() {
           return;
         }
 
-        const nodeInputSources = resolveFeedInputSources(nodeId);
+        const nodeInputSources = resolveFeedInputSourcesForNode({
+          targetNodeId: nodeId,
+          edges: graph.edges,
+          nodeMap,
+          workflowQuestion,
+          latestFeedSourceByNodeId,
+          turnRoleLabelFn: turnRoleLabel,
+          nodeTypeLabelFn: nodeTypeLabel,
+          nodeSelectionLabelFn: nodeSelectionLabel,
+        });
         const nodeInput = buildNodeInputForNode({
           edges: graph.edges,
           nodeId,
@@ -4070,7 +4030,7 @@ function App() {
             dataIssues: cancelledEvidence.dataIssues,
           });
           runRecord.feedPosts?.push(cancelledFeed.post);
-          rememberFeedSource(cancelledFeed.post);
+          rememberFeedSource(latestFeedSourceByNodeId, cancelledFeed.post);
           feedRawAttachmentRef.current[feedAttachmentRawKey(cancelledFeed.post.id, "markdown")] =
             cancelledFeed.rawAttachments.markdown;
           feedRawAttachmentRef.current[feedAttachmentRawKey(cancelledFeed.post.id, "json")] =
@@ -4131,7 +4091,7 @@ function App() {
             dataIssues: blockedEvidence.dataIssues,
           });
           runRecord.feedPosts?.push(blockedFeed.post);
-          rememberFeedSource(blockedFeed.post);
+          rememberFeedSource(latestFeedSourceByNodeId, blockedFeed.post);
           feedRawAttachmentRef.current[feedAttachmentRawKey(blockedFeed.post.id, "markdown")] =
             blockedFeed.rawAttachments.markdown;
           feedRawAttachmentRef.current[feedAttachmentRawKey(blockedFeed.post.id, "json")] =
@@ -4249,7 +4209,7 @@ function App() {
               dataIssues: failedEvidence.dataIssues,
             });
             runRecord.feedPosts?.push(failedFeed.post);
-            rememberFeedSource(failedFeed.post);
+            rememberFeedSource(latestFeedSourceByNodeId, failedFeed.post);
             feedRawAttachmentRef.current[feedAttachmentRawKey(failedFeed.post.id, "markdown")] =
               failedFeed.rawAttachments.markdown;
             feedRawAttachmentRef.current[feedAttachmentRawKey(failedFeed.post.id, "json")] =
@@ -4354,7 +4314,7 @@ function App() {
                 dataIssues: lowQualityEvidence.dataIssues,
               });
               runRecord.feedPosts?.push(lowQualityFeed.post);
-              rememberFeedSource(lowQualityFeed.post);
+              rememberFeedSource(latestFeedSourceByNodeId, lowQualityFeed.post);
               feedRawAttachmentRef.current[feedAttachmentRawKey(lowQualityFeed.post.id, "markdown")] =
                 lowQualityFeed.rawAttachments.markdown;
               feedRawAttachmentRef.current[feedAttachmentRawKey(lowQualityFeed.post.id, "json")] =
@@ -4430,7 +4390,7 @@ function App() {
             dataIssues: doneEvidence.dataIssues,
           });
           runRecord.feedPosts?.push(doneFeed.post);
-          rememberFeedSource(doneFeed.post);
+          rememberFeedSource(latestFeedSourceByNodeId, doneFeed.post);
           feedRawAttachmentRef.current[feedAttachmentRawKey(doneFeed.post.id, "markdown")] =
             doneFeed.rawAttachments.markdown;
           feedRawAttachmentRef.current[feedAttachmentRawKey(doneFeed.post.id, "json")] =
@@ -4477,7 +4437,7 @@ function App() {
               dataIssues: transformFailedEvidence.dataIssues,
             });
             runRecord.feedPosts?.push(transformFailedFeed.post);
-            rememberFeedSource(transformFailedFeed.post);
+            rememberFeedSource(latestFeedSourceByNodeId, transformFailedFeed.post);
             feedRawAttachmentRef.current[feedAttachmentRawKey(transformFailedFeed.post.id, "markdown")] =
               transformFailedFeed.rawAttachments.markdown;
             feedRawAttachmentRef.current[feedAttachmentRawKey(transformFailedFeed.post.id, "json")] =
@@ -4520,7 +4480,7 @@ function App() {
             dataIssues: transformDoneEvidence.dataIssues,
           });
           runRecord.feedPosts?.push(transformDoneFeed.post);
-          rememberFeedSource(transformDoneFeed.post);
+          rememberFeedSource(latestFeedSourceByNodeId, transformDoneFeed.post);
           feedRawAttachmentRef.current[feedAttachmentRawKey(transformDoneFeed.post.id, "markdown")] =
             transformDoneFeed.rawAttachments.markdown;
           feedRawAttachmentRef.current[feedAttachmentRawKey(transformDoneFeed.post.id, "json")] =
@@ -4574,7 +4534,7 @@ function App() {
             dataIssues: gateFailedEvidence.dataIssues,
           });
           runRecord.feedPosts?.push(gateFailedFeed.post);
-          rememberFeedSource(gateFailedFeed.post);
+          rememberFeedSource(latestFeedSourceByNodeId, gateFailedFeed.post);
           feedRawAttachmentRef.current[feedAttachmentRawKey(gateFailedFeed.post.id, "markdown")] =
             gateFailedFeed.rawAttachments.markdown;
           feedRawAttachmentRef.current[feedAttachmentRawKey(gateFailedFeed.post.id, "json")] =
@@ -4617,7 +4577,7 @@ function App() {
           dataIssues: gateDoneEvidence.dataIssues,
         });
         runRecord.feedPosts?.push(gateDoneFeed.post);
-        rememberFeedSource(gateDoneFeed.post);
+        rememberFeedSource(latestFeedSourceByNodeId, gateDoneFeed.post);
         feedRawAttachmentRef.current[feedAttachmentRawKey(gateDoneFeed.post.id, "markdown")] =
           gateDoneFeed.rawAttachments.markdown;
         feedRawAttachmentRef.current[feedAttachmentRawKey(gateDoneFeed.post.id, "json")] =

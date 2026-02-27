@@ -1,8 +1,15 @@
 import { buildConflictLedger, buildFinalSynthesisPacket } from "../mainAppRuntimeHelpers";
 import { getWebProviderFromExecutor, getTurnExecutor, type TurnConfig, type WebProvider } from "../../features/workflow/domain";
 import type { GraphData, GraphEdge, GraphNode, NodeAnchorSide, NodeExecutionStatus } from "../../features/workflow/types";
-import type { EvidenceEnvelope, FinalSynthesisPacket, NodeResponsibilityMemory, NodeRunState, RunRecord } from "./types";
-
+import type {
+  EvidenceEnvelope,
+  FeedInputSource,
+  FeedPost,
+  FinalSynthesisPacket,
+  NodeResponsibilityMemory,
+  NodeRunState,
+  RunRecord,
+} from "./types";
 export const PAUSE_ERROR_TOKEN = "__PAUSED_BY_USER__";
 
 export function buildNodeInputForNode(params: {
@@ -270,6 +277,70 @@ export function scheduleChildrenWhenReady(params: {
       params.onQueued(childId);
     }
   }
+}
+
+export function resolveFeedInputSources(params: {
+  targetNodeId: string;
+  edges: GraphEdge[];
+  nodeMap: Map<string, GraphNode>;
+  workflowQuestion: string;
+  latestFeedSourceByNodeId: Map<string, FeedInputSource>;
+  turnRoleLabelFn: (node: GraphNode) => string;
+  nodeTypeLabelFn: (type: GraphNode["type"]) => string;
+  nodeSelectionLabelFn: (node: GraphNode) => string;
+}): FeedInputSource[] {
+  const incomingEdges = params.edges.filter((edge) => edge.to.nodeId === params.targetNodeId);
+  if (incomingEdges.length === 0) {
+    return [
+      {
+        kind: "question",
+        agentName: "사용자 입력 질문",
+        summary: params.workflowQuestion.trim() || undefined,
+      },
+    ];
+  }
+
+  const seenNodeIds = new Set<string>();
+  const sources: FeedInputSource[] = [];
+  for (const edge of incomingEdges) {
+    const sourceNodeId = edge.from.nodeId;
+    if (!sourceNodeId || seenNodeIds.has(sourceNodeId)) {
+      continue;
+    }
+    seenNodeIds.add(sourceNodeId);
+    const known = params.latestFeedSourceByNodeId.get(sourceNodeId);
+    const sourceNode = params.nodeMap.get(sourceNodeId);
+    const sourceRoleLabel =
+      sourceNode?.type === "turn"
+        ? params.turnRoleLabelFn(sourceNode)
+        : sourceNode
+          ? params.nodeTypeLabelFn(sourceNode.type)
+          : known?.roleLabel;
+    const sourceAgentName = known?.agentName ?? (sourceNode ? params.nodeSelectionLabelFn(sourceNode) : sourceNodeId);
+    sources.push({
+      kind: "node",
+      nodeId: sourceNodeId,
+      agentName: sourceAgentName,
+      roleLabel: sourceRoleLabel,
+      summary: known?.summary,
+      sourcePostId: known?.sourcePostId,
+    });
+  }
+  return sources;
+}
+
+export function rememberFeedSource(
+  latestFeedSourceByNodeId: Map<string, FeedInputSource>,
+  post: FeedPost,
+) {
+  latestFeedSourceByNodeId.set(post.nodeId, {
+    kind: "node",
+    nodeId: post.nodeId,
+    agentName: post.agentName,
+    roleLabel: post.roleLabel,
+    summary: post.summary,
+    sourcePostId: post.id,
+  });
 }
 
 export function isPauseSignalError(input: unknown): boolean {
