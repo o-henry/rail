@@ -222,22 +222,26 @@ import {
   appendRunTransition,
   buildConnectPreviewLine,
   buildFinalTurnInputPacket,
-  buildWebConnectPreflightReasons,
   buildNodeInputForNode,
   cancelGraphRun,
   collectRequiredWebProviders,
-  createRunNodeStateSnapshot,
-  createRunRecord,
-  findDirectInputNodeIds,
-  resolveFinalNodeId,
-  buildGraphExecutionIndex,
-  enqueueZeroIndegreeNodes,
-  scheduleChildrenWhenReady,
-  resolveFeedInputSources as resolveFeedInputSourcesForNode,
-  rememberFeedSource,
-  buildFinalNodeFailureReason,
   isPauseSignalError,
 } from "./main/runGraphExecutionUtils";
+import {
+  buildFinalNodeFailureReason,
+  buildGraphExecutionIndex,
+  buildWebConnectPreflightReasons,
+  createRunNodeStateSnapshot,
+  createRunRecord,
+  enqueueZeroIndegreeNodes,
+  findDirectInputNodeIds,
+  graphRequiresCodexEngine,
+  rememberFeedSource,
+  resolveDagMaxThreads,
+  resolveFeedInputSources as resolveFeedInputSourcesForNode,
+  resolveFinalNodeId,
+  scheduleChildrenWhenReady,
+} from "./main/runGraphFlowUtils";
 import {
   buildRegressionSummary,
   exportRunFeedMarkdownFiles,
@@ -3881,12 +3885,7 @@ function App() {
       if (internalMemoryCorpusRef.current.length > 0) {
         setStatus(`그래프 실행 시작 (내부 메모리 ${internalMemoryCorpusRef.current.length}개 로드)`);
       }
-      const requiresCodexEngine = graph.nodes.some((node) => {
-        if (node.type !== "turn") {
-          return false;
-        }
-        return getTurnExecutor(node.config as TurnConfig) === "codex";
-      });
+      const requiresCodexEngine = graphRequiresCodexEngine(graph.nodes);
       if (requiresCodexEngine) {
         await ensureEngineStarted();
       }
@@ -3947,7 +3946,7 @@ function App() {
       const skipSet = new Set<string>();
       let lastDoneNodeId = "";
 
-      const dagMaxThreads = codexMultiAgentMode === "max" ? 4 : codexMultiAgentMode === "balanced" ? 2 : 1;
+      const dagMaxThreads = resolveDagMaxThreads(codexMultiAgentMode);
       const activeTasks = new Map<string, Promise<void>>();
       let activeTurnTasks = 0;
       let pauseStatusShown = false;
