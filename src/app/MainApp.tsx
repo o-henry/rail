@@ -230,6 +230,7 @@ import { createCoreStateHandlers } from "./main/coreStateHandlers";
 import { createFeedKnowledgeHandlers } from "./main/feedKnowledgeHandlers";
 import { useMainAppStateEffects } from "./main/useMainAppStateEffects";
 import { createRunGraphControlHandlers } from "./main/runGraphControlHandlers";
+import { createRunGraphProcessNode } from "./main/runGraphProcessNode";
 import {
   PAUSE_ERROR_TOKEN,
   appendRunTransition,
@@ -280,8 +281,6 @@ import type {
   EvidenceEnvelope,
   InternalMemorySnippet,
   NodeResponsibilityMemory,
-  NodeMetric,
-  QualityReport,
   RunRecord,
 } from "./main";
 
@@ -1935,627 +1934,57 @@ function App() {
         });
       };
 
-      const processNode = async (nodeId: string): Promise<void> => {
-        const node = nodeMap.get(nodeId);
-        if (!node) {
-          return;
-        }
-
-        const nodeInputSources = resolveFeedInputSourcesForNode({
-          targetNodeId: nodeId,
-          edges: graph.edges,
-          nodeMap,
-          workflowQuestion,
-          latestFeedSourceByNodeId,
-          turnRoleLabelFn: turnRoleLabel,
-          nodeTypeLabelFn: nodeTypeLabel,
-          nodeSelectionLabelFn: nodeSelectionLabel,
-        });
-        const nodeInput = buildNodeInputForNode({
-          edges: graph.edges,
-          nodeId,
-          outputs,
-          rootInput: workflowQuestion,
-        });
-        const isFinalTurnNode = node.type === "turn" && (adjacency.get(nodeId)?.length ?? 0) === 0;
-
-        if (pauseRequestedRef.current) {
-          const pauseMessage = "사용자 일시정지 요청으로 대기열로 복귀";
-          setNodeStatus(nodeId, "queued", pauseMessage);
-          setNodeRuntimeFields(nodeId, {
-            status: "queued",
-            finishedAt: undefined,
-            durationMs: undefined,
-          });
-          appendRunTransition(runRecord, nodeId, "queued", pauseMessage);
-          if (!queue.includes(nodeId)) {
-            queue.push(nodeId);
-          }
-          return;
-        }
-
-        if (cancelRequestedRef.current) {
-          setNodeStatus(nodeId, "cancelled", "취소 요청됨");
-          appendRunTransition(runRecord, nodeId, "cancelled", "취소 요청됨");
-          const cancelledAt = new Date().toISOString();
-          const cancelledEvidence = appendNodeEvidence({
-            node,
-            output: nodeInput,
-            provider: "system",
-            summary: t("run.cancelledByUser"),
-            createdAt: cancelledAt,
-          });
-          const cancelledFeed = buildFeedPost({
-            runId: runRecord.runId,
-            node,
-            isFinalDocument: isFinalTurnNode,
-            status: "cancelled",
-            createdAt: cancelledAt,
-            summary: t("run.cancelledByUser"),
-            logs: runLogCollectorRef.current[nodeId] ?? [],
-            inputSources: nodeInputSources,
-            inputData: nodeInput,
-            verificationStatus: cancelledEvidence.verificationStatus,
-            confidenceBand: cancelledEvidence.confidenceBand,
-            dataIssues: cancelledEvidence.dataIssues,
-          });
-          runRecord.feedPosts?.push(cancelledFeed.post);
-          rememberFeedSource(latestFeedSourceByNodeId, cancelledFeed.post);
-          feedRawAttachmentRef.current[feedAttachmentRawKey(cancelledFeed.post.id, "markdown")] =
-            cancelledFeed.rawAttachments.markdown;
-          feedRawAttachmentRef.current[feedAttachmentRawKey(cancelledFeed.post.id, "json")] =
-            cancelledFeed.rawAttachments.json;
-          terminalStateByNodeId[nodeId] = "cancelled";
-          scheduleChildren(nodeId);
-          return;
-        }
-
-        if (skipSet.has(nodeId)) {
-          setNodeStatus(nodeId, "skipped", "분기 결과로 건너뜀");
-          setNodeRuntimeFields(nodeId, {
-            status: "skipped",
-            finishedAt: new Date().toISOString(),
-          });
-          appendRunTransition(runRecord, nodeId, "skipped", "분기 결과로 건너뜀");
-          appendNodeEvidence({
-            node,
-            output: nodeInput,
-            provider: "system",
-            summary: "분기 결과로 건너뜀",
-          });
-          terminalStateByNodeId[nodeId] = "skipped";
-          scheduleChildren(nodeId);
-          return;
-        }
-
-        const parentIds = incoming.get(nodeId) ?? [];
-        const missingParent = parentIds.find((parentId) => !(parentId in outputs));
-        if (missingParent) {
-          const blockedAtIso = new Date().toISOString();
-          const blockedReason = `선행 노드(${missingParent}) 결과 없음으로 건너뜀`;
-          setNodeStatus(nodeId, "skipped", blockedReason);
-          setNodeRuntimeFields(nodeId, {
-            status: "skipped",
-            finishedAt: blockedAtIso,
-          });
-          appendRunTransition(runRecord, nodeId, "skipped", blockedReason);
-          const blockedEvidence = appendNodeEvidence({
-            node,
-            output: nodeInput,
-            provider: "system",
-            summary: blockedReason,
-            createdAt: blockedAtIso,
-          });
-          const blockedFeed = buildFeedPost({
-            runId: runRecord.runId,
-            node,
-            isFinalDocument: isFinalTurnNode,
-            status: "cancelled",
-            createdAt: blockedAtIso,
-            summary: blockedReason,
-            logs: runLogCollectorRef.current[nodeId] ?? [],
-            inputSources: nodeInputSources,
-            inputData: nodeInput,
-            verificationStatus: blockedEvidence.verificationStatus,
-            confidenceBand: blockedEvidence.confidenceBand,
-            dataIssues: blockedEvidence.dataIssues,
-          });
-          runRecord.feedPosts?.push(blockedFeed.post);
-          rememberFeedSource(latestFeedSourceByNodeId, blockedFeed.post);
-          feedRawAttachmentRef.current[feedAttachmentRawKey(blockedFeed.post.id, "markdown")] =
-            blockedFeed.rawAttachments.markdown;
-          feedRawAttachmentRef.current[feedAttachmentRawKey(blockedFeed.post.id, "json")] =
-            blockedFeed.rawAttachments.json;
-          terminalStateByNodeId[nodeId] = "skipped";
-          scheduleChildren(nodeId);
-          return;
-        }
-
-        const startedAtMs = Date.now();
-        const startedAtIso = new Date(startedAtMs).toISOString();
-        setNodeStatus(nodeId, "running", "노드 실행 시작");
-        setNodeRuntimeFields(nodeId, {
-          status: "running",
-          startedAt: startedAtIso,
-          finishedAt: undefined,
-          durationMs: undefined,
-          usage: undefined,
-        });
-        appendRunTransition(runRecord, nodeId, "running");
-
-        const input = isFinalTurnNode
-          ? buildFinalTurnInputPacket({
-              edges: graph.edges,
-              nodeId,
-              currentInput: nodeInput,
-              outputs,
-              rootInput: workflowQuestion,
-              normalizedEvidenceByNodeId,
-              runMemory: runMemoryByNodeId,
-            })
-          : nodeInput;
-
-        if (node.type === "turn") {
-          const hasOutputSchema = String((node.config as TurnConfig).outputSchemaJson ?? "").trim().length > 0;
-          const turnExecution = await executeTurnNodeWithOutputSchemaRetry({
-            node,
-            input,
-            executeTurnNode,
-            addNodeLog,
-            validateSimpleSchema,
-            outputSchemaEnabled: TURN_OUTPUT_SCHEMA_ENABLED,
-            maxRetryDefault: TURN_OUTPUT_SCHEMA_MAX_RETRY,
-            options: {
-              maxRetry: isFinalTurnNode || hasOutputSchema ? 1 : 0,
-            },
-          });
-          let result = turnExecution.result;
-          if (!result.ok && pauseRequestedRef.current && isPauseSignalError(result.error)) {
-            const pauseMessage = "사용자 일시정지 요청으로 노드 실행을 보류했습니다.";
-            addNodeLog(nodeId, `[중지] ${pauseMessage}`);
-            setNodeStatus(nodeId, "queued", pauseMessage);
-            setNodeRuntimeFields(nodeId, {
-              status: "queued",
-              finishedAt: undefined,
-              durationMs: undefined,
-            });
-            appendRunTransition(runRecord, nodeId, "queued", pauseMessage);
-            if (!queue.includes(nodeId)) {
-              queue.push(nodeId);
-            }
-            return;
-          }
-          if (result.knowledgeTrace && result.knowledgeTrace.length > 0) {
-            runRecord.knowledgeTrace?.push(...result.knowledgeTrace);
-          }
-          if (result.memoryTrace && result.memoryTrace.length > 0) {
-            runRecord.internalMemoryTrace?.push(...result.memoryTrace);
-          }
-          if (!result.ok) {
-            const finishedAtIso = new Date().toISOString();
-            setNodeStatus(nodeId, "failed", result.error ?? "턴 실행 실패");
-            setNodeRuntimeFields(nodeId, {
-              error: result.error,
-              status: "failed",
-              threadId: result.threadId,
-              turnId: result.turnId,
-              usage: result.usage,
-              finishedAt: finishedAtIso,
-              durationMs: Date.now() - startedAtMs,
-            });
-            runRecord.providerTrace?.push({
-              nodeId,
-              executor: result.executor,
-              provider: result.provider,
-              status: cancelRequestedRef.current ? "cancelled" : "failed",
-              startedAt: startedAtIso,
-              finishedAt: finishedAtIso,
-              summary: result.error ?? "턴 실행 실패",
-            });
-            appendRunTransition(runRecord, nodeId, "failed", result.error ?? "턴 실행 실패");
-            const failedEvidence = appendNodeEvidence({
-              node,
-              output: result.output ?? { error: result.error ?? "턴 실행 실패", input },
-              provider: result.provider,
-              summary: result.error ?? "턴 실행 실패",
-              createdAt: finishedAtIso,
-            });
-            const failedFeed = buildFeedPost({
-              runId: runRecord.runId,
-              node,
-              isFinalDocument: isFinalTurnNode,
-              status: "failed",
-              createdAt: finishedAtIso,
-              summary: result.error ?? "턴 실행 실패",
-              logs: runLogCollectorRef.current[nodeId] ?? [],
-              output: result.output,
-              error: result.error,
-              durationMs: Date.now() - startedAtMs,
-              usage: result.usage,
-              inputSources: nodeInputSources,
-              inputData: input,
-              verificationStatus: failedEvidence.verificationStatus,
-              confidenceBand: failedEvidence.confidenceBand,
-              dataIssues: failedEvidence.dataIssues,
-            });
-            runRecord.feedPosts?.push(failedFeed.post);
-            rememberFeedSource(latestFeedSourceByNodeId, failedFeed.post);
-            feedRawAttachmentRef.current[feedAttachmentRawKey(failedFeed.post.id, "markdown")] =
-              failedFeed.rawAttachments.markdown;
-            feedRawAttachmentRef.current[feedAttachmentRawKey(failedFeed.post.id, "json")] =
-              failedFeed.rawAttachments.json;
-            terminalStateByNodeId[nodeId] = "failed";
-            scheduleChildren(nodeId);
-            return;
-          }
-
-          const config = node.config as TurnConfig;
-          for (const warning of turnExecution.artifactWarnings) {
-            addNodeLog(nodeId, `[아티팩트] ${warning}`);
-          }
-          const normalizedOutput = turnExecution.normalizedOutput ?? result.output;
-          let qualityReport: QualityReport | undefined;
-          if (isFinalTurnNode) {
-            const finalQualityReport = await buildQualityReport({
-              node,
-              config,
-              output: normalizedOutput,
-              cwd: String(config.cwd ?? cwd).trim() || cwd,
-            });
-            qualityReport = finalQualityReport;
-            const nodeMetric: NodeMetric = {
-              nodeId,
-              profile: finalQualityReport.profile,
-              score: finalQualityReport.score,
-              decision: finalQualityReport.decision,
-              threshold: finalQualityReport.threshold,
-              failedChecks: finalQualityReport.failures.length,
-              warningCount: finalQualityReport.warnings.length,
-            };
-            runRecord.nodeMetrics = {
-              ...(runRecord.nodeMetrics ?? {}),
-              [nodeId]: nodeMetric,
-            };
-            for (const warning of finalQualityReport.warnings) {
-              addNodeLog(nodeId, `[품질] ${warning}`);
-            }
-            if (finalQualityReport.decision !== "PASS") {
-              const finishedAtIso = new Date().toISOString();
-              const lowQualitySummary = t("run.qualityLowSummary", {
-                score: finalQualityReport.score,
-                threshold: finalQualityReport.threshold,
-              });
-              addNodeLog(
-                nodeId,
-                t("run.qualityRejectLog", {
-                  score: finalQualityReport.score,
-                  threshold: finalQualityReport.threshold,
-                }),
-              );
-              outputs[nodeId] = normalizedOutput;
-              setNodeStatus(nodeId, "low_quality", lowQualitySummary);
-              setNodeRuntimeFields(nodeId, {
-                status: "low_quality",
-                output: normalizedOutput,
-                qualityReport: finalQualityReport,
-                threadId: result.threadId,
-                turnId: result.turnId,
-                usage: result.usage,
-                finishedAt: finishedAtIso,
-                durationMs: Date.now() - startedAtMs,
-              });
-              runRecord.threadTurnMap[nodeId] = {
-                threadId: result.threadId,
-                turnId: result.turnId,
-              };
-              runRecord.providerTrace?.push({
-                nodeId,
-                executor: result.executor,
-                provider: result.provider,
-                status: "done",
-                startedAt: startedAtIso,
-                finishedAt: finishedAtIso,
-                summary: lowQualitySummary,
-              });
-              appendRunTransition(runRecord, nodeId, "low_quality", lowQualitySummary);
-              const lowQualityEvidence = appendNodeEvidence({
-                node,
-                output: normalizedOutput,
-                provider: result.provider,
-                summary: lowQualitySummary,
-                createdAt: finishedAtIso,
-              });
-              const lowQualityFeed = buildFeedPost({
-                runId: runRecord.runId,
-                node,
-                isFinalDocument: isFinalTurnNode,
-                status: "low_quality",
-                createdAt: finishedAtIso,
-                summary: lowQualitySummary,
-                logs: runLogCollectorRef.current[nodeId] ?? [],
-                output: normalizedOutput,
-                durationMs: Date.now() - startedAtMs,
-                usage: result.usage,
-                qualityReport: finalQualityReport,
-                inputSources: nodeInputSources,
-                inputData: input,
-                verificationStatus: lowQualityEvidence.verificationStatus,
-                confidenceBand: lowQualityEvidence.confidenceBand,
-                dataIssues: lowQualityEvidence.dataIssues,
-              });
-              runRecord.feedPosts?.push(lowQualityFeed.post);
-              rememberFeedSource(latestFeedSourceByNodeId, lowQualityFeed.post);
-              feedRawAttachmentRef.current[feedAttachmentRawKey(lowQualityFeed.post.id, "markdown")] =
-                lowQualityFeed.rawAttachments.markdown;
-              feedRawAttachmentRef.current[feedAttachmentRawKey(lowQualityFeed.post.id, "json")] =
-                lowQualityFeed.rawAttachments.json;
-              lastDoneNodeId = nodeId;
-              terminalStateByNodeId[nodeId] = "low_quality";
-              scheduleChildren(nodeId);
-              return;
-            }
-          } else {
-            addNodeLog(nodeId, "[품질] 중간 노드는 품질 게이트를 생략합니다. (최종 노드만 검증)");
-          }
-
-          const finishedAtIso = new Date().toISOString();
-          outputs[nodeId] = normalizedOutput;
-          if (qualityReport) {
-            addNodeLog(
-              nodeId,
-              t("run.qualityPassLog", {
-                score: qualityReport.score,
-                threshold: qualityReport.threshold,
-              }),
-            );
-          }
-          setNodeRuntimeFields(nodeId, {
-            status: "done",
-            output: normalizedOutput,
-            qualityReport,
-            threadId: result.threadId,
-            turnId: result.turnId,
-            usage: result.usage,
-            finishedAt: finishedAtIso,
-            durationMs: Date.now() - startedAtMs,
-          });
-          setNodeStatus(nodeId, "done", t("run.turnCompleted"));
-          runRecord.threadTurnMap[nodeId] = {
-            threadId: result.threadId,
-            turnId: result.turnId,
-          };
-          runRecord.providerTrace?.push({
-            nodeId,
-            executor: result.executor,
-            provider: result.provider,
-            status: "done",
-            startedAt: startedAtIso,
-            finishedAt: finishedAtIso,
-            summary: t("run.turnCompleted"),
-          });
-          appendRunTransition(runRecord, nodeId, "done", t("run.turnCompleted"));
-          const doneEvidence = appendNodeEvidence({
-            node,
-            output: normalizedOutput,
-            provider: result.provider,
-            summary: t("run.turnCompleted"),
-            createdAt: finishedAtIso,
-          });
-          const doneFeed = buildFeedPost({
-            runId: runRecord.runId,
-            node,
-            isFinalDocument: isFinalTurnNode,
-            status: "done",
-            createdAt: finishedAtIso,
-            summary: t("run.turnCompleted"),
-            logs: runLogCollectorRef.current[nodeId] ?? [],
-            output: normalizedOutput,
-            durationMs: Date.now() - startedAtMs,
-            usage: result.usage,
-            qualityReport,
-            inputSources: nodeInputSources,
-            inputData: input,
-            verificationStatus: doneEvidence.verificationStatus,
-            confidenceBand: doneEvidence.confidenceBand,
-            dataIssues: doneEvidence.dataIssues,
-          });
-          runRecord.feedPosts?.push(doneFeed.post);
-          rememberFeedSource(latestFeedSourceByNodeId, doneFeed.post);
-          feedRawAttachmentRef.current[feedAttachmentRawKey(doneFeed.post.id, "markdown")] =
-            doneFeed.rawAttachments.markdown;
-          feedRawAttachmentRef.current[feedAttachmentRawKey(doneFeed.post.id, "json")] =
-            doneFeed.rawAttachments.json;
-          lastDoneNodeId = nodeId;
-          terminalStateByNodeId[nodeId] = "done";
-          scheduleChildren(nodeId);
-          return;
-        }
-
-        if (node.type === "transform") {
-          const result = await executeTransformNode(node, input);
-          if (!result.ok) {
-            const finishedAtIso = new Date().toISOString();
-            setNodeStatus(nodeId, "failed", result.error ?? "변환 실패");
-            setNodeRuntimeFields(nodeId, {
-              status: "failed",
-              error: result.error,
-              finishedAt: finishedAtIso,
-              durationMs: Date.now() - startedAtMs,
-            });
-            appendRunTransition(runRecord, nodeId, "failed", result.error ?? "변환 실패");
-            const transformFailedEvidence = appendNodeEvidence({
-              node,
-              output: result.output ?? { error: result.error ?? "변환 실패", input },
-              provider: "transform",
-              summary: result.error ?? "변환 실패",
-              createdAt: finishedAtIso,
-            });
-            const transformFailedFeed = buildFeedPost({
-              runId: runRecord.runId,
-              node,
-              status: "failed",
-              createdAt: finishedAtIso,
-              summary: result.error ?? "변환 실패",
-              logs: runLogCollectorRef.current[nodeId] ?? [],
-              output: result.output,
-              error: result.error ?? "변환 실패",
-              durationMs: Date.now() - startedAtMs,
-              inputSources: nodeInputSources,
-              inputData: input,
-              verificationStatus: transformFailedEvidence.verificationStatus,
-              confidenceBand: transformFailedEvidence.confidenceBand,
-              dataIssues: transformFailedEvidence.dataIssues,
-            });
-            runRecord.feedPosts?.push(transformFailedFeed.post);
-            rememberFeedSource(latestFeedSourceByNodeId, transformFailedFeed.post);
-            feedRawAttachmentRef.current[feedAttachmentRawKey(transformFailedFeed.post.id, "markdown")] =
-              transformFailedFeed.rawAttachments.markdown;
-            feedRawAttachmentRef.current[feedAttachmentRawKey(transformFailedFeed.post.id, "json")] =
-              transformFailedFeed.rawAttachments.json;
-            terminalStateByNodeId[nodeId] = "failed";
-            scheduleChildren(nodeId);
-            return;
-          }
-
-          const finishedAtIso = new Date().toISOString();
-          outputs[nodeId] = result.output;
-          setNodeRuntimeFields(nodeId, {
-            status: "done",
-            output: result.output,
-            finishedAt: finishedAtIso,
-            durationMs: Date.now() - startedAtMs,
-          });
-          setNodeStatus(nodeId, "done", "변환 완료");
-          appendRunTransition(runRecord, nodeId, "done", "변환 완료");
-          const transformDoneEvidence = appendNodeEvidence({
-            node,
-            output: result.output,
-            provider: "transform",
-            summary: "변환 완료",
-            createdAt: finishedAtIso,
-          });
-          const transformDoneFeed = buildFeedPost({
-            runId: runRecord.runId,
-            node,
-            status: "done",
-            createdAt: finishedAtIso,
-            summary: "변환 완료",
-            logs: runLogCollectorRef.current[nodeId] ?? [],
-            output: result.output,
-            durationMs: Date.now() - startedAtMs,
-            inputSources: nodeInputSources,
-            inputData: input,
-            verificationStatus: transformDoneEvidence.verificationStatus,
-            confidenceBand: transformDoneEvidence.confidenceBand,
-            dataIssues: transformDoneEvidence.dataIssues,
-          });
-          runRecord.feedPosts?.push(transformDoneFeed.post);
-          rememberFeedSource(latestFeedSourceByNodeId, transformDoneFeed.post);
-          feedRawAttachmentRef.current[feedAttachmentRawKey(transformDoneFeed.post.id, "markdown")] =
-            transformDoneFeed.rawAttachments.markdown;
-          feedRawAttachmentRef.current[feedAttachmentRawKey(transformDoneFeed.post.id, "json")] =
-            transformDoneFeed.rawAttachments.json;
-          lastDoneNodeId = nodeId;
-          terminalStateByNodeId[nodeId] = "done";
-          scheduleChildren(nodeId);
-          return;
-        }
-
-        const gateResult = executeGateNode({
-          node,
-          input,
-          skipSet,
-          graph,
-          simpleWorkflowUi: SIMPLE_WORKFLOW_UI,
-          addNodeLog,
-          validateSimpleSchema,
-        });
-        if (!gateResult.ok) {
-          const finishedAtIso = new Date().toISOString();
-          setNodeStatus(nodeId, "failed", gateResult.error ?? "분기 실패");
-          setNodeRuntimeFields(nodeId, {
-            status: "failed",
-            error: gateResult.error,
-            finishedAt: finishedAtIso,
-            durationMs: Date.now() - startedAtMs,
-          });
-          appendRunTransition(runRecord, nodeId, "failed", gateResult.error ?? "분기 실패");
-          const gateFailedEvidence = appendNodeEvidence({
-            node,
-            output: gateResult.output ?? { error: gateResult.error ?? "분기 실패", input },
-            provider: "gate",
-            summary: gateResult.error ?? "분기 실패",
-            createdAt: finishedAtIso,
-          });
-          const gateFailedFeed = buildFeedPost({
-            runId: runRecord.runId,
-            node,
-            status: "failed",
-            createdAt: finishedAtIso,
-            summary: gateResult.error ?? "분기 실패",
-            logs: runLogCollectorRef.current[nodeId] ?? [],
-            output: gateResult.output,
-            error: gateResult.error ?? "분기 실패",
-            durationMs: Date.now() - startedAtMs,
-            inputSources: nodeInputSources,
-            inputData: input,
-            verificationStatus: gateFailedEvidence.verificationStatus,
-            confidenceBand: gateFailedEvidence.confidenceBand,
-            dataIssues: gateFailedEvidence.dataIssues,
-          });
-          runRecord.feedPosts?.push(gateFailedFeed.post);
-          rememberFeedSource(latestFeedSourceByNodeId, gateFailedFeed.post);
-          feedRawAttachmentRef.current[feedAttachmentRawKey(gateFailedFeed.post.id, "markdown")] =
-            gateFailedFeed.rawAttachments.markdown;
-          feedRawAttachmentRef.current[feedAttachmentRawKey(gateFailedFeed.post.id, "json")] =
-            gateFailedFeed.rawAttachments.json;
-          terminalStateByNodeId[nodeId] = "failed";
-          scheduleChildren(nodeId);
-          return;
-        }
-
-        const finishedAtIso = new Date().toISOString();
-        outputs[nodeId] = gateResult.output;
-        setNodeRuntimeFields(nodeId, {
-          status: "done",
-          output: gateResult.output,
-          finishedAt: finishedAtIso,
-          durationMs: Date.now() - startedAtMs,
-        });
-        setNodeStatus(nodeId, "done", gateResult.message ?? "분기 완료");
-        appendRunTransition(runRecord, nodeId, "done", gateResult.message ?? "분기 완료");
-        const gateDoneEvidence = appendNodeEvidence({
-          node,
-          output: gateResult.output,
-          provider: "gate",
-          summary: gateResult.message ?? "분기 완료",
-          createdAt: finishedAtIso,
-        });
-        const gateDoneFeed = buildFeedPost({
-          runId: runRecord.runId,
-          node,
-          status: "done",
-          createdAt: finishedAtIso,
-          summary: gateResult.message ?? "분기 완료",
-          logs: runLogCollectorRef.current[nodeId] ?? [],
-          output: gateResult.output,
-          durationMs: Date.now() - startedAtMs,
-          inputSources: nodeInputSources,
-          inputData: input,
-          verificationStatus: gateDoneEvidence.verificationStatus,
-          confidenceBand: gateDoneEvidence.confidenceBand,
-          dataIssues: gateDoneEvidence.dataIssues,
-        });
-        runRecord.feedPosts?.push(gateDoneFeed.post);
-        rememberFeedSource(latestFeedSourceByNodeId, gateDoneFeed.post);
-        feedRawAttachmentRef.current[feedAttachmentRawKey(gateDoneFeed.post.id, "markdown")] =
-          gateDoneFeed.rawAttachments.markdown;
-        feedRawAttachmentRef.current[feedAttachmentRawKey(gateDoneFeed.post.id, "json")] =
-          gateDoneFeed.rawAttachments.json;
+      const getRunMemoryByNodeId = () => runMemoryByNodeId;
+      const setLastDoneNodeId = (nodeId: string) => {
         lastDoneNodeId = nodeId;
-        terminalStateByNodeId[nodeId] = "done";
-        scheduleChildren(nodeId);
       };
+      const processNode = createRunGraphProcessNode({
+        nodeMap,
+        graph,
+        workflowQuestion,
+        latestFeedSourceByNodeId,
+        turnRoleLabel,
+        nodeTypeLabel,
+        nodeSelectionLabel,
+        resolveFeedInputSourcesForNode,
+        buildNodeInputForNode,
+        adjacency,
+        pauseRequestedRef,
+        cancelRequestedRef,
+        skipSet,
+        incoming,
+        outputs,
+        normalizedEvidenceByNodeId,
+        getRunMemoryByNodeId,
+        buildFinalTurnInputPacket,
+        runRecord,
+        runLogCollectorRef,
+        buildFeedPost,
+        rememberFeedSource,
+        feedRawAttachmentRef,
+        feedAttachmentRawKey,
+        terminalStateByNodeId,
+        scheduleChildren,
+        appendRunTransition,
+        appendNodeEvidence,
+        setNodeStatus,
+        setNodeRuntimeFields,
+        t,
+        executeTurnNodeWithOutputSchemaRetry,
+        executeTurnNode,
+        addNodeLog,
+        validateSimpleSchema,
+        turnOutputSchemaEnabled: TURN_OUTPUT_SCHEMA_ENABLED,
+        turnOutputSchemaMaxRetry: TURN_OUTPUT_SCHEMA_MAX_RETRY,
+        isPauseSignalError,
+        queue,
+        buildQualityReport,
+        cwd,
+        executeTransformNode,
+        executeGateNode,
+        simpleWorkflowUi: SIMPLE_WORKFLOW_UI,
+        setLastDoneNodeId,
+      });
 
       while (queue.length > 0 || activeTasks.size > 0) {
         const pauseResult = await handleRunPauseIfNeeded(activeTasks, pauseStatusShown);
