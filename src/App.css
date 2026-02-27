@@ -2329,7 +2329,7 @@ h3 {
   gap: 12px;
   width: 100%;
   border-radius: 12px;
-  background: var(--surface-panel);
+  background: #ffffff;
   /* padding: 16px; */
   padding: 26px 16px 18px 16px;
   scrollbar-width: none;
