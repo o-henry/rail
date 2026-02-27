@@ -11,6 +11,8 @@ type SettingsPageProps = {
   modelOptions: readonly string[];
   codexMultiAgentMode: string;
   codexMultiAgentModeOptions: ReadonlyArray<{ value: string; label: string }>;
+  themeMode: string;
+  themeModeOptions: ReadonlyArray<{ value: string; label: string }>;
   status: string;
   usageInfoText: string;
   usageResultClosed: boolean;
@@ -20,6 +22,7 @@ type SettingsPageProps = {
   onSelectCwdDirectory: () => void;
   onSetModel: (next: string) => void;
   onSetCodexMultiAgentMode: (next: string) => void;
+  onSetThemeMode: (next: string) => void;
   onStartEngine: () => void;
   onStopEngine: () => void;
   onCheckUsage: () => void;
@@ -38,6 +41,8 @@ export default function SettingsPage({
   modelOptions,
   codexMultiAgentMode,
   codexMultiAgentModeOptions,
+  themeMode,
+  themeModeOptions,
   status,
   usageInfoText,
   usageResultClosed,
@@ -47,6 +52,7 @@ export default function SettingsPage({
   onSelectCwdDirectory,
   onSetModel,
   onSetCodexMultiAgentMode,
+  onSetThemeMode,
   onStartEngine,
   onStopEngine,
   onCheckUsage,
@@ -96,6 +102,16 @@ export default function SettingsPage({
           onChange={onSetCodexMultiAgentMode}
           options={[...codexMultiAgentModeOptions]}
           value={codexMultiAgentMode}
+        />
+      </label>
+      <label>
+        {t("settings.themeMode")}
+        <FancySelect
+          ariaLabel={t("settings.themeMode")}
+          className="modern-select"
+          onChange={onSetThemeMode}
+          options={[...themeModeOptions]}
+          value={themeMode}
         />
       </label>
       {!compact && (

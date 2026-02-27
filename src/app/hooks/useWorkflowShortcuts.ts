@@ -74,12 +74,14 @@ export function useWorkflowShortcuts(params: UseWorkflowShortcutsParams) {
       const key = event.key;
       let nextTab: WorkspaceTab | null = null;
       if (key === "1") {
-        nextTab = "workflow";
+        nextTab = "dashboard";
       } else if (key === "2") {
-        nextTab = "feed";
+        nextTab = "workflow";
       } else if (key === "3") {
-        nextTab = "bridge";
+        nextTab = "feed";
       } else if (key === "4") {
+        nextTab = "bridge";
+      } else if (key === "5") {
         nextTab = "settings";
       }
 
@@ -90,7 +92,9 @@ export function useWorkflowShortcuts(params: UseWorkflowShortcutsParams) {
       event.preventDefault();
       setWorkspaceTab(nextTab);
       setStatus(
-        nextTab === "workflow"
+        nextTab === "dashboard"
+          ? "대시보드 탭으로 이동"
+          : nextTab === "workflow"
           ? "워크플로우 탭으로 이동"
           : nextTab === "feed"
             ? "피드 탭으로 이동"

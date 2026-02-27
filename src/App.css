@@ -83,10 +83,31 @@
   color: #1b2229;
   background: #ffffff;
   --header-control-height: 34px;
-  --surface: #F6F6F6;
+  --surface: #f6f6f6;
   --surface-strong: #e7ebf1;
   --surface-soft: #f7f9fc;
+  --surface-panel: #ffffff;
+  --surface-active: rgba(212, 212, 212, 0.96);
+  --bg-app: #ffffff;
+  --text-main: #1b2229;
   --text-muted: #667180;
+  --text-danger: #9a2727;
+  --danger-bg: #fff2f2;
+}
+
+:root[data-theme="dark"] {
+  color: #e6edf3;
+  background: #0f141b;
+  --surface: #1b222c;
+  --surface-strong: #252f3a;
+  --surface-soft: #2b3643;
+  --surface-panel: #131a23;
+  --surface-active: #334154;
+  --bg-app: #0f141b;
+  --text-main: #e6edf3;
+  --text-muted: #a3b1c3;
+  --text-danger: #ff9a9a;
+  --danger-bg: #3b1d22;
 }
 
 html[data-locale="en"] {
@@ -138,6 +159,8 @@ body,
 
 body {
   margin: 0;
+  color: var(--text-main);
+  background: var(--bg-app);
 }
 
 button,
@@ -151,8 +174,8 @@ button {
   border: 0;
   border-radius: 5px;
   /* background: #e7ebf1; */
-  background: white;
-  color: #1c2328;
+  background: var(--surface-panel);
+  color: var(--text-main);
   padding: 8px 11px;
   cursor: pointer;
 }
@@ -173,7 +196,8 @@ select {
   border: 0;
   border-radius: 5px;
   /* background: #e7ebf1; */
-  color: #1d252c;
+  background: var(--surface-panel);
+  color: var(--text-main);
   padding: 8px 10px;
 }
 
@@ -230,7 +254,7 @@ h3 {
   /* grid-template-columns: 72px minmax(0, 1fr); */
   grid-template-columns: 64px minmax(0, 1fr);
   column-gap: 4px;
-  background: #ffffff;
+  background: var(--bg-app);
 }
 
 .app-shell.canvas-fullscreen-mode {
@@ -314,7 +338,7 @@ h3 {
 }
 
 .nav-list button.is-active {
-  background: rgba(212, 212, 212, 0.96);
+  background: var(--surface-active);
   /* background: var(--surface); */
   /* border: 1px solid rgba(194, 205, 222, 0.95); */
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72), 0 4px 10px rgba(16, 23, 31, 0.08);
@@ -428,8 +452,8 @@ h3 {
   margin: 12px;
   /* border: 1px solid #f0c2c2; */
   border-radius: 5px;
-  background: #fff2f2;
-  color: #9a2727;
+  background: var(--danger-bg);
+  color: var(--text-danger);
   padding: 10px 36px 10px 10px;
   font-size: 0.88rem;
   display: flex;
@@ -444,7 +468,7 @@ h3 {
 .error-close {
   border: 0;
   background: transparent;
-  color: #9a2727;
+  color: var(--text-danger);
   width: 22px;
   min-width: 22px;
   height: 22px;
@@ -494,7 +518,7 @@ h3 {
   height: 100%;
   margin: 0 10px 10px;
   display: grid;
-  background: white;
+  background: var(--surface-panel);
   grid-template-columns: minmax(0, 1fr) 300px;
   gap: 10px;
   overflow: hidden;
@@ -540,7 +564,7 @@ h3 {
   display: grid;
   grid-template-rows: auto auto;
   border-radius: 8px;
-  background: #ffffff;
+  background: var(--surface-panel);
   overflow: hidden;
 }
 
@@ -2120,7 +2144,7 @@ h3 {
   gap: 12px;
   width: 100%;
   border-radius: 12px;
-  background: #ffffff;
+  background: var(--surface-panel);
   /* padding: 16px; */
   padding: 26px 16px 18px 16px;
   scrollbar-width: none;
@@ -3739,6 +3763,82 @@ h3 {
   width: 0;
   height: 0;
   display: none;
+}
+
+.dashboard-layout {
+  margin: 0 10px 10px;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 12px;
+  overflow: auto;
+  padding-bottom: 16px;
+}
+
+.dashboard-hero {
+  gap: 6px;
+}
+
+.dashboard-hero h1 {
+  font-size: 1.35rem;
+}
+
+.dashboard-hero p {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.dashboard-grid {
+  min-height: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.dashboard-card {
+  gap: 8px;
+}
+
+.dashboard-card h2 {
+  font-size: 0.88rem;
+  color: var(--text-muted);
+}
+
+.dashboard-card strong {
+  font-size: 1.4rem;
+  letter-spacing: -0.02em;
+}
+
+.dashboard-card p {
+  font-size: 0.86rem;
+  color: var(--text-muted);
+  word-break: break-word;
+}
+
+.dashboard-footer {
+  gap: 12px;
+}
+
+.dashboard-last-batch {
+  display: grid;
+  gap: 4px;
+}
+
+.dashboard-last-batch span {
+  color: var(--text-muted);
+  font-size: 0.84rem;
+}
+
+.dashboard-actions {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.dashboard-actions button {
+  width: 100%;
+  border-radius: 8px;
+  background: var(--surface-soft);
 }
 
 .childview-view {

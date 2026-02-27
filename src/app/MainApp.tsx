@@ -8,6 +8,7 @@ import { invoke, listen, openUrl } from "../shared/tauri";
 import AppNav from "../components/AppNav";
 import BridgePage from "../pages/bridge/BridgePage";
 import FeedPage from "../pages/feed/FeedPage";
+import DashboardPage from "../pages/dashboard/DashboardPage";
 import SettingsPage from "../pages/settings/SettingsPage";
 import WorkflowPage from "../pages/workflow/WorkflowPage";
 import { useFloatingPanel } from "../features/ui/useFloatingPanel";
@@ -121,6 +122,11 @@ import {
   toOpenRunsFolderErrorMessage,
   toUsageCheckErrorMessage,
 } from "./mainAppUtils";
+import {
+  THEME_MODE_STORAGE_KEY,
+  loadPersistedThemeMode,
+  normalizeThemeMode,
+} from "./themeMode";
 import {
   GRAPH_SCHEMA_VERSION,
   KNOWLEDGE_DEFAULT_MAX_CHARS,
@@ -290,8 +296,10 @@ function App() {
   const defaultLoginCompleted = useMemo(() => loadPersistedLoginCompleted(), []);
   const defaultAuthMode = useMemo(() => loadPersistedAuthMode(), []);
   const defaultCodexMultiAgentMode = useMemo(() => loadPersistedCodexMultiAgentMode(), []);
+  const defaultThemeMode = useMemo(() => loadPersistedThemeMode(), []);
 
-  const [workspaceTab, setWorkspaceTab] = useState<WorkspaceTab>("workflow");
+  const [workspaceTab, setWorkspaceTab] = useState<WorkspaceTab>("dashboard");
+  const [themeMode, setThemeMode] = useState(defaultThemeMode);
   const [pendingWebConnectCheck, setPendingWebConnectCheck] = useState<{
     providers: WebProvider[];
     reason: string;
@@ -1189,6 +1197,8 @@ function App() {
     authModeStorageKey: AUTH_MODE_STORAGE_KEY,
     codexMultiAgentMode,
     codexMultiAgentModeStorageKey: CODEX_MULTI_AGENT_MODE_STORAGE_KEY,
+    themeMode,
+    themeStorageKey: THEME_MODE_STORAGE_KEY,
     syncQuestionInputHeight,
     workflowQuestion,
     syncCanvasLogicalViewport,
@@ -1482,6 +1492,13 @@ function App() {
   const artifactTypeOptions = useMemo(() => getArtifactTypeOptions(locale), [locale]);
   const costPresetOptions = useMemo(() => getCostPresetOptions(locale), [locale]);
   const codexMultiAgentModeOptions = useMemo(() => getCodexMultiAgentModeOptions(locale), [locale]);
+  const themeModeOptions = useMemo(
+    () => [
+      { value: "light", label: t("settings.theme.light") },
+      { value: "dark", label: t("settings.theme.dark") },
+    ],
+    [t],
+  );
   const presetTemplateOptions = useMemo(() => getPresetTemplateOptions(locale), [locale]);
   const knowledgeTopKOptions = useMemo(
     () => KNOWLEDGE_TOP_K_OPTIONS.map((option) => ({ ...option, label: tp(option.label) })),
@@ -1735,6 +1752,11 @@ function App() {
     setFeedInspectorPostId,
     setNodeSelection,
   });
+  const batchRunHistory = batchScheduler.batchRunHistoryRef.current;
+  const latestBatchRun = batchRunHistory[batchRunHistory.length - 1];
+  const lastBatchSummary = latestBatchRun
+    ? `${latestBatchRun.status.toUpperCase()} · ${new Date(latestBatchRun.startedAt).toLocaleString(locale)}`
+    : t("dashboard.value.none");
   return (
     <main className={`app-shell ${canvasFullscreen ? "canvas-fullscreen-mode" : ""}`}>
       <AppNav
@@ -1843,6 +1865,22 @@ function App() {
             />
           </WorkflowPage>
         )}
+        {workspaceTab === "dashboard" && (
+          <DashboardPage
+            connectedProviderCount={webBridgeStatus.connectedProviders.length}
+            cwd={cwd}
+            enabledScheduleCount={batchScheduler.schedules.filter((item) => item.status === "enabled").length}
+            isGraphRunning={isGraphRunning}
+            lastBatchSummary={lastBatchSummary}
+            onOpenBridge={() => setWorkspaceTab("bridge")}
+            onOpenFeed={() => setWorkspaceTab("feed")}
+            onOpenSettings={() => setWorkspaceTab("settings")}
+            onOpenWorkflow={() => setWorkspaceTab("workflow")}
+            pendingApprovalsCount={pendingApprovals.length}
+            scheduleCount={batchScheduler.schedules.length}
+            webBridgeRunning={webBridgeStatus.running}
+          />
+        )}
 
         {workspaceTab === "feed" && (
           <FeedPage vm={feedPageVm} />
@@ -1862,12 +1900,15 @@ function App() {
               modelOptions={TURN_MODEL_OPTIONS}
               codexMultiAgentMode={codexMultiAgentMode}
               codexMultiAgentModeOptions={[...codexMultiAgentModeOptions]}
+              themeMode={themeMode}
+              themeModeOptions={[...themeModeOptions]}
               onCheckUsage={() => void onCheckUsage()}
               onCloseUsageResult={() => setUsageResultClosed(true)}
               onOpenRunsFolder={() => void onOpenRunsFolder()}
               onSelectCwdDirectory={() => void onSelectCwdDirectory()}
               onSetModel={setModel}
               onSetCodexMultiAgentMode={(next) => setCodexMultiAgentMode(normalizeCodexMultiAgentMode(next))}
+              onSetThemeMode={(next) => setThemeMode(normalizeThemeMode(next))}
               onStartEngine={() => void onStartEngine()}
               onStopEngine={() => void onStopEngine()}
               onToggleCodexLogin={() => void onLoginCodex()}
