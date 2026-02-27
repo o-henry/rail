@@ -1,7 +1,39 @@
 import { extractFinalAnswer } from "../../features/workflow/labels";
+import type { Dispatch, MutableRefObject, SetStateAction } from "react";
 import type { TurnExecutor } from "../../features/workflow/domain";
 import type { GraphNode } from "../../features/workflow/types";
 import type { FeedPost, RunRecord } from "./types";
+
+export function cancelFeedReplyFeedbackClearTimer(
+  postId: string,
+  timerRef: MutableRefObject<Record<string, ReturnType<typeof window.setTimeout>>>,
+) {
+  const existingClearTimer = timerRef.current[postId];
+  if (existingClearTimer) {
+    window.clearTimeout(existingClearTimer);
+    delete timerRef.current[postId];
+  }
+}
+
+export function scheduleFeedReplyFeedbackAutoClear(params: {
+  postId: string;
+  timerRef: MutableRefObject<Record<string, ReturnType<typeof window.setTimeout>>>;
+  setFeedReplyFeedbackByPost: Dispatch<SetStateAction<Record<string, string>>>;
+  delayMs?: number;
+}) {
+  const timerId = window.setTimeout(() => {
+    params.setFeedReplyFeedbackByPost((prev) => {
+      if (!(params.postId in prev)) {
+        return prev;
+      }
+      const next = { ...prev };
+      delete next[params.postId];
+      return next;
+    });
+    delete params.timerRef.current[params.postId];
+  }, params.delayMs ?? 10_000);
+  params.timerRef.current[params.postId] = timerId;
+}
 
 export async function resolveTurnNodeForFollowup(params: {
   graphNodes: GraphNode[];

@@ -221,7 +221,9 @@ import {
   buildFollowupDoneRunRecord,
   buildFollowupFailedRunRecord,
   buildFollowupInputText,
+  cancelFeedReplyFeedbackClearTimer,
   resolveTurnNodeForFollowup,
+  scheduleFeedReplyFeedbackAutoClear,
 } from "./main/feedFollowupUtils";
 import {
   PAUSE_ERROR_TOKEN,
@@ -1276,11 +1278,7 @@ function App() {
     if (!postId || feedReplySubmittingByPost[postId]) {
       return;
     }
-    const existingClearTimer = feedReplyFeedbackClearTimerRef.current[postId];
-    if (existingClearTimer) {
-      window.clearTimeout(existingClearTimer);
-      delete feedReplyFeedbackClearTimerRef.current[postId];
-    }
+    cancelFeedReplyFeedbackClearTimer(postId, feedReplyFeedbackClearTimerRef);
     setFeedReplySubmittingByPost((prev) => ({ ...prev, [postId]: true }));
     setFeedReplyFeedbackByPost((prev) => ({ ...prev, [postId]: t("feed.followup.sending") }));
     let replyFeedbackText = "";
@@ -1514,18 +1512,11 @@ function App() {
           [postId]: replyFeedbackText,
         }));
         if (shouldAutoClearReplyFeedback) {
-          const timerId = window.setTimeout(() => {
-            setFeedReplyFeedbackByPost((prev) => {
-              if (!(postId in prev)) {
-                return prev;
-              }
-              const next = { ...prev };
-              delete next[postId];
-              return next;
-            });
-            delete feedReplyFeedbackClearTimerRef.current[postId];
-          }, 10_000);
-          feedReplyFeedbackClearTimerRef.current[postId] = timerId;
+          scheduleFeedReplyFeedbackAutoClear({
+            postId,
+            timerRef: feedReplyFeedbackClearTimerRef,
+            setFeedReplyFeedbackByPost,
+          });
         }
       }
     }
