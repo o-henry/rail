@@ -15,12 +15,17 @@
 - Keep graph contracts (`GraphNode`, `GraphEdge`, run status, artifacts) in dedicated type modules.
 - Avoid adding unrelated logic to `MainApp.tsx`; prefer hooks/services.
 - Route all mutations through explicit domain functions, not ad-hoc UI state edits.
+- `src/app/main/runtime` must not depend on `src/app/main/presentation`.
+- `src/features/orchestration` must not depend on `src/app/*` (domain -> app forbidden).
+- Keep `src/app/main/{runtime,canvas,presentation}` boundaries explicit when adding modules.
 
 ## Anti-Mud Guardrails
 - TS/TSX soft limit: 300 lines
 - TS/TSX hard limit: 500 lines
 - No circular imports
 - No god files handling canvas input + execution engine + persistence together
+- Temporary line-limit allowlist entries must include expiry date and reason.
+- Guardrail checks must pass via `npm run check` (`check:arch + check:cycles + build + test`).
 
 ## Refactor Rules For Large Files
 - If a file exceeds 500 lines, split by responsibility before adding major features.

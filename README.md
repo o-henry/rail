@@ -332,11 +332,17 @@ bash scripts/secret_scan.sh --all
 npm run check:arch
 ```
 
+```bash
+npm run check:cycles
+```
+
 검사 항목:
 - `src/main.tsx` 엔트리포인트 규칙
-- 파일 라인수 제한(예외 목록 제외)
+- 파일 라인수 soft/hard 제한(300/500) + 임시 allowlist 만료일 검사
 - 레이어 의존 방향
 - cross-slice import 제한
+- `app/main` 하위 경계(`runtime -> presentation` 금지)
+- 순환 import 탐지
 
 ---
 
@@ -371,7 +377,9 @@ npm run check:arch
 - `npm run tauri:dev:global` : 글로벌 `~/.codex` 홈으로 Tauri 개발 실행(필요 시)
 - `npm run build` : 타입체크 + 번들
 - `npm run check:arch` : 아키텍처 규칙 검사
-- `npm run check` : 아키텍처 + 빌드 통합 검사
+- `npm run check:cycles` : 순환 의존 검사
+- `npm run test` : Vitest 테스트 실행
+- `npm run check` : 아키텍처 + 순환 + 빌드 + 테스트 통합 검사
 
 참고:
 - 기본 런타임은 Codex 홈을 분리(`isolated`)해 VSCode Codex 기록과 섞이지 않도록 동작합니다.

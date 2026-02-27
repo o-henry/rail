@@ -15,17 +15,43 @@ const LAYER_RANK = {
   app: 5,
 };
 
-const MAX_LINES_TS = 500;
-const MAX_LINES_TSX = 400;
-const MAX_LINES_MAIN = 80;
+const FILE_SOFT_LIMIT = 300;
+const FILE_HARD_LIMIT = 500;
+const MAIN_FILE_LIMIT = 80;
 
-// Transitional allowlist: block new regressions while refactor is in progress.
-const LEGACY_LINE_EXCEPTIONS = new Set([
-  "src/app/MainApp.tsx",
-  "src/pages/feed/FeedPage.tsx",
-  "src/app/mainAppUtils.ts",
-  "src/app/mainAppRuntimeHelpers.ts",
-  "src/app/mainAppGraphHelpers.tsx",
+const TEMP_LINE_ALLOWLIST = new Map([
+  [
+    "src/app/MainApp.tsx",
+    {
+      maxLines: 2200,
+      expiresOn: "2026-06-30",
+      reason: "Main app controller split in progress",
+    },
+  ],
+  [
+    "src/app/mainAppRuntimeHelpers.ts",
+    {
+      maxLines: 1900,
+      expiresOn: "2026-05-31",
+      reason: "Runtime helper migration to feature modules",
+    },
+  ],
+  [
+    "src/app/mainAppUtils.ts",
+    {
+      maxLines: 900,
+      expiresOn: "2026-04-30",
+      reason: "Shared utility split in progress",
+    },
+  ],
+  [
+    "src/pages/feed/FeedPage.tsx",
+    {
+      maxLines: 980,
+      expiresOn: "2026-05-31",
+      reason: "Feed page decomposition in progress",
+    },
+  ],
 ]);
 
 const LEGACY_IMPORT_EXCEPTIONS = new Set([
@@ -61,14 +87,25 @@ function parseLayerInfo(fileRel) {
   return { layer, slice, parts };
 }
 
+function parseMainPartition(fileRel) {
+  const parts = fileRel.split("/");
+  if (parts[0] !== "src" || parts[1] !== "app" || parts[2] !== "main") {
+    return null;
+  }
+  const partition = parts[3] ?? "root";
+  if (!["root", "runtime", "canvas", "presentation"].includes(partition)) {
+    return "root";
+  }
+  return partition;
+}
+
 function resolveImport(fileRel, spec) {
   if (spec.startsWith("@/")) {
     return `src/${spec.slice(2)}`;
   }
   if (spec.startsWith("./") || spec.startsWith("../")) {
     const base = path.dirname(fileRel);
-    const abs = path.normalize(path.join(base, spec)).replace(/\\/g, "/");
-    return abs;
+    return path.normalize(path.join(base, spec)).replace(/\\/g, "/");
   }
   return null;
 }
@@ -78,7 +115,13 @@ function extractImports(content) {
   return Array.from(matches, (m) => m[1]);
 }
 
+function isAllowlistExpired(expiresOn) {
+  const expiry = new Date(`${expiresOn}T23:59:59.999Z`);
+  return Number.isNaN(expiry.getTime()) ? true : Date.now() > expiry.getTime();
+}
+
 const errors = [];
+const warnings = [];
 
 const files = walk(SRC_DIR);
 
@@ -88,8 +131,8 @@ for (const file of files) {
   const lineCount = content.split("\n").length;
 
   if (fileRel === "src/main.tsx") {
-    if (lineCount > MAX_LINES_MAIN) {
-      errors.push(`${fileRel}: line count ${lineCount} > ${MAX_LINES_MAIN}`);
+    if (lineCount > MAIN_FILE_LIMIT) {
+      errors.push(`${fileRel}: line count ${lineCount} > ${MAIN_FILE_LIMIT}`);
     }
     const disallowed = /(invoke\(|listen\(|function\s+|useState\(|useEffect\(|const\s+[A-Z][A-Za-z0-9_]*\s*=\s*\()/;
     if (disallowed.test(content)) {
@@ -97,9 +140,27 @@ for (const file of files) {
     }
   }
 
-  const limit = fileRel.endsWith(".tsx") ? MAX_LINES_TSX : MAX_LINES_TS;
-  if (lineCount > limit && !LEGACY_LINE_EXCEPTIONS.has(fileRel)) {
-    errors.push(`${fileRel}: line count ${lineCount} > ${limit}`);
+  const allow = TEMP_LINE_ALLOWLIST.get(fileRel);
+  if (allow && isAllowlistExpired(allow.expiresOn)) {
+    errors.push(
+      `${fileRel}: temporary line allowlist expired on ${allow.expiresOn} (${allow.reason})`,
+    );
+  }
+
+  if (lineCount > FILE_HARD_LIMIT) {
+    if (!allow) {
+      errors.push(`${fileRel}: line count ${lineCount} > hard limit ${FILE_HARD_LIMIT}`);
+    } else if (lineCount > allow.maxLines) {
+      errors.push(
+        `${fileRel}: line count ${lineCount} > allowlist max ${allow.maxLines} (expires ${allow.expiresOn})`,
+      );
+    } else {
+      warnings.push(
+        `${fileRel}: temporary allowlist active (${lineCount} lines, max ${allow.maxLines}, expires ${allow.expiresOn})`,
+      );
+    }
+  } else if (lineCount > FILE_SOFT_LIMIT) {
+    warnings.push(`${fileRel}: line count ${lineCount} > soft limit ${FILE_SOFT_LIMIT}`);
   }
 
   const importer = parseLayerInfo(fileRel);
@@ -132,14 +193,33 @@ for (const file of files) {
       errors.push(`${fileRel}: cross-slice import within ${importer.layer} is not allowed (${spec})`);
     }
 
-    // Public API import rule (alias path): allow only layer/slice root imports.
     if (spec.startsWith("@/") && target.slice) {
       const specParts = spec.slice(2).split("/");
       if (specParts.length > 2 && specParts[2] !== "index.ts" && specParts[2] !== "index.tsx") {
         errors.push(`${fileRel}: deep import blocked by public API rule (${spec})`);
       }
     }
+
+    const importerPartition = parseMainPartition(fileRel);
+    const targetPartition = parseMainPartition(resolved);
+    if (importerPartition && targetPartition) {
+      if (importerPartition === "runtime" && targetPartition === "presentation") {
+        errors.push(`${fileRel}: app/main/runtime must not depend on presentation (${spec})`);
+      }
+    }
+
+    if (importer.layer === "features" && importer.slice === "orchestration" && target.layer === "app") {
+      errors.push(`${fileRel}: features/orchestration must not depend on app layer (${spec})`);
+    }
   }
+}
+
+if (warnings.length > 0) {
+  console.warn("Architecture warnings:\n");
+  for (const warning of warnings) {
+    console.warn(`- ${warning}`);
+  }
+  console.warn("");
 }
 
 if (errors.length > 0) {

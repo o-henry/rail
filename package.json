@@ -8,7 +8,9 @@
     "dev:isolated": "RAIL_CODEX_HOME_MODE=isolated vite",
     "build": "tsc && vite build",
     "check:arch": "node scripts/check-architecture.mjs",
-    "check": "npm run check:arch && npm run build",
+    "check:cycles": "node scripts/check-cycles.mjs",
+    "test": "vitest run --passWithNoTests",
+    "check": "npm run check:arch && npm run check:cycles && npm run build && npm run test",
     "preview": "vite preview",
     "tauri": "tauri",
     "tauri:dev": "npm run tauri:dev:isolated",
@@ -28,6 +30,7 @@
     "@types/react-dom": "^19.1.6",
     "@vitejs/plugin-react": "^4.6.0",
     "typescript": "~5.8.3",
-    "vite": "^7.0.4"
+    "vite": "^7.0.4",
+    "vitest": "^4.0.18"
   }
 }
