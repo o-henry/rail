@@ -1,7 +1,5 @@
 import {
-  KeyboardEvent as ReactKeyboardEvent,
   MouseEvent as ReactMouseEvent,
-  WheelEvent as ReactWheelEvent,
   useEffect,
   useMemo,
   useRef,
@@ -230,6 +228,7 @@ import {
 } from "./main/webTurnQueueActions";
 import { createWebInteractionHandlers } from "./main/webInteractionHandlers";
 import { createEngineBridgeHandlers } from "./main/engineBridgeHandlers";
+import { createCanvasDragZoomHandlers } from "./main/canvasDragZoomHandlers";
 import {
   PAUSE_ERROR_TOKEN,
   appendRunTransition,
@@ -2090,461 +2089,69 @@ function App() {
     return changed;
   }
 
-  function zoomAtClientPoint(nextZoom: number, clientX: number, clientY: number) {
-    const canvas = graphCanvasRef.current;
-    if (!canvas) {
-      setCanvasZoom(nextZoom);
-      return;
-    }
-
-    const rect = canvas.getBoundingClientRect();
-    const stageOffsetX = GRAPH_STAGE_INSET_X;
-    const stageOffsetY = GRAPH_STAGE_INSET_Y;
-    const pointerX = clientX - rect.left + canvas.scrollLeft;
-    const pointerY = clientY - rect.top + canvas.scrollTop;
-    const logicalX = (pointerX - stageOffsetX) / canvasZoom;
-    const logicalY = (pointerY - stageOffsetY) / canvasZoom;
-
-    setCanvasZoom(nextZoom);
-    requestAnimationFrame(() => {
-      const currentCanvas = graphCanvasRef.current;
-      if (!currentCanvas) {
-        return;
-      }
-      currentCanvas.scrollLeft = logicalX * nextZoom + stageOffsetX - (clientX - rect.left);
-      currentCanvas.scrollTop = logicalY * nextZoom + stageOffsetY - (clientY - rect.top);
-    });
-  }
-
-  function applyDragPosition(clientX: number, clientY: number) {
-    if (!dragRef.current) {
-      return;
-    }
-    const logicalPoint = clientToLogicalPoint(clientX, clientY);
-    if (!logicalPoint) {
-      return;
-    }
-
-    const { nodeIds, pointerStart, startPositions } = dragRef.current;
-    if (nodeIds.length === 0) {
-      return;
-    }
-    const dx = logicalPoint.x - pointerStart.x;
-    const dy = logicalPoint.y - pointerStart.y;
-    const minX = -NODE_DRAG_MARGIN;
-    const minY = (24 - GRAPH_STAGE_INSET_Y) / canvasZoom;
-    const nodeIdSet = new Set(nodeIds);
-    const dragSingleNode = nodeIds.length === 1;
-
-    setGraph((prev) => ({
-      ...prev,
-      nodes: (() => {
-        const stationaryNodes = prev.nodes.filter((node) => !nodeIdSet.has(node.id));
-        return prev.nodes.map((node) => {
-        if (!nodeIdSet.has(node.id)) {
-          return node;
-        }
-        const start = startPositions[node.id];
-        if (!start) {
-          return node;
-        }
-        const size = getNodeVisualSize(node.id);
-        const maxX = Math.max(minX, boundedStageWidth - size.width + NODE_DRAG_MARGIN);
-        const maxY = Math.max(minY, boundedStageHeight - size.height + NODE_DRAG_MARGIN);
-        const nextX = start.x + dx;
-        const nextY = start.y + dy;
-        let snappedX = snapToLayoutGrid(nextX, "x", AUTO_LAYOUT_DRAG_SNAP_THRESHOLD);
-        let snappedY = snapToLayoutGrid(nextY, "y", AUTO_LAYOUT_DRAG_SNAP_THRESHOLD);
-        if (dragSingleNode) {
-          snappedX = snapToNearbyNodeAxis(snappedX, "x", stationaryNodes, AUTO_LAYOUT_NODE_AXIS_SNAP_THRESHOLD);
-          snappedY = snapToNearbyNodeAxis(snappedY, "y", stationaryNodes, AUTO_LAYOUT_NODE_AXIS_SNAP_THRESHOLD);
-        }
-        return {
-          ...node,
-          position: {
-            x: Math.min(maxX, Math.max(minX, snappedX)),
-            y: Math.min(maxY, Math.max(minY, snappedY)),
-          },
-        };
-      });
-      })(),
-    }));
-  }
-
-  function ensureDragAutoPanLoop() {
-    if (dragAutoPanFrameRef.current != null) {
-      return;
-    }
-
-    const tick = () => {
-      if (!dragRef.current) {
-        dragAutoPanFrameRef.current = null;
-        return;
-      }
-
-      const pointer = dragPointerRef.current;
-      const canvas = graphCanvasRef.current;
-      if (pointer && canvas) {
-        const rect = canvas.getBoundingClientRect();
-        const edge = 30;
-        const maxSpeed = 14;
-        let dx = 0;
-        let dy = 0;
-
-        if (pointer.clientX < rect.left + edge) {
-          dx = -Math.ceil(((rect.left + edge - pointer.clientX) / edge) * maxSpeed);
-        } else if (pointer.clientX > rect.right - edge) {
-          dx = Math.ceil(((pointer.clientX - (rect.right - edge)) / edge) * maxSpeed);
-        }
-        if (pointer.clientY < rect.top + edge) {
-          dy = -Math.ceil(((rect.top + edge - pointer.clientY) / edge) * maxSpeed);
-        } else if (pointer.clientY > rect.bottom - edge) {
-          dy = Math.ceil(((pointer.clientY - (rect.bottom - edge)) / edge) * maxSpeed);
-        }
-
-        if (dx !== 0 || dy !== 0) {
-          const maxLeft = Math.max(0, canvas.scrollWidth - canvas.clientWidth);
-          const maxTop = Math.max(0, canvas.scrollHeight - canvas.clientHeight);
-          canvas.scrollLeft = Math.max(0, Math.min(maxLeft, canvas.scrollLeft + dx));
-          canvas.scrollTop = Math.max(0, Math.min(maxTop, canvas.scrollTop + dy));
-          applyDragPosition(pointer.clientX, pointer.clientY);
-        }
-      }
-
-      dragAutoPanFrameRef.current = requestAnimationFrame(tick);
-    };
-
-    dragAutoPanFrameRef.current = requestAnimationFrame(tick);
-  }
-
-  function onNodeDragStart(e: ReactMouseEvent<HTMLDivElement>, nodeId: string) {
-    if (panMode) {
-      return;
-    }
-    e.preventDefault();
-    e.stopPropagation();
-
-    const node = canvasNodes.find((item) => item.id === nodeId);
-    if (!node) {
-      return;
-    }
-
-    const canvasPoint = clientToLogicalPoint(e.clientX, e.clientY);
-    if (!canvasPoint) {
-      return;
-    }
-
-    const activeNodeIds = selectedNodeIds.includes(nodeId) ? selectedNodeIds : [nodeId];
-    if (!selectedNodeIds.includes(nodeId)) {
-      setNodeSelection([nodeId], nodeId);
-    }
-    const startPositions = Object.fromEntries(
-      canvasNodes
-        .filter((item) => activeNodeIds.includes(item.id))
-        .map((item) => [item.id, { x: item.position.x, y: item.position.y }]),
-    );
-    if (Object.keys(startPositions).length === 0) {
-      return;
-    }
-
-    dragStartSnapshotRef.current = cloneGraph(graph);
-    setDraggingNodeIds(activeNodeIds);
-    setMarqueeSelection(null);
-    dragPointerRef.current = { clientX: e.clientX, clientY: e.clientY };
-    ensureDragAutoPanLoop();
-    if (!dragWindowMoveHandlerRef.current) {
-      dragWindowMoveHandlerRef.current = (event: MouseEvent) => {
-        if (!dragRef.current) {
-          return;
-        }
-        dragPointerRef.current = { clientX: event.clientX, clientY: event.clientY };
-        applyDragPosition(event.clientX, event.clientY);
-      };
-      window.addEventListener("mousemove", dragWindowMoveHandlerRef.current);
-    }
-    if (!dragWindowUpHandlerRef.current) {
-      dragWindowUpHandlerRef.current = () => {
-        onCanvasMouseUp();
-      };
-      window.addEventListener("mouseup", dragWindowUpHandlerRef.current);
-    }
-
-    dragRef.current = {
-      nodeIds: activeNodeIds,
-      pointerStart: canvasPoint,
-      startPositions,
-    };
-  }
-
-  function onCanvasMouseMove(e: ReactMouseEvent<HTMLDivElement>) {
-    if (panRef.current) {
-      const canvas = graphCanvasRef.current;
-      if (canvas) {
-        canvas.scrollLeft = panRef.current.scrollLeft - (e.clientX - panRef.current.startX);
-        canvas.scrollTop = panRef.current.scrollTop - (e.clientY - panRef.current.startY);
-      }
-      return;
-    }
-
-    if (isConnectingDrag && connectFromNodeId) {
-      const point = clientToLogicalPoint(e.clientX, e.clientY);
-      if (point) {
-        snapConnectPreviewPoint(point);
-      }
-      return;
-    }
-
-    if (marqueeSelection) {
-      const point = clientToLogicalPoint(e.clientX, e.clientY);
-      if (point) {
-        setMarqueeSelection((prev) => (prev ? { ...prev, current: point } : prev));
-      }
-      return;
-    }
-
-    if (!dragRef.current) {
-      return;
-    }
-
-    dragPointerRef.current = { clientX: e.clientX, clientY: e.clientY };
-    applyDragPosition(e.clientX, e.clientY);
-  }
-
-  function onCanvasMouseUp(event?: { clientX: number; clientY: number }) {
-    panRef.current = null;
-    const edgeReconnectState = edgeDragRef.current;
-
-    if (isConnectingDrag) {
-      const pointerPoint =
-        event && Number.isFinite(event.clientX) && Number.isFinite(event.clientY)
-          ? clientToLogicalPoint(event.clientX, event.clientY)
-          : null;
-      const dropPoint = pointerPoint ?? connectPreviewPoint;
-      const dropTarget = dropPoint ? resolveConnectDropTarget(dropPoint) : null;
-      if (dropTarget && connectFromNodeId && connectFromNodeId !== dropTarget.nodeId) {
-        if (edgeReconnectState) {
-          reconnectSelectedEdgeEndpoint(edgeReconnectState, dropTarget.nodeId, dropTarget.side);
-        } else {
-          onNodeConnectDrop(dropTarget.nodeId, dropTarget.side);
-        }
-      } else {
-        setIsConnectingDrag(false);
-        setConnectPreviewStartPoint(null);
-        setConnectPreviewPoint(null);
-        setConnectFromNodeId("");
-        setConnectFromSide(null);
-      }
-    }
-    edgeDragRef.current = null;
-    edgeDragStartSnapshotRef.current = null;
-
-    if (marqueeSelection) {
-      const minX = Math.min(marqueeSelection.start.x, marqueeSelection.current.x);
-      const maxX = Math.max(marqueeSelection.start.x, marqueeSelection.current.x);
-      const minY = Math.min(marqueeSelection.start.y, marqueeSelection.current.y);
-      const maxY = Math.max(marqueeSelection.start.y, marqueeSelection.current.y);
-      const selectedByBox = canvasNodes
-        .filter((node) => {
-          const size = getNodeVisualSize(node.id);
-          const nodeLeft = node.position.x;
-          const nodeTop = node.position.y;
-          const nodeRight = node.position.x + size.width;
-          const nodeBottom = node.position.y + size.height;
-          return !(nodeRight < minX || nodeLeft > maxX || nodeBottom < minY || nodeTop > maxY);
-        })
-        .map((node) => node.id);
-      const nextSelected = marqueeSelection.append
-        ? Array.from(new Set([...selectedNodeIds, ...selectedByBox]))
-        : selectedByBox;
-      setNodeSelection(nextSelected, nextSelected[nextSelected.length - 1]);
-      setMarqueeSelection(null);
-      setSelectedEdgeKey("");
-    }
-
-    dragPointerRef.current = null;
-    if (dragAutoPanFrameRef.current != null) {
-      cancelAnimationFrame(dragAutoPanFrameRef.current);
-      dragAutoPanFrameRef.current = null;
-    }
-    if (dragWindowMoveHandlerRef.current) {
-      window.removeEventListener("mousemove", dragWindowMoveHandlerRef.current);
-      dragWindowMoveHandlerRef.current = null;
-    }
-    if (dragWindowUpHandlerRef.current) {
-      window.removeEventListener("mouseup", dragWindowUpHandlerRef.current);
-      dragWindowUpHandlerRef.current = null;
-    }
-    const dragSnapshot = dragStartSnapshotRef.current;
-    if (dragSnapshot && !graphEquals(dragSnapshot, graph)) {
-      setUndoStack((stack) => [...stack.slice(-79), cloneGraph(dragSnapshot)]);
-      setRedoStack([]);
-    }
-    const dragNodeIds = dragRef.current?.nodeIds ?? [];
-    dragStartSnapshotRef.current = null;
-    dragRef.current = null;
-    setDraggingNodeIds([]);
-    if (dragNodeIds.length > 0) {
-      const draggedNodeIdSet = new Set(dragNodeIds);
-      const dragSingleNode = dragNodeIds.length === 1;
-      setGraph((prev) => ({
-        ...prev,
-        nodes: (() => {
-          const stationaryNodes = prev.nodes.filter((node) => !draggedNodeIdSet.has(node.id));
-          return prev.nodes.map((node) => {
-          if (!draggedNodeIdSet.has(node.id)) {
-            return node;
-          }
-          const size = getNodeVisualSize(node.id);
-          const minX = -NODE_DRAG_MARGIN;
-          const minY = (24 - GRAPH_STAGE_INSET_Y) / canvasZoom;
-          const maxX = Math.max(minX, boundedStageWidth - size.width + NODE_DRAG_MARGIN);
-          const maxY = Math.max(minY, boundedStageHeight - size.height + NODE_DRAG_MARGIN);
-          let snappedX = snapToLayoutGrid(node.position.x, "x", AUTO_LAYOUT_SNAP_THRESHOLD);
-          let snappedY = snapToLayoutGrid(node.position.y, "y", AUTO_LAYOUT_SNAP_THRESHOLD);
-          if (dragSingleNode) {
-            snappedX = snapToNearbyNodeAxis(snappedX, "x", stationaryNodes, AUTO_LAYOUT_NODE_AXIS_SNAP_THRESHOLD);
-            snappedY = snapToNearbyNodeAxis(snappedY, "y", stationaryNodes, AUTO_LAYOUT_NODE_AXIS_SNAP_THRESHOLD);
-          }
-          return {
-            ...node,
-            position: {
-              x: Math.min(maxX, Math.max(minX, snappedX)),
-              y: Math.min(maxY, Math.max(minY, snappedY)),
-            },
-          };
-        });
-        })(),
-      }));
-    }
-  }
-
-  function onCanvasMouseDown(e: ReactMouseEvent<HTMLDivElement>) {
-    const target = e.target as HTMLElement;
-    const clickedNodeOrPorts = target.closest(".graph-node, .node-anchors");
-    const clickedEdge = target.closest(".edge-path, .edge-path-hit");
-    const clickedOverlay = target.closest(".canvas-overlay");
-    const clickedControl = target.closest(".canvas-zoom-controls, .canvas-runbar");
-
-    if (!clickedNodeOrPorts && !clickedEdge && !clickedOverlay) {
-      if (!e.shiftKey) {
-        setNodeSelection([]);
-      }
-      setSelectedEdgeKey("");
-    }
-
-    if (!panMode) {
-      if (e.button !== 0 || clickedControl || clickedOverlay || clickedNodeOrPorts || clickedEdge) {
-        return;
-      }
-      const point = clientToLogicalPoint(e.clientX, e.clientY);
-      if (!point) {
-        return;
-      }
-      e.preventDefault();
-      setMarqueeSelection({
-        start: point,
-        current: point,
-        append: e.shiftKey,
-      });
-      return;
-    }
-    const canvas = graphCanvasRef.current;
-    if (!canvas) {
-      return;
-    }
-    if (clickedControl) {
-      return;
-    }
-    if (clickedEdge) {
-      return;
-    }
-    e.preventDefault();
-    panRef.current = {
-      startX: e.clientX,
-      startY: e.clientY,
-      scrollLeft: canvas.scrollLeft,
-      scrollTop: canvas.scrollTop,
-    };
-  }
-
-  function onCanvasWheel(e: ReactWheelEvent<HTMLDivElement>) {
-    if (!(e.ctrlKey || e.metaKey)) {
-      return;
-    }
-    e.preventDefault();
-    const ratio = e.deltaY < 0 ? 1.08 : 0.92;
-    const nextZoom = clampCanvasZoom(canvasZoom * ratio);
-    if (nextZoom === canvasZoom) {
-      return;
-    }
-    zoomAtClientPoint(nextZoom, e.clientX, e.clientY);
-    scheduleZoomStatus(nextZoom);
-  }
-
-  function zoomAtCanvasCenter(nextZoom: number) {
-    const canvas = graphCanvasRef.current;
-    if (!canvas) {
-      setCanvasZoom(nextZoom);
-      return;
-    }
-    const rect = canvas.getBoundingClientRect();
-    zoomAtClientPoint(nextZoom, rect.left + rect.width / 2, rect.top + rect.height / 2);
-  }
-
-  function onCanvasZoomIn() {
-    const nextZoom = clampCanvasZoom(canvasZoom * 1.08);
-    if (nextZoom === canvasZoom) {
-      return;
-    }
-    zoomAtCanvasCenter(nextZoom);
-    scheduleZoomStatus(nextZoom);
-  }
-
-  function onCanvasZoomOut() {
-    const nextZoom = clampCanvasZoom(canvasZoom * 0.92);
-    if (nextZoom === canvasZoom) {
-      return;
-    }
-    zoomAtCanvasCenter(nextZoom);
-    scheduleZoomStatus(nextZoom);
-  }
-
-  function onCanvasKeyDown(e: ReactKeyboardEvent<HTMLDivElement>) {
-    if (!(e.metaKey || e.ctrlKey)) {
-      return;
-    }
-
-    const canvas = graphCanvasRef.current;
-    if (!canvas) {
-      return;
-    }
-
-    const rect = canvas.getBoundingClientRect();
-    const centerX = rect.left + rect.width / 2;
-    const centerY = rect.top + rect.height / 2;
-
-    if (e.key === "+" || e.key === "=") {
-      e.preventDefault();
-      const nextZoom = clampCanvasZoom(canvasZoom * 1.08);
-      zoomAtClientPoint(nextZoom, centerX, centerY);
-      scheduleZoomStatus(nextZoom);
-      return;
-    }
-
-    if (e.key === "-" || e.key === "_") {
-      e.preventDefault();
-      const nextZoom = clampCanvasZoom(canvasZoom * 0.92);
-      zoomAtClientPoint(nextZoom, centerX, centerY);
-      scheduleZoomStatus(nextZoom);
-      return;
-    }
-
-    if (e.key === "0") {
-      e.preventDefault();
-      zoomAtClientPoint(1, centerX, centerY);
-      scheduleZoomStatus(1);
-    }
-  }
+  const {
+    onNodeDragStart,
+    onCanvasMouseMove,
+    onCanvasMouseUp,
+    onCanvasMouseDown,
+    onCanvasWheel,
+    onCanvasZoomIn,
+    onCanvasZoomOut,
+    onCanvasKeyDown,
+  } = createCanvasDragZoomHandlers({
+    graphCanvasRef,
+    setCanvasZoom,
+    graphStageInsetX: GRAPH_STAGE_INSET_X,
+    graphStageInsetY: GRAPH_STAGE_INSET_Y,
+    canvasZoom,
+    dragRef,
+    clientToLogicalPoint,
+    nodeDragMargin: NODE_DRAG_MARGIN,
+    getNodeVisualSize,
+    getBoundedStageWidth: () => boundedStageWidth,
+    getBoundedStageHeight: () => boundedStageHeight,
+    setGraph,
+    snapToLayoutGrid,
+    autoLayoutDragSnapThreshold: AUTO_LAYOUT_DRAG_SNAP_THRESHOLD,
+    autoLayoutSnapThreshold: AUTO_LAYOUT_SNAP_THRESHOLD,
+    snapToNearbyNodeAxis,
+    autoLayoutNodeAxisSnapThreshold: AUTO_LAYOUT_NODE_AXIS_SNAP_THRESHOLD,
+    dragAutoPanFrameRef,
+    dragPointerRef,
+    panMode,
+    canvasNodes,
+    selectedNodeIds,
+    setNodeSelection,
+    cloneGraph,
+    graph,
+    dragStartSnapshotRef,
+    setDraggingNodeIds,
+    setMarqueeSelection,
+    dragWindowMoveHandlerRef,
+    dragWindowUpHandlerRef,
+    panRef,
+    isConnectingDrag,
+    connectFromNodeId,
+    snapConnectPreviewPoint,
+    marqueeSelection,
+    edgeDragRef,
+    connectPreviewPoint,
+    resolveConnectDropTarget,
+    reconnectSelectedEdgeEndpoint,
+    onNodeConnectDrop,
+    setIsConnectingDrag,
+    setConnectPreviewStartPoint,
+    setConnectPreviewPoint,
+    setConnectFromNodeId,
+    setConnectFromSide,
+    edgeDragStartSnapshotRef,
+    setSelectedEdgeKey,
+    graphEquals,
+    setUndoStack,
+    setRedoStack,
+    clampCanvasZoom,
+    scheduleZoomStatus,
+  });
 
   const {
     updateNodeConfigById,
