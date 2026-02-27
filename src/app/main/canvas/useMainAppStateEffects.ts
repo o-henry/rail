@@ -74,18 +74,6 @@ export function useMainAppStateEffects(params: any) {
   }, [params.codexMultiAgentMode]);
 
   useEffect(() => {
-    if (!params.themeStorageKey || !params.themeMode) {
-      return;
-    }
-    try {
-      window.localStorage.setItem(params.themeStorageKey, params.themeMode);
-    } catch {
-      // ignore persistence failures
-    }
-    document.documentElement.setAttribute("data-theme", params.themeMode);
-  }, [params.themeMode, params.themeStorageKey]);
-
-  useEffect(() => {
     params.syncQuestionInputHeight();
   }, [params.workflowQuestion]);
 

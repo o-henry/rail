@@ -124,9 +124,8 @@ import {
   toOpenRunsFolderErrorMessage,
   toUsageCheckErrorMessage,
 } from "./mainAppUtils";
+import { useThemeMode } from "./theme/ThemeProvider";
 import {
-  THEME_MODE_STORAGE_KEY,
-  loadPersistedThemeMode,
   normalizeThemeMode,
 } from "./themeMode";
 import {
@@ -298,11 +297,10 @@ function App() {
   const defaultLoginCompleted = useMemo(() => loadPersistedLoginCompleted(), []);
   const defaultAuthMode = useMemo(() => loadPersistedAuthMode(), []);
   const defaultCodexMultiAgentMode = useMemo(() => loadPersistedCodexMultiAgentMode(), []);
-  const defaultThemeMode = useMemo(() => loadPersistedThemeMode(), []);
+  const { mode: themeMode, setMode: setThemeMode } = useThemeMode();
 
   const [workspaceTab, setWorkspaceTab] = useState<WorkspaceTab>("dashboard");
   const [dashboardDetailTopic, setDashboardDetailTopic] = useState<DashboardDetailTopic | null>(null);
-  const [themeMode, setThemeMode] = useState(defaultThemeMode);
   const [pendingWebConnectCheck, setPendingWebConnectCheck] = useState<{
     providers: WebProvider[];
     reason: string;
@@ -1200,8 +1198,6 @@ function App() {
     authModeStorageKey: AUTH_MODE_STORAGE_KEY,
     codexMultiAgentMode,
     codexMultiAgentModeStorageKey: CODEX_MULTI_AGENT_MODE_STORAGE_KEY,
-    themeMode,
-    themeStorageKey: THEME_MODE_STORAGE_KEY,
     syncQuestionInputHeight,
     workflowQuestion,
     syncCanvasLogicalViewport,

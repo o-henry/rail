@@ -1,6 +1,10 @@
 export const THEME_MODE_STORAGE_KEY = "rail.settings.theme_mode";
 
 export type ThemeModeValue = "light" | "dark";
+export const THEME_MODE_META_COLOR: Record<ThemeModeValue, string> = {
+  light: "#ffffff",
+  dark: "#1e1e1e",
+};
 
 export function normalizeThemeMode(value: unknown): ThemeModeValue {
   const raw = String(value ?? "").trim().toLowerCase();
@@ -17,4 +21,26 @@ export function loadPersistedThemeMode(): ThemeModeValue {
   } catch {
     return "light";
   }
+}
+
+function upsertThemeColorMeta(themeMode: ThemeModeValue) {
+  if (typeof document === "undefined") {
+    return;
+  }
+  let themeColorMeta = document.querySelector('meta[name="theme-color"]');
+  if (!(themeColorMeta instanceof HTMLMetaElement)) {
+    themeColorMeta = document.createElement("meta");
+    themeColorMeta.setAttribute("name", "theme-color");
+    document.head.appendChild(themeColorMeta);
+  }
+  themeColorMeta.setAttribute("content", THEME_MODE_META_COLOR[themeMode]);
+}
+
+export function applyThemeModeToDocument(themeMode: ThemeModeValue) {
+  if (typeof document === "undefined") {
+    return;
+  }
+  document.documentElement.setAttribute("data-theme", themeMode);
+  document.documentElement.style.colorScheme = themeMode;
+  upsertThemeColorMeta(themeMode);
 }

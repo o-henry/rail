@@ -1,5 +1,6 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
 import MainApp from "./app/MainApp";
+import { ThemeProvider } from "./app/theme/ThemeProvider";
 import { I18nProvider, t } from "./i18n";
 
 type AppErrorBoundaryState = {
@@ -89,9 +90,11 @@ class AppErrorBoundary extends Component<{ children: ReactNode }, AppErrorBounda
 export default function App() {
   return (
     <I18nProvider>
-      <AppErrorBoundary>
-        <MainApp />
-      </AppErrorBoundary>
+      <ThemeProvider>
+        <AppErrorBoundary>
+          <MainApp />
+        </AppErrorBoundary>
+      </ThemeProvider>
     </I18nProvider>
   );
 }
