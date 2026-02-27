@@ -4564,10 +4564,56 @@ h3 {
   font-size: 12px;
 }
 
+.agents-model-dropdown {
+  position: relative;
+}
+
+.agents-model-dropdown.is-open .agents-model-button img {
+  transform: rotate(180deg);
+}
+
 .agents-model-button img {
   width: 10px;
   height: 10px;
   opacity: 0.7;
+  transition: transform 120ms ease;
+}
+
+.agents-model-menu {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 8px);
+  min-width: 220px;
+  list-style: none;
+  margin: 0;
+  padding: 6px;
+  border-radius: 12px;
+  border: 1px solid var(--surface-strong);
+  background: var(--surface-panel);
+  box-shadow: 0 12px 30px rgba(12, 18, 28, 0.18);
+  z-index: 15;
+}
+
+.agents-model-menu li {
+  margin: 0;
+  padding: 0;
+}
+
+.agents-model-menu button {
+  width: 100%;
+  min-height: 30px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-main);
+  text-align: left;
+  padding: 6px 8px;
+  font-size: 12px;
+}
+
+.agents-model-menu button:hover,
+.agents-model-menu button.is-selected {
+  background: var(--surface-soft);
 }
 
 .agents-send-button {

@@ -1,4 +1,4 @@
-import { type ChangeEvent, useMemo, useRef, useState } from "react";
+import { type ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useI18n } from "../../i18n";
 
 type AgentsPageProps = {
@@ -15,74 +15,44 @@ type AttachedFile = {
   name: string;
 };
 
-function LockIcon() {
-  return (
-    <svg aria-hidden="true" viewBox="0 0 24 24">
-      <path
-        d="M8 10V7.8C8 5.7 9.8 4 12 4C14.2 4 16 5.7 16 7.8V10"
-        fill="none"
-        stroke="currentColor"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        strokeWidth="1.7"
-      />
-      <rect
-        x="6"
-        y="10"
-        width="12"
-        height="10"
-        rx="2.3"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.7"
-      />
-    </svg>
-  );
-}
-
-function MicIcon() {
-  return (
-    <svg aria-hidden="true" viewBox="0 0 24 24">
-      <rect
-        x="9"
-        y="4"
-        width="6"
-        height="10"
-        rx="3"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.7"
-      />
-      <path
-        d="M7 11.5C7 14.2 9.1 16.4 12 16.4C14.9 16.4 17 14.2 17 11.5"
-        fill="none"
-        stroke="currentColor"
-        strokeLinecap="round"
-        strokeWidth="1.7"
-      />
-      <path
-        d="M12 16.5V20M9.5 20H14.5"
-        fill="none"
-        stroke="currentColor"
-        strokeLinecap="round"
-        strokeWidth="1.7"
-      />
-    </svg>
-  );
-}
-
 export default function AgentsPage({ onQuickAction }: AgentsPageProps) {
   const { t } = useI18n();
   const [threads, setThreads] = useState<AgentThread[]>([{ id: "agent-1", name: "Agent 1" }]);
   const [activeThreadId, setActiveThreadId] = useState("agent-1");
   const [draft, setDraft] = useState("");
   const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([]);
+  const [isModelMenuOpen, setIsModelMenuOpen] = useState(false);
+  const [selectedModel, setSelectedModel] = useState(t("agents.model.label"));
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const modelMenuRef = useRef<HTMLDivElement | null>(null);
+  const modelOptions = useMemo(
+    () => [t("agents.model.label"), "GPT-5.2-Codex High", "GPT-5.2-Codex Standard"],
+    [t],
+  );
 
   const activeThread = useMemo(
     () => threads.find((thread) => thread.id === activeThreadId) ?? threads[0] ?? null,
     [activeThreadId, threads],
   );
+
+  useEffect(() => {
+    if (!modelOptions.includes(selectedModel)) {
+      setSelectedModel(modelOptions[0]);
+    }
+  }, [modelOptions, selectedModel]);
+
+  useEffect(() => {
+    if (!isModelMenuOpen) {
+      return;
+    }
+    const onPointerDown = (event: PointerEvent) => {
+      if (!modelMenuRef.current?.contains(event.target as Node)) {
+        setIsModelMenuOpen(false);
+      }
+    };
+    window.addEventListener("pointerdown", onPointerDown);
+    return () => window.removeEventListener("pointerdown", onPointerDown);
+  }, [isModelMenuOpen]);
 
   const onAddThread = () => {
     const nextIndex = threads.length + 1;
@@ -223,18 +193,43 @@ export default function AgentsPage({ onQuickAction }: AgentsPageProps) {
             <button aria-label="파일 추가" className="agents-icon-button" onClick={onOpenFilePicker} type="button">
               <img alt="" aria-hidden="true" src="/plus.svg" />
             </button>
-            <button className="agents-model-button" type="button">
-              <span>{t("agents.model.label")}</span>
-              <img alt="" aria-hidden="true" src="/down-arrow.svg" />
-            </button>
+            <div
+              className={`agents-model-dropdown${isModelMenuOpen ? " is-open" : ""}`}
+              ref={modelMenuRef}
+            >
+              <button
+                aria-expanded={isModelMenuOpen}
+                aria-haspopup="listbox"
+                className="agents-model-button"
+                onClick={() => setIsModelMenuOpen((prev) => !prev)}
+                type="button"
+              >
+                <span>{selectedModel}</span>
+                <img alt="" aria-hidden="true" src="/down-arrow.svg" />
+              </button>
+              {isModelMenuOpen && (
+                <ul aria-label="Agent model" className="agents-model-menu" role="listbox">
+                  {modelOptions.map((model) => (
+                    <li key={model}>
+                      <button
+                        aria-selected={model === selectedModel}
+                        className={model === selectedModel ? "is-selected" : ""}
+                        onClick={() => {
+                          setSelectedModel(model);
+                          setIsModelMenuOpen(false);
+                        }}
+                        role="option"
+                        type="button"
+                      >
+                        {model}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
           </div>
           <div className="agents-composer-right">
-            <button aria-label="lock" className="agents-icon-button" type="button">
-              <LockIcon />
-            </button>
-            <button aria-label="voice" className="agents-icon-button" type="button">
-              <MicIcon />
-            </button>
             <button
               aria-label={t("agents.send")}
               className="agents-send-button"
@@ -242,7 +237,7 @@ export default function AgentsPage({ onQuickAction }: AgentsPageProps) {
               onClick={onSend}
               type="button"
             >
-              <img alt="" aria-hidden="true" src="/up-arrow.svg" />
+              <img alt="" aria-hidden="true" src="/up.svg" />
             </button>
           </div>
         </div>
