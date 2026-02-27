@@ -102,7 +102,6 @@ import {
 } from "../features/workflow/graph-utils";
 import type {
   GraphNode,
-  NodeExecutionStatus,
 } from "../features/workflow/types";
 import {
   AUTH_MODE_STORAGE_KEY,
@@ -230,8 +229,7 @@ import { createCoreStateHandlers } from "./main/coreStateHandlers";
 import { createFeedKnowledgeHandlers } from "./main/feedKnowledgeHandlers";
 import { useMainAppStateEffects } from "./main/useMainAppStateEffects";
 import { createRunGraphControlHandlers } from "./main/runGraphControlHandlers";
-import { createRunGraphProcessNode } from "./main/runGraphProcessNode";
-import { finalizeRunGraphExecution } from "./main/runGraphFinalize";
+import { createRunGraphRunner } from "./main/runGraphRunner";
 import {
   PAUSE_ERROR_TOKEN,
   appendRunTransition,
@@ -278,10 +276,7 @@ import type {
   EngineLifecycleEvent,
   EngineNotificationEvent,
   FeedCategory,
-  FeedInputSource,
-  EvidenceEnvelope,
   InternalMemorySnippet,
-  NodeResponsibilityMemory,
   RunRecord,
 } from "./main";
 
@@ -1812,248 +1807,83 @@ function App() {
     cancelGraphRun,
   });
 
-  async function onRunGraph(skipWebConnectPreflight = false) {
-    if (isGraphRunning && isGraphPaused) {
-      pauseRequestedRef.current = false;
-      setIsGraphPaused(false);
-      setStatus("그래프 실행 재개");
-      return;
-    }
-
-    if (isGraphRunning || runStartGuardRef.current) {
-      return;
-    }
-
-    const runGroup = await prepareRunGraphStart(skipWebConnectPreflight);
-    if (!runGroup) {
-      return;
-    }
-
-    runStartGuardRef.current = true;
-    setPendingWebConnectCheck(null);
-    setIsRunStarting(true);
-    setError("");
-    setStatus("그래프 실행 시작");
-    setIsGraphRunning(true);
-    setIsGraphPaused(false);
-    cancelRequestedRef.current = false;
-    pauseRequestedRef.current = false;
-    collectingRunRef.current = true;
-
-    const runStateSnapshot = createRunNodeStateSnapshot(graph.nodes);
-    runLogCollectorRef.current = runStateSnapshot.runLogs;
-    setNodeStates(runStateSnapshot.nodeStates);
-
-    const runRecord: RunRecord = createRunRecord({
-      graph,
-      question: workflowQuestion,
-      workflowGroupName: runGroup.name,
-      workflowGroupKind: runGroup.kind,
-      workflowPresetKind: runGroup.presetKind,
-    });
-    setActiveFeedRunMeta({
-      runId: runRecord.runId,
-      question: workflowQuestion,
-      startedAt: runRecord.startedAt,
-      groupName: runGroup.name,
-      groupKind: runGroup.kind,
-      presetKind: runGroup.presetKind,
-    });
-    activeRunPresetKindRef.current = runGroup.presetKind;
-
-    try {
-      internalMemoryCorpusRef.current = await loadInternalMemoryCorpus({
-        invokeFn: invoke,
-        presetKind: runGroup.presetKind,
-        onError: setError,
-      });
-      if (internalMemoryCorpusRef.current.length > 0) {
-        setStatus(`그래프 실행 시작 (내부 메모리 ${internalMemoryCorpusRef.current.length}개 로드)`);
-      }
-      const requiresCodexEngine = graphRequiresCodexEngine(graph.nodes);
-      if (requiresCodexEngine) {
-        await ensureEngineStarted();
-      }
-
-      const { nodeMap, indegree, adjacency, incoming } = buildGraphExecutionIndex(graph);
-      const terminalStateByNodeId: Record<string, NodeExecutionStatus> = {};
-
-      const latestFeedSourceByNodeId = new Map<string, FeedInputSource>();
-
-      const appendNodeEvidence = (params: {
-        node: GraphNode;
-        output: unknown;
-        provider?: string;
-        summary?: string;
-        createdAt?: string;
-      }): EvidenceEnvelope => {
-        const result = appendNodeEvidenceWithMemory({
-          ...params,
-          normalizedEvidenceByNodeId,
-          runMemoryByNodeId,
-          runRecord,
-          turnRoleLabelFn: turnRoleLabel,
-          nodeTypeLabelFn: nodeTypeLabel,
-          normalizeEvidenceEnvelopeFn: normalizeEvidenceEnvelope,
-          updateRunMemoryByEnvelopeFn: updateRunMemoryByEnvelope,
-        });
-        runMemoryByNodeId = result.runMemoryByNodeId;
-        return result.envelope;
-      };
-
-      const queue: string[] = [];
-      enqueueZeroIndegreeNodes({
-        indegree,
-        queue,
-        onQueued: (nodeId) => {
-          setNodeStatus(nodeId, "queued");
-          appendRunTransition(runRecord, nodeId, "queued");
-        },
-      });
-
-      const outputs: Record<string, unknown> = {};
-      const normalizedEvidenceByNodeId: Record<string, EvidenceEnvelope[]> = {};
-      let runMemoryByNodeId: Record<string, NodeResponsibilityMemory> = {};
-      const skipSet = new Set<string>();
-      let lastDoneNodeId = "";
-
-      const dagMaxThreads = resolveDagMaxThreads(codexMultiAgentMode);
-      const activeTasks = new Map<string, Promise<void>>();
-      let activeTurnTasks = 0;
-      let pauseStatusShown = false;
-
-      const scheduleChildren = (nodeId: string) => {
-        scheduleChildrenWhenReady({
-          nodeId,
-          adjacency,
-          indegree,
-          queue,
-          onQueued: (childId) => {
-            setNodeStatus(childId, "queued");
-            appendRunTransition(runRecord, childId, "queued");
-          },
-        });
-      };
-
-      const getRunMemoryByNodeId = () => runMemoryByNodeId;
-      const setLastDoneNodeId = (nodeId: string) => {
-        lastDoneNodeId = nodeId;
-      };
-      const processNode = createRunGraphProcessNode({
-        nodeMap,
-        graph,
-        workflowQuestion,
-        latestFeedSourceByNodeId,
-        turnRoleLabel,
-        nodeTypeLabel,
-        nodeSelectionLabel,
-        resolveFeedInputSourcesForNode,
-        buildNodeInputForNode,
-        adjacency,
-        pauseRequestedRef,
-        cancelRequestedRef,
-        skipSet,
-        incoming,
-        outputs,
-        normalizedEvidenceByNodeId,
-        getRunMemoryByNodeId,
-        buildFinalTurnInputPacket,
-        runRecord,
-        runLogCollectorRef,
-        buildFeedPost,
-        rememberFeedSource,
-        feedRawAttachmentRef,
-        feedAttachmentRawKey,
-        terminalStateByNodeId,
-        scheduleChildren,
-        appendRunTransition,
-        appendNodeEvidence,
-        setNodeStatus,
-        setNodeRuntimeFields,
-        t,
-        executeTurnNodeWithOutputSchemaRetry,
-        executeTurnNode,
-        addNodeLog,
-        validateSimpleSchema,
-        turnOutputSchemaEnabled: TURN_OUTPUT_SCHEMA_ENABLED,
-        turnOutputSchemaMaxRetry: TURN_OUTPUT_SCHEMA_MAX_RETRY,
-        isPauseSignalError,
-        queue,
-        buildQualityReport,
-        cwd,
-        executeTransformNode,
-        executeGateNode,
-        simpleWorkflowUi: SIMPLE_WORKFLOW_UI,
-        setLastDoneNodeId,
-      });
-
-      while (queue.length > 0 || activeTasks.size > 0) {
-        const pauseResult = await handleRunPauseIfNeeded(activeTasks, pauseStatusShown);
-        pauseStatusShown = pauseResult.pauseStatusShown;
-        if (pauseResult.handled) {
-          continue;
-        }
-
-        if (!cancelRequestedRef.current) {
-          activeTurnTasks = scheduleRunnableGraphNodes({
-            queue,
-            activeTasks,
-            dagMaxThreads,
-            nodeMap,
-            activeTurnTasks,
-            processNode,
-            reportSoftError,
-          });
-        }
-
-        if (activeTasks.size > 0) {
-          await Promise.race(activeTasks.values());
-          continue;
-        }
-
-        if (queue.length === 0) {
-          break;
-        }
-
-        const fallbackNodeId = queue.shift() as string;
-        await processNode(fallbackNodeId);
-      }
-
-      await finalizeRunGraphExecution({
-        cancelRequestedRef,
-        graph,
-        setNodeStates,
-        runRecord,
-        runLogCollectorRef,
-        normalizedEvidenceByNodeId,
-        runMemoryByNodeId,
-        buildConflictLedger,
-        computeFinalConfidence,
-        summarizeQualityMetrics,
-        resolveFinalNodeId,
-        lastDoneNodeId,
-        terminalStateByNodeId,
-        outputs,
-        extractFinalAnswer,
-        setStatus,
-        t,
-        buildFinalNodeFailureReason,
-        nodeStatusLabel,
-        setError,
-        buildRegressionSummary,
-        invokeFn: invoke,
-        saveRunRecord,
-        normalizeRunRecord,
-        feedRunCacheRef,
-      });
-    } catch (e) {
-      markCodexNodesStatusOnEngineIssue("failed", `그래프 실행 실패: ${String(e)}`, true);
-      setError(String(e));
-      setStatus("그래프 실행 실패");
-    } finally {
-      cleanupRunGraphExecutionState();
-    }
-  }
+  const onRunGraph = createRunGraphRunner({
+    isGraphRunning,
+    isGraphPaused,
+    pauseRequestedRef,
+    setIsGraphPaused,
+    runStartGuardRef,
+    prepareRunGraphStart,
+    setPendingWebConnectCheck,
+    setIsRunStarting,
+    setError,
+    setStatus,
+    setIsGraphRunning,
+    cancelRequestedRef,
+    collectingRunRef,
+    createRunNodeStateSnapshot,
+    graph,
+    runLogCollectorRef,
+    setNodeStates,
+    createRunRecord,
+    workflowQuestion,
+    setActiveFeedRunMeta,
+    activeRunPresetKindRef,
+    loadInternalMemoryCorpus,
+    invokeFn: invoke,
+    graphRequiresCodexEngine,
+    ensureEngineStarted,
+    buildGraphExecutionIndex,
+    appendNodeEvidenceWithMemory,
+    turnRoleLabel,
+    nodeTypeLabel,
+    normalizeEvidenceEnvelope,
+    updateRunMemoryByEnvelope,
+    enqueueZeroIndegreeNodes,
+    setNodeStatus,
+    appendRunTransition,
+    resolveDagMaxThreads,
+    codexMultiAgentMode,
+    scheduleChildrenWhenReady,
+    nodeSelectionLabel,
+    resolveFeedInputSourcesForNode,
+    buildNodeInputForNode,
+    buildFinalTurnInputPacket,
+    buildFeedPost,
+    rememberFeedSource,
+    feedRawAttachmentRef,
+    feedAttachmentRawKey,
+    setNodeRuntimeFields,
+    t,
+    executeTurnNodeWithOutputSchemaRetry,
+    executeTurnNode,
+    addNodeLog,
+    validateSimpleSchema,
+    turnOutputSchemaEnabled: TURN_OUTPUT_SCHEMA_ENABLED,
+    turnOutputSchemaMaxRetry: TURN_OUTPUT_SCHEMA_MAX_RETRY,
+    isPauseSignalError,
+    buildQualityReport,
+    cwd,
+    executeTransformNode,
+    executeGateNode,
+    simpleWorkflowUi: SIMPLE_WORKFLOW_UI,
+    handleRunPauseIfNeeded,
+    scheduleRunnableGraphNodes,
+    reportSoftError,
+    buildConflictLedger,
+    computeFinalConfidence,
+    summarizeQualityMetrics,
+    resolveFinalNodeId,
+    extractFinalAnswer,
+    buildFinalNodeFailureReason,
+    nodeStatusLabel,
+    buildRegressionSummary,
+    saveRunRecord,
+    normalizeRunRecord,
+    feedRunCacheRef,
+    markCodexNodesStatusOnEngineIssue,
+    cleanupRunGraphExecutionState,
+  });
   const edgeLines = buildCanvasEdgeLines({
     entries: canvasDisplayEdges,
     nodeMap: canvasNodeMap,

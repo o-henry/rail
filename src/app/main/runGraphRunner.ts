@@ -1,0 +1,242 @@
+import { createRunGraphProcessNode } from "./runGraphProcessNode";
+import { finalizeRunGraphExecution } from "./runGraphFinalize";
+
+export function createRunGraphRunner(params: any) {
+  return async function onRunGraph(skipWebConnectPreflight = false) {
+    if (params.isGraphRunning && params.isGraphPaused) {
+      params.pauseRequestedRef.current = false;
+      params.setIsGraphPaused(false);
+      params.setStatus("그래프 실행 재개");
+      return;
+    }
+
+    if (params.isGraphRunning || params.runStartGuardRef.current) {
+      return;
+    }
+
+    const runGroup = await params.prepareRunGraphStart(skipWebConnectPreflight);
+    if (!runGroup) {
+      return;
+    }
+
+    params.runStartGuardRef.current = true;
+    params.setPendingWebConnectCheck(null);
+    params.setIsRunStarting(true);
+    params.setError("");
+    params.setStatus("그래프 실행 시작");
+    params.setIsGraphRunning(true);
+    params.setIsGraphPaused(false);
+    params.cancelRequestedRef.current = false;
+    params.pauseRequestedRef.current = false;
+    params.collectingRunRef.current = true;
+
+    const runStateSnapshot = params.createRunNodeStateSnapshot(params.graph.nodes);
+    params.runLogCollectorRef.current = runStateSnapshot.runLogs;
+    params.setNodeStates(runStateSnapshot.nodeStates);
+
+    const runRecord = params.createRunRecord({
+      graph: params.graph,
+      question: params.workflowQuestion,
+      workflowGroupName: runGroup.name,
+      workflowGroupKind: runGroup.kind,
+      workflowPresetKind: runGroup.presetKind,
+    });
+    params.setActiveFeedRunMeta({
+      runId: runRecord.runId,
+      question: params.workflowQuestion,
+      startedAt: runRecord.startedAt,
+      groupName: runGroup.name,
+      groupKind: runGroup.kind,
+      presetKind: runGroup.presetKind,
+    });
+    params.activeRunPresetKindRef.current = runGroup.presetKind;
+
+    try {
+      params.internalMemoryCorpusRef.current = await params.loadInternalMemoryCorpus({
+        invokeFn: params.invokeFn,
+        presetKind: runGroup.presetKind,
+        onError: params.setError,
+      });
+      if (params.internalMemoryCorpusRef.current.length > 0) {
+        params.setStatus(`그래프 실행 시작 (내부 메모리 ${params.internalMemoryCorpusRef.current.length}개 로드)`);
+      }
+      const requiresCodexEngine = params.graphRequiresCodexEngine(params.graph.nodes);
+      if (requiresCodexEngine) {
+        await params.ensureEngineStarted();
+      }
+
+      const { nodeMap, indegree, adjacency, incoming } = params.buildGraphExecutionIndex(params.graph);
+      const terminalStateByNodeId: Record<string, any> = {};
+      const latestFeedSourceByNodeId = new Map<string, any>();
+
+      const outputs: Record<string, unknown> = {};
+      const normalizedEvidenceByNodeId: Record<string, any[]> = {};
+      let runMemoryByNodeId: Record<string, any> = {};
+      const skipSet = new Set<string>();
+      let lastDoneNodeId = "";
+
+      const appendNodeEvidence = (payload: any) => {
+        const result = params.appendNodeEvidenceWithMemory({
+          ...payload,
+          normalizedEvidenceByNodeId,
+          runMemoryByNodeId,
+          runRecord,
+          turnRoleLabelFn: params.turnRoleLabel,
+          nodeTypeLabelFn: params.nodeTypeLabel,
+          normalizeEvidenceEnvelopeFn: params.normalizeEvidenceEnvelope,
+          updateRunMemoryByEnvelopeFn: params.updateRunMemoryByEnvelope,
+        });
+        runMemoryByNodeId = result.runMemoryByNodeId;
+        return result.envelope;
+      };
+
+      const queue: string[] = [];
+      params.enqueueZeroIndegreeNodes({
+        indegree,
+        queue,
+        onQueued: (nodeId: string) => {
+          params.setNodeStatus(nodeId, "queued");
+          params.appendRunTransition(runRecord, nodeId, "queued");
+        },
+      });
+
+      const dagMaxThreads = params.resolveDagMaxThreads(params.codexMultiAgentMode);
+      const activeTasks = new Map<string, Promise<void>>();
+      let activeTurnTasks = 0;
+      let pauseStatusShown = false;
+
+      const scheduleChildren = (nodeId: string) => {
+        params.scheduleChildrenWhenReady({
+          nodeId,
+          adjacency,
+          indegree,
+          queue,
+          onQueued: (childId: string) => {
+            params.setNodeStatus(childId, "queued");
+            params.appendRunTransition(runRecord, childId, "queued");
+          },
+        });
+      };
+
+      const getRunMemoryByNodeId = () => runMemoryByNodeId;
+      const setLastDoneNodeId = (nodeId: string) => {
+        lastDoneNodeId = nodeId;
+      };
+
+      const processNode = createRunGraphProcessNode({
+        nodeMap,
+        graph: params.graph,
+        workflowQuestion: params.workflowQuestion,
+        latestFeedSourceByNodeId,
+        turnRoleLabel: params.turnRoleLabel,
+        nodeTypeLabel: params.nodeTypeLabel,
+        nodeSelectionLabel: params.nodeSelectionLabel,
+        resolveFeedInputSourcesForNode: params.resolveFeedInputSourcesForNode,
+        buildNodeInputForNode: params.buildNodeInputForNode,
+        adjacency,
+        pauseRequestedRef: params.pauseRequestedRef,
+        cancelRequestedRef: params.cancelRequestedRef,
+        skipSet,
+        incoming,
+        outputs,
+        normalizedEvidenceByNodeId,
+        getRunMemoryByNodeId,
+        buildFinalTurnInputPacket: params.buildFinalTurnInputPacket,
+        runRecord,
+        runLogCollectorRef: params.runLogCollectorRef,
+        buildFeedPost: params.buildFeedPost,
+        rememberFeedSource: params.rememberFeedSource,
+        feedRawAttachmentRef: params.feedRawAttachmentRef,
+        feedAttachmentRawKey: params.feedAttachmentRawKey,
+        terminalStateByNodeId,
+        scheduleChildren,
+        appendRunTransition: params.appendRunTransition,
+        appendNodeEvidence,
+        setNodeStatus: params.setNodeStatus,
+        setNodeRuntimeFields: params.setNodeRuntimeFields,
+        t: params.t,
+        executeTurnNodeWithOutputSchemaRetry: params.executeTurnNodeWithOutputSchemaRetry,
+        executeTurnNode: params.executeTurnNode,
+        addNodeLog: params.addNodeLog,
+        validateSimpleSchema: params.validateSimpleSchema,
+        turnOutputSchemaEnabled: params.turnOutputSchemaEnabled,
+        turnOutputSchemaMaxRetry: params.turnOutputSchemaMaxRetry,
+        isPauseSignalError: params.isPauseSignalError,
+        queue,
+        buildQualityReport: params.buildQualityReport,
+        cwd: params.cwd,
+        executeTransformNode: params.executeTransformNode,
+        executeGateNode: params.executeGateNode,
+        simpleWorkflowUi: params.simpleWorkflowUi,
+        setLastDoneNodeId,
+      });
+
+      while (queue.length > 0 || activeTasks.size > 0) {
+        const pauseResult: { handled: boolean; pauseStatusShown: boolean } =
+          await params.handleRunPauseIfNeeded(activeTasks, pauseStatusShown);
+        pauseStatusShown = pauseResult.pauseStatusShown;
+        if (pauseResult.handled) {
+          continue;
+        }
+
+        if (!params.cancelRequestedRef.current) {
+          activeTurnTasks = params.scheduleRunnableGraphNodes({
+            queue,
+            activeTasks,
+            dagMaxThreads,
+            nodeMap,
+            activeTurnTasks,
+            processNode,
+            reportSoftError: params.reportSoftError,
+          });
+        }
+
+        if (activeTasks.size > 0) {
+          await Promise.race(activeTasks.values());
+          continue;
+        }
+
+        if (queue.length === 0) {
+          break;
+        }
+
+        const fallbackNodeId = queue.shift() as string;
+        await processNode(fallbackNodeId);
+      }
+
+      await finalizeRunGraphExecution({
+        cancelRequestedRef: params.cancelRequestedRef,
+        graph: params.graph,
+        setNodeStates: params.setNodeStates,
+        runRecord,
+        runLogCollectorRef: params.runLogCollectorRef,
+        normalizedEvidenceByNodeId,
+        runMemoryByNodeId,
+        buildConflictLedger: params.buildConflictLedger,
+        computeFinalConfidence: params.computeFinalConfidence,
+        summarizeQualityMetrics: params.summarizeQualityMetrics,
+        resolveFinalNodeId: params.resolveFinalNodeId,
+        lastDoneNodeId,
+        terminalStateByNodeId,
+        outputs,
+        extractFinalAnswer: params.extractFinalAnswer,
+        setStatus: params.setStatus,
+        t: params.t,
+        buildFinalNodeFailureReason: params.buildFinalNodeFailureReason,
+        nodeStatusLabel: params.nodeStatusLabel,
+        setError: params.setError,
+        buildRegressionSummary: params.buildRegressionSummary,
+        invokeFn: params.invokeFn,
+        saveRunRecord: params.saveRunRecord,
+        normalizeRunRecord: params.normalizeRunRecord,
+        feedRunCacheRef: params.feedRunCacheRef,
+      });
+    } catch (e) {
+      params.markCodexNodesStatusOnEngineIssue("failed", `그래프 실행 실패: ${String(e)}`, true);
+      params.setError(String(e));
+      params.setStatus("그래프 실행 실패");
+    } finally {
+      params.cleanupRunGraphExecutionState();
+    }
+  };
+}
