@@ -217,7 +217,12 @@ import {
 import WorkflowCanvasPane from "./main/WorkflowCanvasPane";
 import WorkflowInspectorPane from "./main/WorkflowInspectorPane";
 import { buildFeedPageVm, buildWorkflowInspectorPaneProps } from "./main/mainAppPropsBuilders";
-import { buildFollowupDoneRunRecord, buildFollowupFailedRunRecord } from "./main/feedFollowupUtils";
+import {
+  buildFollowupDoneRunRecord,
+  buildFollowupFailedRunRecord,
+  buildFollowupInputText,
+  resolveTurnNodeForFollowup,
+} from "./main/feedFollowupUtils";
 import {
   PAUSE_ERROR_TOKEN,
   appendRunTransition,
@@ -1280,26 +1285,20 @@ function App() {
     setFeedReplyFeedbackByPost((prev) => ({ ...prev, [postId]: t("feed.followup.sending") }));
     let replyFeedbackText = "";
     let shouldAutoClearReplyFeedback = false;
-    let node = graph.nodes.find((row) => row.id === post.nodeId);
-    const existsInCurrentGraph = !!node && node.type === "turn";
+    let node: GraphNode | null = null;
+    let existsInCurrentGraph = false;
 
     try {
-      if ((!node || node.type !== "turn") && post.sourceFile) {
-        const runRecord = await ensureFeedRunRecord(post.sourceFile);
-        const snapshotNode = runRecord?.graphSnapshot?.nodes?.find((row: any) => row?.id === post.nodeId) ?? null;
-        if (snapshotNode && snapshotNode.type === "turn") {
-          node = {
-            ...snapshotNode,
-            position:
-              snapshotNode.position && typeof snapshotNode.position === "object"
-                ? { ...snapshotNode.position }
-                : { x: 0, y: 0 },
-            config: JSON.parse(JSON.stringify(snapshotNode.config ?? {})),
-          } as GraphNode;
-        }
-      }
+      const resolved = await resolveTurnNodeForFollowup({
+        graphNodes: graph.nodes,
+        postNodeId: post.nodeId,
+        postSourceFile: post.sourceFile,
+        ensureFeedRunRecord,
+      });
+      node = resolved.node;
+      existsInCurrentGraph = resolved.existsInCurrentGraph;
 
-      if (!node || node.type !== "turn") {
+      if (!node) {
         setError(t("feed.followup.error.nodeNotFound"));
         replyFeedbackText = t("feed.followup.error.nodeNotFoundShort");
         return;
@@ -1329,13 +1328,14 @@ function App() {
 
       const oneOffRunId = `manual-${Date.now()}`;
       const startedAt = new Date().toISOString();
-      const followupInput = [
-        post.question ? `[${t("feed.followup.originalQuestion")}]\n${post.question}` : "",
-        post.summary ? `[${t("feed.followup.previousSummary")}]\n${post.summary}` : "",
-        `[${t("group.followup")}]\n${draft}`,
-      ]
-        .filter(Boolean)
-        .join("\n\n");
+      const followupInput = buildFollowupInputText({
+        draft,
+        question: post.question,
+        previousSummary: post.summary,
+        originalQuestionLabel: t("feed.followup.originalQuestion"),
+        previousSummaryLabel: t("feed.followup.previousSummary"),
+        followupLabel: t("group.followup"),
+      });
       const oneOffRunFileName = `run-${oneOffRunId}.json`;
 
       setNodeStatus(node.id, "running", t("feed.followup.run.started"));

@@ -3,6 +3,51 @@ import type { TurnExecutor } from "../../features/workflow/domain";
 import type { GraphNode } from "../../features/workflow/types";
 import type { FeedPost, RunRecord } from "./types";
 
+export async function resolveTurnNodeForFollowup(params: {
+  graphNodes: GraphNode[];
+  postNodeId: string;
+  postSourceFile?: string;
+  ensureFeedRunRecord: (sourceFile: string) => Promise<RunRecord | null>;
+}): Promise<{ node: GraphNode | null; existsInCurrentGraph: boolean }> {
+  let node = params.graphNodes.find((row) => row.id === params.postNodeId) ?? null;
+  const existsInCurrentGraph = !!node && node.type === "turn";
+  if ((!node || node.type !== "turn") && params.postSourceFile) {
+    const runRecord = await params.ensureFeedRunRecord(params.postSourceFile);
+    const snapshotNode = runRecord?.graphSnapshot?.nodes?.find((row: any) => row?.id === params.postNodeId) ?? null;
+    if (snapshotNode && snapshotNode.type === "turn") {
+      node = {
+        ...snapshotNode,
+        position:
+          snapshotNode.position && typeof snapshotNode.position === "object"
+            ? { ...snapshotNode.position }
+            : { x: 0, y: 0 },
+        config: JSON.parse(JSON.stringify(snapshotNode.config ?? {})),
+      } as GraphNode;
+    }
+  }
+  if (!node || node.type !== "turn") {
+    return { node: null, existsInCurrentGraph };
+  }
+  return { node, existsInCurrentGraph };
+}
+
+export function buildFollowupInputText(params: {
+  draft: string;
+  question?: string;
+  previousSummary?: string;
+  originalQuestionLabel: string;
+  previousSummaryLabel: string;
+  followupLabel: string;
+}): string {
+  return [
+    params.question ? `[${params.originalQuestionLabel}]\n${params.question}` : "",
+    params.previousSummary ? `[${params.previousSummaryLabel}]\n${params.previousSummary}` : "",
+    `[${params.followupLabel}]\n${params.draft}`,
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+}
+
 export function buildFollowupGraphSnapshot(
   node: GraphNode,
   graphSchemaVersion: number,
