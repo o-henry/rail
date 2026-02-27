@@ -31,6 +31,8 @@ type SettingsPageProps = {
   onOpenRunsFolder: () => void;
 };
 
+const SHOW_THEME_MODE_SETTING = false;
+
 export default function SettingsPage({
   compact = false,
   engineStarted,
@@ -104,16 +106,18 @@ export default function SettingsPage({
           value={codexMultiAgentMode}
         />
       </label>
-      <label>
-        {t("settings.themeMode")}
-        <FancySelect
-          ariaLabel={t("settings.themeMode")}
-          className="modern-select"
-          onChange={onSetThemeMode}
-          options={[...themeModeOptions]}
-          value={themeMode}
-        />
-      </label>
+      {SHOW_THEME_MODE_SETTING && (
+        <label>
+          {t("settings.themeMode")}
+          <FancySelect
+            ariaLabel={t("settings.themeMode")}
+            className="modern-select"
+            onChange={onSetThemeMode}
+            options={[...themeModeOptions]}
+            value={themeMode}
+          />
+        </label>
+      )}
       {!compact && (
         <div className="button-row">
           <button
