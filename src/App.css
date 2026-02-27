@@ -4466,6 +4466,10 @@ h3 {
   box-shadow: 0 3px 10px rgba(15, 24, 34, 0.06);
 }
 
+.agents-file-input {
+  display: none;
+}
+
 .agents-composer textarea {
   width: 100%;
   min-height: 42px;
@@ -4483,6 +4487,27 @@ h3 {
 .agents-composer textarea:focus-visible {
   outline: none;
   box-shadow: none;
+}
+
+.agents-file-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: -1px 0 2px;
+}
+
+.agents-file-chip {
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border-radius: 999px;
+  border: 1px solid var(--surface-strong);
+  background: var(--surface-soft);
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.1;
+  padding: 5px 8px;
 }
 
 .agents-composer-row {

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { type ChangeEvent, useMemo, useRef, useState } from "react";
 import { useI18n } from "../../i18n";
 
 type AgentsPageProps = {
@@ -6,6 +6,11 @@ type AgentsPageProps = {
 };
 
 type AgentThread = {
+  id: string;
+  name: string;
+};
+
+type AttachedFile = {
   id: string;
   name: string;
 };
@@ -71,6 +76,8 @@ export default function AgentsPage({ onQuickAction }: AgentsPageProps) {
   const [threads, setThreads] = useState<AgentThread[]>([{ id: "agent-1", name: "Agent 1" }]);
   const [activeThreadId, setActiveThreadId] = useState("agent-1");
   const [draft, setDraft] = useState("");
+  const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([]);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const activeThread = useMemo(
     () => threads.find((thread) => thread.id === activeThreadId) ?? threads[0] ?? null,
@@ -95,12 +102,46 @@ export default function AgentsPage({ onQuickAction }: AgentsPageProps) {
 
   const onSend = () => {
     const text = draft.trim();
-    if (!text) {
+    if (!text && attachedFiles.length === 0) {
       return;
     }
-    const payload = activeThread ? `[${activeThread.name}] ${text}` : text;
+    const filePrefix =
+      attachedFiles.length > 0 ? `files: ${attachedFiles.map((file) => file.name).join(", ")}\n` : "";
+    const content = `${filePrefix}${text}`.trim();
+    const payload = activeThread ? `[${activeThread.name}] ${content}` : content;
     onQuickAction(payload);
     setDraft("");
+    setAttachedFiles([]);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
+
+  const onOpenFilePicker = () => {
+    fileInputRef.current?.click();
+  };
+
+  const onAttachFiles = (event: ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    if (!files || files.length === 0) {
+      return;
+    }
+    const nextFiles: AttachedFile[] = Array.from(files).map((file, index) => ({
+      id: `${file.name}-${index}-${Date.now()}`,
+      name: file.name,
+    }));
+    setAttachedFiles((prev) => {
+      const seen = new Set(prev.map((file) => file.name));
+      const merged = [...prev];
+      nextFiles.forEach((file) => {
+        if (!seen.has(file.name)) {
+          seen.add(file.name);
+          merged.push(file);
+        }
+      });
+      return merged;
+    });
+    event.target.value = "";
   };
 
   return (
@@ -153,15 +194,33 @@ export default function AgentsPage({ onQuickAction }: AgentsPageProps) {
       </section>
 
       <div className="agents-composer">
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          onChange={onAttachFiles}
+          className="agents-file-input"
+          tabIndex={-1}
+          aria-hidden="true"
+        />
         <textarea
           aria-label={t("agents.input.placeholder")}
           placeholder={t("agents.input.placeholder")}
           value={draft}
           onChange={(event) => setDraft(event.target.value)}
         />
+        {attachedFiles.length > 0 && (
+          <div className="agents-file-list" aria-label="Attached files">
+            {attachedFiles.map((file) => (
+              <span key={file.id} className="agents-file-chip">
+                {file.name}
+              </span>
+            ))}
+          </div>
+        )}
         <div className="agents-composer-row">
           <div className="agents-composer-left">
-            <button aria-label={t("agents.add")} className="agents-icon-button" onClick={onAddThread} type="button">
+            <button aria-label="파일 추가" className="agents-icon-button" onClick={onOpenFilePicker} type="button">
               <img alt="" aria-hidden="true" src="/plus.svg" />
             </button>
             <button className="agents-model-button" type="button">
@@ -179,7 +238,7 @@ export default function AgentsPage({ onQuickAction }: AgentsPageProps) {
             <button
               aria-label={t("agents.send")}
               className="agents-send-button"
-              disabled={!draft.trim()}
+              disabled={!draft.trim() && attachedFiles.length === 0}
               onClick={onSend}
               type="button"
             >
