@@ -1906,6 +1906,38 @@ h3 {
   min-width: 78px;
 }
 
+.settings-view .controls .fancy-select-trigger {
+  background: var(--surface-panel);
+  border: 1px solid var(--surface-strong);
+  box-shadow: none;
+}
+
+.settings-view .controls .fancy-select.is-open .fancy-select-trigger {
+  background: var(--surface-panel);
+  border-color: #7f8fa5;
+}
+
+.settings-view .controls .fancy-select-trigger:focus,
+.settings-view .controls .fancy-select-trigger:focus-visible {
+  border-color: #5f88d7;
+  box-shadow: 0 0 0 1px rgba(95, 136, 215, 0.28);
+}
+
+:root[data-theme="dark"] .settings-view .controls .fancy-select-trigger {
+  background: #252526;
+  border-color: #4a4f58;
+}
+
+:root[data-theme="dark"] .settings-view .controls .fancy-select.is-open .fancy-select-trigger {
+  border-color: #6b7584;
+}
+
+:root[data-theme="dark"] .settings-view .controls .fancy-select-trigger:focus,
+:root[data-theme="dark"] .settings-view .controls .fancy-select-trigger:focus-visible {
+  border-color: #81b8ff;
+  box-shadow: 0 0 0 1px rgba(129, 184, 255, 0.32);
+}
+
 .lowercase-path-input {
   text-transform: lowercase;
 }
