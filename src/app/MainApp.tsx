@@ -3838,6 +3838,36 @@ function App() {
     return runGroup;
   }
 
+  function cleanupRunGraphExecutionState() {
+    for (const timerId of Object.values(webBridgeStageWarnTimerRef.current)) {
+      window.clearTimeout(timerId);
+    }
+    webBridgeStageWarnTimerRef.current = {};
+    activeWebPromptRef.current = {};
+    activeWebNodeByProviderRef.current = {};
+    turnTerminalResolverRef.current = null;
+    webTurnResolverRef.current = null;
+    webLoginResolverRef.current = null;
+    clearQueuedWebTurnRequests("실행이 종료되어 대기 중인 웹 응답 입력을 취소했습니다.");
+    manualInputWaitNoticeByNodeRef.current = {};
+    setPendingWebTurn(null);
+    setSuspendedWebTurn(null);
+    setSuspendedWebResponseDraft("");
+    setPendingWebLogin(null);
+    setWebResponseDraft("");
+    internalMemoryCorpusRef.current = [];
+    activeRunPresetKindRef.current = undefined;
+    activeTurnNodeIdRef.current = "";
+    setIsGraphRunning(false);
+    setIsGraphPaused(false);
+    setIsRunStarting(false);
+    runStartGuardRef.current = false;
+    cancelRequestedRef.current = false;
+    pauseRequestedRef.current = false;
+    collectingRunRef.current = false;
+    setActiveFeedRunMeta(null);
+  }
+
   async function onRunGraph(skipWebConnectPreflight = false) {
     if (isGraphRunning && isGraphPaused) {
       pauseRequestedRef.current = false;
@@ -4713,33 +4743,7 @@ function App() {
       setError(String(e));
       setStatus("그래프 실행 실패");
     } finally {
-      for (const timerId of Object.values(webBridgeStageWarnTimerRef.current)) {
-        window.clearTimeout(timerId);
-      }
-      webBridgeStageWarnTimerRef.current = {};
-      activeWebPromptRef.current = {};
-      activeWebNodeByProviderRef.current = {};
-      turnTerminalResolverRef.current = null;
-      webTurnResolverRef.current = null;
-      webLoginResolverRef.current = null;
-      clearQueuedWebTurnRequests("실행이 종료되어 대기 중인 웹 응답 입력을 취소했습니다.");
-      manualInputWaitNoticeByNodeRef.current = {};
-      setPendingWebTurn(null);
-      setSuspendedWebTurn(null);
-      setSuspendedWebResponseDraft("");
-      setPendingWebLogin(null);
-      setWebResponseDraft("");
-      internalMemoryCorpusRef.current = [];
-      activeRunPresetKindRef.current = undefined;
-      activeTurnNodeIdRef.current = "";
-      setIsGraphRunning(false);
-      setIsGraphPaused(false);
-      setIsRunStarting(false);
-      runStartGuardRef.current = false;
-      cancelRequestedRef.current = false;
-      pauseRequestedRef.current = false;
-      collectingRunRef.current = false;
-      setActiveFeedRunMeta(null);
+      cleanupRunGraphExecutionState();
     }
   }
   async function onCancelGraphRun() {
