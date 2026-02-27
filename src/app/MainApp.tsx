@@ -229,6 +229,7 @@ import {
   resolvePendingWebTurnAction,
 } from "./main/webTurnQueueActions";
 import { createWebInteractionHandlers } from "./main/webInteractionHandlers";
+import { createEngineBridgeHandlers } from "./main/engineBridgeHandlers";
 import {
   PAUSE_ERROR_TOKEN,
   appendRunTransition,
@@ -270,7 +271,6 @@ import {
 import { executeTurnNodeWithContext } from "./main/executeTurnNode";
 import type {
   ApprovalDecision,
-  AuthProbeResult,
   CanvasDisplayEdge,
   EngineApprovalRequestEvent,
   EngineLifecycleEvent,
@@ -281,15 +281,12 @@ import type {
   EvidenceEnvelope,
   InternalMemorySnippet,
   NodeResponsibilityMemory,
-  LoginChatgptResult,
   LogicalPoint,
   NodeMetric,
   NodeRunState,
   NodeVisualSize,
   QualityReport,
   RunRecord,
-  UsageCheckResult,
-  WebWorkerHealth,
 } from "./main";
 
 function App() {
@@ -1321,224 +1318,62 @@ function App() {
     };
   }, []);
 
-  async function ensureEngineStarted() {
-    if (engineStarted) {
-      return;
-    }
-    const resolvedCwd = String(cwd ?? "").trim();
-    if (!resolvedCwd || resolvedCwd === ".") {
-      throw new Error("작업 경로(CWD)를 먼저 선택하세요.");
-    }
-    try {
-      await invoke("engine_start", { cwd: resolvedCwd });
-      setEngineStarted(true);
-    } catch (error) {
-      if (isEngineAlreadyStartedError(error)) {
-        setEngineStarted(true);
-        return;
-      }
-      throw error;
-    }
-  }
-
-  async function onStartEngine() {
-    setError("");
-    try {
-      await ensureEngineStarted();
-      await refreshAuthStateFromEngine(true);
-      setStatus("준비됨");
-    } catch (e) {
-      if (isEngineAlreadyStartedError(e)) {
-        setEngineStarted(true);
-        setStatus("준비됨");
-        return;
-      }
-      setError(toErrorText(e));
-    }
-  }
-
-  async function onStopEngine() {
-    setError("");
-    try {
-      await invoke("engine_stop");
-      setEngineStarted(false);
-      markCodexNodesStatusOnEngineIssue("cancelled", "엔진 정지");
-      setStatus("중지됨");
-      setRunning(false);
-      setIsGraphRunning(false);
-      setUsageInfoText("");
-    } catch (e) {
-      setError(String(e));
-    }
-  }
-
-  async function refreshAuthStateFromEngine(silent = true): Promise<AuthProbeResult | null> {
-    try {
-      const result = await invoke<AuthProbeResult>("auth_probe");
-      const mode = extractAuthMode(result.authMode ?? null) ?? extractAuthMode(result.raw ?? null);
-      if (mode) {
-        setAuthMode(mode);
-      }
-
-      if (result.state === "authenticated") {
-        authLoginRequiredProbeCountRef.current = 0;
-        lastAuthenticatedAtRef.current = Date.now();
-        setLoginCompleted(true);
-        if (!silent) {
-          setStatus(mode ? `로그인 상태 확인됨 (인증 모드=${mode})` : "로그인 상태 확인됨");
-        }
-      } else if (result.state === "login_required") {
-        if (loginCompleted) {
-          authLoginRequiredProbeCountRef.current = 0;
-          if (!silent) {
-            setStatus("로그인 상태 유지 (재확인 필요)");
-          }
-          return result;
-        }
-        const now = Date.now();
-        const nextProbeCount = authLoginRequiredProbeCountRef.current + 1;
-        authLoginRequiredProbeCountRef.current = nextProbeCount;
-        const withinGraceWindow =
-          lastAuthenticatedAtRef.current > 0 &&
-          now - lastAuthenticatedAtRef.current < AUTH_LOGIN_REQUIRED_GRACE_MS;
-        const shouldKeepSession =
-          loginCompleted && (withinGraceWindow || nextProbeCount < AUTH_LOGIN_REQUIRED_CONFIRM_COUNT);
-
-        if (shouldKeepSession) {
-          if (!silent) {
-            setStatus(
-              `로그인 상태 재확인 중 (${Math.min(nextProbeCount, AUTH_LOGIN_REQUIRED_CONFIRM_COUNT)}/${AUTH_LOGIN_REQUIRED_CONFIRM_COUNT})`,
-            );
-          }
-        } else {
-          setLoginCompleted(false);
-          if (!silent) {
-            setStatus("로그인 필요");
-          }
-        }
-      } else {
-        authLoginRequiredProbeCountRef.current = 0;
-        if (!silent) {
-          setStatus("계정 상태 확인됨 (상태 미확인)");
-        }
-      }
-
-      return result;
-    } catch (error) {
-      if (!silent) {
-        setError(`계정 상태 확인 실패: ${String(error)}`);
-      }
-      return null;
-    }
-  }
-
-  async function onCheckUsage() {
-    setError("");
-    try {
-      await ensureEngineStarted();
-      const beforeProbe = await refreshAuthStateFromEngine(true);
-      if (beforeProbe?.state === "login_required" && !loginCompleted) {
-        setLoginCompleted(false);
-        setUsageInfoText("");
-        setUsageResultClosed(false);
-        throw new Error("로그인이 완료되지 않아 사용량을 조회할 수 없습니다. 설정에서 로그인 후 다시 시도해주세요.");
-      }
-      const result = await invoke<UsageCheckResult>("usage_check");
-      const mode = extractAuthMode(result.raw);
-      if (mode) {
-        setAuthMode(mode);
-      }
-      const probed = await refreshAuthStateFromEngine(true);
-      if (probed?.state === "authenticated") {
-        setLoginCompleted(true);
-      } else if (probed?.state === "login_required" && !loginCompleted) {
-        setLoginCompleted(false);
-      } else if (mode) {
-        setLoginCompleted(true);
-      }
-      setUsageInfoText(formatUsageInfoForDisplay(result.raw));
-      setUsageResultClosed(false);
-      setStatus("사용량 조회 완료");
-    } catch (e) {
-      setError(toUsageCheckErrorMessage(e));
-      setStatus("사용량 조회 실패");
-    }
-  }
-
-  async function onLoginCodex() {
-    setError("");
-    if (codexAuthBusy) {
-      setStatus("Codex 인증 요청 처리 중입니다.");
-      return;
-    }
-    try {
-      if (!loginCompleted) {
-        const now = Date.now();
-        const elapsed = now - codexLoginLastAttemptAtRef.current;
-        if (elapsed < CODEX_LOGIN_COOLDOWN_MS) {
-          const remainSec = Math.ceil((CODEX_LOGIN_COOLDOWN_MS - elapsed) / 1000);
-          setStatus(`Codex 로그인 재시도 대기 ${remainSec}초`);
-          return;
-        }
-        codexLoginLastAttemptAtRef.current = now;
-      }
-      setCodexAuthBusy(true);
-      await ensureEngineStarted();
-      if (loginCompleted) {
-        await invoke("logout_codex");
-        await invoke("engine_stop");
-        setEngineStarted(false);
-        await invoke("engine_start", { cwd });
-        setEngineStarted(true);
-        authLoginRequiredProbeCountRef.current = 0;
-        lastAuthenticatedAtRef.current = 0;
-        setLoginCompleted(false);
-        setAuthMode("unknown");
-        setUsageInfoText("");
-        setStatus("Codex 로그아웃 완료");
-        return;
-      }
-
-      const probed = await refreshAuthStateFromEngine(true);
-      if (probed?.state === "authenticated") {
-        authLoginRequiredProbeCountRef.current = 0;
-        lastAuthenticatedAtRef.current = Date.now();
-        setLoginCompleted(true);
-        setStatus("이미 로그인 상태입니다.");
-        return;
-      }
-      const result = await invoke<LoginChatgptResult>("login_chatgpt");
-      const authUrl = typeof result?.authUrl === "string" ? result.authUrl.trim() : "";
-      if (!authUrl) {
-        throw new Error("로그인 URL을 받지 못했습니다.");
-      }
-      await openUrl(authUrl);
-      setStatus("Codex 로그인 창 열림 (재시도 제한 45초)");
-    } catch (e) {
-      if (loginCompleted) {
-        setError(`Codex 로그아웃 실패: ${String(e)}`);
-      } else {
-        setError(`Codex 로그인 시작 실패: ${String(e)}`);
-      }
-    } finally {
-      setCodexAuthBusy(false);
-    }
-  }
-
-  async function onSelectCwdDirectory() {
-    setError("");
-    try {
-      const selected = await invoke<string | null>("dialog_pick_directory");
-      const selectedDirectory = typeof selected === "string" ? selected.trim() : "";
-      if (!selectedDirectory) {
-        return;
-      }
-      setCwd(selectedDirectory);
-      setStatus(`작업 경로 선택됨: ${selectedDirectory.toLowerCase()}`);
-    } catch (error) {
-      setError(`작업 경로 선택 실패: ${String(error)}`);
-    }
-  }
+  const {
+    ensureEngineStarted,
+    onStartEngine,
+    onStopEngine,
+    refreshAuthStateFromEngine,
+    onCheckUsage,
+    onLoginCodex,
+    onSelectCwdDirectory,
+    onOpenPendingProviderWindow,
+    onCloseProviderChildView,
+    refreshWebWorkerHealth,
+    refreshWebBridgeStatus,
+    onRotateWebBridgeToken,
+    onRestartWebBridge,
+    onCopyWebBridgeConnectCode,
+    onOpenProviderSession,
+  } = createEngineBridgeHandlers({
+    engineStarted,
+    cwd,
+    invokeFn: invoke,
+    setEngineStarted,
+    isEngineAlreadyStartedError,
+    setError,
+    setStatus,
+    toErrorText,
+    markCodexNodesStatusOnEngineIssue,
+    setRunning,
+    setIsGraphRunning,
+    setUsageInfoText,
+    extractAuthMode,
+    setAuthMode,
+    authLoginRequiredProbeCountRef,
+    lastAuthenticatedAtRef,
+    setLoginCompleted,
+    loginCompleted,
+    authLoginRequiredGraceMs: AUTH_LOGIN_REQUIRED_GRACE_MS,
+    authLoginRequiredConfirmCount: AUTH_LOGIN_REQUIRED_CONFIRM_COUNT,
+    formatUsageInfoForDisplay,
+    setUsageResultClosed,
+    toUsageCheckErrorMessage,
+    codexAuthBusy,
+    codexLoginLastAttemptAtRef,
+    codexLoginCooldownMs: CODEX_LOGIN_COOLDOWN_MS,
+    setCodexAuthBusy,
+    openUrlFn: openUrl,
+    setCwd,
+    pendingWebTurn,
+    webProviderHomeUrl,
+    webProviderLabel,
+    setProviderChildViewOpen,
+    setWebWorkerHealth,
+    setWebBridgeStatus,
+    toWebBridgeStatus,
+    setWebWorkerBusy,
+    setWebBridgeConnectCode,
+  });
 
   async function attachKnowledgeFiles(paths: string[]) {
     const uniquePaths = Array.from(new Set(paths.map((path) => path.trim()).filter(Boolean)));
@@ -1609,40 +1444,6 @@ function App() {
     }));
   }
 
-  async function onOpenPendingProviderWindow() {
-    if (!pendingWebTurn) {
-      return;
-    }
-    try {
-      await openUrl(webProviderHomeUrl(pendingWebTurn.provider));
-      setStatus(`${webProviderLabel(pendingWebTurn.provider)} 기본 브라우저 열림`);
-    } catch (error) {
-      setError(String(error));
-    }
-  }
-
-  async function onCloseProviderChildView(provider: WebProvider) {
-    try {
-      await invoke("provider_child_view_hide", { provider });
-    } catch (error) {
-      const message = String(error);
-      if (!message.includes("provider child view not found")) {
-        setError(`${webProviderLabel(provider)} 세션 창 숨기기 실패: ${message}`);
-        return;
-      }
-    }
-
-    try {
-      await invoke("provider_window_close", { provider });
-    } catch {
-      // noop: standalone window not opened
-    }
-
-    setProviderChildViewOpen((prev) => ({ ...prev, [provider]: false }));
-    setStatus(`${webProviderLabel(provider)} 세션 창 숨김`);
-    void refreshWebWorkerHealth(true);
-  }
-
   useEffect(() => {
     if (workspaceTab === "workflow") {
       return;
@@ -1655,186 +1456,6 @@ function App() {
       onCloseProviderChildView(provider);
     }
   }, [workspaceTab, providerChildViewOpen]);
-
-  async function refreshWebWorkerHealth(silent = false) {
-    try {
-      const health = await invoke<WebWorkerHealth>("web_provider_health");
-      setWebWorkerHealth(health);
-      if (health.bridge) {
-        setWebBridgeStatus(toWebBridgeStatus(health.bridge));
-      }
-      return health;
-    } catch (error) {
-      if (!silent) {
-        setError(`웹 워커 상태 조회 실패: ${String(error)}`);
-      }
-      return null;
-    }
-  }
-
-  function isBridgeMethodMissing(error: unknown): boolean {
-    const message = String(error ?? "").toLowerCase();
-    return message.includes("method not found") || message.includes("rpc error -32601");
-  }
-
-  async function invokeBridgeRpcWithRecovery(command: "web_bridge_status" | "web_bridge_rotate_token") {
-    try {
-      return await invoke<unknown>(command);
-    } catch (error) {
-      if (!isBridgeMethodMissing(error)) {
-        throw error;
-      }
-      // Old worker may still be alive after hot-reload; restart and retry once.
-      await invoke("web_worker_stop").catch(() => {
-        // ignore
-      });
-      await invoke("web_worker_start");
-      return await invoke<unknown>(command);
-    }
-  }
-
-  async function refreshWebBridgeStatus(silent = false, forceRpc = false) {
-    if (!forceRpc) {
-      const health = await refreshWebWorkerHealth(true);
-      if (health?.bridge) {
-        const next = toWebBridgeStatus(health.bridge);
-        setWebBridgeStatus(next);
-        return next;
-      }
-      return null;
-    }
-    try {
-      const raw = await invokeBridgeRpcWithRecovery("web_bridge_status");
-      const next = toWebBridgeStatus(raw);
-      setWebBridgeStatus(next);
-      return next;
-    } catch (error) {
-      if (!silent) {
-        setError(`웹 연결 상태 조회 실패: ${String(error)}`);
-      }
-      return null;
-    }
-  }
-
-  async function onRotateWebBridgeToken() {
-    setWebWorkerBusy(true);
-    setError("");
-    try {
-      const raw = await invokeBridgeRpcWithRecovery("web_bridge_rotate_token");
-      setWebBridgeStatus(toWebBridgeStatus(raw));
-      setStatus("웹 연결 토큰을 재발급했습니다.");
-    } catch (error) {
-      setError(`웹 연결 토큰 재발급 실패: ${String(error)}`);
-    } finally {
-      setWebWorkerBusy(false);
-    }
-  }
-
-  async function onRestartWebBridge() {
-    setError("");
-    setWebWorkerBusy(true);
-    try {
-      await invoke("web_worker_stop");
-    } catch {
-      // noop
-    }
-    try {
-      await invoke("web_worker_start");
-      setStatus("웹 연결 워커 재시작 완료");
-      await refreshWebBridgeStatus(true, true);
-      await onCopyWebBridgeConnectCode();
-    } catch (error) {
-      setError(`웹 연결 재시작 실패: ${String(error)}`);
-    } finally {
-      setWebWorkerBusy(false);
-    }
-  }
-
-  async function onCopyWebBridgeConnectCode() {
-    try {
-      const status = await refreshWebBridgeStatus(true, true);
-      if (!status?.token) {
-        throw new Error("연결 토큰을 읽을 수 없습니다.");
-      }
-      const code = JSON.stringify(
-        {
-          bridgeUrl: `http://127.0.0.1:${status.port}`,
-          token: status.token,
-        },
-        null,
-        2,
-      );
-      setWebBridgeConnectCode(code);
-      let copied = false;
-      try {
-        if (navigator.clipboard?.writeText) {
-          await navigator.clipboard.writeText(code);
-          copied = true;
-        }
-      } catch {
-        // fallback below
-      }
-
-      if (!copied) {
-        const textarea = document.createElement("textarea");
-        textarea.value = code;
-        textarea.setAttribute("readonly", "true");
-        textarea.style.position = "fixed";
-        textarea.style.opacity = "0";
-        textarea.style.pointerEvents = "none";
-        textarea.style.left = "-9999px";
-        document.body.appendChild(textarea);
-        textarea.select();
-        textarea.setSelectionRange(0, textarea.value.length);
-        copied = document.execCommand("copy");
-        document.body.removeChild(textarea);
-      }
-
-      if (copied) {
-        setStatus("웹 연결 코드 복사 완료");
-        setError("");
-      } else {
-        setStatus("자동 복사 권한이 없어 코드 박스를 표시했습니다. 아래에서 수동 복사하세요.");
-        setError("");
-      }
-    } catch (error) {
-      setError(`웹 연결 코드 준비 실패: ${String(error)}`);
-    }
-  }
-
-  async function onOpenProviderSession(provider: WebProvider) {
-    setWebWorkerBusy(true);
-    setError("");
-    try {
-      const result = await invoke<{
-        ok?: boolean;
-        error?: string;
-        errorCode?: string;
-        sessionState?: string;
-      }>(
-        "web_provider_open_session",
-        { provider },
-      );
-      if (result && result.ok === false) {
-        throw new Error(result.error || result.errorCode || "세션 창을 열지 못했습니다.");
-      }
-      await refreshWebWorkerHealth(true);
-      window.setTimeout(() => {
-        void refreshWebWorkerHealth(true);
-      }, 900);
-      if (result?.sessionState === "active") {
-        setStatus(`${webProviderLabel(provider)} 로그인 상태 확인됨`);
-      } else if (result?.sessionState === "login_required") {
-        setStatus(`${webProviderLabel(provider)} 로그인 필요`);
-      } else {
-        setStatus(`${webProviderLabel(provider)} 로그인 세션 창 열림`);
-      }
-    } catch (error) {
-      setError(`${webProviderLabel(provider)} 로그인 세션 열기 실패: ${String(error)}`);
-    } finally {
-      setWebWorkerBusy(false);
-    }
-  }
 
   useEffect(() => {
     if (!pendingWebTurn) {
@@ -3325,7 +2946,7 @@ function App() {
       if (requiredWebProviders.length > 0) {
         const bridgeStatusLatest = (await refreshWebBridgeStatus(true, true)) ?? webBridgeStatus;
         const connectedProviderSet = new Set(
-          (bridgeStatusLatest.connectedProviders ?? []).map((row) => row.provider),
+          (bridgeStatusLatest.connectedProviders ?? []).map((row: any) => row.provider),
         );
         const missingProviders = requiredWebProviders.filter((provider) => !connectedProviderSet.has(provider));
         const reasons = buildWebConnectPreflightReasons({
