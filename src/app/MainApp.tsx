@@ -1,5 +1,4 @@
 import {
-  useEffect,
   useMemo,
   useRef,
   useState,
@@ -229,6 +228,7 @@ import { createCoreStateHandlers } from "./main/coreStateHandlers";
 import { createFeedKnowledgeHandlers } from "./main/feedKnowledgeHandlers";
 import { useMainAppStateEffects } from "./main/useMainAppStateEffects";
 import { useEngineEventListeners } from "./main/useEngineEventListeners";
+import { useMainAppRuntimeEffects } from "./main/useMainAppRuntimeEffects";
 import { createRunGraphControlHandlers } from "./main/runGraphControlHandlers";
 import { createRunGraphRunner } from "./main/runGraphRunner";
 import {
@@ -724,46 +724,6 @@ function App() {
   });
 
 
-  useEffect(() => {
-    return () => {
-      for (const timerId of Object.values(webBridgeStageWarnTimerRef.current)) {
-        window.clearTimeout(timerId);
-      }
-      webBridgeStageWarnTimerRef.current = {};
-    };
-  }, []);
-
-  useEffect(() => {
-    const onUnhandledRejection = (event: PromiseRejectionEvent) => {
-      event.preventDefault();
-      reportSoftError("unhandled rejection", event.reason);
-    };
-    const onWindowError = (event: ErrorEvent) => {
-      reportSoftError("runtime error", event.error ?? event.message);
-    };
-    window.addEventListener("unhandledrejection", onUnhandledRejection);
-    window.addEventListener("error", onWindowError);
-    return () => {
-      window.removeEventListener("unhandledrejection", onUnhandledRejection);
-      window.removeEventListener("error", onWindowError);
-    };
-  }, []);
-
-  useEffect(() => {
-    refreshGraphFiles();
-    refreshFeedTimeline();
-  }, []);
-
-  useEffect(() => {
-    setStatus("대기 중");
-    return () => {
-      for (const timerId of Object.values(feedReplyFeedbackClearTimerRef.current)) {
-        window.clearTimeout(timerId);
-      }
-      feedReplyFeedbackClearTimerRef.current = {};
-    };
-  }, []);
-
   const {
     ensureEngineStarted,
     onStartEngine,
@@ -859,117 +819,35 @@ function App() {
   });
 
 
-  useEffect(() => {
-    if (workspaceTab === "workflow") {
-      return;
-    }
-    const openProviders = WEB_PROVIDER_OPTIONS.filter((provider) => providerChildViewOpen[provider]);
-    if (openProviders.length === 0) {
-      return;
-    }
-    for (const provider of openProviders) {
-      onCloseProviderChildView(provider);
-    }
-  }, [workspaceTab, providerChildViewOpen]);
-
-  useEffect(() => {
-    if (!pendingWebTurn) {
-      pendingWebTurnAutoOpenKeyRef.current = "";
-      return;
-    }
-    webTurnPanel.setPosition({
-      x: WEB_TURN_FLOATING_DEFAULT_X,
-      y: WEB_TURN_FLOATING_DEFAULT_Y,
-    });
-    window.setTimeout(() => {
-      const panel = webTurnFloatingRef.current;
-      const textarea = panel?.querySelector("textarea");
-      if (textarea instanceof HTMLTextAreaElement) {
-        textarea.focus({ preventScroll: true });
-      }
-    }, 0);
-    const key = `${pendingWebTurn.nodeId}:${pendingWebTurn.provider}:${pendingWebTurn.mode}:${pendingWebTurn.prompt.length}`;
-    if (pendingWebTurnAutoOpenKeyRef.current === key) {
-      return;
-    }
-    pendingWebTurnAutoOpenKeyRef.current = key;
-    void openUrl(webProviderHomeUrl(pendingWebTurn.provider))
-      .then(() => {
-        setStatus(`${webProviderLabel(pendingWebTurn.provider)} 기본 브라우저 자동 열림`);
-      })
-      .catch((error) => {
-        setError(`${webProviderLabel(pendingWebTurn.provider)} 브라우저 자동 열기 실패: ${String(error)}`);
-      });
-  }, [pendingWebTurn]);
-
-  useEffect(() => {
-    if (!pendingWebLogin) {
-      pendingWebLoginAutoOpenKeyRef.current = "";
-      return;
-    }
-    const key = `${pendingWebLogin.nodeId}:${pendingWebLogin.provider}:${pendingWebLogin.reason.length}`;
-    if (pendingWebLoginAutoOpenKeyRef.current === key) {
-      return;
-    }
-    pendingWebLoginAutoOpenKeyRef.current = key;
-    void invoke<{ ok?: boolean; error?: string; errorCode?: string }>("web_provider_open_session", {
-      provider: pendingWebLogin.provider,
-    })
-      .then(() => {
-        setStatus(`${webProviderLabel(pendingWebLogin.provider)} 로그인 세션 자동 열림`);
-        void refreshWebWorkerHealth(true);
-      })
-      .catch((error) => {
-        setError(`${webProviderLabel(pendingWebLogin.provider)} 로그인 브라우저 열기 실패: ${String(error)}`);
-      });
-  }, [pendingWebLogin]);
-
-  useEffect(() => {
-    if (workspaceTab !== "settings") {
-      return;
-    }
-
-    void refreshWebWorkerHealth(true);
-    return;
-  }, [workspaceTab]);
-
-  useEffect(() => {
-    if (workspaceTab !== "bridge") {
-      return;
-    }
-    void refreshWebWorkerHealth(true);
-    return undefined;
-  }, [workspaceTab]);
-
-  useEffect(() => {
-    if (workspaceTab !== "feed") {
-      setFeedShareMenuPostId(null);
-      return;
-    }
-    void refreshFeedTimeline();
-  }, [workspaceTab]);
-
-  const hasActiveNodeRuntime = useMemo(
-    () =>
-      Object.values(nodeStates).some(
-        (row) =>
-          Boolean(row.startedAt) &&
-          !row.finishedAt &&
-          (row.status === "queued" || row.status === "running" || row.status === "waiting_user"),
-      ),
-    [nodeStates],
-  );
-
-  useEffect(() => {
-    if (!hasActiveNodeRuntime) {
-      return;
-    }
-    setRuntimeNowMs(Date.now());
-    const timer = window.setInterval(() => {
-      setRuntimeNowMs(Date.now());
-    }, 1000);
-    return () => window.clearInterval(timer);
-  }, [hasActiveNodeRuntime]);
+  useMainAppRuntimeEffects({
+    webBridgeStageWarnTimerRef,
+    reportSoftError,
+    refreshGraphFiles,
+    refreshFeedTimeline,
+    setStatus,
+    feedReplyFeedbackClearTimerRef,
+    workspaceTab,
+    webProviderOptions: WEB_PROVIDER_OPTIONS,
+    providerChildViewOpen,
+    onCloseProviderChildView,
+    pendingWebTurn,
+    pendingWebTurnAutoOpenKeyRef,
+    webTurnPanel,
+    webTurnFloatingDefaultX: WEB_TURN_FLOATING_DEFAULT_X,
+    webTurnFloatingDefaultY: WEB_TURN_FLOATING_DEFAULT_Y,
+    webTurnFloatingRef,
+    openUrlFn: openUrl,
+    webProviderHomeUrl,
+    webProviderLabel,
+    setError,
+    pendingWebLogin,
+    pendingWebLoginAutoOpenKeyRef,
+    invokeFn: invoke,
+    refreshWebWorkerHealth,
+    setFeedShareMenuPostId,
+    nodeStates,
+    setRuntimeNowMs,
+  });
 
   const {
     ensureWebWorkerReady,
