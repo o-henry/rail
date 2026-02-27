@@ -14,6 +14,7 @@ type DashboardPageProps = {
   onOpenFeed: () => void;
   onOpenBridge: () => void;
   onOpenSettings: () => void;
+  onOpenDetail: (topic: "news" | "trend" | "stock") => void;
 };
 
 type DashboardCard = {
@@ -76,7 +77,11 @@ export default function DashboardPage(props: DashboardPageProps) {
       </section>
 
       <section className="dashboard-widget-grid">
-        <article className="panel-card dashboard-widget-card">
+        <button
+          className="panel-card dashboard-widget-card dashboard-widget-button"
+          onClick={() => props.onOpenDetail("news")}
+          type="button"
+        >
           <div className="dashboard-widget-head">
             <h3>{t("dashboard.widget.news.title")}</h3>
             <span>{t("dashboard.widget.badge.live")}</span>
@@ -86,8 +91,12 @@ export default function DashboardPage(props: DashboardPageProps) {
             <li>{t("dashboard.widget.news.item2")}</li>
             <li>{t("dashboard.widget.news.item3")}</li>
           </ul>
-        </article>
-        <article className="panel-card dashboard-widget-card">
+        </button>
+        <button
+          className="panel-card dashboard-widget-card dashboard-widget-button"
+          onClick={() => props.onOpenDetail("trend")}
+          type="button"
+        >
           <div className="dashboard-widget-head">
             <h3>{t("dashboard.widget.trend.title")}</h3>
             <span>{t("dashboard.widget.badge.signal")}</span>
@@ -97,8 +106,12 @@ export default function DashboardPage(props: DashboardPageProps) {
             <li>{t("dashboard.widget.trend.item2")}</li>
             <li>{t("dashboard.widget.trend.item3")}</li>
           </ul>
-        </article>
-        <article className="panel-card dashboard-widget-card">
+        </button>
+        <button
+          className="panel-card dashboard-widget-card dashboard-widget-button"
+          onClick={() => props.onOpenDetail("stock")}
+          type="button"
+        >
           <div className="dashboard-widget-head">
             <h3>{t("dashboard.widget.stock.title")}</h3>
             <span>{t("dashboard.widget.badge.market")}</span>
@@ -108,7 +121,7 @@ export default function DashboardPage(props: DashboardPageProps) {
             <li>{t("dashboard.widget.stock.item2")}</li>
             <li>{t("dashboard.widget.stock.item3")}</li>
           </ul>
-        </article>
+        </button>
       </section>
 
       <article className="panel-card dashboard-footer">

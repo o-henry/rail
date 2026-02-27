@@ -3818,6 +3818,17 @@ h3 {
   gap: 10px;
 }
 
+.dashboard-widget-button {
+  text-align: left;
+  border: 1px solid transparent;
+  transition: border-color 160ms ease, transform 160ms ease;
+}
+
+.dashboard-widget-button:hover {
+  border-color: var(--surface-strong);
+  transform: translateY(-1px);
+}
+
 .dashboard-widget-head {
   display: flex;
   align-items: center;
@@ -3845,6 +3856,40 @@ h3 {
   color: var(--text-main);
   font-size: 0.86rem;
   line-height: 1.4;
+}
+
+.dashboard-detail-head {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: start;
+  gap: 12px;
+}
+
+.dashboard-back-button {
+  border-radius: 8px;
+  background: var(--surface-soft);
+}
+
+.dashboard-detail-head h2 {
+  font-size: 1.15rem;
+}
+
+.dashboard-detail-head p {
+  margin-top: 4px;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.dashboard-detail-body ol {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 10px;
+}
+
+.dashboard-detail-body li {
+  font-size: 0.9rem;
+  line-height: 1.5;
 }
 
 .dashboard-last-batch {

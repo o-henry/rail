@@ -9,6 +9,7 @@ import AppNav from "../components/AppNav";
 import BridgePage from "../pages/bridge/BridgePage";
 import FeedPage from "../pages/feed/FeedPage";
 import DashboardPage from "../pages/dashboard/DashboardPage";
+import DashboardDetailPage, { type DashboardDetailTopic } from "../pages/dashboard/DashboardDetailPage";
 import SettingsPage from "../pages/settings/SettingsPage";
 import WorkflowPage from "../pages/workflow/WorkflowPage";
 import { useFloatingPanel } from "../features/ui/useFloatingPanel";
@@ -299,6 +300,7 @@ function App() {
   const defaultThemeMode = useMemo(() => loadPersistedThemeMode(), []);
 
   const [workspaceTab, setWorkspaceTab] = useState<WorkspaceTab>("dashboard");
+  const [dashboardDetailTopic, setDashboardDetailTopic] = useState<DashboardDetailTopic | null>(null);
   const [themeMode, setThemeMode] = useState(defaultThemeMode);
   const [pendingWebConnectCheck, setPendingWebConnectCheck] = useState<{
     providers: WebProvider[];
@@ -1757,11 +1759,17 @@ function App() {
   const lastBatchSummary = latestBatchRun
     ? `${latestBatchRun.status.toUpperCase()} · ${new Date(latestBatchRun.startedAt).toLocaleString(locale)}`
     : t("dashboard.value.none");
+  const onSelectWorkspaceTab = (tab: WorkspaceTab) => {
+    setWorkspaceTab(tab);
+    if (tab !== "dashboard") {
+      setDashboardDetailTopic(null);
+    }
+  };
   return (
     <main className={`app-shell ${canvasFullscreen ? "canvas-fullscreen-mode" : ""}`}>
       <AppNav
         activeTab={workspaceTab}
-        onSelectTab={setWorkspaceTab}
+        onSelectTab={onSelectWorkspaceTab}
         renderIcon={(tab, active) => <NavIcon active={active} tab={tab} />}
       />
 
@@ -1865,7 +1873,7 @@ function App() {
             />
           </WorkflowPage>
         )}
-        {workspaceTab === "dashboard" && (
+        {workspaceTab === "dashboard" && dashboardDetailTopic == null && (
           <DashboardPage
             connectedProviderCount={webBridgeStatus.connectedProviders.length}
             cwd={cwd}
@@ -1873,12 +1881,20 @@ function App() {
             isGraphRunning={isGraphRunning}
             lastBatchSummary={lastBatchSummary}
             onOpenBridge={() => setWorkspaceTab("bridge")}
+            onOpenDetail={(topic) => setDashboardDetailTopic(topic)}
             onOpenFeed={() => setWorkspaceTab("feed")}
             onOpenSettings={() => setWorkspaceTab("settings")}
             onOpenWorkflow={() => setWorkspaceTab("workflow")}
             pendingApprovalsCount={pendingApprovals.length}
             scheduleCount={batchScheduler.schedules.length}
             webBridgeRunning={webBridgeStatus.running}
+          />
+        )}
+        {workspaceTab === "dashboard" && dashboardDetailTopic != null && (
+          <DashboardDetailPage
+            onBack={() => setDashboardDetailTopic(null)}
+            onOpenFeed={() => setWorkspaceTab("feed")}
+            topic={dashboardDetailTopic}
           />
         )}
 
