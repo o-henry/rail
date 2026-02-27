@@ -1,6 +1,14 @@
 import { getTurnExecutor, type TurnConfig, type WebProvider } from "../../features/workflow/domain";
 import type { GraphData, GraphEdge, GraphNode, NodeExecutionStatus } from "../../features/workflow/types";
-import type { CodexMultiAgentMode, FeedInputSource, FeedPost, NodeRunState, RunRecord } from "./types";
+import type {
+  CodexMultiAgentMode,
+  EvidenceEnvelope,
+  FeedInputSource,
+  FeedPost,
+  NodeResponsibilityMemory,
+  NodeRunState,
+  RunRecord,
+} from "./types";
 
 export function graphRequiresCodexEngine(nodes: GraphNode[]): boolean {
   return nodes.some((node) => node.type === "turn" && getTurnExecutor(node.config as TurnConfig) === "codex");
@@ -244,4 +252,62 @@ export function rememberFeedSource(latestFeedSourceByNodeId: Map<string, FeedInp
     summary: post.summary,
     sourcePostId: post.id,
   });
+}
+
+export function appendNodeEvidenceWithMemory(params: {
+  node: GraphNode;
+  output: unknown;
+  provider?: string;
+  summary?: string;
+  createdAt?: string;
+  normalizedEvidenceByNodeId: Record<string, EvidenceEnvelope[]>;
+  runMemoryByNodeId: Record<string, NodeResponsibilityMemory>;
+  runRecord: RunRecord;
+  turnRoleLabelFn: (node: GraphNode) => string;
+  nodeTypeLabelFn: (type: GraphNode["type"]) => string;
+  normalizeEvidenceEnvelopeFn: (params: {
+    nodeId: string;
+    roleLabel: string;
+    provider?: string;
+    output: unknown;
+    fallbackCapturedAt?: string;
+  }) => EvidenceEnvelope;
+  updateRunMemoryByEnvelopeFn: (
+    current: Record<string, NodeResponsibilityMemory>,
+    params: {
+      nodeId: string;
+      roleLabel: string;
+      summary?: string;
+      envelope: EvidenceEnvelope;
+    },
+  ) => Record<string, NodeResponsibilityMemory>;
+}): {
+  envelope: EvidenceEnvelope;
+  runMemoryByNodeId: Record<string, NodeResponsibilityMemory>;
+} {
+  const roleLabel =
+    params.node.type === "turn" ? params.turnRoleLabelFn(params.node) : params.nodeTypeLabelFn(params.node.type);
+  const envelope = params.normalizeEvidenceEnvelopeFn({
+    nodeId: params.node.id,
+    roleLabel,
+    provider: params.provider,
+    output: params.output,
+    fallbackCapturedAt: params.createdAt,
+  });
+  params.normalizedEvidenceByNodeId[params.node.id] = [
+    ...(params.normalizedEvidenceByNodeId[params.node.id] ?? []),
+    envelope,
+  ];
+  const nextRunMemoryByNodeId = params.updateRunMemoryByEnvelopeFn(params.runMemoryByNodeId, {
+    nodeId: params.node.id,
+    roleLabel,
+    summary: params.summary,
+    envelope,
+  });
+  params.runRecord.normalizedEvidenceByNodeId = params.normalizedEvidenceByNodeId;
+  params.runRecord.runMemory = nextRunMemoryByNodeId;
+  return {
+    envelope,
+    runMemoryByNodeId: nextRunMemoryByNodeId,
+  };
 }

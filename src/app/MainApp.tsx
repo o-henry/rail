@@ -228,6 +228,7 @@ import {
   isPauseSignalError,
 } from "./main/runGraphExecutionUtils";
 import {
+  appendNodeEvidenceWithMemory,
   buildFinalNodeFailureReason,
   buildGraphExecutionIndex,
   buildWebConnectPreflightReasons,
@@ -3902,32 +3903,18 @@ function App() {
         summary?: string;
         createdAt?: string;
       }): EvidenceEnvelope => {
-        const envelope = normalizeEvidenceEnvelope({
-          nodeId: params.node.id,
-          roleLabel:
-            params.node.type === "turn"
-              ? turnRoleLabel(params.node)
-              : nodeTypeLabel(params.node.type),
-          provider: params.provider,
-          output: params.output,
-          fallbackCapturedAt: params.createdAt,
+        const result = appendNodeEvidenceWithMemory({
+          ...params,
+          normalizedEvidenceByNodeId,
+          runMemoryByNodeId,
+          runRecord,
+          turnRoleLabelFn: turnRoleLabel,
+          nodeTypeLabelFn: nodeTypeLabel,
+          normalizeEvidenceEnvelopeFn: normalizeEvidenceEnvelope,
+          updateRunMemoryByEnvelopeFn: updateRunMemoryByEnvelope,
         });
-        normalizedEvidenceByNodeId[params.node.id] = [
-          ...(normalizedEvidenceByNodeId[params.node.id] ?? []),
-          envelope,
-        ];
-        runMemoryByNodeId = updateRunMemoryByEnvelope(runMemoryByNodeId, {
-          nodeId: params.node.id,
-          roleLabel:
-            params.node.type === "turn"
-              ? turnRoleLabel(params.node)
-              : nodeTypeLabel(params.node.type),
-          summary: params.summary,
-          envelope,
-        });
-        runRecord.normalizedEvidenceByNodeId = normalizedEvidenceByNodeId;
-        runRecord.runMemory = runMemoryByNodeId;
-        return envelope;
+        runMemoryByNodeId = result.runMemoryByNodeId;
+        return result.envelope;
       };
 
       const queue: string[] = [];
