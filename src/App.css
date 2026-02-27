@@ -383,6 +383,8 @@ h3 {
 }
 
 .app-shell {
+  --user-bg-image: none;
+  --user-bg-opacity: 0;
   position: relative;
   isolation: isolate;
   overflow: hidden;
@@ -394,6 +396,24 @@ h3 {
   grid-template-columns: 64px minmax(0, 1fr);
   column-gap: 4px;
   background: var(--app-shell-bg);
+}
+
+.app-shell::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-image: var(--user-bg-image);
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: cover;
+  opacity: var(--user-bg-opacity);
+}
+
+.app-shell > * {
+  position: relative;
+  z-index: 1;
 }
 
 .app-shell.canvas-fullscreen-mode {
@@ -1956,6 +1976,25 @@ h3 {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 8px;
+}
+
+.settings-background-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 8px;
+}
+
+.settings-background-name {
+  min-width: 0;
+}
+
+.settings-background-file-input {
+  display: none;
+}
+
+.settings-opacity-slider {
+  width: 100%;
+  accent-color: #5f88d7;
 }
 
 .settings-cwd-picker {

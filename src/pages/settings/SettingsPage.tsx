@@ -1,3 +1,4 @@
+import { type ChangeEvent, useRef } from "react";
 import FancySelect from "../../components/FancySelect";
 import { useI18n } from "../../i18n";
 
@@ -19,10 +20,16 @@ type SettingsPageProps = {
   running: boolean;
   isGraphRunning: boolean;
   codexAuthBusy: boolean;
+  backgroundImageName: string;
+  hasBackgroundImage: boolean;
+  backgroundImageOpacity: number;
   onSelectCwdDirectory: () => void;
   onSetModel: (next: string) => void;
   onSetCodexMultiAgentMode: (next: string) => void;
   onSetThemeMode: (next: string) => void;
+  onSelectBackgroundImage: (file: File | null) => void;
+  onClearBackgroundImage: () => void;
+  onSetBackgroundImageOpacity: (nextOpacity: number) => void;
   onCheckUsage: () => void;
   onToggleCodexLogin: () => void;
   onCloseUsageResult: () => void;
@@ -49,16 +56,30 @@ export default function SettingsPage({
   running,
   isGraphRunning,
   codexAuthBusy,
+  backgroundImageName,
+  hasBackgroundImage,
+  backgroundImageOpacity,
   onSelectCwdDirectory,
   onSetModel,
   onSetCodexMultiAgentMode,
   onSetThemeMode,
+  onSelectBackgroundImage,
+  onClearBackgroundImage,
+  onSetBackgroundImageOpacity,
   onCheckUsage,
   onToggleCodexLogin,
   onCloseUsageResult,
   onOpenRunsFolder,
 }: SettingsPageProps) {
   const { t } = useI18n();
+  const backgroundFileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const onBackgroundFileChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const nextFile = event.target.files?.[0] ?? null;
+    onSelectBackgroundImage(nextFile);
+    event.currentTarget.value = "";
+  };
+
   return (
     <section className={`controls ${compact ? "settings-compact" : ""}`}>
       <h3>{t("settings.title")}</h3>
@@ -100,6 +121,55 @@ export default function SettingsPage({
           onChange={onSetCodexMultiAgentMode}
           options={[...codexMultiAgentModeOptions]}
           value={codexMultiAgentMode}
+        />
+      </label>
+      <label>
+        배경 이미지
+        <div className="settings-background-row">
+          <input
+            className="settings-background-name"
+            readOnly
+            value={
+              hasBackgroundImage
+                ? backgroundImageName || "사용자 이미지 적용됨"
+                : "선택된 이미지 없음"
+            }
+          />
+          <button
+            className="settings-cwd-picker"
+            onClick={() => backgroundFileInputRef.current?.click()}
+            type="button"
+          >
+            {hasBackgroundImage ? "이미지 변경" : "이미지 선택"}
+          </button>
+          <button
+            className="settings-cwd-picker"
+            disabled={!hasBackgroundImage}
+            onClick={onClearBackgroundImage}
+            type="button"
+          >
+            배경 제거
+          </button>
+        </div>
+        <input
+          accept="image/*"
+          className="settings-background-file-input"
+          onChange={onBackgroundFileChange}
+          ref={backgroundFileInputRef}
+          type="file"
+        />
+      </label>
+      <label>
+        배경 불투명도 ({Math.round(backgroundImageOpacity * 100)}%)
+        <input
+          className="settings-opacity-slider"
+          disabled={!hasBackgroundImage}
+          max="1"
+          min="0"
+          onChange={(event) => onSetBackgroundImageOpacity(Number(event.currentTarget.value))}
+          step="0.05"
+          type="range"
+          value={backgroundImageOpacity}
         />
       </label>
       {SHOW_THEME_MODE_SETTING && (
