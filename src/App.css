@@ -3947,6 +3947,99 @@ h3 {
   border: 1px solid var(--surface-strong);
 }
 
+.agents-layout {
+  margin: 0 10px 10px;
+  min-height: 0;
+  height: 100%;
+  display: grid;
+  grid-template-rows: auto 1fr auto auto;
+  gap: 14px;
+  overflow: auto;
+  padding-top: 4px;
+}
+
+.agents-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.agents-header h2 {
+  font-size: 1.04rem;
+}
+
+.agents-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.agents-header-actions button {
+  border: 1px solid var(--surface-strong);
+  border-radius: 999px;
+  background: var(--surface-panel);
+}
+
+.agents-hero {
+  min-height: 0;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 10px;
+}
+
+.agents-hero-icon {
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--surface-soft);
+  border: 1px solid var(--surface-strong);
+  font-size: 22px;
+}
+
+.agents-hero h1 {
+  font-size: 2.2rem;
+  font-weight: 600;
+}
+
+.agents-hero p {
+  font-size: 1.2rem;
+  color: var(--text-muted);
+}
+
+.agents-quick-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.agents-quick-card {
+  border-radius: 14px;
+  border: 1px solid var(--surface-strong);
+  min-height: 56px;
+  background: var(--surface-panel);
+  text-align: left;
+  padding: 12px 14px;
+}
+
+.agents-input-shell {
+  border-radius: 20px;
+  border: 1px solid var(--surface-strong);
+  background: var(--surface-panel);
+  padding: 10px 12px;
+}
+
+.agents-input-shell input {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  padding: 8px 6px;
+}
+
 .childview-view {
   margin: 0 10px 10px;
   height: 100%;
@@ -4384,6 +4477,7 @@ pre {
   .childview-view,
   .settings-view,
   .dashboard-layout,
+  .agents-layout,
   .bridge-view,
   .dev-layout {
     margin: 0 10px 10px;
@@ -4391,6 +4485,10 @@ pre {
   }
 
   .dashboard-widget-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .agents-quick-grid {
     grid-template-columns: 1fr;
   }
 

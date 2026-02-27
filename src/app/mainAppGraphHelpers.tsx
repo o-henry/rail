@@ -27,7 +27,7 @@ import {
 } from "./mainAppUtils";
 import { useI18n } from "../i18n";
 
-export type WorkspaceTab = "dashboard" | "workflow" | "feed" | "settings" | "bridge";
+export type WorkspaceTab = "dashboard" | "workflow" | "feed" | "agents" | "settings" | "bridge";
 
 export type TurnTerminal = {
   ok: boolean;
@@ -198,6 +198,18 @@ export function NavIcon({ tab, active = false }: { tab: WorkspaceTab; active?: b
         className="nav-workflow-image nav-feed-image"
         src={active ? "/post.svg" : "/post.svg"}
       />
+    );
+  }
+  if (tab === "agents") {
+    return (
+      <svg aria-hidden="true" fill="none" height="20" viewBox="0 0 24 24" width="20">
+        <path
+          d="M8.5 5.5h7a3 3 0 013 3v7a3 3 0 01-3 3h-7a3 3 0 01-3-3v-7a3 3 0 013-3z"
+          stroke="currentColor"
+          strokeWidth="1.6"
+        />
+        <path d="M9.5 12h5M12 9.5v5" stroke="currentColor" strokeLinecap="round" strokeWidth="1.6" />
+      </svg>
     );
   }
   if (tab === "settings") {

@@ -80,8 +80,10 @@ export function useWorkflowShortcuts(params: UseWorkflowShortcutsParams) {
       } else if (key === "3") {
         nextTab = "feed";
       } else if (key === "4") {
-        nextTab = "bridge";
+        nextTab = "agents";
       } else if (key === "5") {
+        nextTab = "bridge";
+      } else if (key === "6") {
         nextTab = "settings";
       }
 
@@ -98,6 +100,8 @@ export function useWorkflowShortcuts(params: UseWorkflowShortcutsParams) {
           ? "워크플로우 탭으로 이동"
           : nextTab === "feed"
             ? "피드 탭으로 이동"
+            : nextTab === "agents"
+              ? "에이전트 탭으로 이동"
             : nextTab === "bridge"
               ? "웹 연결 탭으로 이동"
               : "설정 탭으로 이동",

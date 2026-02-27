@@ -10,6 +10,7 @@ import BridgePage from "../pages/bridge/BridgePage";
 import FeedPage from "../pages/feed/FeedPage";
 import DashboardPage from "../pages/dashboard/DashboardPage";
 import DashboardDetailPage, { type DashboardDetailTopic } from "../pages/dashboard/DashboardDetailPage";
+import AgentsPage from "../pages/agents/AgentsPage";
 import SettingsPage from "../pages/settings/SettingsPage";
 import WorkflowPage from "../pages/workflow/WorkflowPage";
 import { useFloatingPanel } from "../features/ui/useFloatingPanel";
@@ -1765,6 +1766,11 @@ function App() {
       setDashboardDetailTopic(null);
     }
   };
+  const onAgentQuickAction = (prompt: string) => {
+    setWorkflowQuestion(prompt);
+    setWorkspaceTab("workflow");
+    setStatus("에이전트 요청이 워크플로우 입력에 반영되었습니다.");
+  };
   return (
     <main className={`app-shell ${canvasFullscreen ? "canvas-fullscreen-mode" : ""}`}>
       <AppNav
@@ -1900,6 +1906,9 @@ function App() {
 
         {workspaceTab === "feed" && (
           <FeedPage vm={feedPageVm} />
+        )}
+        {workspaceTab === "agents" && (
+          <AgentsPage onQuickAction={onAgentQuickAction} />
         )}
 
         {workspaceTab === "settings" && (
