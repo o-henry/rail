@@ -3868,6 +3868,35 @@ function App() {
     setActiveFeedRunMeta(null);
   }
 
+  async function handleRunPauseIfNeeded(
+    activeTasks: Map<string, Promise<void>>,
+    pauseStatusShown: boolean,
+  ): Promise<{ handled: boolean; pauseStatusShown: boolean }> {
+    if (!pauseRequestedRef.current) {
+      return { handled: false, pauseStatusShown };
+    }
+    if (activeTasks.size > 0) {
+      await Promise.race(activeTasks.values());
+      return { handled: true, pauseStatusShown };
+    }
+    if (!pauseStatusShown) {
+      pauseStatusShown = true;
+      setIsGraphPaused(true);
+      setStatus("그래프 실행 일시정지됨");
+    }
+    await new Promise<void>((resolve) => {
+      const intervalId = window.setInterval(() => {
+        if (!pauseRequestedRef.current) {
+          window.clearInterval(intervalId);
+          resolve();
+        }
+      }, 120);
+    });
+    setIsGraphPaused(false);
+    setStatus("그래프 실행 재개");
+    return { handled: true, pauseStatusShown: false };
+  }
+
   async function onRunGraph(skipWebConnectPreflight = false) {
     if (isGraphRunning && isGraphPaused) {
       pauseRequestedRef.current = false;
@@ -4614,27 +4643,9 @@ function App() {
       };
 
       while (queue.length > 0 || activeTasks.size > 0) {
-        if (pauseRequestedRef.current) {
-          if (activeTasks.size > 0) {
-            await Promise.race(activeTasks.values());
-            continue;
-          }
-          if (!pauseStatusShown) {
-            pauseStatusShown = true;
-            setIsGraphPaused(true);
-            setStatus("그래프 실행 일시정지됨");
-          }
-          await new Promise<void>((resolve) => {
-            const intervalId = window.setInterval(() => {
-              if (!pauseRequestedRef.current) {
-                window.clearInterval(intervalId);
-                resolve();
-              }
-            }, 120);
-          });
-          pauseStatusShown = false;
-          setIsGraphPaused(false);
-          setStatus("그래프 실행 재개");
+        const pauseResult = await handleRunPauseIfNeeded(activeTasks, pauseStatusShown);
+        pauseStatusShown = pauseResult.pauseStatusShown;
+        if (pauseResult.handled) {
           continue;
         }
 
