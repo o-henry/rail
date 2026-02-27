@@ -798,6 +798,10 @@ h3 {
   padding-bottom: 1px;
 }
 
+.workflow-question-input {
+  margin-bottom: 0;
+}
+
 .workflow-question-input .agents-composer-left::-webkit-scrollbar {
   width: 0;
   height: 0;
@@ -4623,6 +4627,10 @@ h3 {
   gap: 8px;
   box-shadow: 0 3px 10px rgba(15, 24, 34, 0.06);
   margin: 0px 0 6px 0;
+}
+
+.agents-composer.workflow-question-input {
+  margin-bottom: 0;
 }
 
 .agents-file-input {
