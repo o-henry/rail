@@ -17,6 +17,7 @@ type DashboardPageProps = {
 };
 
 type DashboardCard = {
+  id: "workflow" | "approvals" | "webConnect" | "schedules";
   title: string;
   value: string;
   caption: string;
@@ -115,11 +116,13 @@ export default function DashboardPage(props: DashboardPageProps) {
   const cards = useMemo<DashboardCard[]>(
     () => [
       {
+        id: "workflow",
         title: t("dashboard.card.workflow"),
         value: props.isGraphRunning ? t("dashboard.status.running") : t("dashboard.status.idle"),
         caption: props.cwd || t("dashboard.value.none"),
       },
       {
+        id: "approvals",
         title: t("dashboard.card.approvals"),
         value: String(props.pendingApprovalsCount),
         caption:
@@ -128,11 +131,13 @@ export default function DashboardPage(props: DashboardPageProps) {
             : t("label.status.done"),
       },
       {
+        id: "webConnect",
         title: t("dashboard.card.webConnect"),
         value: props.webBridgeRunning ? t("dashboard.status.connected") : t("dashboard.status.disconnected"),
         caption: `${props.connectedProviderCount} providers`,
       },
       {
+        id: "schedules",
         title: t("dashboard.card.schedules"),
         value: `${props.enabledScheduleCount}/${props.scheduleCount}`,
         caption: t("dashboard.card.lastBatch"),
@@ -151,21 +156,18 @@ export default function DashboardPage(props: DashboardPageProps) {
   );
 
   return (
-    <section className="dashboard-layout workspace-tab-panel">
-      <section className="dashboard-grid">
+    <section className="dashboard-layout dashboard-overview-layout workspace-tab-panel">
+      <section className="dashboard-mosaic">
         {cards.map((card) => (
-          <article className="panel-card dashboard-card" key={card.title}>
+          <article className={`panel-card dashboard-tile dashboard-card dashboard-area-${card.id}`} key={card.id}>
             <h2>{card.title}</h2>
             <strong>{card.value}</strong>
             <p>{card.caption}</p>
           </article>
         ))}
-      </section>
-
-      <section className="dashboard-widget-grid">
         {widgets.map((widget) => (
           <button
-            className="panel-card dashboard-widget-card dashboard-widget-button"
+            className={`panel-card dashboard-tile dashboard-widget-card dashboard-widget-button dashboard-area-${widget.topic}`}
             key={widget.topic}
             onClick={() => props.onOpenDetail(widget.topic)}
             type="button"

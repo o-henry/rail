@@ -3964,18 +3964,81 @@ h3 {
   margin: 0 10px 10px;
   min-height: 0;
   display: grid;
-  grid-template-rows: auto auto auto;
-  gap: 14px;
+  gap: 10px;
   overflow: auto;
-  padding-bottom: 16px;
-  padding-top: 4px;
+  padding-bottom: 8px;
 }
 
-.dashboard-grid {
+.dashboard-overview-layout {
+  height: 100%;
+  overflow: hidden;
+  padding-top: 2px;
+}
+
+.dashboard-mosaic {
   min-height: 0;
+  height: 100%;
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
+  gap: 8px;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  grid-template-rows: repeat(3, minmax(0, 1fr));
+  grid-template-areas:
+    "workflow workflow approvals approvals webConnect webConnect schedules schedules marketSummary marketSummary marketSummary marketSummary"
+    "globalHeadlines globalHeadlines globalHeadlines industryTrendRadar industryTrendRadar industryTrendRadar communityHotTopics communityHotTopics reliabilityPanel reliabilityPanel reliabilityPanel reliabilityPanel"
+    "eventCalendar eventCalendar eventCalendar eventCalendar riskAlertBoard riskAlertBoard riskAlertBoard riskAlertBoard devEcosystem devEcosystem devEcosystem devEcosystem";
+}
+
+.dashboard-tile {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.dashboard-area-workflow {
+  grid-area: workflow;
+}
+
+.dashboard-area-approvals {
+  grid-area: approvals;
+}
+
+.dashboard-area-webConnect {
+  grid-area: webConnect;
+}
+
+.dashboard-area-schedules {
+  grid-area: schedules;
+}
+
+.dashboard-area-globalHeadlines {
+  grid-area: globalHeadlines;
+}
+
+.dashboard-area-industryTrendRadar {
+  grid-area: industryTrendRadar;
+}
+
+.dashboard-area-marketSummary {
+  grid-area: marketSummary;
+}
+
+.dashboard-area-communityHotTopics {
+  grid-area: communityHotTopics;
+}
+
+.dashboard-area-reliabilityPanel {
+  grid-area: reliabilityPanel;
+}
+
+.dashboard-area-eventCalendar {
+  grid-area: eventCalendar;
+}
+
+.dashboard-area-riskAlertBoard {
+  grid-area: riskAlertBoard;
+}
+
+.dashboard-area-devEcosystem {
+  grid-area: devEcosystem;
 }
 
 .dashboard-card {
@@ -3983,46 +4046,39 @@ h3 {
 }
 
 .dashboard-card h2 {
-  font-size: 0.88rem;
+  margin: 0;
+  font-size: 0.77rem;
   color: var(--text-muted);
 }
 
 .dashboard-card strong {
-  font-size: 1.4rem;
+  font-size: 1.5rem;
   letter-spacing: -0.02em;
-  color: #1f252b;
+  color: var(--text-main);
 }
 
 .dashboard-card p {
-  font-size: 0.86rem;
+  margin: 0;
+  font-size: 0.81rem;
   color: var(--text-muted);
   word-break: break-word;
 }
 
-.dashboard-footer {
-  gap: 12px;
-}
-
-.dashboard-widget-grid {
-  min-height: 0;
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
-}
-
 .dashboard-widget-card {
-  gap: 10px;
+  gap: 8px;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
 }
 
 .dashboard-widget-button {
   text-align: left;
-  transition: border-color 160ms ease, transform 160ms ease, box-shadow 160ms ease;
+  border: 1px solid transparent;
+  transition: border-color 160ms ease, transform 160ms ease, box-shadow 160ms ease, background 160ms ease;
 }
 
 .dashboard-widget-button:hover {
   border-color: var(--surface-strong);
-  transform: translateY(-2px);
-  box-shadow: 0 14px 24px rgba(32, 38, 46, 0.1);
+  transform: translateY(-1px);
 }
 
 .dashboard-widget-head {
@@ -4033,25 +4089,42 @@ h3 {
 }
 
 .dashboard-widget-head h3 {
-  font-size: 0.95rem;
+  margin: 0;
+  font-size: 0.89rem;
+  line-height: 1.2;
 }
 
 .dashboard-widget-head span {
   color: var(--text-muted);
-  font-size: 0.75rem;
+  font-size: 0.68rem;
 }
 
 .dashboard-widget-card ul {
   margin: 0;
-  padding-left: 16px;
+  padding-left: 14px;
   display: grid;
   gap: 6px;
+  align-content: start;
 }
 
 .dashboard-widget-card li {
   color: var(--text-main);
-  font-size: 0.86rem;
-  line-height: 1.4;
+  font-size: 0.8rem;
+  line-height: 1.35;
+}
+
+.dashboard-area-marketSummary {
+  background: linear-gradient(162deg, rgba(95, 136, 215, 0.22), rgba(95, 136, 215, 0.04) 58%);
+}
+
+.dashboard-area-globalHeadlines,
+.dashboard-area-industryTrendRadar,
+.dashboard-area-reliabilityPanel {
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.66), rgba(245, 248, 252, 0.92));
+}
+
+.dashboard-footer {
+  gap: 12px;
 }
 
 .dashboard-stock-chart-wrap {
@@ -4214,7 +4287,7 @@ h3 {
 }
 
 :root[data-theme="light"] .dashboard-layout {
-  gap: 12px;
+  gap: 10px;
   padding-top: 0;
 }
 
@@ -4223,13 +4296,32 @@ h3 {
 }
 
 :root[data-theme="light"] .dashboard-widget-button {
-  border: 1px solid transparent;
-  transition: border-color 160ms ease, transform 160ms ease;
+  border: 1px solid #eef2f7;
+  background: #f9fbfe;
 }
 
 :root[data-theme="light"] .dashboard-widget-button:hover {
   transform: translateY(-1px);
-  box-shadow: none;
+  box-shadow: 0 8px 18px rgba(30, 45, 62, 0.08);
+}
+
+:root[data-theme="light"] .dashboard-card {
+  background: #f8f9fc;
+}
+
+:root[data-theme="dark"] .dashboard-card,
+:root[data-theme="dark"] .dashboard-widget-button {
+  border-color: #343841;
+}
+
+:root[data-theme="dark"] .dashboard-area-marketSummary {
+  background: linear-gradient(162deg, rgba(87, 134, 220, 0.28), rgba(58, 84, 130, 0.1) 60%);
+}
+
+:root[data-theme="dark"] .dashboard-area-globalHeadlines,
+:root[data-theme="dark"] .dashboard-area-industryTrendRadar,
+:root[data-theme="dark"] .dashboard-area-reliabilityPanel {
+  background: linear-gradient(155deg, rgba(48, 53, 62, 0.78), rgba(41, 45, 52, 0.95));
 }
 
 :root[data-theme="dark"] .dashboard-stock-chart-line,
@@ -4891,6 +4983,23 @@ pre {
   .feed-main {
     width: 100%;
   }
+
+  .dashboard-overview-layout {
+    overflow: auto;
+  }
+
+  .dashboard-mosaic {
+    height: auto;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    grid-template-rows: repeat(6, minmax(120px, auto));
+    grid-template-areas:
+      "workflow workflow approvals approvals webConnect webConnect"
+      "schedules schedules marketSummary marketSummary marketSummary marketSummary"
+      "globalHeadlines globalHeadlines globalHeadlines industryTrendRadar industryTrendRadar industryTrendRadar"
+      "communityHotTopics communityHotTopics communityHotTopics reliabilityPanel reliabilityPanel reliabilityPanel"
+      "eventCalendar eventCalendar riskAlertBoard riskAlertBoard devEcosystem devEcosystem"
+      "eventCalendar eventCalendar riskAlertBoard riskAlertBoard devEcosystem devEcosystem";
+  }
 }
 
 @media (max-width: 900px) {
@@ -4925,8 +5034,22 @@ pre {
     width: auto;
   }
 
-  .dashboard-widget-grid {
+  .dashboard-mosaic {
     grid-template-columns: 1fr;
+    grid-template-rows: unset;
+    grid-template-areas:
+      "workflow"
+      "approvals"
+      "webConnect"
+      "schedules"
+      "marketSummary"
+      "globalHeadlines"
+      "industryTrendRadar"
+      "communityHotTopics"
+      "reliabilityPanel"
+      "eventCalendar"
+      "riskAlertBoard"
+      "devEcosystem";
   }
 
   .agents-topbar {
