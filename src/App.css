@@ -106,28 +106,28 @@
 }
 
 :root[data-theme="dark"] {
-  color: #e6edf3;
-  background: #0f141b;
-  --surface: #1b222c;
-  --surface-strong: #252f3a;
-  --surface-soft: #2b3643;
-  --surface-panel: #131a23;
-  --surface-active: #334154;
-  --bg-app: #0f141b;
-  --app-shell-bg: #0f141b;
-  --workspace-bg: #111a25;
-  --workspace-border: #1e2a38;
+  color: #cccccc;
+  background: #1e1e1e;
+  --surface: #252526;
+  --surface-strong: #2d2d30;
+  --surface-soft: #333333;
+  --surface-panel: #252526;
+  --surface-active: #37373d;
+  --bg-app: #1e1e1e;
+  --app-shell-bg: #1e1e1e;
+  --workspace-bg: #1e1e1e;
+  --workspace-border: #3c3c3c;
   --workspace-shadow: none;
-  --nav-bg: transparent;
-  --nav-border: transparent;
+  --nav-bg: #252526;
+  --nav-border: #3c3c3c;
   --nav-shadow: none;
   --nav-button-shadow: none;
-  --panel-border: #273546;
+  --panel-border: #3c3c3c;
   --panel-shadow: none;
-  --text-main: #e6edf3;
-  --text-muted: #a3b1c3;
-  --text-danger: #ff9a9a;
-  --danger-bg: #3b1d22;
+  --text-main: #cccccc;
+  --text-muted: #9da0a6;
+  --text-danger: #f48771;
+  --danger-bg: #3a1f1b;
 }
 
 html[data-locale="en"] {
