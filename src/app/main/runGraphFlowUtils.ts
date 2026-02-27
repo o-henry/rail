@@ -1,4 +1,4 @@
-import { getTurnExecutor, type TurnConfig, type WebProvider } from "../../features/workflow/domain";
+import { getWebProviderFromExecutor, getTurnExecutor, type TurnConfig, type WebProvider } from "../../features/workflow/domain";
 import type { GraphData, GraphEdge, GraphNode, NodeExecutionStatus } from "../../features/workflow/types";
 import type {
   CodexMultiAgentMode,
@@ -310,4 +310,47 @@ export function appendNodeEvidenceWithMemory(params: {
     envelope,
     runMemoryByNodeId: nextRunMemoryByNodeId,
   };
+}
+
+export function scheduleRunnableGraphNodes(params: {
+  queue: string[];
+  activeTasks: Map<string, Promise<void>>;
+  dagMaxThreads: number;
+  nodeMap: Map<string, GraphNode>;
+  activeTurnTasks: number;
+  processNode: (nodeId: string) => Promise<void>;
+  reportSoftError: (prefix: string, error: unknown) => void;
+}): number {
+  let nextActiveTurnTasks = params.activeTurnTasks;
+  for (let index = 0; index < params.queue.length && params.activeTasks.size < params.dagMaxThreads; ) {
+    const nodeId = params.queue[index];
+    const node = params.nodeMap.get(nodeId);
+    if (!node) {
+      params.queue.splice(index, 1);
+      continue;
+    }
+    const turnExecutor = node.type === "turn" ? getTurnExecutor(node.config as TurnConfig) : null;
+    const isWebTurn = Boolean(turnExecutor && getWebProviderFromExecutor(turnExecutor));
+    const requiresTurnLock = node.type === "turn" && !isWebTurn;
+    if (requiresTurnLock && nextActiveTurnTasks > 0) {
+      index += 1;
+      continue;
+    }
+    params.queue.splice(index, 1);
+    if (requiresTurnLock) {
+      nextActiveTurnTasks += 1;
+    }
+    const task = params.processNode(nodeId)
+      .catch((error) => {
+        params.reportSoftError(`노드 실행 실패(${nodeId})`, error);
+      })
+      .finally(() => {
+        params.activeTasks.delete(nodeId);
+        if (requiresTurnLock) {
+          nextActiveTurnTasks = Math.max(0, nextActiveTurnTasks - 1);
+        }
+      });
+    params.activeTasks.set(nodeId, task);
+  }
+  return nextActiveTurnTasks;
 }

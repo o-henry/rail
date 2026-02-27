@@ -249,6 +249,7 @@ import {
   resolveDagMaxThreads,
   resolveFeedInputSources as resolveFeedInputSourcesForNode,
   resolveFinalNodeId,
+  scheduleRunnableGraphNodes,
   scheduleChildrenWhenReady,
 } from "./main/runGraphFlowUtils";
 import {
@@ -4587,36 +4588,15 @@ function App() {
         }
 
         if (!cancelRequestedRef.current) {
-          for (let index = 0; index < queue.length && activeTasks.size < dagMaxThreads; ) {
-            const nodeId = queue[index];
-            const node = nodeMap.get(nodeId);
-            if (!node) {
-              queue.splice(index, 1);
-              continue;
-            }
-            const turnExecutor = node.type === "turn" ? getTurnExecutor(node.config as TurnConfig) : null;
-            const isWebTurn = Boolean(turnExecutor && getWebProviderFromExecutor(turnExecutor));
-            const requiresTurnLock = node.type === "turn" && !isWebTurn;
-            if (requiresTurnLock && activeTurnTasks > 0) {
-              index += 1;
-              continue;
-            }
-            queue.splice(index, 1);
-            if (requiresTurnLock) {
-              activeTurnTasks += 1;
-            }
-            const task = processNode(nodeId)
-              .catch((error) => {
-                reportSoftError(`노드 실행 실패(${nodeId})`, error);
-              })
-              .finally(() => {
-                activeTasks.delete(nodeId);
-                if (requiresTurnLock) {
-                  activeTurnTasks = Math.max(0, activeTurnTasks - 1);
-                }
-              });
-            activeTasks.set(nodeId, task);
-          }
+          activeTurnTasks = scheduleRunnableGraphNodes({
+            queue,
+            activeTasks,
+            dagMaxThreads,
+            nodeMap,
+            activeTurnTasks,
+            processNode,
+            reportSoftError,
+          });
         }
 
         if (activeTasks.size > 0) {
