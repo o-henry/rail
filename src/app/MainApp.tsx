@@ -228,6 +228,7 @@ import { createCanvasDragZoomHandlers } from "./main/canvasDragZoomHandlers";
 import { createCanvasConnectionHandlers } from "./main/canvasConnectionHandlers";
 import { createCoreStateHandlers } from "./main/coreStateHandlers";
 import { createFeedKnowledgeHandlers } from "./main/feedKnowledgeHandlers";
+import { useMainAppStateEffects } from "./main/useMainAppStateEffects";
 import {
   PAUSE_ERROR_TOKEN,
   appendRunTransition,
@@ -279,7 +280,6 @@ import type {
   InternalMemorySnippet,
   NodeResponsibilityMemory,
   NodeMetric,
-  NodeVisualSize,
   QualityReport,
   RunRecord,
 } from "./main";
@@ -1547,37 +1547,47 @@ function App() {
     extractSelectedNodeId: (node) => node.id,
   });
 
-  useEffect(() => {
-    const nodeIdSet = new Set(canvasNodes.map((node) => node.id));
-    const filteredSelected = selectedNodeIds.filter((id) => nodeIdSet.has(id));
-    if (filteredSelected.length !== selectedNodeIds.length) {
-      setSelectedNodeIds(filteredSelected);
-    }
-
-    if (selectedNodeId && !nodeIdSet.has(selectedNodeId)) {
-      setSelectedNodeId(filteredSelected[0] ?? "");
-      return;
-    }
-
-    if (!selectedNodeId && filteredSelected.length > 0) {
-      setSelectedNodeId(filteredSelected[0]);
-      return;
-    }
-
-    if (selectedNodeId && !filteredSelected.includes(selectedNodeId)) {
-      setSelectedNodeIds((prev) => [...prev, selectedNodeId]);
-    }
-  }, [canvasNodes, selectedNodeIds, selectedNodeId]);
-
-  useEffect(() => {
-    if (!selectedEdgeKey) {
-      return;
-    }
-    const exists = canvasDisplayEdges.some((row) => !row.readOnly && row.edgeKey === selectedEdgeKey);
-    if (!exists) {
-      setSelectedEdgeKey("");
-    }
-  }, [canvasDisplayEdges, selectedEdgeKey]);
+  useMainAppStateEffects({
+    canvasNodes,
+    selectedNodeIds,
+    selectedNodeId,
+    setSelectedNodeIds,
+    setSelectedNodeId,
+    selectedEdgeKey,
+    canvasDisplayEdges,
+    setSelectedEdgeKey,
+    cwd,
+    workspaceCwdStorageKey: WORKSPACE_CWD_STORAGE_KEY,
+    loginCompleted,
+    loginCompletedStorageKey: LOGIN_COMPLETED_STORAGE_KEY,
+    authMode,
+    authModeStorageKey: AUTH_MODE_STORAGE_KEY,
+    codexMultiAgentMode,
+    codexMultiAgentModeStorageKey: CODEX_MULTI_AGENT_MODE_STORAGE_KEY,
+    syncQuestionInputHeight,
+    workflowQuestion,
+    syncCanvasLogicalViewport,
+    graphCanvasRef,
+    canvasZoom,
+    canvasFullscreen,
+    workspaceTab,
+    graph,
+    nodeSizeMapRef,
+    setNodeSizeVersion,
+    dragAutoPanFrameRef,
+    dragWindowMoveHandlerRef,
+    dragWindowUpHandlerRef,
+    edgeDragWindowMoveHandlerRef,
+    edgeDragWindowUpHandlerRef,
+    zoomStatusTimerRef,
+    webTurnResolverRef,
+    clearQueuedWebTurnRequests,
+    isConnectingDrag,
+    connectFromNodeId,
+    clientToLogicalPoint,
+    snapConnectPreviewPoint,
+    onCanvasMouseUp,
+  });
 
   useWorkflowShortcuts({
     workspaceTab,
@@ -1602,156 +1612,6 @@ function App() {
     graph,
   });
 
-  useEffect(() => {
-    try {
-      const next = cwd.trim();
-      if (!next || next === ".") {
-        window.localStorage.removeItem(WORKSPACE_CWD_STORAGE_KEY);
-        return;
-      }
-      window.localStorage.setItem(WORKSPACE_CWD_STORAGE_KEY, next);
-    } catch {
-      // ignore persistence failures
-    }
-  }, [cwd]);
-
-  useEffect(() => {
-    try {
-      window.localStorage.setItem(LOGIN_COMPLETED_STORAGE_KEY, loginCompleted ? "1" : "0");
-    } catch {
-      // ignore persistence failures
-    }
-  }, [loginCompleted]);
-
-  useEffect(() => {
-    try {
-      window.localStorage.setItem(AUTH_MODE_STORAGE_KEY, authMode);
-    } catch {
-      // ignore persistence failures
-    }
-  }, [authMode]);
-
-  useEffect(() => {
-    try {
-      window.localStorage.setItem(CODEX_MULTI_AGENT_MODE_STORAGE_KEY, codexMultiAgentMode);
-    } catch {
-      // ignore persistence failures
-    }
-  }, [codexMultiAgentMode]);
-
-  useEffect(() => {
-    syncQuestionInputHeight();
-  }, [workflowQuestion]);
-
-  useEffect(() => {
-    syncCanvasLogicalViewport();
-    const canvas = graphCanvasRef.current;
-    if (!canvas) {
-      return;
-    }
-    const onScrollOrResize = () => syncCanvasLogicalViewport();
-    canvas.addEventListener("scroll", onScrollOrResize, { passive: true });
-    window.addEventListener("resize", onScrollOrResize);
-    return () => {
-      canvas.removeEventListener("scroll", onScrollOrResize);
-      window.removeEventListener("resize", onScrollOrResize);
-    };
-  }, [canvasZoom, canvasFullscreen, workspaceTab]);
-
-  useEffect(() => {
-    syncCanvasLogicalViewport();
-  }, [graph.nodes, canvasZoom]);
-
-  useEffect(() => {
-    if (workspaceTab !== "workflow") {
-      return;
-    }
-    const canvas = graphCanvasRef.current;
-    if (!canvas) {
-      return;
-    }
-
-    const elements = Array.from(canvas.querySelectorAll<HTMLDivElement>(".graph-node[data-node-id]"));
-    const seen = new Set<string>();
-    let changed = false;
-
-    for (const element of elements) {
-      const nodeId = element.dataset.nodeId;
-      if (!nodeId) {
-        continue;
-      }
-      seen.add(nodeId);
-      const nextSize: NodeVisualSize = { width: element.offsetWidth, height: element.offsetHeight };
-      const prevSize = nodeSizeMapRef.current[nodeId];
-      if (!prevSize || prevSize.width !== nextSize.width || prevSize.height !== nextSize.height) {
-        nodeSizeMapRef.current[nodeId] = nextSize;
-        changed = true;
-      }
-    }
-
-    for (const knownId of Object.keys(nodeSizeMapRef.current)) {
-      if (!seen.has(knownId)) {
-        delete nodeSizeMapRef.current[knownId];
-        changed = true;
-      }
-    }
-
-    if (changed) {
-      setNodeSizeVersion((version) => version + 1);
-    }
-  });
-
-  useEffect(() => {
-    return () => {
-      if (dragAutoPanFrameRef.current != null) {
-        cancelAnimationFrame(dragAutoPanFrameRef.current);
-      }
-      if (dragWindowMoveHandlerRef.current) {
-        window.removeEventListener("mousemove", dragWindowMoveHandlerRef.current);
-      }
-      if (dragWindowUpHandlerRef.current) {
-        window.removeEventListener("mouseup", dragWindowUpHandlerRef.current);
-      }
-      if (edgeDragWindowMoveHandlerRef.current) {
-        window.removeEventListener("mousemove", edgeDragWindowMoveHandlerRef.current);
-      }
-      if (edgeDragWindowUpHandlerRef.current) {
-        window.removeEventListener("mouseup", edgeDragWindowUpHandlerRef.current);
-      }
-      if (zoomStatusTimerRef.current != null) {
-        window.clearTimeout(zoomStatusTimerRef.current);
-      }
-      if (webTurnResolverRef.current) {
-        webTurnResolverRef.current({ ok: false, error: "화면이 닫혀 실행이 취소되었습니다." });
-        webTurnResolverRef.current = null;
-      }
-      clearQueuedWebTurnRequests("화면이 닫혀 실행이 취소되었습니다.");
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!isConnectingDrag || !connectFromNodeId) {
-      return;
-    }
-    const onWindowMove = (event: MouseEvent) => {
-      const point = clientToLogicalPoint(event.clientX, event.clientY);
-      if (point) {
-        snapConnectPreviewPoint(point);
-      }
-    };
-    const onWindowUp = (event: MouseEvent) => {
-      onCanvasMouseUp({
-        clientX: event.clientX,
-        clientY: event.clientY,
-      });
-    };
-    window.addEventListener("mousemove", onWindowMove);
-    window.addEventListener("mouseup", onWindowUp);
-    return () => {
-      window.removeEventListener("mousemove", onWindowMove);
-      window.removeEventListener("mouseup", onWindowUp);
-    };
-  }, [isConnectingDrag, connectFromNodeId, canvasZoom]);
 
   async function saveRunRecord(runRecord: RunRecord) {
     const fileName = `run-${runRecord.runId}.json`;
