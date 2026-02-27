@@ -4084,8 +4084,9 @@ h3 {
 .settings-view {
   margin: 0 20rem 10px;
   display: grid;
+  grid-template-rows: auto auto;
   gap: 36px;
-  align-content: start;
+  align-content: space-between;
   overflow: auto;
   -ms-overflow-style: none;
   scrollbar-width: none;
