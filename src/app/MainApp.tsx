@@ -43,7 +43,6 @@ import {
   normalizeWebResultMode,
   toArtifactType,
   toTurnModelDisplayName,
-  toTurnModelEngineId,
   turnExecutorLabel,
   webProviderHomeUrl,
   webProviderLabel,
@@ -77,18 +76,8 @@ import {
 } from "../features/workflow/labels";
 import { QUALITY_DEFAULT_THRESHOLD } from "../features/workflow/quality";
 import {
-  buildFinalVisualizationDirective,
-  buildReadableDocumentDirective,
-  buildExpertOrchestrationDirective,
-  buildCodexMultiAgentDirective,
-  buildForcedAgentRuleBlock,
   injectOutputLanguageDirective,
-  buildOutputSchemaDirective,
-  extractFinalSynthesisInputText,
-  extractPromptInputText,
-  isLikelyWebPromptEcho,
   replaceInputPlaceholder,
-  stringifyInput,
   toHumanReadableFeedText,
 } from "../features/workflow/promptUtils";
 import {
@@ -126,11 +115,9 @@ import {
   LOGIN_COMPLETED_STORAGE_KEY,
   WORKSPACE_CWD_STORAGE_KEY,
   closestNumericOptionValue,
-  codexMultiAgentModeLabel,
   extractAuthMode,
   extractDeltaText,
   extractStringByPaths,
-  extractUsageStats,
   formatDuration,
   formatNodeElapsedTime,
   formatRunDateTime,
@@ -153,7 +140,6 @@ import {
   KNOWLEDGE_DEFAULT_MAX_CHARS,
   KNOWLEDGE_DEFAULT_TOP_K,
   NavIcon,
-  type TurnTerminal,
   type WorkspaceTab,
   isTurnTerminalEvent,
   normalizeKnowledgeConfig,
@@ -179,7 +165,6 @@ import {
   inferRunGroupMeta,
   isCriticalTurnNode,
   normalizeEvidenceEnvelope,
-  normalizeWebEvidenceOutput,
   normalizeWebTurnOutput,
   buildConflictLedger,
   computeFinalConfidence,
@@ -252,6 +237,7 @@ import {
   injectKnowledgeContext,
   loadAgentRuleDocs,
 } from "./main/turnExecutionUtils";
+import { executeTurnNodeWithContext } from "./main/executeTurnNode";
 import type {
   ApprovalDecision,
   AuthProbeResult,
@@ -265,9 +251,7 @@ import type {
   FeedViewPost,
   EvidenceEnvelope,
   InternalMemorySnippet,
-  InternalMemoryTraceEntry,
   NodeResponsibilityMemory,
-  KnowledgeTraceEntry,
   LoginChatgptResult,
   LogicalPoint,
   NodeMetric,
@@ -275,10 +259,7 @@ import type {
   NodeVisualSize,
   QualityReport,
   RunRecord,
-  ThreadStartResult,
   UsageCheckResult,
-  UsageStats,
-  WebProviderRunResult,
   WebWorkerHealth,
 } from "./main";
 
@@ -3731,537 +3712,62 @@ function App() {
     });
   }
 
-  async function executeTurnNode(
-    node: GraphNode,
-    input: unknown,
-  ): Promise<{
-    ok: boolean;
-    output?: unknown;
-    error?: string;
-    threadId?: string;
-    turnId?: string;
-    usage?: UsageStats;
-    executor: TurnExecutor;
-    provider: string;
-    knowledgeTrace?: KnowledgeTraceEntry[];
-    memoryTrace?: InternalMemoryTraceEntry[];
-  }> {
-    const config = node.config as TurnConfig;
-    const executor = getTurnExecutor(config);
-    const nodeModel = toTurnModelDisplayName(String(config.model ?? model).trim() || model);
-    const nodeModelEngine = toTurnModelEngineId(nodeModel);
-    const nodeCwd = resolveNodeCwd(config.cwd ?? cwd, cwd);
-    const promptTemplate = injectOutputLanguageDirective(
-      String(config.promptTemplate ?? "{{input}}"),
-      locale,
-    );
-    const nodeOllamaModel = String(config.ollamaModel ?? "llama3.1:8b").trim() || "llama3.1:8b";
-
-    const qualityProfile = inferQualityProfile(node, config);
-    const inputText =
-      qualityProfile === "synthesis_final"
-        ? extractFinalSynthesisInputText(input)
-        : extractPromptInputText(input);
-    const queuedRequests = consumeNodeRequests(node.id);
-    const queuedRequestBlock =
-      queuedRequests.length > 0
-        ? `\n\n[사용자 추가 요청]\n${queuedRequests.map((line, index) => `${index + 1}. ${line}`).join("\n")}`
-        : "";
-    if (queuedRequests.length > 0) {
-      addNodeLog(node.id, `[요청 반영] ${queuedRequests.length}개 추가 요청을 이번 실행에 반영했습니다.`);
-    }
-    const basePrompt = promptTemplate.includes("{{input}}")
-      ? replaceInputPlaceholder(promptTemplate, inputText)
-      : `${promptTemplate}${inputText ? `\n${inputText}` : ""}`;
-    const promptWithRequests = `${basePrompt}${queuedRequestBlock}`.trim();
-    const agentRuleDocs = await loadAgentRuleDocs({
-      nodeCwd,
+  async function executeTurnNode(node: GraphNode, input: unknown) {
+    return executeTurnNodeWithContext(node, input, {
+      model,
       cwd,
-      cacheTtlMs: AGENT_RULE_CACHE_TTL_MS,
-      maxDocs: AGENT_RULE_MAX_DOCS,
-      maxDocChars: AGENT_RULE_MAX_DOC_CHARS,
-      agentRulesCacheRef,
-      invokeFn: invoke,
-    });
-    const shouldForceAgentRules =
-      FORCE_AGENT_RULES_ALL_TURNS || inferQualityProfile(node, config) === "code_implementation";
-    if (agentRuleDocs.length > 0 && shouldForceAgentRules) {
-      addNodeLog(node.id, `[규칙] agent/skill 문서 ${agentRuleDocs.length}개 강제 적용`);
-    }
-    const forcedRuleBlock = shouldForceAgentRules ? buildForcedAgentRuleBlock(agentRuleDocs) : "";
-    const withKnowledge = await injectKnowledgeContext({
-      node,
-      prompt: promptWithRequests,
-      config,
+      locale,
       workflowQuestion,
-      activeRunPresetKind: activeRunPresetKindRef.current,
-      internalMemoryCorpus: internalMemoryCorpusRef.current,
-      enabledKnowledgeFiles,
-      graphKnowledge,
+      codexMultiAgentMode,
+      forceAgentRulesAllTurns: FORCE_AGENT_RULES_ALL_TURNS,
+      turnOutputSchemaEnabled: TURN_OUTPUT_SCHEMA_ENABLED,
+      pauseErrorToken: PAUSE_ERROR_TOKEN,
+      nodeStates,
+      activeRunPresetKindRef,
+      internalMemoryCorpusRef,
+      activeWebNodeByProviderRef,
+      activeWebPromptRef,
+      activeWebProviderByNodeRef,
+      activeWebPromptByNodeRef,
+      manualWebFallbackNodeRef,
+      pauseRequestedRef,
+      cancelRequestedRef,
+      activeTurnNodeIdRef,
+      activeRunDeltaRef,
+      turnTerminalResolverRef,
+      consumeNodeRequests,
       addNodeLog,
+      setStatus,
+      setNodeStatus,
+      setNodeRuntimeFields,
+      requestWebTurnResponse,
+      ensureWebWorkerReady,
+      clearWebBridgeStageWarnTimer,
+      loadAgentRuleDocs: async (nodeCwd) =>
+        loadAgentRuleDocs({
+          nodeCwd,
+          cwd,
+          cacheTtlMs: AGENT_RULE_CACHE_TTL_MS,
+          maxDocs: AGENT_RULE_MAX_DOCS,
+          maxDocChars: AGENT_RULE_MAX_DOC_CHARS,
+          agentRulesCacheRef,
+          invokeFn: invoke,
+        }),
+      injectKnowledgeContext: (params) =>
+        injectKnowledgeContext({
+          ...params,
+          workflowQuestion,
+          activeRunPresetKind: activeRunPresetKindRef.current,
+          internalMemoryCorpus: internalMemoryCorpusRef.current,
+          enabledKnowledgeFiles,
+          graphKnowledge,
+          addNodeLog,
+          invokeFn: invoke,
+        }),
       invokeFn: invoke,
+      openUrlFn: openUrl,
+      t,
     });
-    let textToSend = forcedRuleBlock
-      ? `${forcedRuleBlock}\n\n${withKnowledge.prompt}`.trim()
-      : withKnowledge.prompt;
-    const knowledgeTrace = withKnowledge.trace;
-    const memoryTrace = withKnowledge.memoryTrace;
-    const orchestrationDirective = buildExpertOrchestrationDirective(locale, qualityProfile);
-    if (orchestrationDirective) {
-      textToSend = `${orchestrationDirective}\n\n${textToSend}`.trim();
-      addNodeLog(node.id, "[오케스트레이션] 전문가 실행 계약 지침 자동 적용");
-    }
-    const outputSchemaRaw = String(config.outputSchemaJson ?? "").trim();
-    const hasStrictOutputSchema = TURN_OUTPUT_SCHEMA_ENABLED && outputSchemaRaw.length > 0;
-    const readableDocumentDirective =
-      qualityProfile === "synthesis_final" && !hasStrictOutputSchema
-        ? buildReadableDocumentDirective(locale)
-        : "";
-    if (readableDocumentDirective) {
-      textToSend = `${textToSend}\n\n${readableDocumentDirective}`.trim();
-      addNodeLog(node.id, "[포맷] 최종 문서 가독성 포맷 지침 자동 적용");
-    }
-    const shouldAutoVisualization = qualityProfile === "synthesis_final";
-    const visualizationDirective = shouldAutoVisualization ? buildFinalVisualizationDirective() : "";
-    if (visualizationDirective) {
-      textToSend = `${textToSend}\n\n${visualizationDirective}`.trim();
-      addNodeLog(node.id, "[시각화] 품질 프로필(최종 종합) 기반 시각화 지침 자동 적용");
-    }
-    const outputSchemaDirective = TURN_OUTPUT_SCHEMA_ENABLED ? buildOutputSchemaDirective(outputSchemaRaw) : "";
-    if (outputSchemaDirective) {
-      textToSend = `${textToSend}\n\n${outputSchemaDirective}`.trim();
-      addNodeLog(node.id, "[스키마] 출력 스키마 지시를 프롬프트에 자동 주입했습니다.");
-    }
-    if (executor === "codex" && qualityProfile === "synthesis_final") {
-      const multiAgentDirective = buildCodexMultiAgentDirective(codexMultiAgentMode);
-      if (multiAgentDirective) {
-        textToSend = `${multiAgentDirective}\n\n${textToSend}`.trim();
-        addNodeLog(node.id, `[멀티에이전트] Codex 최적화 모드 적용: ${codexMultiAgentModeLabel(codexMultiAgentMode)}`);
-      }
-    }
-
-    if (executor === "ollama") {
-      try {
-        const raw = await invoke<unknown>("ollama_generate", {
-          model: nodeOllamaModel,
-          prompt: textToSend,
-        });
-        const text =
-          extractStringByPaths(raw, ["response", "message.content", "content"]) ??
-          stringifyInput(raw);
-        return {
-          ok: true,
-          output: {
-            provider: "ollama",
-            timestamp: new Date().toISOString(),
-            text,
-            raw,
-          },
-          executor,
-          provider: "ollama",
-          knowledgeTrace,
-          memoryTrace,
-        };
-      } catch (error) {
-        return {
-          ok: false,
-          error: `Ollama 실행 실패: ${String(error)}`,
-          executor,
-          provider: "ollama",
-          knowledgeTrace,
-          memoryTrace,
-        };
-      }
-    }
-
-    const webProvider = getWebProviderFromExecutor(executor);
-    if (webProvider) {
-      const webResultMode = normalizeWebResultMode(config.webResultMode);
-      const webTimeoutMs = Math.max(5_000, Number(config.webTimeoutMs ?? 180_000) || 180_000);
-
-      if (webResultMode === "bridgeAssisted") {
-        activeWebNodeByProviderRef.current[webProvider] = node.id;
-        activeWebPromptRef.current[webProvider] = textToSend;
-        activeWebProviderByNodeRef.current[node.id] = webProvider;
-        activeWebPromptByNodeRef.current[node.id] = textToSend;
-        addNodeLog(node.id, `[WEB] ${webProviderLabel(webProvider)} 웹 연결 반자동 시작`);
-        addNodeLog(node.id, "[WEB] 프롬프트 자동 주입/전송을 시도합니다. 자동 전송 실패 시 웹 탭에서 전송 1회가 필요합니다.");
-        setStatus(`${webProviderLabel(webProvider)} 웹 연결 대기 중 - 자동 주입/전송 준비`);
-        const requestManualFallback = async (reasonLine: string) => {
-          addNodeLog(node.id, reasonLine);
-          addNodeLog(node.id, "[WEB] 수동 입력 모달로 전환합니다.");
-          setNodeStatus(node.id, "waiting_user", `${webProvider} 응답 입력 대기`);
-          setNodeRuntimeFields(node.id, {
-            status: "waiting_user",
-          });
-          const fallback = await requestWebTurnResponse(
-            node.id,
-            webProvider,
-            textToSend,
-            "manualPasteText",
-          );
-          const normalizedFallback =
-            fallback.ok && fallback.output !== undefined
-              ? {
-                  ...fallback,
-                  output: normalizeWebEvidenceOutput(
-                    webProvider,
-                    fallback.output,
-                    "manualPasteText",
-                  ),
-                }
-              : fallback;
-          return {
-            ...normalizedFallback,
-            executor,
-            provider: webProvider,
-            knowledgeTrace,
-            memoryTrace,
-          };
-        };
-        try {
-          await openUrl(webProviderHomeUrl(webProvider));
-          addNodeLog(node.id, `[WEB] ${webProviderLabel(webProvider)} 웹 탭을 자동으로 열었습니다.`);
-        } catch (error) {
-          addNodeLog(node.id, `[WEB] 웹 탭 자동 열기 실패: ${String(error)}`);
-        }
-        const workerReady = await ensureWebWorkerReady();
-        if (!workerReady) {
-          clearWebBridgeStageWarnTimer(webProvider);
-          if (activeWebNodeByProviderRef.current[webProvider] === node.id) {
-            delete activeWebNodeByProviderRef.current[webProvider];
-          }
-          delete activeWebProviderByNodeRef.current[node.id];
-          if (activeWebPromptRef.current[webProvider] === textToSend) {
-            delete activeWebPromptRef.current[webProvider];
-          }
-          delete activeWebPromptByNodeRef.current[node.id];
-          return requestManualFallback("[WEB] 웹 연결 워커 준비 실패, 수동 입력으로 전환");
-        } else {
-          const runBridgeAssisted = async (timeoutMs = webTimeoutMs) =>
-            invoke<WebProviderRunResult>("web_provider_run", {
-              provider: webProvider,
-              prompt: textToSend,
-              timeoutMs,
-              mode: "bridgeAssisted",
-            });
-
-          let result: WebProviderRunResult | null = null;
-          try {
-            const runPromise = runBridgeAssisted().then(
-              (value) => ({ state: "resolved" as const, value }),
-              (error) => ({ state: "rejected" as const, error }),
-            );
-
-            let settled: Awaited<typeof runPromise> | null = null;
-            while (!settled) {
-              if (pauseRequestedRef.current) {
-                addNodeLog(node.id, "[WEB] 일시정지 요청 감지 - 자동 수집 취소 요청");
-                try {
-                  await invoke("web_provider_cancel", { provider: webProvider });
-                } catch (cancelError) {
-                  addNodeLog(node.id, `[WEB] 자동 수집 취소 요청 실패: ${String(cancelError)}`);
-                }
-                await runPromise;
-                return {
-                  ok: false,
-                  error: PAUSE_ERROR_TOKEN,
-                  executor,
-                  provider: webProvider,
-                  knowledgeTrace,
-                  memoryTrace,
-                };
-              }
-
-              if (manualWebFallbackNodeRef.current[node.id]) {
-                addNodeLog(node.id, "[WEB] 수동 입력 전환 요청 감지 - 자동 수집 취소 요청");
-                try {
-                  await invoke("web_provider_cancel", { provider: webProvider });
-                } catch (cancelError) {
-                  addNodeLog(node.id, `[WEB] 자동 수집 취소 요청 실패: ${String(cancelError)}`);
-                }
-                const cancelSettled = await Promise.race([
-                  runPromise,
-                  new Promise<null>((resolve) => {
-                    window.setTimeout(() => resolve(null), 1200);
-                  }),
-                ]);
-                if (!cancelSettled) {
-                  addNodeLog(node.id, "[WEB] 자동 수집 취소 확인이 지연되어 즉시 수동 입력 모달로 전환합니다.");
-                }
-                delete manualWebFallbackNodeRef.current[node.id];
-                return requestManualFallback("[WEB] 사용자 요청으로 자동 수집을 중단하고 수동 입력으로 전환합니다.");
-              }
-
-              const polled = await Promise.race([
-                runPromise,
-                new Promise<null>((resolve) => {
-                  window.setTimeout(() => resolve(null), 200);
-                }),
-              ]);
-              if (polled) {
-                settled = polled;
-              }
-            }
-
-            if (settled.state === "rejected") {
-              throw settled.error;
-            }
-            result = settled.value;
-
-            if (result.ok && result.text && isLikelyWebPromptEcho(result.text, textToSend)) {
-              addNodeLog(
-                node.id,
-                `[WEB] 입력 에코로 보이는 응답을 감지해 폐기했습니다. (${webProviderLabel(webProvider)})`,
-              );
-              result = {
-                ok: false,
-                errorCode: "PROMPT_ECHO",
-                error: "웹 응답이 입력 에코로 감지되어 폐기되었습니다.",
-              } as WebProviderRunResult;
-            }
-
-            if (result.ok && result.text) {
-              addNodeLog(node.id, `[WEB] ${webProviderLabel(webProvider)} 웹 연결 응답 수집 완료`);
-              return {
-                ok: true,
-                output: normalizeWebEvidenceOutput(
-                  webProvider,
-                  {
-                    provider: webProvider,
-                    timestamp: new Date().toISOString(),
-                    text: result.text,
-                    raw: result.raw,
-                    meta: result.meta,
-                  },
-                  "bridgeAssisted",
-                ),
-                executor,
-                provider: webProvider,
-                knowledgeTrace,
-                memoryTrace,
-              };
-            }
-
-            if (cancelRequestedRef.current || pauseRequestedRef.current || result?.errorCode === "CANCELLED") {
-              if (manualWebFallbackNodeRef.current[node.id]) {
-                delete manualWebFallbackNodeRef.current[node.id];
-                return requestManualFallback("[WEB] 사용자 요청으로 자동 수집을 중단하고 수동 입력으로 전환합니다.");
-              }
-              if (pauseRequestedRef.current) {
-                return {
-                  ok: false,
-                  error: PAUSE_ERROR_TOKEN,
-                  executor,
-                  provider: webProvider,
-                  knowledgeTrace,
-                  memoryTrace,
-                };
-              }
-              return {
-                ok: false,
-                error: t("run.cancelledByUserShort"),
-                executor,
-                provider: webProvider,
-                knowledgeTrace,
-                memoryTrace,
-              };
-            }
-
-            return requestManualFallback(
-              `[WEB] 웹 연결 수집 실패 (${result?.errorCode ?? "UNKNOWN"}): ${
-                result?.error ?? "unknown error"
-              }`,
-            );
-          } catch (error) {
-            if (cancelRequestedRef.current || pauseRequestedRef.current) {
-              if (manualWebFallbackNodeRef.current[node.id]) {
-                delete manualWebFallbackNodeRef.current[node.id];
-                return requestManualFallback("[WEB] 사용자 요청으로 자동 수집을 중단하고 수동 입력으로 전환합니다.");
-              }
-              if (pauseRequestedRef.current) {
-                return {
-                  ok: false,
-                  error: PAUSE_ERROR_TOKEN,
-                  executor,
-                  provider: webProvider,
-                  knowledgeTrace,
-                  memoryTrace,
-                };
-              }
-              return {
-                ok: false,
-                error: t("run.cancelledByUserShort"),
-                executor,
-                provider: webProvider,
-                knowledgeTrace,
-                memoryTrace,
-              };
-            }
-            return requestManualFallback(`[WEB] 웹 연결 예외: ${String(error)}`);
-          } finally {
-            clearWebBridgeStageWarnTimer(webProvider);
-            if (activeWebNodeByProviderRef.current[webProvider] === node.id) {
-              delete activeWebNodeByProviderRef.current[webProvider];
-            }
-            delete activeWebProviderByNodeRef.current[node.id];
-            if (activeWebPromptRef.current[webProvider] === textToSend) {
-              delete activeWebPromptRef.current[webProvider];
-            }
-            delete activeWebPromptByNodeRef.current[node.id];
-            delete manualWebFallbackNodeRef.current[node.id];
-          }
-        }
-      }
-
-      try {
-        await openUrl(webProviderHomeUrl(webProvider));
-      } catch (error) {
-        return {
-          ok: false,
-          error: `웹 서비스 브라우저 열기 실패(${webProvider}): ${String(error)}`,
-          executor,
-          provider: webProvider,
-          knowledgeTrace,
-          memoryTrace,
-        };
-      }
-      setNodeStatus(node.id, "waiting_user", `${webProvider} 응답 입력 대기`);
-      setNodeRuntimeFields(node.id, {
-        status: "waiting_user",
-      });
-      return requestWebTurnResponse(
-        node.id,
-        webProvider,
-        textToSend,
-        webResultMode,
-      ).then((result) => ({
-        ...result,
-        executor,
-        provider: webProvider,
-        knowledgeTrace,
-        memoryTrace,
-      }));
-    }
-
-    let activeThreadId = extractStringByPaths(nodeStates[node.id], ["threadId"]);
-    if (!activeThreadId) {
-      const threadStart = await invoke<ThreadStartResult>("thread_start", {
-        model: nodeModelEngine,
-        cwd: nodeCwd,
-      });
-      activeThreadId = threadStart.threadId;
-    }
-
-    if (!activeThreadId) {
-      return {
-        ok: false,
-        error: "threadId를 가져오지 못했습니다.",
-        executor,
-        provider: "codex",
-        knowledgeTrace,
-        memoryTrace,
-      };
-    }
-
-    setNodeRuntimeFields(node.id, { threadId: activeThreadId });
-
-    activeTurnNodeIdRef.current = node.id;
-    activeRunDeltaRef.current[node.id] = "";
-
-    let timeoutHandle: ReturnType<typeof setTimeout> | null = null;
-    const terminalPromise = new Promise<TurnTerminal>((resolve) => {
-      turnTerminalResolverRef.current = resolve;
-      timeoutHandle = setTimeout(() => {
-        if (turnTerminalResolverRef.current) {
-          const resolver = turnTerminalResolverRef.current;
-          turnTerminalResolverRef.current = null;
-          resolver({ ok: false, status: "timeout", params: null });
-        }
-      }, 300000);
-    });
-
-    let turnStartResponse: unknown;
-    try {
-      turnStartResponse = await invoke<unknown>("turn_start", {
-        threadId: activeThreadId,
-        text: textToSend,
-      });
-    } catch (e) {
-      if (turnTerminalResolverRef.current) {
-        turnTerminalResolverRef.current = null;
-      }
-      if (timeoutHandle) {
-        clearTimeout(timeoutHandle);
-      }
-      activeTurnNodeIdRef.current = "";
-      return {
-        ok: false,
-        error: String(e),
-        threadId: activeThreadId,
-        executor: "codex",
-        provider: "codex",
-        knowledgeTrace,
-        memoryTrace,
-      };
-    }
-
-    const terminal = await terminalPromise;
-    if (timeoutHandle) {
-      clearTimeout(timeoutHandle);
-    }
-
-    const turnId =
-      extractStringByPaths(turnStartResponse, ["turnId", "turn_id", "id", "turn.id"]) ??
-      extractStringByPaths(terminal.params, ["turnId", "turn_id", "id", "turn.id"]);
-    const usage = extractUsageStats(terminal.params);
-
-    activeTurnNodeIdRef.current = "";
-
-    if (!terminal.ok) {
-      return {
-        ok: false,
-        error: `턴 실행 실패 (${terminal.status})`,
-        threadId: activeThreadId,
-        turnId: turnId ?? undefined,
-        usage,
-        executor: "codex",
-        provider: "codex",
-        knowledgeTrace,
-        memoryTrace,
-      };
-    }
-
-    const streamedText = String(activeRunDeltaRef.current[node.id] ?? "");
-    const completionText =
-      extractStringByPaths(terminal.params, [
-        "text",
-        "output_text",
-        "turn.output_text",
-        "turn.response.output_text",
-        "turn.response.text",
-        "response.output_text",
-        "response.text",
-      ]) ??
-      extractDeltaText(terminal.params);
-    const finalOutputText = (streamedText.trim() || completionText.trim())
-      ? (streamedText.trim() ? streamedText : completionText)
-      : "";
-
-    return {
-      ok: true,
-      output: {
-        text: finalOutputText,
-        completion: terminal.params,
-      },
-      threadId: activeThreadId,
-      turnId: turnId ?? undefined,
-      usage,
-      executor: "codex",
-      provider: "codex",
-      knowledgeTrace,
-      memoryTrace,
-    };
   }
 
   async function onRunGraph(skipWebConnectPreflight = false) {
