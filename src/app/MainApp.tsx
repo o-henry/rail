@@ -218,13 +218,10 @@ import WorkflowCanvasPane from "./main/WorkflowCanvasPane";
 import WorkflowInspectorPane from "./main/WorkflowInspectorPane";
 import { buildFeedPageVm, buildWorkflowInspectorPaneProps } from "./main/mainAppPropsBuilders";
 import {
-  buildFollowupDoneRunRecord,
-  buildFollowupFailedRunRecord,
-  buildFollowupInputText,
   cancelFeedReplyFeedbackClearTimer,
-  resolveTurnNodeForFollowup,
   scheduleFeedReplyFeedbackAutoClear,
 } from "./main/feedFollowupUtils";
+import { ensureFeedRunRecordFromCache, submitFeedAgentRequest as submitFeedAgentRequestAction } from "./main/feedFollowupActions";
 import {
   PAUSE_ERROR_TOKEN,
   appendRunTransition,
@@ -1252,275 +1249,54 @@ function App() {
   }
 
   async function ensureFeedRunRecord(sourceFile: string): Promise<RunRecord | null> {
-    const target = sourceFile.trim();
-    if (!target) {
-      return null;
-    }
-    const cached = feedRunCacheRef.current[target];
-    if (cached) {
-      return cached;
-    }
-    try {
-      const loaded = await invoke<RunRecord>("run_load", { name: target });
-      const normalized = normalizeRunRecord(loaded);
-      feedRunCacheRef.current[target] = normalized;
-      return normalized;
-    } catch {
-      return null;
-    }
+    return ensureFeedRunRecordFromCache({
+      sourceFile,
+      feedRunCacheRef,
+      invokeFn: invoke,
+      normalizeRunRecordFn: normalizeRunRecord,
+    });
   }
 
   async function onSubmitFeedAgentRequest(post: FeedViewPost) {
-    const postId = String(post.id ?? "");
-    const draft = (feedReplyDraftByPost[postId] ?? "").trim();
-    if (!draft) {
-      return;
-    }
-    if (!postId || feedReplySubmittingByPost[postId]) {
-      return;
-    }
-    cancelFeedReplyFeedbackClearTimer(postId, feedReplyFeedbackClearTimerRef);
-    setFeedReplySubmittingByPost((prev) => ({ ...prev, [postId]: true }));
-    setFeedReplyFeedbackByPost((prev) => ({ ...prev, [postId]: t("feed.followup.sending") }));
-    let replyFeedbackText = "";
-    let shouldAutoClearReplyFeedback = false;
-    let node: GraphNode | null = null;
-    let existsInCurrentGraph = false;
-
-    try {
-      const resolved = await resolveTurnNodeForFollowup({
-        graphNodes: graph.nodes,
-        postNodeId: post.nodeId,
-        postSourceFile: post.sourceFile,
-        ensureFeedRunRecord,
-      });
-      node = resolved.node;
-      existsInCurrentGraph = resolved.existsInCurrentGraph;
-
-      if (!node) {
-        setError(t("feed.followup.error.nodeNotFound"));
-        replyFeedbackText = t("feed.followup.error.nodeNotFoundShort");
-        return;
-      }
-
-      if (isGraphRunning) {
-        if (!existsInCurrentGraph) {
-          setError(t("feed.followup.error.notInCurrentGraph"));
-          replyFeedbackText = t("feed.followup.error.notInCurrentGraphShort");
-          return;
-        }
-        enqueueNodeRequest(node.id, draft);
-        setFeedReplyDraftByPost((prev) => ({
-          ...prev,
-          [postId]: "",
-        }));
-        setStatus(`${turnModelLabel(node)} 에이전트 요청을 큐에 추가했습니다.`);
-        replyFeedbackText = t("feed.followup.queued");
-        return;
-      }
-
-      enqueueNodeRequest(node.id, draft);
-      setFeedReplyDraftByPost((prev) => ({
-        ...prev,
-        [postId]: "",
-      }));
-
-      const oneOffRunId = `manual-${Date.now()}`;
-      const startedAt = new Date().toISOString();
-      const followupInput = buildFollowupInputText({
-        draft,
-        question: post.question,
-        previousSummary: post.summary,
-        originalQuestionLabel: t("feed.followup.originalQuestion"),
-        previousSummaryLabel: t("feed.followup.previousSummary"),
-        followupLabel: t("group.followup"),
-      });
-      const oneOffRunFileName = `run-${oneOffRunId}.json`;
-
-      setNodeStatus(node.id, "running", t("feed.followup.run.started"));
-      setNodeRuntimeFields(node.id, {
-        status: "running",
-        startedAt,
-        finishedAt: undefined,
-        durationMs: undefined,
-        error: undefined,
-      });
-      const startedAtMs = Date.now();
-      const turnExecution = await executeTurnNodeWithOutputSchemaRetry({
-        node,
-        input: followupInput,
-        executeTurnNode,
-        addNodeLog,
-        validateSimpleSchema,
-        outputSchemaEnabled: TURN_OUTPUT_SCHEMA_ENABLED,
-        maxRetryDefault: TURN_OUTPUT_SCHEMA_MAX_RETRY,
-      });
-      const result = turnExecution.result;
-      const effectiveOutput = turnExecution.normalizedOutput ?? result.output;
-      for (const warning of turnExecution.artifactWarnings) {
-        addNodeLog(node.id, `[아티팩트] ${warning}`);
-      }
-      const finishedAt = new Date().toISOString();
-      const durationMs = Date.now() - startedAtMs;
-      if (!result.ok) {
-        setNodeStatus(node.id, "failed", result.error ?? t("feed.followup.run.failed"));
-        setNodeRuntimeFields(node.id, {
-          status: "failed",
-          error: result.error,
-          finishedAt,
-          durationMs,
-          threadId: result.threadId,
-          turnId: result.turnId,
-          usage: result.usage,
-        });
-        const failed = buildFeedPost({
-          runId: oneOffRunId,
-          node,
-          isFinalDocument: true,
-          status: "failed",
-          createdAt: finishedAt,
-          summary: result.error ?? t("feed.followup.run.failed"),
-          logs: nodeStates[node.id]?.logs ?? [],
-          output: effectiveOutput,
-          error: result.error,
-          durationMs,
-          usage: result.usage,
-          inputSources: post.inputSources ?? [],
-          inputData: followupInput,
-        });
-        feedRawAttachmentRef.current[feedAttachmentRawKey(failed.post.id, "markdown")] =
-          failed.rawAttachments.markdown;
-        feedRawAttachmentRef.current[feedAttachmentRawKey(failed.post.id, "json")] = failed.rawAttachments.json;
-        const failedRunRecord: RunRecord = buildFollowupFailedRunRecord({
-          runId: oneOffRunId,
-          node,
-          question: post.question ?? workflowQuestion,
-          startedAt,
-          finishedAt,
-          errorMessage: result.error ?? t("feed.followup.run.failed"),
-          failedShortMessage: result.error ?? t("feed.followup.run.failedShort"),
-          nodeLogs: nodeStates[node.id]?.logs ?? [],
-          threadId: result.threadId,
-          turnId: result.turnId,
-          executor: result.executor,
-          provider: result.provider,
-          post: failed.post,
-          graphSchemaVersion: GRAPH_SCHEMA_VERSION,
-          defaultKnowledgeConfig,
-          groupLabel: t("group.followup"),
-        });
-          await exportRunFeedMarkdownFiles({
-            runRecord: failedRunRecord,
-            cwd,
-            invokeFn: invoke,
-            feedRawAttachment: feedRawAttachmentRef.current,
-            setError,
-          });
-          await persistRunRecordFile(oneOffRunFileName, failedRunRecord);
-        feedRunCacheRef.current[oneOffRunFileName] = normalizeRunRecord(failedRunRecord);
-        setFeedPosts((prev) => [
-          {
-            ...failed.post,
-            sourceFile: oneOffRunFileName,
-            question: post.question,
-          },
-          ...prev,
-        ]);
-        setStatus(t("feed.followup.run.failed"));
-        replyFeedbackText = t("feed.followup.run.failedShort");
-        return;
-      }
-
-      setNodeStatus(node.id, "done", t("feed.followup.run.done"));
-      setNodeRuntimeFields(node.id, {
-        status: "done",
-        output: effectiveOutput,
-        finishedAt,
-        durationMs,
-        threadId: result.threadId,
-        turnId: result.turnId,
-        usage: result.usage,
-      });
-      const done = buildFeedPost({
-        runId: oneOffRunId,
-        node,
-        isFinalDocument: true,
-        status: "done",
-        createdAt: finishedAt,
-        summary: t("feed.followup.run.done"),
-        logs: nodeStates[node.id]?.logs ?? [],
-        output: effectiveOutput,
-        durationMs,
-        usage: result.usage,
-        inputSources: post.inputSources ?? [],
-        inputData: followupInput,
-      });
-      feedRawAttachmentRef.current[feedAttachmentRawKey(done.post.id, "markdown")] = done.rawAttachments.markdown;
-      feedRawAttachmentRef.current[feedAttachmentRawKey(done.post.id, "json")] = done.rawAttachments.json;
-      const doneRunRecord: RunRecord = buildFollowupDoneRunRecord({
-        runId: oneOffRunId,
-        node,
-        question: post.question ?? workflowQuestion,
-        startedAt,
-        finishedAt,
-        doneMessage: t("feed.followup.run.done"),
-        nodeLogs: nodeStates[node.id]?.logs ?? [],
-        threadId: result.threadId,
-        turnId: result.turnId,
-        executor: result.executor,
-        provider: result.provider,
-        post: done.post,
-        output: effectiveOutput,
-        graphSchemaVersion: GRAPH_SCHEMA_VERSION,
-        defaultKnowledgeConfig,
-        groupLabel: t("group.followup"),
-      });
-      await exportRunFeedMarkdownFiles({
-        runRecord: doneRunRecord,
-        cwd,
-        invokeFn: invoke,
-        feedRawAttachment: feedRawAttachmentRef.current,
-        setError,
-      });
-      await persistRunRecordFile(oneOffRunFileName, doneRunRecord);
-      feedRunCacheRef.current[oneOffRunFileName] = normalizeRunRecord(doneRunRecord);
-      setFeedPosts((prev) => [
-        {
-          ...done.post,
-          sourceFile: oneOffRunFileName,
-          question: post.question,
-        },
-        ...prev,
-      ]);
-      setStatus(t("feed.followup.run.done"));
-      replyFeedbackText = t("feed.followup.run.doneShort");
-      shouldAutoClearReplyFeedback = true;
-    } catch (error) {
-      setError(`${t("feed.followup.run.failed")}: ${String(error)}`);
-      replyFeedbackText = t("feed.followup.run.failedShort");
-    } finally {
-      setFeedReplySubmittingByPost((prev) => {
-        if (!(postId in prev)) {
-          return prev;
-        }
-        const next = { ...prev };
-        delete next[postId];
-        return next;
-      });
-      if (replyFeedbackText) {
-        setFeedReplyFeedbackByPost((prev) => ({
-          ...prev,
-          [postId]: replyFeedbackText,
-        }));
-        if (shouldAutoClearReplyFeedback) {
-          scheduleFeedReplyFeedbackAutoClear({
-            postId,
-            timerRef: feedReplyFeedbackClearTimerRef,
-            setFeedReplyFeedbackByPost,
-          });
-        }
-      }
-    }
+    await submitFeedAgentRequestAction({
+      post,
+      graphNodes: graph.nodes,
+      isGraphRunning,
+      workflowQuestion,
+      cwd,
+      nodeStates,
+      feedReplyDraftByPost,
+      feedReplySubmittingByPost,
+      feedRunCacheRef,
+      feedRawAttachmentRef,
+      feedReplyFeedbackClearTimerRef,
+      setFeedReplySubmittingByPost,
+      setFeedReplyFeedbackByPost,
+      setFeedReplyDraftByPost,
+      setFeedPosts,
+      setError,
+      setStatus,
+      setNodeStatus,
+      setNodeRuntimeFields,
+      addNodeLog,
+      enqueueNodeRequest,
+      persistRunRecordFile,
+      invokeFn: invoke,
+      executeTurnNode,
+      validateSimpleSchemaFn: validateSimpleSchema,
+      turnOutputSchemaEnabled: TURN_OUTPUT_SCHEMA_ENABLED,
+      turnOutputSchemaMaxRetry: TURN_OUTPUT_SCHEMA_MAX_RETRY,
+      graphSchemaVersion: GRAPH_SCHEMA_VERSION,
+      defaultKnowledgeConfig,
+      buildFeedPostFn: buildFeedPost,
+      feedAttachmentRawKeyFn: feedAttachmentRawKey,
+      exportRunFeedMarkdownFilesFn: exportRunFeedMarkdownFiles,
+      normalizeRunRecordFn: normalizeRunRecord,
+      cancelFeedReplyFeedbackClearTimerFn: cancelFeedReplyFeedbackClearTimer,
+      scheduleFeedReplyFeedbackAutoClearFn: scheduleFeedReplyFeedbackAutoClear,
+      turnModelLabelFn: turnModelLabel,
+      t,
+    });
   }
 
   useEffect(() => {
