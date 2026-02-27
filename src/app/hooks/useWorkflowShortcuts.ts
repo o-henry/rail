@@ -63,6 +63,22 @@ export function useWorkflowShortcuts(params: UseWorkflowShortcutsParams) {
   }, [canvasFullscreen, setCanvasFullscreen, workspaceTab]);
 
   useEffect(() => {
+    const tabHotkeys: Record<string, WorkspaceTab> = {
+      "1": "dashboard",
+      "2": "agents",
+      "3": "workflow",
+      "4": "feed",
+      "5": "settings",
+    };
+    const tabStatusByKey: Record<WorkspaceTab, string> = {
+      dashboard: "대시보드 탭으로 이동",
+      agents: "에이전트 탭으로 이동",
+      workflow: "워크플로우 탭으로 이동",
+      feed: "피드 탭으로 이동",
+      settings: "설정 탭으로 이동",
+      bridge: "설정 탭으로 이동",
+    };
+
     const onTabHotkey = (event: KeyboardEvent) => {
       if (!(event.metaKey || event.ctrlKey) || event.altKey || event.shiftKey) {
         return;
@@ -71,41 +87,14 @@ export function useWorkflowShortcuts(params: UseWorkflowShortcutsParams) {
         return;
       }
 
-      const key = event.key;
-      let nextTab: WorkspaceTab | null = null;
-      if (key === "1") {
-        nextTab = "dashboard";
-      } else if (key === "2") {
-        nextTab = "workflow";
-      } else if (key === "3") {
-        nextTab = "feed";
-      } else if (key === "4") {
-        nextTab = "agents";
-      } else if (key === "5") {
-        nextTab = "bridge";
-      } else if (key === "6") {
-        nextTab = "settings";
-      }
-
+      const nextTab = tabHotkeys[event.key];
       if (!nextTab) {
         return;
       }
 
       event.preventDefault();
       setWorkspaceTab(nextTab);
-      setStatus(
-        nextTab === "dashboard"
-          ? "대시보드 탭으로 이동"
-          : nextTab === "workflow"
-          ? "워크플로우 탭으로 이동"
-          : nextTab === "feed"
-            ? "피드 탭으로 이동"
-            : nextTab === "agents"
-              ? "에이전트 탭으로 이동"
-            : nextTab === "bridge"
-              ? "웹 연결 탭으로 이동"
-              : "설정 탭으로 이동",
-      );
+      setStatus(tabStatusByKey[nextTab]);
     };
 
     window.addEventListener("keydown", onTabHotkey);
