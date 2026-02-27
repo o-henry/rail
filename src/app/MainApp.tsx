@@ -1751,11 +1751,6 @@ function App() {
     setFeedInspectorPostId,
     setNodeSelection,
   });
-  const batchRunHistory = batchScheduler.batchRunHistoryRef.current;
-  const latestBatchRun = batchRunHistory[batchRunHistory.length - 1];
-  const lastBatchSummary = latestBatchRun
-    ? `${latestBatchRun.status.toUpperCase()} · ${new Date(latestBatchRun.startedAt).toLocaleString(locale)}`
-    : t("dashboard.value.none");
   const onSelectWorkspaceTab = (tab: WorkspaceTab) => {
     const nextTab = tab === "bridge" ? "settings" : tab;
     setWorkspaceTab(nextTab);
@@ -1882,12 +1877,7 @@ function App() {
             cwd={cwd}
             enabledScheduleCount={batchScheduler.schedules.filter((item) => item.status === "enabled").length}
             isGraphRunning={isGraphRunning}
-            lastBatchSummary={lastBatchSummary}
-            onOpenBridge={() => setWorkspaceTab("settings")}
             onOpenDetail={(topic) => setDashboardDetailTopic(topic)}
-            onOpenFeed={() => setWorkspaceTab("feed")}
-            onOpenSettings={() => setWorkspaceTab("settings")}
-            onOpenWorkflow={() => setWorkspaceTab("workflow")}
             pendingApprovalsCount={pendingApprovals.length}
             scheduleCount={batchScheduler.schedules.length}
             stockDocumentPosts={feedPosts}

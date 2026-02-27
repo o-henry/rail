@@ -11,11 +11,6 @@ type DashboardPageProps = {
   connectedProviderCount: number;
   scheduleCount: number;
   enabledScheduleCount: number;
-  lastBatchSummary: string;
-  onOpenWorkflow: () => void;
-  onOpenFeed: () => void;
-  onOpenBridge: () => void;
-  onOpenSettings: () => void;
   onOpenDetail: (topic: "news" | "trend" | "stock") => void;
   stockDocumentPosts: DashboardStockDocumentPost[];
 };
@@ -126,19 +121,6 @@ export default function DashboardPage(props: DashboardPageProps) {
           <StockWidgetChart data={stockChartData} />
         </button>
       </section>
-
-      <article className="panel-card dashboard-footer">
-        <div className="dashboard-last-batch">
-          <span>{t("dashboard.card.lastBatch")}</span>
-          <strong>{props.lastBatchSummary}</strong>
-        </div>
-        <div className="dashboard-actions">
-          <button onClick={props.onOpenWorkflow} type="button">{t("dashboard.cta.workflow")}</button>
-          <button onClick={props.onOpenFeed} type="button">{t("dashboard.cta.feed")}</button>
-          <button onClick={props.onOpenBridge} type="button">{t("dashboard.cta.bridge")}</button>
-          <button onClick={props.onOpenSettings} type="button">{t("dashboard.cta.settings")}</button>
-        </div>
-      </article>
     </section>
   );
 }
