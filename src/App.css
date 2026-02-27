@@ -88,7 +88,17 @@
   --surface-soft: #f7f9fc;
   --surface-panel: #ffffff;
   --surface-active: rgba(212, 212, 212, 0.96);
-  --bg-app: #ffffff;
+  --bg-app: #dadadd;
+  --app-shell-bg: radial-gradient(1200px 560px at 50% 0%, #f4f4f5 0%, #dddddf 45%, #d1d1d4 100%);
+  --workspace-bg: #ececee;
+  --workspace-border: rgba(255, 255, 255, 0.55);
+  --workspace-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 24px 48px rgba(32, 34, 40, 0.12);
+  --nav-bg: rgba(255, 255, 255, 0.54);
+  --nav-border: rgba(255, 255, 255, 0.68);
+  --nav-shadow: 0 12px 24px rgba(35, 39, 47, 0.1);
+  --nav-button-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.86), 0 2px 5px rgba(25, 27, 32, 0.08);
+  --panel-border: rgba(225, 228, 235, 0.88);
+  --panel-shadow: 0 10px 20px rgba(31, 35, 44, 0.07);
   --text-main: #1b2229;
   --text-muted: #667180;
   --text-danger: #9a2727;
@@ -104,6 +114,16 @@
   --surface-panel: #131a23;
   --surface-active: #334154;
   --bg-app: #0f141b;
+  --app-shell-bg: #0f141b;
+  --workspace-bg: #111a25;
+  --workspace-border: #1e2a38;
+  --workspace-shadow: none;
+  --nav-bg: transparent;
+  --nav-border: transparent;
+  --nav-shadow: none;
+  --nav-button-shadow: none;
+  --panel-border: #273546;
+  --panel-shadow: none;
   --text-main: #e6edf3;
   --text-muted: #a3b1c3;
   --text-danger: #ff9a9a;
@@ -254,7 +274,7 @@ h3 {
   /* grid-template-columns: 72px minmax(0, 1fr); */
   grid-template-columns: 64px minmax(0, 1fr);
   column-gap: 4px;
-  background: var(--bg-app);
+  background: var(--app-shell-bg);
 }
 
 .app-shell.canvas-fullscreen-mode {
@@ -285,6 +305,10 @@ h3 {
   align-content: center;
   gap: 14px;
   padding: 0 10px;
+  border: 1px solid var(--nav-border);
+  border-radius: 18px;
+  background: var(--nav-bg);
+  box-shadow: var(--nav-shadow);
 }
 
 .brand-spacer {
@@ -316,6 +340,7 @@ h3 {
   display: inline-grid;
   place-items: center;
   padding: 0;
+  box-shadow: var(--nav-button-shadow);
 }
 
 .nav-lang-code {
@@ -336,6 +361,7 @@ h3 {
   display: inline-grid;
   place-items: center;
   padding: 0;
+  box-shadow: var(--nav-button-shadow);
 }
 
 .nav-list button.is-active {
@@ -385,6 +411,9 @@ h3 {
   overflow: hidden;
   display: grid;
   grid-template-rows: auto auto minmax(0, 1fr);
+  background: var(--workspace-bg);
+  border: 1px solid var(--workspace-border);
+  box-shadow: var(--workspace-shadow);
 }
 
 .workspace.canvas-fullscreen-active {
@@ -2058,15 +2087,16 @@ h3 {
 }
 
 .panel-card {
-  border: 0;
-  border-radius: 5px;
-  background: var(--surface);
+  border: 1px solid var(--panel-border);
+  border-radius: 14px;
+  background: var(--surface-panel);
   padding: 12px;
   display: grid;
   align-content: start;
   gap: 12px;
   min-height: 0;
   overflow: auto;
+  box-shadow: var(--panel-shadow);
 }
 
 .history-layout {
@@ -3771,9 +3801,10 @@ h3 {
   min-height: 0;
   display: grid;
   grid-template-rows: auto auto auto;
-  gap: 12px;
+  gap: 14px;
   overflow: auto;
   padding-bottom: 16px;
+  padding-top: 4px;
 }
 
 .dashboard-grid {
@@ -3795,6 +3826,7 @@ h3 {
 .dashboard-card strong {
   font-size: 1.4rem;
   letter-spacing: -0.02em;
+  color: #1f252b;
 }
 
 .dashboard-card p {
@@ -3820,13 +3852,13 @@ h3 {
 
 .dashboard-widget-button {
   text-align: left;
-  border: 1px solid transparent;
-  transition: border-color 160ms ease, transform 160ms ease;
+  transition: border-color 160ms ease, transform 160ms ease, box-shadow 160ms ease;
 }
 
 .dashboard-widget-button:hover {
   border-color: var(--surface-strong);
-  transform: translateY(-1px);
+  transform: translateY(-2px);
+  box-shadow: 0 14px 24px rgba(32, 38, 46, 0.1);
 }
 
 .dashboard-widget-head {
@@ -3912,6 +3944,7 @@ h3 {
   width: 100%;
   border-radius: 8px;
   background: var(--surface-soft);
+  border: 1px solid var(--surface-strong);
 }
 
 .childview-view {
