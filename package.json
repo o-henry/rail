@@ -11,6 +11,7 @@
     "check": "npm run check:arch && npm run build",
     "preview": "vite preview",
     "tauri": "tauri",
+    "tauri:dev": "npm run tauri:dev:isolated",
     "tauri:dev:isolated": "RAIL_CODEX_HOME_MODE=isolated tauri dev",
     "tauri:dev:global": "RAIL_CODEX_HOME_MODE=global tauri dev"
   },
