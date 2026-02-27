@@ -23,6 +23,7 @@ const NAV_ITEMS: NavItem[] = [
   { tab: "bridge", label: "nav.bridge", ariaLabel: "nav.bridge", title: "nav.bridge" },
   { tab: "settings", label: "nav.settings", ariaLabel: "nav.settings", title: "nav.settings" },
 ];
+const SHOW_LANGUAGE_SWITCH = false;
 
 export default function AppNav({ activeTab, onSelectTab, renderIcon }: AppNavProps) {
   const { locale, cycleLocale, t } = useI18n();
@@ -52,17 +53,19 @@ export default function AppNav({ activeTab, onSelectTab, renderIcon }: AppNavPro
           );
         })}
       </nav>
-      <div className="nav-footer">
-        <button
-          aria-label={t("nav.language")}
-          className="nav-lang-button"
-          onClick={cycleLocale}
-          title={`${t("nav.language")} · ${t(`lang.${locale}`)}`}
-          type="button"
-        >
-          <span className="nav-lang-code">{localeShortLabel(locale)}</span>
-        </button>
-      </div>
+      {SHOW_LANGUAGE_SWITCH && (
+        <div className="nav-footer">
+          <button
+            aria-label={t("nav.language")}
+            className="nav-lang-button"
+            onClick={cycleLocale}
+            title={`${t("nav.language")} · ${t(`lang.${locale}`)}`}
+            type="button"
+          >
+            <span className="nav-lang-code">{localeShortLabel(locale)}</span>
+          </button>
+        </div>
+      )}
     </aside>
   );
 }
