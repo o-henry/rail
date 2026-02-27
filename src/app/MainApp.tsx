@@ -228,6 +228,7 @@ import {
   requestWebTurnResponseAction,
   resolvePendingWebTurnAction,
 } from "./main/webTurnQueueActions";
+import { createWebInteractionHandlers } from "./main/webInteractionHandlers";
 import {
   PAUSE_ERROR_TOKEN,
   appendRunTransition,
@@ -1934,199 +1935,56 @@ function App() {
     return () => window.clearInterval(timer);
   }, [hasActiveNodeRuntime]);
 
-  async function ensureWebWorkerReady() {
-    try {
-      await invoke("web_worker_start");
-      const health = await refreshWebWorkerHealth(true);
-      if (!health?.running) {
-        return false;
-      }
-      return true;
-    } catch {
-      return false;
-    }
-  }
-
-  function resolvePendingWebLogin(retry: boolean) {
-    const resolver = webLoginResolverRef.current;
-    webLoginResolverRef.current = null;
-    setPendingWebLogin(null);
-    if (resolver) {
-      resolver(retry);
-    }
-  }
-
-  async function onCopyPendingWebPrompt() {
-    if (!pendingWebTurn) {
-      return;
-    }
-    try {
-      await navigator.clipboard.writeText(pendingWebTurn.prompt);
-      setStatus("웹 프롬프트 복사 완료");
-    } catch (error) {
-      setError(`clipboard copy failed: ${String(error)}`);
-    }
-  }
-
-  function onSubmitPendingWebTurn() {
-    if (!pendingWebTurn) {
-      return;
-    }
-    if (!webTurnResolverRef.current) {
-      if (!manualInputWaitNoticeByNodeRef.current[pendingWebTurn.nodeId]) {
-        manualInputWaitNoticeByNodeRef.current[pendingWebTurn.nodeId] = true;
-        setStatus("자동 수집 중단 처리 중입니다. 잠시 후 '입력 완료'를 다시 눌러주세요.");
-      }
-      return;
-    }
-    const normalized = normalizeWebTurnOutput(
-      pendingWebTurn.provider,
-      pendingWebTurn.mode,
-      webResponseDraft,
-    );
-    if (!normalized.ok) {
-      setError(normalized.error ?? "웹 응답 처리 실패");
-      return;
-    }
-    resolvePendingWebTurn({ ok: true, output: normalized.output });
-  }
-
-  function onDismissPendingWebTurn() {
-    if (!pendingWebTurn) {
-      return;
-    }
-    webTurnPanel.clearDragging();
-    setSuspendedWebTurn(pendingWebTurn);
-    setSuspendedWebResponseDraft(webResponseDraft);
-    setPendingWebTurn(null);
-    setStatus("웹 응답 입력 창을 닫았습니다. 하단 '웹 입력 다시 열기' 버튼으로 재개할 수 있습니다.");
-  }
-
-  function onReopenPendingWebTurn() {
-    if (!suspendedWebTurn) {
-      return;
-    }
-    setPendingWebTurn(suspendedWebTurn);
-    setWebResponseDraft(suspendedWebResponseDraft);
-    setSuspendedWebTurn(null);
-    setSuspendedWebResponseDraft("");
-    setStatus(`${webProviderLabel(suspendedWebTurn.provider)} 웹 응답 입력 창을 다시 열었습니다.`);
-  }
-
-  function onOpenWebInputForNode(nodeId: string) {
-    clearDetachedWebTurnResolver("이전 웹 입력 세션이 비어 있어 새 입력 세션으로 교체했습니다.");
-    if (pendingWebTurn?.nodeId === nodeId) {
-      webTurnPanel.setPosition({
-        x: WEB_TURN_FLOATING_DEFAULT_X,
-        y: WEB_TURN_FLOATING_DEFAULT_Y,
-      });
-      setStatus("해당 WEB 노드의 수동 입력 창이 이미 열려 있습니다.");
-      return;
-    }
-
-    if (suspendedWebTurn?.nodeId === nodeId) {
-      onReopenPendingWebTurn();
-      return;
-    }
-
-    const queuedIndex = webTurnQueueRef.current.findIndex((row) => row.turn.nodeId === nodeId);
-    if (queuedIndex >= 0) {
-      const hasActiveWebInputSession = Boolean(pendingWebTurn || suspendedWebTurn || webTurnResolverRef.current);
-      if (hasActiveWebInputSession) {
-        if (queuedIndex > 0) {
-          const [target] = webTurnQueueRef.current.splice(queuedIndex, 1);
-          if (target) {
-            webTurnQueueRef.current.unshift(target);
-          }
-        }
-        setStatus("해당 WEB 노드 입력은 대기열 맨 앞으로 이동했습니다.");
-        return;
-      }
-
-      const [target] = webTurnQueueRef.current.splice(queuedIndex, 1);
-      if (!target) {
-        return;
-      }
-      setPendingWebTurn(target.turn);
-      setWebResponseDraft("");
-      setSuspendedWebTurn(null);
-      setSuspendedWebResponseDraft("");
-      webTurnResolverRef.current = target.resolve;
-      webTurnPanel.setPosition({
-        x: WEB_TURN_FLOATING_DEFAULT_X,
-        y: WEB_TURN_FLOATING_DEFAULT_Y,
-      });
-      setStatus(`${webProviderLabel(target.turn.provider)} 웹 응답 입력 창을 상단에 표시했습니다.`);
-      return;
-    }
-
-    const activeProvider =
-      activeWebProviderByNodeRef.current[nodeId] ??
-      WEB_PROVIDER_OPTIONS.find((provider) => activeWebNodeByProviderRef.current[provider] === nodeId);
-    if (activeProvider) {
-      manualWebFallbackNodeRef.current[nodeId] = true;
-      delete manualInputWaitNoticeByNodeRef.current[nodeId];
-      const prompt = activeWebPromptByNodeRef.current[nodeId] ?? activeWebPromptRef.current[activeProvider] ?? "";
-      if (!pendingWebTurn && !suspendedWebTurn) {
-        setWebResponseDraft("");
-        setPendingWebTurn({
-          nodeId,
-          provider: activeProvider,
-          prompt,
-          mode: "manualPasteText",
-        });
-        webTurnPanel.setPosition({
-          x: WEB_TURN_FLOATING_DEFAULT_X,
-          y: WEB_TURN_FLOATING_DEFAULT_Y,
-        });
-        setStatus(`${webProviderLabel(activeProvider)} 수동 입력 창을 열고 자동 수집 중단을 요청했습니다.`);
-      } else {
-        setStatus(`${webProviderLabel(activeProvider)} 자동 수집 중단을 요청했습니다. 수동 입력 창에서 입력을 계속하세요.`);
-      }
-      return;
-    }
-
-    const targetNode = graph.nodes.find((node) => node.id === nodeId);
-    if (targetNode?.type !== "turn") {
-      setStatus("현재 해당 WEB 노드의 수동 입력 대기 항목이 없습니다.");
-      return;
-    }
-    const provider = getWebProviderFromExecutor(getTurnExecutor(targetNode.config as TurnConfig));
-    if (!provider) {
-      setStatus("현재 해당 WEB 노드의 수동 입력 대기 항목이 없습니다.");
-      return;
-    }
-
-    const template = injectOutputLanguageDirective(
-      String((targetNode.config as TurnConfig).promptTemplate ?? "{{input}}"),
-      locale,
-    );
-    const directInput = workflowQuestion.trim();
-    const prompt =
-      activeWebPromptByNodeRef.current[nodeId] ??
-      activeWebPromptRef.current[provider] ??
-      (template.includes("{{input}}")
-        ? replaceInputPlaceholder(template, directInput)
-        : `${template}${directInput ? `\n${directInput}` : ""}`.trim()) ??
-      "";
-
-    setWebResponseDraft("");
-    setPendingWebTurn({
-      nodeId,
-      provider,
-      prompt,
-      mode: "manualPasteText",
-    });
-    webTurnPanel.setPosition({
-      x: WEB_TURN_FLOATING_DEFAULT_X,
-      y: WEB_TURN_FLOATING_DEFAULT_Y,
-    });
-    setStatus(`${webProviderLabel(provider)} 수동 입력 창을 열었습니다. 실행 연결 후 입력 완료가 반영됩니다.`);
-  }
-
-  function onCancelPendingWebTurn() {
-    resolvePendingWebTurn({ ok: false, error: t("run.cancelledByUserShort") });
-  }
+  const {
+    ensureWebWorkerReady,
+    resolvePendingWebLogin,
+    onCopyPendingWebPrompt,
+    onSubmitPendingWebTurn,
+    onDismissPendingWebTurn,
+    onReopenPendingWebTurn,
+    onOpenWebInputForNode,
+    onCancelPendingWebTurn,
+  } = createWebInteractionHandlers({
+    invokeFn: invoke,
+    refreshWebWorkerHealth,
+    webLoginResolverRef,
+    setPendingWebLogin,
+    pendingWebTurn,
+    webTurnResolverRef,
+    manualInputWaitNoticeByNodeRef,
+    setStatus,
+    normalizeWebTurnOutput,
+    webResponseDraft,
+    setError,
+    resolvePendingWebTurn,
+    webTurnPanel,
+    setSuspendedWebTurn,
+    setSuspendedWebResponseDraft,
+    setPendingWebTurn,
+    suspendedWebTurn,
+    setWebResponseDraft,
+    suspendedWebResponseDraft,
+    webProviderLabel,
+    clearDetachedWebTurnResolver,
+    webTurnFloatingDefaultX: WEB_TURN_FLOATING_DEFAULT_X,
+    webTurnFloatingDefaultY: WEB_TURN_FLOATING_DEFAULT_Y,
+    webTurnQueueRef,
+    activeWebProviderByNodeRef,
+    webProviderOptions: WEB_PROVIDER_OPTIONS,
+    activeWebNodeByProviderRef,
+    manualWebFallbackNodeRef,
+    activeWebPromptByNodeRef,
+    activeWebPromptRef,
+    graphNodes: graph.nodes,
+    getWebProviderFromExecutor,
+    getTurnExecutor,
+    injectOutputLanguageDirective,
+    locale,
+    workflowQuestion,
+    replaceInputPlaceholder,
+    addNodeLog,
+    t,
+  });
 
   async function onRespondApproval(decision: ApprovalDecision) {
     if (!activeApproval) {
