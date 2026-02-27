@@ -4168,77 +4168,62 @@ h3 {
   min-height: 0;
   height: 100%;
   display: grid;
-  grid-template-rows: auto 1fr auto auto;
+  grid-template-rows: auto 1fr auto;
   gap: 14px;
   overflow: auto;
   padding-top: 4px;
 }
 
-.agents-header {
+.agents-thread-toolbar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 12px;
 }
 
-.agents-header h2 {
-  font-size: 1.04rem;
-}
-
-.agents-header-actions {
+.agents-thread-list {
+  flex: 1;
+  min-width: 0;
   display: flex;
   align-items: center;
   gap: 8px;
+  overflow-x: auto;
 }
 
-.agents-header-actions button {
+.agents-thread-list button {
   border: 1px solid var(--surface-strong);
   border-radius: 999px;
   background: var(--surface-panel);
+  min-height: 32px;
+  height: 32px;
+  padding: 0 12px;
+  white-space: nowrap;
 }
 
-.agents-hero {
-  min-height: 0;
-  display: grid;
-  place-content: center;
-  justify-items: center;
-  gap: 10px;
+.agents-thread-list button.is-active {
+  background: var(--surface-active);
 }
 
-.agents-hero-icon {
-  width: 44px;
-  height: 44px;
-  display: grid;
-  place-items: center;
-  border-radius: 50%;
-  background: var(--surface-soft);
+.agents-add-thread-button {
   border: 1px solid var(--surface-strong);
-  font-size: 22px;
-}
-
-.agents-hero h1 {
-  font-size: 2.2rem;
-  font-weight: 600;
-}
-
-.agents-hero p {
-  font-size: 1.2rem;
-  color: var(--text-muted);
-}
-
-.agents-quick-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
-}
-
-.agents-quick-card {
-  border-radius: 14px;
-  border: 1px solid var(--surface-strong);
-  min-height: 56px;
+  border-radius: 999px;
   background: var(--surface-panel);
-  text-align: left;
-  padding: 12px 14px;
+  min-height: 32px;
+  height: 32px;
+  padding: 0 12px;
+  white-space: nowrap;
+}
+
+.agents-chat-stage {
+  min-height: 0;
+  padding: 14px;
+  display: grid;
+  align-content: start;
+  overflow: auto;
+}
+
+.agents-chat-stage p {
+  margin: 0;
+  color: var(--text-muted);
 }
 
 .agents-input-shell {
@@ -4246,14 +4231,33 @@ h3 {
   border: 1px solid var(--surface-strong);
   background: var(--surface-panel);
   padding: 10px 12px;
+  display: grid;
+  grid-template-rows: auto auto;
+  gap: 8px;
 }
 
-.agents-input-shell input {
+.agents-input-shell textarea {
   width: 100%;
+  min-height: 72px;
+  resize: vertical;
   border: 0;
   background: transparent;
-  color: var(--text-muted);
+  color: var(--text-main);
   padding: 8px 6px;
+}
+
+.agents-send-row {
+  min-height: 36px;
+  display: flex;
+  align-items: center;
+}
+
+.agents-send-row button {
+  width: 100%;
+  min-height: 36px;
+  border-radius: 10px;
+  border: 1px solid var(--surface-strong);
+  background: var(--surface-soft);
 }
 
 .childview-view {
@@ -4704,8 +4708,13 @@ pre {
     grid-template-columns: 1fr;
   }
 
-  .agents-quick-grid {
-    grid-template-columns: 1fr;
+  .agents-thread-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .agents-add-thread-button {
+    width: 100%;
   }
 
 }
