@@ -217,6 +217,7 @@ import {
 import WorkflowCanvasPane from "./main/WorkflowCanvasPane";
 import WorkflowInspectorPane from "./main/WorkflowInspectorPane";
 import { buildFeedPageVm, buildWorkflowInspectorPaneProps } from "./main/mainAppPropsBuilders";
+import { buildFollowupDoneRunRecord, buildFollowupFailedRunRecord } from "./main/feedFollowupUtils";
 import {
   PAUSE_ERROR_TOKEN,
   appendRunTransition,
@@ -1391,51 +1392,24 @@ function App() {
         feedRawAttachmentRef.current[feedAttachmentRawKey(failed.post.id, "markdown")] =
           failed.rawAttachments.markdown;
         feedRawAttachmentRef.current[feedAttachmentRawKey(failed.post.id, "json")] = failed.rawAttachments.json;
-        const failedRunRecord: RunRecord = {
+        const failedRunRecord: RunRecord = buildFollowupFailedRunRecord({
           runId: oneOffRunId,
+          node,
           question: post.question ?? workflowQuestion,
           startedAt,
           finishedAt,
-          workflowGroupName: t("group.followup"),
-          workflowGroupKind: "custom",
-          graphSnapshot: {
-            version: GRAPH_SCHEMA_VERSION,
-            nodes: [node],
-            edges: [],
-            knowledge: defaultKnowledgeConfig(),
-          },
-          transitions: [
-            { at: startedAt, nodeId: node.id, status: "running" },
-            {
-              at: finishedAt,
-              nodeId: node.id,
-              status: "failed",
-              message: result.error ?? t("feed.followup.run.failed"),
-            },
-          ],
-          summaryLogs: [`[${node.id}] running`, `[${node.id}] failed: ${result.error ?? t("feed.followup.run.failedShort")}`],
-          nodeLogs: {
-            [node.id]: nodeStates[node.id]?.logs ?? [],
-          },
-          threadTurnMap: {
-            [node.id]: {
-              threadId: result.threadId,
-              turnId: result.turnId,
-            },
-          },
-          providerTrace: [
-            {
-              nodeId: node.id,
-              executor: result.executor,
-              provider: result.provider,
-              status: "failed",
-              startedAt,
-              finishedAt,
-              summary: result.error ?? t("feed.followup.run.failed"),
-            },
-          ],
-          feedPosts: [failed.post],
-        };
+          errorMessage: result.error ?? t("feed.followup.run.failed"),
+          failedShortMessage: result.error ?? t("feed.followup.run.failedShort"),
+          nodeLogs: nodeStates[node.id]?.logs ?? [],
+          threadId: result.threadId,
+          turnId: result.turnId,
+          executor: result.executor,
+          provider: result.provider,
+          post: failed.post,
+          graphSchemaVersion: GRAPH_SCHEMA_VERSION,
+          defaultKnowledgeConfig,
+          groupLabel: t("group.followup"),
+        });
           await exportRunFeedMarkdownFiles({
             runRecord: failedRunRecord,
             cwd,
@@ -1484,52 +1458,24 @@ function App() {
       });
       feedRawAttachmentRef.current[feedAttachmentRawKey(done.post.id, "markdown")] = done.rawAttachments.markdown;
       feedRawAttachmentRef.current[feedAttachmentRawKey(done.post.id, "json")] = done.rawAttachments.json;
-      const doneRunRecord: RunRecord = {
+      const doneRunRecord: RunRecord = buildFollowupDoneRunRecord({
         runId: oneOffRunId,
+        node,
         question: post.question ?? workflowQuestion,
         startedAt,
         finishedAt,
-        workflowGroupName: t("group.followup"),
-        workflowGroupKind: "custom",
-        finalAnswer: extractFinalAnswer(effectiveOutput),
-        graphSnapshot: {
-          version: GRAPH_SCHEMA_VERSION,
-          nodes: [node],
-          edges: [],
-          knowledge: defaultKnowledgeConfig(),
-        },
-        transitions: [
-          { at: startedAt, nodeId: node.id, status: "running" },
-          {
-            at: finishedAt,
-            nodeId: node.id,
-            status: "done",
-            message: t("feed.followup.run.done"),
-          },
-        ],
-        summaryLogs: [`[${node.id}] running`, `[${node.id}] done`],
-        nodeLogs: {
-          [node.id]: nodeStates[node.id]?.logs ?? [],
-        },
-        threadTurnMap: {
-          [node.id]: {
-            threadId: result.threadId,
-            turnId: result.turnId,
-          },
-        },
-        providerTrace: [
-          {
-            nodeId: node.id,
-            executor: result.executor,
-            provider: result.provider,
-            status: "done",
-            startedAt,
-            finishedAt,
-            summary: t("feed.followup.run.done"),
-          },
-        ],
-        feedPosts: [done.post],
-      };
+        doneMessage: t("feed.followup.run.done"),
+        nodeLogs: nodeStates[node.id]?.logs ?? [],
+        threadId: result.threadId,
+        turnId: result.turnId,
+        executor: result.executor,
+        provider: result.provider,
+        post: done.post,
+        output: effectiveOutput,
+        graphSchemaVersion: GRAPH_SCHEMA_VERSION,
+        defaultKnowledgeConfig,
+        groupLabel: t("group.followup"),
+      });
       await exportRunFeedMarkdownFiles({
         runRecord: doneRunRecord,
         cwd,
