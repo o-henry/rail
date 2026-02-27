@@ -6,10 +6,6 @@ import {
 import "../App.css";
 import { invoke, listen, openUrl } from "../shared/tauri";
 import AppNav from "../components/AppNav";
-import ApprovalModal from "../components/modals/ApprovalModal";
-import PendingWebLoginModal from "../components/modals/PendingWebLoginModal";
-import PendingWebConnectModal from "../components/modals/PendingWebConnectModal";
-import PendingWebTurnModal from "../components/modals/PendingWebTurnModal";
 import BridgePage from "../pages/bridge/BridgePage";
 import FeedPage from "../pages/feed/FeedPage";
 import SettingsPage from "../pages/settings/SettingsPage";
@@ -231,6 +227,7 @@ import { createRunGraphRunner } from "./main/runGraphRunner";
 import { createWorkflowPresetHandlers } from "./main/workflowPresetHandlers";
 import { createWebTurnRunHandlers } from "./main/webTurnRunHandlers";
 import { useCanvasGraphDerivedState } from "./main/useCanvasGraphDerivedState";
+import { MainAppModals } from "./main/MainAppModals";
 import {
   PAUSE_ERROR_TOKEN,
   appendRunTransition,
@@ -1842,77 +1839,35 @@ function App() {
         )}
 
       </section>
-
-      <PendingWebConnectModal
-        onCancel={() => {
-          setPendingWebConnectCheck(null);
-          setStatus("그래프 실행 대기");
-        }}
-        onContinue={() => {
-          if (!pendingWebConnectCheck) {
-            return;
-          }
-          setPendingWebConnectCheck(null);
-          void onRunGraph(true);
-        }}
-        onOpenBridgeTab={() => {
-          setPendingWebConnectCheck(null);
-          setWorkspaceTab("bridge");
-          void refreshWebBridgeStatus(false, true);
-        }}
-        open={Boolean(pendingWebConnectCheck)}
-        providersLabel={
-          pendingWebConnectCheck
-            ? pendingWebConnectCheck.providers.map((provider) => webProviderLabel(provider)).join(", ")
-            : ""
-        }
-        reason={pendingWebConnectCheck?.reason ?? ""}
-      />
-
-      <PendingWebLoginModal
-        nodeId={pendingWebLogin?.nodeId ?? ""}
-        onCancel={() => resolvePendingWebLogin(false)}
-        onContinueAfterLogin={() => resolvePendingWebLogin(true)}
-        onOpenProviderSession={() => {
-          if (!pendingWebLogin) {
-            return;
-          }
-          void onOpenProviderSession(pendingWebLogin.provider);
-        }}
-        open={Boolean(pendingWebLogin)}
-        providerLabel={pendingWebLogin ? webProviderLabel(pendingWebLogin.provider) : ""}
-        reason={pendingWebLogin?.reason ?? ""}
-      />
-
-      <PendingWebTurnModal
-        dragging={webTurnPanel.dragging}
-        modeLabel={pendingWebTurn?.mode === "manualPasteJson" ? "JSON" : t("feed.webMode.text")}
-        nodeId={pendingWebTurn?.nodeId ?? ""}
-        onCancelRun={onCancelPendingWebTurn}
-        onChangeResponseDraft={setWebResponseDraft}
-        onCopyPrompt={() => void onCopyPendingWebPrompt()}
-        onDismiss={onDismissPendingWebTurn}
-        onDragStart={webTurnPanel.onDragStart}
-        onOpenProviderWindow={() => void onOpenPendingProviderWindow()}
-        onSubmit={onSubmitPendingWebTurn}
-        open={Boolean(pendingWebTurn)}
-        panelRef={webTurnFloatingRef}
-        position={webTurnPanel.position}
-        prompt={pendingWebTurn?.prompt ?? ""}
-        providerLabel={pendingWebTurn ? webProviderLabel(pendingWebTurn.provider) : ""}
-        responseDraft={webResponseDraft}
-      />
-
-      <ApprovalModal
-        decisionLabel={approvalDecisionLabel}
-        decisions={APPROVAL_DECISIONS}
-        method={activeApproval?.method ?? ""}
-        onRespond={onRespondApproval}
-        open={Boolean(activeApproval)}
-        params={formatUnknown(activeApproval?.params)}
-        requestId={activeApproval?.requestId ?? 0}
-        sourceLabel={approvalSourceLabel(activeApproval?.source ?? "remote")}
-        submitting={approvalSubmitting}
+      <MainAppModals
+        activeApproval={activeApproval}
+        approvalDecisionLabel={approvalDecisionLabel}
+        approvalDecisions={APPROVAL_DECISIONS}
+        approvalSourceLabel={approvalSourceLabel}
+        approvalSubmitting={approvalSubmitting}
+        formatUnknown={formatUnknown}
+        onCancelPendingWebTurn={onCancelPendingWebTurn}
+        onCopyPendingWebPrompt={onCopyPendingWebPrompt}
+        onDismissPendingWebTurn={onDismissPendingWebTurn}
+        onOpenPendingProviderWindow={onOpenPendingProviderWindow}
+        onOpenProviderSession={onOpenProviderSession}
+        onRespondApproval={onRespondApproval}
+        onRunGraph={onRunGraph}
+        onSubmitPendingWebTurn={onSubmitPendingWebTurn}
+        pendingWebConnectCheck={pendingWebConnectCheck}
+        pendingWebLogin={pendingWebLogin}
+        pendingWebTurn={pendingWebTurn}
+        refreshWebBridgeStatus={refreshWebBridgeStatus}
+        resolvePendingWebLogin={resolvePendingWebLogin}
+        setPendingWebConnectCheck={setPendingWebConnectCheck}
+        setStatus={setStatus}
+        setWebResponseDraft={setWebResponseDraft}
+        setWorkspaceTab={setWorkspaceTab}
+        t={t}
+        webProviderLabel={webProviderLabel}
+        webResponseDraft={webResponseDraft}
+        webTurnFloatingRef={webTurnFloatingRef}
+        webTurnPanel={webTurnPanel}
       />
     </main>
   );
