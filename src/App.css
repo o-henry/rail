@@ -88,17 +88,17 @@
   --surface-soft: #f7f9fc;
   --surface-panel: #ffffff;
   --surface-active: rgba(212, 212, 212, 0.96);
-  --bg-app: #dadadd;
-  --app-shell-bg: radial-gradient(1200px 560px at 50% 0%, #f4f4f5 0%, #dddddf 45%, #d1d1d4 100%);
-  --workspace-bg: #ececee;
-  --workspace-border: rgba(255, 255, 255, 0.55);
-  --workspace-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 24px 48px rgba(32, 34, 40, 0.12);
-  --nav-bg: rgba(255, 255, 255, 0.54);
-  --nav-border: rgba(255, 255, 255, 0.68);
-  --nav-shadow: 0 12px 24px rgba(35, 39, 47, 0.1);
-  --nav-button-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.86), 0 2px 5px rgba(25, 27, 32, 0.08);
-  --panel-border: rgba(225, 228, 235, 0.88);
-  --panel-shadow: 0 10px 20px rgba(31, 35, 44, 0.07);
+  --bg-app: #ffffff;
+  --app-shell-bg: #ffffff;
+  --workspace-bg: transparent;
+  --workspace-border: transparent;
+  --workspace-shadow: none;
+  --nav-bg: transparent;
+  --nav-border: transparent;
+  --nav-shadow: none;
+  --nav-button-shadow: none;
+  --panel-border: transparent;
+  --panel-shadow: none;
   --text-main: #1b2229;
   --text-muted: #667180;
   --text-danger: #9a2727;
@@ -3945,6 +3945,53 @@ h3 {
   border-radius: 8px;
   background: var(--surface-soft);
   border: 1px solid var(--surface-strong);
+}
+
+:root[data-theme="light"] .app-shell {
+  background: var(--bg-app);
+}
+
+:root[data-theme="light"] .left-nav {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+:root[data-theme="light"] .nav-lang-button,
+:root[data-theme="light"] .nav-list button {
+  box-shadow: none;
+}
+
+:root[data-theme="light"] .workspace {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+
+:root[data-theme="light"] .panel-card {
+  border: 0;
+  border-radius: 5px;
+  background: var(--surface);
+  box-shadow: none;
+}
+
+:root[data-theme="light"] .dashboard-layout {
+  gap: 12px;
+  padding-top: 0;
+}
+
+:root[data-theme="light"] .dashboard-card strong {
+  color: var(--text-main);
+}
+
+:root[data-theme="light"] .dashboard-widget-button {
+  border: 1px solid transparent;
+  transition: border-color 160ms ease, transform 160ms ease;
+}
+
+:root[data-theme="light"] .dashboard-widget-button:hover {
+  transform: translateY(-1px);
+  box-shadow: none;
 }
 
 .agents-layout {
