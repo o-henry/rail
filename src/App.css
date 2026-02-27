@@ -170,10 +170,10 @@
   --bg-app: #1e1e1e;
   --app-shell-bg: #1e1e1e;
   --workspace-bg: #1e1e1e;
-  --workspace-border: #3c3c3c;
+  --workspace-border: transparent;
   --workspace-shadow: none;
   --nav-bg: #252526;
-  --nav-border: #3c3c3c;
+  --nav-border: transparent;
   --nav-shadow: none;
   --nav-button-shadow: none;
   --nav-active-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 4px 12px rgba(0, 0, 0, 0.38);
