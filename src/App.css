@@ -3986,7 +3986,7 @@ h3 {
   grid-template-rows: clamp(158px, 15cqw, 250px) minmax(0, 1fr) minmax(0, 1fr);
   grid-template-areas:
     "workflow workflow approvals approvals webConnect webConnect schedules schedules marketSummary marketSummary marketSummary marketSummary"
-    "globalHeadlines globalHeadlines globalHeadlines industryTrendRadar industryTrendRadar industryTrendRadar communityHotTopics communityHotTopics reliabilityPanel reliabilityPanel reliabilityPanel reliabilityPanel"
+    "globalHeadlines globalHeadlines globalHeadlines industryTrendRadar industryTrendRadar industryTrendRadar communityHotTopics communityHotTopics communityHotTopics communityHotTopics reliabilityPanel reliabilityPanel"
     "eventCalendar eventCalendar eventCalendar eventCalendar riskAlertBoard riskAlertBoard riskAlertBoard riskAlertBoard devEcosystem devEcosystem devEcosystem devEcosystem";
 }
 
@@ -5107,7 +5107,7 @@ pre {
       "workflow workflow approvals approvals webConnect webConnect"
       "schedules schedules marketSummary marketSummary marketSummary marketSummary"
       "globalHeadlines globalHeadlines globalHeadlines industryTrendRadar industryTrendRadar industryTrendRadar"
-      "communityHotTopics communityHotTopics communityHotTopics reliabilityPanel reliabilityPanel reliabilityPanel"
+      "communityHotTopics communityHotTopics communityHotTopics communityHotTopics reliabilityPanel reliabilityPanel"
       "eventCalendar eventCalendar riskAlertBoard riskAlertBoard devEcosystem devEcosystem"
       "eventCalendar eventCalendar riskAlertBoard riskAlertBoard devEcosystem devEcosystem";
   }
