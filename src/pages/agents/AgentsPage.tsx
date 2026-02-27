@@ -136,7 +136,7 @@ export default function AgentsPage({ onQuickAction }: AgentsPageProps) {
         </button>
       </div>
 
-      <section className="agents-grid" aria-label="Agents grid">
+      <section className={`agents-grid${threads.length === 1 ? " is-single" : ""}`} aria-label="Agents grid">
         {threads.map((thread) => (
           <article
             key={thread.id}
@@ -158,7 +158,14 @@ export default function AgentsPage({ onQuickAction }: AgentsPageProps) {
                 <img alt="" aria-hidden="true" src="/xmark.svg" />
               </button>
             </div>
-            <p>{thread.name} ready.</p>
+            <div className="agents-grid-card-log" aria-label={`${thread.name} log`}>
+              <p className="agents-grid-card-placeholder">
+                {thread.id === activeThreadId ? "대화 로그가 여기에 표시됩니다." : "에이전트를 선택하면 로그가 표시됩니다."}
+              </p>
+            </div>
+            <div className="agents-grid-card-foot">
+              <span>{thread.id === activeThreadId ? "Active" : "Standby"}</span>
+            </div>
           </article>
         ))}
       </section>

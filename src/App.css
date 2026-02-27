@@ -4395,22 +4395,34 @@ h3 {
   min-height: 0;
   overflow: auto;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(420px, 1fr));
+  grid-auto-rows: minmax(360px, 1fr);
   gap: 10px;
-  align-content: start;
+  align-content: stretch;
   padding-right: 2px;
 }
 
+.agents-grid.is-single {
+  grid-template-columns: minmax(0, 1fr);
+  grid-auto-rows: minmax(0, 1fr);
+}
+
 .agents-grid-card {
-  min-height: 130px;
+  min-height: 360px;
   border-radius: 12px;
   border: 1px solid var(--surface-strong);
   background: var(--surface-panel);
   padding: 12px;
   display: grid;
-  align-content: start;
+  grid-template-rows: auto minmax(0, 1fr) auto;
   gap: 10px;
   cursor: pointer;
+  overflow: hidden;
+}
+
+.agents-grid.is-single .agents-grid-card {
+  min-height: 0;
+  height: 100%;
 }
 
 .agents-grid-card.is-active {
@@ -4435,6 +4447,30 @@ h3 {
   color: var(--text-muted);
   font-size: 12px;
   line-height: 1.4;
+}
+
+.agents-grid-card-log {
+  min-height: 0;
+  border: 1px solid var(--surface-strong);
+  border-radius: 10px;
+  background: var(--surface);
+  padding: 12px;
+  overflow: auto;
+}
+
+.agents-grid-card-placeholder {
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.agents-grid-card-foot {
+  min-height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  color: var(--text-muted);
+  font-size: 12px;
 }
 
 .agents-off-button {
