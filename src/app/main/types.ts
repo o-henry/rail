@@ -1,5 +1,13 @@
 import type { PresetKind, QualityProfileId, TurnExecutor, WebProvider, WebResultMode } from "../../features/workflow/domain";
 import type { GraphData, GraphEdge, GraphNode, NodeAnchorSide, NodeExecutionStatus, NodeType } from "../../features/workflow/types";
+import type {
+  ApprovalRequest as OrchestrationApprovalRequest,
+  BatchRunResult as OrchestrationBatchRunResult,
+  MissionFlowState,
+  PatchBundle,
+  UnityTaskBundle,
+  WorkbenchTimelineEvent,
+} from "../../features/orchestration/types";
 
 export type EngineNotificationEvent = {
   method: string;
@@ -344,6 +352,12 @@ export type RunRecord = {
     band: ConfidenceBand;
     rationale: string;
   };
+  missionFlow?: MissionFlowState;
+  approvalQueueSnapshot?: OrchestrationApprovalRequest[];
+  batchRuns?: OrchestrationBatchRunResult[];
+  collaborationTrace?: WorkbenchTimelineEvent[];
+  unityTaskBundle?: UnityTaskBundle;
+  patchBundle?: PatchBundle;
 };
 
 export type FeedViewPost = FeedPost & {
