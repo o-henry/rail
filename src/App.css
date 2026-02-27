@@ -2626,7 +2626,7 @@ h3 {
   gap: 0;
   padding: 18px 20px 30px;
   border-radius: 12px;
-  background: var(--feed-surface);
+  background: #ffffff;
   font-family: "BasicallyAMono", "DialogNanumBody1984", "Noto Sans KR", sans-serif;
 }
 
@@ -2650,7 +2650,7 @@ h3 {
   font-size: 20px;
   font-family: "BasicallyAMono", "DialogNanumBody1984", "Noto Sans KR", sans-serif;
   letter-spacing: -0.015em;
-  color: var(--feed-title);
+  color: #14181f;
 }
 
 .feed-content-search-wrap {
@@ -2670,7 +2670,7 @@ h3 {
 .feed-content-search-wrap.is-open {
   width: 13vw;
   min-width: 180px;
-  border-bottom: 1px solid var(--feed-search-open-border);
+  border-bottom: 1px solid #5f88d7;
 }
 
 .feed-content-search-icon {
@@ -2703,7 +2703,7 @@ h3 {
   padding: 0;
   border-radius: 0;
   background: transparent !important;
-  color: var(--text-main);
+  color: #28303a;
   font-size: 12px;
 }
 
@@ -2718,14 +2718,14 @@ h3 {
   height: 32px;
   padding: 0 10px;
   border-radius: 6px;
-  background: var(--surface);
-  color: var(--text-main);
+  background: #ffffff;
+  color: #2c3440;
   font-size: 13px;
   box-shadow: none;
 }
 
 .feed-filter-toggle.is-open {
-  background: var(--feed-filter-open-bg);
+  background: #eef2f7;
   box-shadow: none;
 }
 
@@ -2757,7 +2757,7 @@ h3 {
   min-height: 0;
   overflow: visible;
   border-radius: 4px;
-  background: var(--surface-soft);
+  background: #eff2f6;
   padding: 12px;
   display: grid;
   grid-template-columns: repeat(4, minmax(120px, 1fr));
@@ -2768,7 +2768,7 @@ h3 {
   display: grid;
   gap: 6px;
   font-size: 12px;
-  color: var(--text-muted);
+  color: #556173;
   min-width: 0;
 }
 
@@ -2812,7 +2812,7 @@ h3 {
   height: 40px;
   border-radius: 0;
   padding: 0;
-  color: var(--text-muted);
+  color: #4d5662;
   background: transparent;
   box-shadow: none;
   font-family: "BasicallyAMono", "DialogNanumBody1984", "Noto Sans KR", sans-serif;
@@ -2869,7 +2869,7 @@ h3 {
   margin-top: 10px;
   border: 0;
   border-radius: 12px;
-  background: var(--feed-surface);
+  background: #ffffff;
   scrollbar-width: none;
 }
 
@@ -2886,7 +2886,7 @@ h3 {
 .feed-run-group {
   display: grid;
   gap: 0;
-  border-bottom: 1px solid var(--feed-border);
+  border-bottom: 1px solid #e8edf2;
 }
 
 .feed-run-group:last-child {
@@ -2916,12 +2916,12 @@ h3 {
   font-size: 13px;
   line-height: 1.2;
   font-family: "BasicallyAMono", "DialogNanumBody1984", "Noto Sans KR", sans-serif;
-  color: var(--feed-title);
+  color: #0f1419;
 }
 
 .feed-run-group-meta span {
   font-size: 12px;
-  color: var(--feed-muted);
+  color: #657285;
   line-height: 1.2;
 }
 
@@ -2938,13 +2938,13 @@ h3 {
   border-radius: 3px;
   font-size: 12px !important;
   line-height: 1;
-  background: var(--feed-action-bg);
-  color: var(--feed-action-color);
+  background: #eef2f7;
+  color: #3a4656;
   box-shadow: none;
 }
 
 .feed-run-group-toggle {
-  background: var(--feed-action-bg);
+  background: #f2f5f9;
 }
 
 .feed-run-group-delete {
@@ -2952,7 +2952,7 @@ h3 {
 }
 
 .feed-run-group-rename {
-  background: var(--feed-action-bg);
+  background: #f2f5f9;
 }
 
 .feed-run-group-rename-row {
@@ -3015,15 +3015,15 @@ h3 {
 .feed-card {
   border: 0;
   border-radius: 0;
-  background: var(--feed-surface);
+  background: #ffffff;
   padding: 16px 0;
   display: grid;
   gap: 10px;
-  border-bottom: 1px solid var(--feed-border);
+  border-bottom: 1px solid #e8edf2;
 }
 
 .feed-card.is-selected {
-  background: var(--feed-surface);
+  background: #ffffff;
 }
 
 .feed-run-group-posts > .feed-card:last-child {
