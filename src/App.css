@@ -595,6 +595,14 @@ h3 {
   overflow: hidden;
 }
 
+.workspace.workspace-has-error .workspace-quick-toggle {
+  top: 66px;
+}
+
+.workspace.workspace-has-error .workspace-quick-panel {
+  top: 104px;
+}
+
 .workspace-quick-toggle {
   position: absolute;
   top: 8px;
@@ -829,6 +837,14 @@ h3 {
 }
 
 @media (max-width: 900px) {
+  .workspace.workspace-has-error .workspace-quick-toggle {
+    top: 62px;
+  }
+
+  .workspace.workspace-has-error .workspace-quick-panel {
+    top: 98px;
+  }
+
   .workspace-quick-toggle {
     right: 8px;
   }
@@ -877,6 +893,10 @@ h3 {
   line-height: 1;
   font-size: 0.82rem;
   font-weight: 600;
+}
+
+.workspace.workspace-has-error .error {
+  z-index: 11;
 }
 
 .error {

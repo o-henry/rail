@@ -1875,7 +1875,9 @@ function App() {
         renderIcon={(tab, active) => <NavIcon active={active} tab={tab} />}
       />
 
-      <section className={`workspace ${canvasFullscreen ? "canvas-fullscreen-active" : ""}`}>
+      <section
+        className={`workspace ${canvasFullscreen ? "canvas-fullscreen-active" : ""} ${error ? "workspace-has-error" : ""}`.trim()}
+      >
         {!canvasFullscreen && <header className="workspace-header workspace-header-spacer" />}
         {!canvasFullscreen && (
           <WorkspaceQuickPanel
