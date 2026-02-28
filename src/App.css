@@ -501,6 +501,10 @@ h3 {
   font-family: "BasicallyAMono", "Noto Sans KR", monospace;
 }
 
+.left-nav .nav-list button {
+  display: none !important;
+}
+
 .nav-list button {
   width: 36px;
   min-width: 36px;
