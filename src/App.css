@@ -2164,9 +2164,11 @@ h3 {
 
 .inspector-head-title {
   position: relative;
-  display: inline-flex;
+  display: flex;
   align-items: center;
   gap: 6px;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .inspector-title-chip {
@@ -2182,7 +2184,8 @@ h3 {
 .inspector-head-tooltip-panel {
   left: 0;
   right: auto;
-  width: 320px;
+  width: calc(100% - 8px);
+  max-width: calc(100% - 8px);
 }
 
 .inspector-pane h2 {
