@@ -2954,11 +2954,17 @@ h3 {
   background: transparent;
   min-height: 0;
   height: 100%;
+  grid-template-rows: minmax(0, 1fr);
 }
 
 .settings-dashboard-intelligence-split {
+  min-height: 0;
+  height: 100%;
+  display: grid;
   grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr);
+  grid-template-rows: minmax(0, 1fr);
   align-items: stretch;
+  gap: 12px;
 }
 
 .settings-dashboard-intelligence-main {
@@ -2980,7 +2986,7 @@ h3 {
   align-items: flex-start;
   justify-content: space-between;
   gap: 10px;
-  margin-bottom: 2rem;
+  margin-bottom: 0;
 }
 
 .settings-dashboard-intelligence-copy {
@@ -5078,6 +5084,10 @@ h3 {
 .panel-card.settings-view.data-intelligence-view {
   background: transparent;
   box-shadow: none;
+  padding: 0;
+  gap: 0;
+  overflow: hidden;
+  grid-template-rows: minmax(0, 1fr);
 }
 
 .data-intelligence-view > .settings-dashboard-intelligence {
@@ -5087,7 +5097,7 @@ h3 {
   min-height: 0;
   height: 100%;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
 }
 
 .settings-view::-webkit-scrollbar {
@@ -7502,6 +7512,7 @@ pre {
 
   .settings-dashboard-intelligence-split {
     grid-template-columns: 1fr;
+    grid-template-rows: auto auto;
   }
 
   .settings-dashboard-topic-columns {
