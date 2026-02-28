@@ -1477,7 +1477,7 @@ h3 {
 .fancy-select-trigger {
   width: 100%;
   min-height: 36px;
-  border-radius: 16px;
+  border-radius: 4px;
   border: 0;
   background: color-mix(in srgb, var(--surface-soft) 74%, var(--surface-elevated));
   color: var(--text-main);
@@ -1556,7 +1556,7 @@ h3 {
 
 .fancy-select-option {
   width: 100%;
-  border-radius: 8px;
+  border-radius: 4px;
   background: transparent;
   display: inline-flex;
   align-items: center;
@@ -1591,7 +1591,7 @@ h3 {
   height: 36px;
   min-height: 36px;
   max-height: 36px;
-  border-radius: 16px;
+  border-radius: 4px;
   margin-bottom: 2px;
   border: 0;
   padding: 0 12px;
@@ -2553,7 +2553,7 @@ h3 {
 .settings-view .controls .fancy-select-trigger {
   background: color-mix(in srgb, var(--surface-soft) 74%, var(--surface-elevated));
   border: 0;
-  border-radius: 16px;
+  border-radius: 4px;
   box-shadow: none;
 }
 
@@ -2562,7 +2562,7 @@ h3 {
 .settings-dashboard-topic-select .fancy-select-trigger:focus,
 .settings-dashboard-topic-select .fancy-select-trigger:focus-visible {
   border: 0 !important;
-  border-radius: 16px !important;
+  border-radius: 4px !important;
   background: color-mix(in srgb, var(--surface-soft) 74%, var(--surface-elevated)) !important;
   box-shadow: none !important;
 }
@@ -2572,7 +2572,7 @@ h3 {
 .settings-multiagent-select .fancy-select-trigger:focus,
 .settings-multiagent-select .fancy-select-trigger:focus-visible {
   border: 0 !important;
-  border-radius: 16px !important;
+  border-radius: 4px !important;
   background: color-mix(in srgb, var(--surface-soft) 74%, var(--surface-elevated)) !important;
   box-shadow: none !important;
 }
@@ -6711,7 +6711,7 @@ h3 {
   min-height: 30px;
   height: 30px;
   width: 100%;
-  border-radius: 16px;
+  border-radius: 4px;
   border: 0;
   background: color-mix(in srgb, var(--surface-soft) 74%, var(--surface-elevated));
   color: var(--text-main);
@@ -6782,7 +6782,7 @@ h3 {
   width: 100%;
   min-height: 30px;
   border: 0;
-  border-radius: 8px;
+  border-radius: 4px;
   background: transparent;
   color: var(--text-main);
   text-align: left;
