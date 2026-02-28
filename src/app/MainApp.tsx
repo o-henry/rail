@@ -1782,6 +1782,17 @@ function App() {
     setWorkspaceTab("workflow");
     setStatus("에이전트 요청이 워크플로우 입력에 반영되었습니다.");
   };
+  const workspaceTopbarTabs = useMemo(
+    () => [
+      { tab: "dashboard" as WorkspaceTab, label: t("nav.dashboard") },
+      { tab: "agents" as WorkspaceTab, label: t("nav.agents") },
+      { tab: "workflow" as WorkspaceTab, label: t("nav.workflow.short") },
+      { tab: "feed" as WorkspaceTab, label: t("nav.feed") },
+      { tab: "settings" as WorkspaceTab, label: t("nav.settings") },
+    ],
+    [t],
+  );
+
   const quickPanelWorkspaceLabel = useMemo(() => {
     const byTab: Record<WorkspaceTab, string> = {
       dashboard: "홈 오버뷰",
@@ -1878,18 +1889,38 @@ function App() {
         {!canvasFullscreen && <header className="workspace-header workspace-header-spacer" />}
         {!canvasFullscreen && (
           <div className="workspace-topbar">
-            <WorkspaceQuickPanel
-              isOpen={quickPanelOpen}
-              onChangeQuery={setQuickPanelQuery}
-              onClose={onCloseQuickPanel}
-              onOpenAgents={onOpenQuickPanelAgents}
-              onOpenFeed={onOpenQuickPanelFeed}
-              onSubmitQuery={onSubmitQuickPanelQuery}
-              onToggle={onToggleQuickPanel}
-              query={quickPanelQuery}
-              recentPosts={quickPanelRecentPosts}
-              workspaceLabel={quickPanelWorkspaceLabel}
-            />
+            <nav aria-label="Workspace top navigation" className="workspace-topbar-nav">
+              {workspaceTopbarTabs.map((item) => {
+                const active = workspaceTab === item.tab;
+                return (
+                  <button
+                    className={active ? "workspace-topbar-tab is-active" : "workspace-topbar-tab"}
+                    key={item.tab}
+                    onClick={() => onSelectWorkspaceTab(item.tab)}
+                    type="button"
+                  >
+                    <span aria-hidden="true" className="workspace-topbar-tab-icon">
+                      <NavIcon active={active} tab={item.tab} />
+                    </span>
+                    <span>{item.label}</span>
+                  </button>
+                );
+              })}
+            </nav>
+            <div className="workspace-topbar-actions">
+              <WorkspaceQuickPanel
+                isOpen={quickPanelOpen}
+                onChangeQuery={setQuickPanelQuery}
+                onClose={onCloseQuickPanel}
+                onOpenAgents={onOpenQuickPanelAgents}
+                onOpenFeed={onOpenQuickPanelFeed}
+                onSubmitQuery={onSubmitQuickPanelQuery}
+                onToggle={onToggleQuickPanel}
+                query={quickPanelQuery}
+                recentPosts={quickPanelRecentPosts}
+                workspaceLabel={quickPanelWorkspaceLabel}
+              />
+            </div>
           </div>
         )}
 
