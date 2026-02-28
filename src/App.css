@@ -674,6 +674,7 @@ h3 {
 }
 
 .workspace-quick-toggle {
+  display: none !important;
   width: 36px;
   min-width: 36px;
   min-height: 36px;
