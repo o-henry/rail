@@ -5055,8 +5055,9 @@ h3 {
 
 .settings-view > .bridge-embedded {
   width: 100%;
-  max-width: var(--content-max-width);
+  max-width: 720px;
   margin-inline: auto;
+  margin-top: 1.5rem;
 }
 
 .panel-card.settings-view {
