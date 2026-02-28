@@ -31,6 +31,7 @@ src-tauri/graphs/
 
 # Local automation/runtime temp artifacts
 .tmp/
+tmp/
 
 # Secrets / local credentials
 .env
