@@ -53,6 +53,14 @@
 }
 
 @font-face {
+  font-family: "Galmuri11";
+  src: url("/fonts/galmuri14.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
   font-family: "Galmuri14";
   src: url("/fonts/galmuri14.ttf") format("truetype");
   font-weight: 400;
@@ -2949,11 +2957,11 @@ h3 {
 }
 
 .settings-dashboard-intelligence-eyebrow {
-  font-size: 11px;
+  font-size: 15px;
   line-height: 1;
-  letter-spacing: 0.08em;
+  letter-spacing: 0;
   color: var(--text-muted);
-  font-family: "BasicallyAMono", "Noto Sans KR", monospace;
+  font-family: "Galmuri11", "DialogNanumBody1984", "Noto Sans KR", sans-serif;
 }
 
 .settings-dashboard-intelligence-head h4 {
@@ -3713,8 +3721,8 @@ h3 {
 
 .feed-topbar h2 {
   margin: 0;
-  font-size: 20px;
-  font-family: "BasicallyAMono", "DialogNanumBody1984", "Noto Sans KR", sans-serif;
+  font-size: 15px;
+  font-family: "Galmuri11", "DialogNanumBody1984", "Noto Sans KR", sans-serif;
   letter-spacing: -0.015em;
   color: #14181f;
 }
@@ -6022,9 +6030,9 @@ h3 {
 
 .agents-set-picker-head h2 {
   margin: 0;
-  font-size: 16px;
-  letter-spacing: 0.06em;
-  font-family: "BasicallyAMono", "Noto Sans KR", monospace;
+  font-size: 15px;
+  letter-spacing: 0;
+  font-family: "Galmuri11", "DialogNanumBody1984", "Noto Sans KR", sans-serif;
   color: var(--text-main);
 }
 
@@ -6813,8 +6821,8 @@ pre {
 }
 
 .controls > h3 {
-  font-size: 20px;
-  font-family: "DialogNanumBody1984", "Noto Sans KR", sans-serif;
+  font-size: 15px;
+  font-family: "Galmuri11", "DialogNanumBody1984", "Noto Sans KR", sans-serif;
 }
 
 .settings-view .controls > h3 {
