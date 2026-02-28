@@ -9,7 +9,6 @@ type SettingsPageProps = {
   cwd: string;
   codexMultiAgentMode: string;
   codexMultiAgentModeOptions: ReadonlyArray<{ value: string; label: string }>;
-  themeMode: string;
   status: string;
   usageInfoText: string;
   usageResultClosed: boolean;
@@ -32,7 +31,6 @@ export default function SettingsPage({
   cwd,
   codexMultiAgentMode,
   codexMultiAgentModeOptions,
-  themeMode,
   status,
   usageInfoText,
   usageResultClosed,
@@ -47,7 +45,6 @@ export default function SettingsPage({
   onOpenRunsFolder,
 }: SettingsPageProps) {
   const { t } = useI18n();
-  const isDarkMode = themeMode === "dark";
 
   return (
     <section className={`controls ${compact ? "settings-compact" : ""}`}>
@@ -80,14 +77,6 @@ export default function SettingsPage({
           onChange={onSetCodexMultiAgentMode}
           options={[...codexMultiAgentModeOptions]}
           value={codexMultiAgentMode}
-        />
-      </label>
-      <label>
-        {t("settings.themeMode")}
-        <input
-          className="lowercase-path-input"
-          readOnly
-          value={isDarkMode ? t("settings.theme.dark") : t("settings.theme.light")}
         />
       </label>
       {!compact && (

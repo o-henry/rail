@@ -127,7 +127,6 @@ import {
   toOpenRunsFolderErrorMessage,
   toUsageCheckErrorMessage,
 } from "./mainAppUtils";
-import { useThemeMode } from "./theme/ThemeProvider";
 import {
   GRAPH_SCHEMA_VERSION,
   KNOWLEDGE_DEFAULT_MAX_CHARS,
@@ -298,7 +297,6 @@ function App() {
   const defaultLoginCompleted = useMemo(() => loadPersistedLoginCompleted(), []);
   const defaultAuthMode = useMemo(() => loadPersistedAuthMode(), []);
   const defaultCodexMultiAgentMode = useMemo(() => loadPersistedCodexMultiAgentMode(), []);
-  const { mode: themeMode } = useThemeMode();
   const [workspaceTab, setWorkspaceTab] = useState<WorkspaceTab>("dashboard");
   const [dashboardDetailTopic, setDashboardDetailTopic] = useState<DashboardDetailTopic | null>(null);
   const [quickPanelOpen, setQuickPanelOpen] = useState(false);
@@ -2060,7 +2058,6 @@ function App() {
               loginCompleted={loginCompleted}
               codexMultiAgentMode={codexMultiAgentMode}
               codexMultiAgentModeOptions={[...codexMultiAgentModeOptions]}
-              themeMode={themeMode}
               onCheckUsage={() => void onCheckUsage()}
               onCloseUsageResult={() => setUsageResultClosed(true)}
               onOpenRunsFolder={() => void onOpenRunsFolder()}
