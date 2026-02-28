@@ -395,8 +395,8 @@ h3 {
   padding: calc(8px + var(--titlebar-overlay-height)) 8px 8px;
   display: grid;
   /* grid-template-columns: 72px minmax(0, 1fr); */
-  grid-template-columns: 56px minmax(0, 1fr);
-  column-gap: 4px;
+  grid-template-columns: 1fr;
+  column-gap: 0;
   background: var(--app-shell-bg);
 }
 
@@ -438,6 +438,7 @@ h3 {
 }
 
 .left-nav {
+  display: none;
   position: relative;
   align-self: start;
   height: auto;
@@ -5744,8 +5745,7 @@ pre {
 
 @media (max-width: 900px) {
   .app-shell {
-    /* grid-template-columns: 68px minmax(0, 1fr); */
-    grid-template-columns: 56px minmax(0, 1fr);
+    grid-template-columns: 1fr;
     padding: 10px;
     /* column-gap: 6px; */
     column-gap: 0px;
