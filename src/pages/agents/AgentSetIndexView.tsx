@@ -43,9 +43,6 @@ export function AgentSetIndexView({
                 <section className="agents-set-group" key={group.id}>
                   <div className="agents-set-group-head">
                     <h3 className="agents-set-group-title">{group.title}</h3>
-                    <div className="agents-set-index-head" role="presentation">
-                      <span>SET</span>
-                    </div>
                   </div>
                   <div className="agents-set-list" role="list" aria-label={`${group.title} Agent sets`}>
                     {group.items.map((setOption) => {
