@@ -2524,15 +2524,15 @@ h3 {
 }
 
 .settings-opacity-input {
-  min-width: 78px;
-  width: 78px;
+  min-width: 46px;
+  width: 46px;
   min-height: 36px;
   height: 36px;
   border: 0;
   border-radius: 5px;
   background: var(--surface-panel);
   color: var(--text-main);
-  padding: 8px 11px;
+  padding: 8px 6px;
   text-align: center;
   appearance: textfield;
   -moz-appearance: textfield;
