@@ -2955,9 +2955,11 @@ h3 {
   grid-template-rows: auto auto minmax(0, 1fr);
   gap: 10px;
   border-radius: 12px;
+  border: 0;
   background: var(--surface);
   padding: 12px 0 0 0;
-  box-shadow: none;
+  box-shadow: var(--panel-shadow);
+  overflow: hidden;
 }
 
 .settings-dashboard-intelligence-head {
@@ -3176,9 +3178,11 @@ h3 {
   grid-template-rows: auto minmax(0, 1fr) auto;
   gap: 10px;
   border-radius: 12px;
+  border: 0;
   background: var(--surface);
   padding: 12px;
-  box-shadow: none;
+  box-shadow: var(--panel-shadow);
+  overflow: hidden;
 }
 
 .settings-dashboard-topic-detail-head {
@@ -5965,11 +5969,6 @@ h3 {
   box-shadow: var(--panel-shadow);
 }
 
-:root[data-theme="light"] .settings-dashboard-intelligence-main.panel-card,
-:root[data-theme="light"] .settings-dashboard-topic-detail.panel-card {
-  box-shadow: none;
-}
-
 :root[data-theme="light"] .dashboard-layout {
   gap: 10px;
   padding-top: 0;
@@ -7166,11 +7165,6 @@ pre {
   background: var(--surface-panel);
   border-color: var(--panel-border);
   box-shadow: var(--panel-shadow);
-}
-
-:root[data-theme="dark"] .settings-dashboard-intelligence-main.panel-card,
-:root[data-theme="dark"] .settings-dashboard-topic-detail.panel-card {
-  box-shadow: none;
 }
 
 :root[data-theme="dark"] .dashboard-hero-reset,
