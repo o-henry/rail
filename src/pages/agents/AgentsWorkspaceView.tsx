@@ -185,20 +185,20 @@ export function AgentsWorkspaceView({
 
         <aside className="panel-card agents-workspace-sidebar" aria-label="Agent workspace sidebar">
           <section className="agents-sidebar-card">
-            <h4>Set Brief</h4>
+            <h4>세트 브리프</h4>
             <p>{setMission || activeSetOption?.description || "세트 설명이 없습니다."}</p>
             <small>{`Mode: ${codexMultiAgentMode}`}</small>
           </section>
 
           <section className="agents-sidebar-card">
-            <h4>Active Agent</h4>
+            <h4>활성 에이전트</h4>
             <p className="agents-sidebar-agent-name">{activeThread?.name ?? "-"}</p>
             <p className="agents-sidebar-agent-role">{activeThread?.role ?? "선택된 에이전트 없음"}</p>
             {activeThread?.starterPrompt ? <small>{activeThread.starterPrompt}</small> : null}
           </section>
 
           <section className="agents-sidebar-card">
-            <h4>Data Snapshot</h4>
+            <h4>데이터 스냅샷</h4>
             <ul className="agents-sidebar-list">
               {(dashboardInsights.length > 0 ? dashboardInsights : ["스냅샷 데이터가 없습니다."]).slice(0, 6).map((line) => (
                 <li key={line}>{line}</li>
@@ -207,7 +207,7 @@ export function AgentsWorkspaceView({
           </section>
 
           <section className="agents-sidebar-card">
-            <h4>Action Queue</h4>
+            <h4>액션 큐</h4>
             <div className="agents-sidebar-actions">
               {quickActionItems.map((item) => (
                 <button key={item.id} onClick={() => onQueuePrompt(item.prompt)} type="button">

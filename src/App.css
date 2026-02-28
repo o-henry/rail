@@ -6344,7 +6344,7 @@ h3 {
 .agents-sidebar-actions button {
   width: 100%;
   min-height: 32px;
-  border: 1px solid var(--surface-strong);
+  border: 0;
   border-radius: 8px;
   background: var(--surface-elevated);
   color: var(--text-main);
