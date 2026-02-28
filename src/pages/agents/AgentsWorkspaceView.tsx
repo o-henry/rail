@@ -1,4 +1,4 @@
-import type { ChangeEvent, RefObject } from "react";
+import { useEffect, useState, type ChangeEvent, type RefObject } from "react";
 import type { CodexMultiAgentMode } from "./agentPrompt";
 import type { AgentModelOption, AgentSetOption, AgentThread, AttachedFile } from "./agentTypes";
 
@@ -79,6 +79,12 @@ export function AgentsWorkspaceView({
   sendDisabled,
   onQueuePrompt,
 }: AgentsWorkspaceViewProps) {
+  const [isSetBriefVisible, setIsSetBriefVisible] = useState(true);
+
+  useEffect(() => {
+    setIsSetBriefVisible(true);
+  }, [activeSetOption?.id]);
+
   const quickActionItems = [
     {
       id: "set-mission",
@@ -129,9 +135,20 @@ export function AgentsWorkspaceView({
 
       <section className="agents-workspace-shell">
         <section className="agents-workspace-main">
-          {activeSetOption ? (
+          {activeSetOption && isSetBriefVisible ? (
             <section className="agents-set-brief" aria-label="Selected set briefing">
-              <strong>{activeSetOption.label}</strong>
+              <div className="agents-set-brief-head">
+                <strong>{activeSetOption.label}</strong>
+                <button
+                  aria-label={`${activeSetOption.label} ${t("agents.off")}`}
+                  className="agents-off-button"
+                  onClick={() => setIsSetBriefVisible(false)}
+                  title={t("agents.off")}
+                  type="button"
+                >
+                  <img alt="" aria-hidden="true" src="/xmark.svg" />
+                </button>
+              </div>
               <p>{setMission || activeSetOption.description}</p>
               <small>{`Codex Multi-Agent: ${codexMultiAgentMode}`}</small>
             </section>

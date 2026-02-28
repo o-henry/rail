@@ -6378,6 +6378,13 @@ h3 {
   gap: 4px;
 }
 
+.agents-set-brief-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
 .agents-set-brief strong {
   font-size: 13px;
   color: var(--text-main);
