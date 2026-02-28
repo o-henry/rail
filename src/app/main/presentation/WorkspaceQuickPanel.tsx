@@ -47,8 +47,7 @@ export function WorkspaceQuickPanel(props: WorkspaceQuickPanelProps) {
         onClick={onToggle}
         type="button"
       >
-        <span>패널</span>
-        <kbd>⌘K</kbd>
+        ⌘K
       </button>
 
       <aside className={`workspace-quick-panel${isOpen ? " is-open" : ""}`}>

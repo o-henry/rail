@@ -614,26 +614,13 @@ h3 {
   border: 1px solid var(--surface-strong);
   background: var(--surface);
   color: var(--text-main);
-  padding: 0 10px;
+  padding: 0 9px;
   display: inline-flex;
   align-items: center;
   gap: 8px;
   font-size: 12px;
   line-height: 1;
   box-shadow: 0 4px 10px rgba(15, 24, 34, 0.08);
-}
-
-.workspace-quick-toggle kbd {
-  display: inline-grid;
-  place-items: center;
-  min-width: 28px;
-  height: 18px;
-  border-radius: 6px;
-  border: 1px solid var(--surface-strong);
-  font-family: "BasicallyAMono", "Noto Sans KR", monospace;
-  font-size: 10px;
-  padding: 0 5px;
-  background: var(--surface-soft);
 }
 
 .workspace-quick-toggle.is-open {
