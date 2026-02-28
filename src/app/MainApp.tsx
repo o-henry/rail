@@ -1793,6 +1793,7 @@ function App() {
   );
   return (
     <main className={`app-shell ${canvasFullscreen ? "canvas-fullscreen-mode" : ""}`} style={appShellStyle}>
+      <div aria-hidden="true" className="window-drag-region" data-tauri-drag-region />
       <AppNav
         activeTab={workspaceTab}
         onSelectTab={onSelectWorkspaceTab}

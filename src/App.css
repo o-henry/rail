@@ -400,6 +400,16 @@ h3 {
   background: var(--app-shell-bg);
 }
 
+.window-drag-region {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: calc(var(--titlebar-overlay-height) + 8px);
+  z-index: 2;
+  background: transparent;
+}
+
 .app-shell::before {
   content: "";
   position: absolute;
