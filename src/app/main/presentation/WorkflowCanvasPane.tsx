@@ -2,6 +2,7 @@ import type { Dispatch, KeyboardEvent as ReactKeyboardEvent, MouseEvent as React
 import { useI18n } from "../../../i18n";
 import type { MarqueeSelection, NodeRunState, PendingWebTurn } from "../types";
 import type { GraphNode, NodeAnchorSide, NodeExecutionStatus } from "../../../features/workflow/types";
+import type { TurnExecutor } from "../../../features/workflow/domain";
 import WorkflowCanvasNodesLayer from "./WorkflowCanvasNodesLayer";
 import WorkflowQuestionComposer from "./WorkflowQuestionComposer";
 
@@ -82,6 +83,12 @@ type WorkflowCanvasPaneProps = {
   onClearGraph: () => void;
   canClearGraph: boolean;
   isWorkflowBusy: boolean;
+  onApplyModelSelection: (selection: {
+    modelValue: string;
+    modelLabel: string;
+    executor: TurnExecutor;
+    turnModel?: string;
+  }) => void;
   setWorkflowQuestion: (value: string) => void;
   workflowQuestion: string;
   questionInputRef: RefObject<HTMLTextAreaElement | null>;
@@ -150,6 +157,7 @@ export default function WorkflowCanvasPane({
   onClearGraph,
   canClearGraph,
   isWorkflowBusy,
+  onApplyModelSelection,
   setWorkflowQuestion,
   workflowQuestion,
   questionInputRef,
@@ -332,6 +340,7 @@ export default function WorkflowCanvasPane({
         <WorkflowQuestionComposer
           canRunGraphNow={canRunGraphNow}
           isWorkflowBusy={isWorkflowBusy}
+          onApplyModelSelection={onApplyModelSelection}
           onRunGraph={onRunGraph}
           questionInputRef={questionInputRef}
           setWorkflowQuestion={setWorkflowQuestion}

@@ -5,6 +5,7 @@ import { AGENT_MODEL_OPTIONS, AGENT_REASON_LEVEL_OPTIONS } from "./agentOptions"
 import { AgentSetIndexView } from "./AgentSetIndexView";
 import { AgentsWorkspaceView } from "./AgentsWorkspaceView";
 import { buildAgentDispatchPayload } from "./agentPrompt";
+import { DEFAULT_RUNTIME_MODEL_VALUE } from "../../features/workflow/runtimeModelOptions";
 import {
   AGENT_SET_DASHBOARD_DATA_STORAGE_KEY,
   buildGroupedSetOptions,
@@ -35,7 +36,7 @@ export default function AgentsPage({ onQuickAction, topicSnapshots, codexMultiAg
   );
   const [isModelMenuOpen, setIsModelMenuOpen] = useState(false);
   const [isReasonMenuOpen, setIsReasonMenuOpen] = useState(false);
-  const [selectedModel, setSelectedModel] = useState("5.3-Codex");
+  const [selectedModel, setSelectedModel] = useState(DEFAULT_RUNTIME_MODEL_VALUE);
   const [selectedReasonLevel, setSelectedReasonLevel] = useState("보통");
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -285,7 +286,13 @@ export default function AgentsPage({ onQuickAction, topicSnapshots, codexMultiAg
       attachedFileNames: attachedFiles.map((file) => file.name),
       codexMultiAgentMode,
     });
-    onQuickAction(payload);
+    onQuickAction({
+      prompt: payload,
+      modelValue: selectedModelOption?.value ?? selectedModel,
+      modelLabel: selectedModelOption?.label ?? selectedModel,
+      executor: selectedModelOption?.executor ?? "codex",
+      turnModel: selectedModelOption?.turnModel,
+    });
     updateActiveSetState((current) => ({
       ...current,
       draft: "",

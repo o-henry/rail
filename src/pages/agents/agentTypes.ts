@@ -1,9 +1,19 @@
+import type { TurnExecutor } from "../../features/workflow/domain";
+import type { RuntimeModelOption } from "../../features/workflow/runtimeModelOptions";
 import type { DashboardTopicId, DashboardTopicSnapshot } from "../../features/dashboard/intelligence";
 import type { CodexMultiAgentMode } from "./agentPrompt";
 import type { AgentSetOptionLike, AgentThreadPreset } from "./agentSetPresets";
 
+export type AgentQuickActionRequest = {
+  prompt: string;
+  modelValue: string;
+  modelLabel: string;
+  executor: TurnExecutor;
+  turnModel?: string;
+};
+
 export type AgentsPageProps = {
-  onQuickAction: (prompt: string) => void;
+  onQuickAction: (request: AgentQuickActionRequest) => void;
   topicSnapshots: Partial<Record<DashboardTopicId, DashboardTopicSnapshot>>;
   codexMultiAgentMode: CodexMultiAgentMode;
 };
@@ -34,11 +44,7 @@ export type AgentSetPresetSnapshot = {
   threads: AgentThread[];
 };
 
-export type AgentModelOption = {
-  value: string;
-  label: string;
-  allowsReasonLevel: boolean;
-};
+export type AgentModelOption = RuntimeModelOption;
 
 export type AgentSetGroup = {
   id: string;

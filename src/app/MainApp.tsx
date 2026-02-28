@@ -14,6 +14,7 @@ import FeedPage from "../pages/feed/FeedPage";
 import DashboardPage from "../pages/dashboard/DashboardPage";
 import { type DashboardDetailTopic } from "../pages/dashboard/DashboardDetailPage";
 import AgentsPage from "../pages/agents/AgentsPage";
+import type { AgentQuickActionRequest } from "../pages/agents/agentTypes";
 import SettingsPage from "../pages/settings/SettingsPage";
 import DashboardIntelligenceSettings from "../pages/settings/DashboardIntelligenceSettings";
 import WorkflowPage from "../pages/workflow/WorkflowPage";
@@ -1867,10 +1868,48 @@ function App() {
     window.addEventListener("mousedown", onMouseBackButton);
     return () => window.removeEventListener("mousedown", onMouseBackButton);
   }, [onNavigateWorkspaceBack]);
-  const onAgentQuickAction = (prompt: string) => {
-    setWorkflowQuestion(prompt);
+  const applyTurnExecutionFromModelSelection = useCallback(
+    (selection: {
+      executor: TurnExecutor;
+      turnModel?: string;
+      modelLabel: string;
+      sourceLabel: string;
+    }) => {
+      const selectedTurnNodeIds = graph.nodes
+        .filter((node) => node.type === "turn" && selectedNodeIds.includes(node.id))
+        .map((node) => node.id);
+      const fallbackTurnNodeId = graph.nodes.find((node) => node.type === "turn")?.id;
+      const targetTurnNodeIds = selectedTurnNodeIds.length > 0 ? selectedTurnNodeIds : fallbackTurnNodeId ? [fallbackTurnNodeId] : [];
+
+      if (targetTurnNodeIds.length === 0) {
+        setStatus(`${selection.sourceLabel}: 적용할 턴 노드가 없습니다.`);
+        return;
+      }
+
+      for (const nodeId of targetTurnNodeIds) {
+        updateNodeConfigById(nodeId, "executor", selection.executor);
+        if (selection.executor === "codex") {
+          updateNodeConfigById(nodeId, "model", selection.turnModel ?? DEFAULT_TURN_MODEL);
+        } else {
+          updateNodeConfigById(nodeId, "webResultMode", "bridgeAssisted");
+        }
+      }
+
+      const targetLabel = targetTurnNodeIds.length > 1 ? `${targetTurnNodeIds.length}개 턴` : targetTurnNodeIds[0];
+      setStatus(`${selection.sourceLabel}: ${targetLabel} 실행 모델을 ${selection.modelLabel}로 설정했습니다.`);
+    },
+    [graph.nodes, selectedNodeIds, setStatus, updateNodeConfigById],
+  );
+
+  const onAgentQuickAction = (request: AgentQuickActionRequest) => {
+    applyTurnExecutionFromModelSelection({
+      executor: request.executor,
+      turnModel: request.turnModel,
+      modelLabel: request.modelLabel,
+      sourceLabel: "에이전트",
+    });
+    setWorkflowQuestion(request.prompt);
     setWorkspaceTab("workflow");
-    setStatus("에이전트 요청이 워크플로우 입력에 반영되었습니다.");
   };
   const onSetDashboardTopicModel = useCallback(
     (topic: DashboardTopicId, modelEngine: string) => {
@@ -2140,6 +2179,14 @@ function App() {
               setNodeSelection={setNodeSelection}
               setPanMode={setPanMode}
               setSelectedEdgeKey={setSelectedEdgeKey}
+              onApplyModelSelection={(selection) =>
+                applyTurnExecutionFromModelSelection({
+                  executor: selection.executor,
+                  turnModel: selection.turnModel,
+                  modelLabel: selection.modelLabel,
+                  sourceLabel: "그래프 입력",
+                })
+              }
               setWorkflowQuestion={setWorkflowQuestion}
               stageInsetX={GRAPH_STAGE_INSET_X}
               stageInsetY={GRAPH_STAGE_INSET_Y}

@@ -27,7 +27,7 @@ describe("agent prompt dispatcher", () => {
       threadRole: "Web Researcher",
       threadGuidance: [],
       threadStarterPrompt: "",
-      selectedModel: "WEB",
+      selectedModel: "Gemini",
       selectedReasonLevel: "보통",
       isReasonLevelSelectable: false,
       text: "핵심 뉴스 찾아줘",
@@ -36,7 +36,7 @@ describe("agent prompt dispatcher", () => {
     });
 
     expect(payload).not.toContain("[CODEx MULTI-AGENT ORCHESTRATION]");
-    expect(payload).toContain("[model=WEB, reason=N/A]");
+    expect(payload).toContain("[model=Gemini, reason=N/A]");
   });
 
   it("injects attached files list into payload", () => {

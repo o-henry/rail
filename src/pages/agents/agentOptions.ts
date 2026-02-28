@@ -1,4 +1,5 @@
 import type { AgentModelOption, AgentSetOption } from "./agentTypes";
+import { RUNTIME_MODEL_OPTIONS } from "../../features/workflow/runtimeModelOptions";
 
 export const BASE_AGENT_SET_OPTIONS: AgentSetOption[] = [
   {
@@ -18,19 +19,6 @@ export const BASE_AGENT_SET_OPTIONS: AgentSetOption[] = [
   },
 ];
 
-export const AGENT_MODEL_OPTIONS: AgentModelOption[] = [
-  { value: "5.3-Codex", label: "5.3-Codex", allowsReasonLevel: true },
-  { value: "5.3-Codex-Spark", label: "5.3-Codex-Spark", allowsReasonLevel: true },
-  { value: "5.2-Codex", label: "5.2-Codex", allowsReasonLevel: true },
-  { value: "5.1-Codex-Max", label: "5.1-Codex-Max", allowsReasonLevel: true },
-  { value: "5.2", label: "5.2", allowsReasonLevel: true },
-  { value: "5.1-Codex-Mini", label: "5.1-Codex-Mini", allowsReasonLevel: true },
-  { value: "WEB", label: "WEB", allowsReasonLevel: false },
-  { value: "Gemini", label: "AI · Gemini", allowsReasonLevel: false },
-  { value: "Grok", label: "AI · Grok", allowsReasonLevel: false },
-  { value: "Perplexity", label: "AI · Perplexity", allowsReasonLevel: false },
-  { value: "Kimi", label: "AI · Kimi", allowsReasonLevel: false },
-  { value: "Claude", label: "AI · Claude", allowsReasonLevel: false },
-];
+export const AGENT_MODEL_OPTIONS: AgentModelOption[] = [...RUNTIME_MODEL_OPTIONS];
 
 export const AGENT_REASON_LEVEL_OPTIONS = ["낮음", "보통", "높음"];
