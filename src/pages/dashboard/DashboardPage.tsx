@@ -12,7 +12,8 @@ type DashboardPageProps = {
   connectedProviderCount: number;
   scheduleCount: number;
   enabledScheduleCount: number;
-  onOpenDetail: (topic: DashboardDetailTopic) => void;
+  focusTopic: DashboardDetailTopic | null;
+  onFocusTopic: (topic: DashboardDetailTopic | null) => void;
   stockDocumentPosts: DashboardStockDocumentPost[];
   topicSnapshots: Partial<Record<DashboardTopicId, DashboardTopicSnapshot>>;
 };
@@ -121,6 +122,21 @@ export default function DashboardPage(props: DashboardPageProps) {
     ],
     [],
   );
+  const activeTopic: DashboardDetailTopic = props.focusTopic ?? "marketSummary";
+  const activeTopicId = asDashboardTopicId(activeTopic);
+  const activeSnapshot = activeTopicId ? props.topicSnapshots[activeTopicId] : undefined;
+  const activeWidget = widgets.find((widget) => widget.topic === activeTopic);
+  const activeFallbackHighlights = activeWidget
+    ? activeWidget.fallbackItemKeys.map((key) => t(key))
+    : [];
+  const activeHighlights = activeSnapshot?.highlights.length
+    ? activeSnapshot.highlights
+    : activeFallbackHighlights;
+  const activeSections = [
+    t(`dashboard.detail.${activeTopic}.section1`),
+    t(`dashboard.detail.${activeTopic}.section2`),
+    t(`dashboard.detail.${activeTopic}.section3`),
+  ].filter((line) => !line.includes(`dashboard.detail.${activeTopic}.section`));
 
   const cards = useMemo<DashboardCard[]>(
     () => [
@@ -166,6 +182,64 @@ export default function DashboardPage(props: DashboardPageProps) {
   return (
     <section className="dashboard-layout dashboard-overview-layout workspace-tab-panel">
       <section className="dashboard-mosaic">
+        <article className="panel-card dashboard-tile dashboard-widget-card dashboard-area-marketSummary">
+          <div className="dashboard-hero-head">
+            <div>
+              <h3>{t(`dashboard.widget.${activeTopic}.title`)}</h3>
+              <p>
+                {activeSnapshot?.status === "degraded"
+                  ? "DEGRADED SNAPSHOT"
+                  : t(`dashboard.detail.${activeTopic}.subtitle`)}
+              </p>
+            </div>
+            {activeTopic !== "marketSummary" ? (
+              <button className="dashboard-hero-reset" onClick={() => props.onFocusTopic("marketSummary")} type="button">
+                {t("dashboard.widget.marketSummary.title")}
+              </button>
+            ) : null}
+          </div>
+          <div className="dashboard-hero-body">
+            <section className="dashboard-hero-related">
+              {activeSnapshot?.summary ? <p className="dashboard-widget-summary">{activeSnapshot.summary}</p> : null}
+              {activeTopic === "marketSummary" && stockChartData ? (
+                <StockWidgetChart data={stockChartData} />
+              ) : (
+                <div className="dashboard-hero-list-wrap">
+                  <ul>
+                    {(activeSnapshot?.references.length ? activeSnapshot.references : activeSections).map((item, index) => {
+                      if (typeof item === "string") {
+                        return <li key={`section-${index}`}>{item}</li>;
+                      }
+                      return (
+                        <li key={item.url}>
+                          <strong>{item.title}</strong> · {item.source}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              )}
+            </section>
+            <aside className="dashboard-hero-summary">
+              <h4>{t("dashboard.detail.cta.label")}</h4>
+              <ul>
+                {activeHighlights.map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
+              {activeSnapshot?.risks.length ? (
+                <>
+                  <h4>Risks</h4>
+                  <ul>
+                    {activeSnapshot.risks.map((risk) => (
+                      <li key={risk}>{risk}</li>
+                    ))}
+                  </ul>
+                </>
+              ) : null}
+            </aside>
+          </div>
+        </article>
         {cards.map((card) => (
           <article className={`panel-card dashboard-tile dashboard-card dashboard-area-${card.id}`} key={card.id}>
             <h2>{card.title}</h2>
@@ -173,7 +247,9 @@ export default function DashboardPage(props: DashboardPageProps) {
             <p>{card.caption}</p>
           </article>
         ))}
-        {widgets.map((widget) => (
+        {widgets
+          .filter((widget) => widget.topic !== "marketSummary")
+          .map((widget) => (
           (() => {
             const snapshotTopic = asDashboardTopicId(widget.topic);
             const snapshot = snapshotTopic ? props.topicSnapshots[snapshotTopic] : undefined;
@@ -183,9 +259,9 @@ export default function DashboardPage(props: DashboardPageProps) {
                 : widget.fallbackItemKeys.map((key) => t(key));
             return (
               <button
-                className={`panel-card dashboard-tile dashboard-widget-card dashboard-widget-button dashboard-area-${widget.topic}`}
+                className={`panel-card dashboard-tile dashboard-widget-card dashboard-widget-button dashboard-area-${widget.topic} ${activeTopic === widget.topic ? "is-focus" : ""}`}
                 key={widget.topic}
-                onClick={() => props.onOpenDetail(widget.topic)}
+                onClick={() => props.onFocusTopic(widget.topic)}
                 type="button"
               >
                 <div className="dashboard-widget-head">
@@ -193,15 +269,11 @@ export default function DashboardPage(props: DashboardPageProps) {
                   <span>{snapshot?.status === "degraded" ? "DEGRADED" : t(widget.badgeKey)}</span>
                 </div>
                 {snapshot?.summary ? <p className="dashboard-widget-summary">{snapshot.summary}</p> : null}
-                {widget.topic === "marketSummary" && stockChartData ? (
-                  <StockWidgetChart data={stockChartData} />
-                ) : (
-                  <ul>
-                    {listItems.map((item) => (
-                      <li key={item}>{item}</li>
-                    ))}
-                  </ul>
-                )}
+                <ul>
+                  {listItems.map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ul>
               </button>
             );
           })()

@@ -12,7 +12,7 @@ import AppNav from "../components/AppNav";
 import BridgePage from "../pages/bridge/BridgePage";
 import FeedPage from "../pages/feed/FeedPage";
 import DashboardPage from "../pages/dashboard/DashboardPage";
-import DashboardDetailPage, { type DashboardDetailTopic } from "../pages/dashboard/DashboardDetailPage";
+import { type DashboardDetailTopic } from "../pages/dashboard/DashboardDetailPage";
 import AgentsPage from "../pages/agents/AgentsPage";
 import SettingsPage from "../pages/settings/SettingsPage";
 import WorkflowPage from "../pages/workflow/WorkflowPage";
@@ -2103,35 +2103,18 @@ function App() {
             />
           </WorkflowPage>
         )}
-        {workspaceTab === "dashboard" && dashboardDetailTopic == null && (
+        {workspaceTab === "dashboard" && (
           <DashboardPage
             connectedProviderCount={webBridgeStatus.connectedProviders.length}
             enabledScheduleCount={batchScheduler.schedules.filter((item) => item.status === "enabled").length}
+            focusTopic={dashboardDetailTopic}
             isGraphRunning={isGraphRunning}
-            onOpenDetail={(topic) => setDashboardDetailTopic(topic)}
+            onFocusTopic={(topic) => setDashboardDetailTopic(topic)}
             pendingApprovalsCount={pendingApprovals.length}
             scheduleCount={batchScheduler.schedules.length}
             stockDocumentPosts={feedPosts}
             topicSnapshots={dashboardSnapshotsByTopic}
             webBridgeRunning={webBridgeStatus.running}
-          />
-        )}
-        {workspaceTab === "dashboard" && dashboardDetailTopic != null && (
-          <DashboardDetailPage
-            onBack={() => setDashboardDetailTopic(null)}
-            onOpenFeed={() => setWorkspaceTab("feed")}
-            snapshot={
-              dashboardDetailTopic === "marketSummary" ||
-              dashboardDetailTopic === "globalHeadlines" ||
-              dashboardDetailTopic === "industryTrendRadar" ||
-              dashboardDetailTopic === "communityHotTopics" ||
-              dashboardDetailTopic === "eventCalendar" ||
-              dashboardDetailTopic === "riskAlertBoard" ||
-              dashboardDetailTopic === "devEcosystem"
-                ? dashboardSnapshotsByTopic[dashboardDetailTopic]
-                : undefined
-            }
-            topic={dashboardDetailTopic}
           />
         )}
 
