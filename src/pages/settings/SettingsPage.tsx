@@ -108,7 +108,7 @@ export default function SettingsPage({
           value={codexMultiAgentMode}
         />
       </label>
-      <label>
+      <label className="settings-background-controls">
         {t("settings.backgroundImage")}
         <input
           className="settings-background-file-input"
