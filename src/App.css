@@ -6004,8 +6004,8 @@ h3 {
   min-height: 0;
   height: 100%;
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr);
-  gap: 0;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 10px;
   overflow: hidden;
   border-radius: 12px;
   background: var(--surface);
@@ -6021,11 +6021,11 @@ h3 {
 
 .agents-set-groups {
   min-height: 0;
-  overflow: auto;
+  overflow: visible;
   display: grid;
   align-content: start;
   gap: 10px;
-  margin-top: 4px;
+  margin-top: 0;
 }
 
 .agents-set-group {
@@ -6038,7 +6038,7 @@ h3 {
   grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
   column-gap: 10px;
-  margin-top: 2rem;
+  margin-top: 1rem;
   padding: 0 8px;
 }
 
@@ -6054,6 +6054,31 @@ h3 {
 .agents-set-picker-head {
   display: grid;
   gap: 3px;
+}
+
+.agents-set-picker-split {
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 66.666%) minmax(0, 33.334%);
+  gap: 12px;
+}
+
+.agents-set-picker-main {
+  min-height: 0;
+  overflow: auto;
+  display: grid;
+  align-content: start;
+}
+
+.agents-set-picker-sidebar {
+  min-height: 0;
+  overflow: auto;
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--surface-panel) 88%, var(--surface));
 }
 
 .agents-set-picker-head h2 {
@@ -6113,6 +6138,10 @@ h3 {
   background: color-mix(in srgb, var(--surface-soft) 68%, var(--surface-elevated));
 }
 
+.agents-set-index-row.is-preview-active {
+  background: color-mix(in srgb, var(--focus-ring) 28%, var(--surface-soft));
+}
+
 .agents-set-index-meta {
   min-width: 0;
   display: grid;
@@ -6169,7 +6198,7 @@ h3 {
 .agents-workspace-shell {
   min-height: 0;
   display: grid;
-  grid-template-columns: minmax(0, 2fr) minmax(300px, 1fr);
+  grid-template-columns: minmax(0, 66.666%) minmax(0, 33.334%);
   gap: 12px;
 }
 
@@ -7386,6 +7415,10 @@ pre {
     grid-template-columns: minmax(0, 1fr);
   }
 
+  .agents-set-picker-split {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
   .settings-dashboard-topic-row {
     grid-template-columns: minmax(0, 1fr);
     align-items: stretch;
@@ -7471,6 +7504,10 @@ pre {
   }
 
   .agents-workspace-sidebar {
+    order: 3;
+  }
+
+  .agents-set-picker-sidebar {
     order: 3;
   }
 
