@@ -2957,7 +2957,7 @@ h3 {
   border-radius: 12px;
   background: var(--surface);
   padding: 12px;
-  box-shadow: var(--panel-shadow);
+  box-shadow: none;
 }
 
 .settings-dashboard-intelligence-head {
@@ -3045,25 +3045,29 @@ h3 {
 }
 
 .settings-dashboard-topic-row {
+  position: relative;
   display: grid;
   grid-template-columns: minmax(220px, 1.8fr) minmax(190px, 1fr) 98px 88px;
   gap: 8px;
   align-items: center;
-  border-radius: 6px;
-  background: color-mix(in srgb, var(--surface-panel) 74%, var(--surface));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--surface-panel) 78%, var(--surface));
   padding: 9px 10px;
   cursor: pointer;
-  transition: background-color 140ms ease, transform 140ms ease;
+  transition: background-color 140ms ease;
 }
 
 .settings-dashboard-topic-row:hover {
-  background: color-mix(in srgb, var(--surface-soft) 68%, var(--surface));
+  background: color-mix(in srgb, var(--surface-soft) 74%, var(--surface));
 }
 
 .settings-dashboard-topic-row.is-active {
-  background: color-mix(in srgb, #d9e6ff 68%, var(--surface));
-  transform: translateY(-1px);
-  box-shadow: none;
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--focus-ring) 20%, var(--surface-soft)) 0%,
+    color-mix(in srgb, var(--surface-soft) 78%, var(--surface)) 100%
+  );
+  box-shadow: inset 2px 0 0 color-mix(in srgb, var(--focus-ring) 82%, #94b8ff);
 }
 
 .settings-dashboard-topic-row:focus,
@@ -3171,7 +3175,7 @@ h3 {
   border-radius: 12px;
   background: var(--surface);
   padding: 12px;
-  box-shadow: var(--panel-shadow);
+  box-shadow: none;
 }
 
 .settings-dashboard-topic-detail-head {
