@@ -294,10 +294,6 @@ import type {
   RunRecord,
 } from "./main";
 
-const APP_BACKGROUND_IMAGE_STORAGE_KEY = "RAIL_APP_BACKGROUND_IMAGE_V1";
-const APP_BACKGROUND_IMAGE_NAME_STORAGE_KEY = "RAIL_APP_BACKGROUND_IMAGE_NAME_V1";
-const APP_BACKGROUND_OPACITY_STORAGE_KEY = "RAIL_APP_BACKGROUND_OPACITY_V1";
-
 function App() {
   const { locale, t, tp } = useI18n();
   const defaultCwd = useMemo(() => loadPersistedCwd(""), []);
@@ -305,32 +301,6 @@ function App() {
   const defaultAuthMode = useMemo(() => loadPersistedAuthMode(), []);
   const defaultCodexMultiAgentMode = useMemo(() => loadPersistedCodexMultiAgentMode(), []);
   const { mode: themeMode, setMode: setThemeMode } = useThemeMode();
-  const defaultBackgroundImage = useMemo(() => {
-    try {
-      return window.localStorage.getItem(APP_BACKGROUND_IMAGE_STORAGE_KEY) ?? "";
-    } catch {
-      return "";
-    }
-  }, []);
-  const defaultBackgroundImageName = useMemo(() => {
-    try {
-      return window.localStorage.getItem(APP_BACKGROUND_IMAGE_NAME_STORAGE_KEY) ?? "";
-    } catch {
-      return "";
-    }
-  }, []);
-  const defaultBackgroundOpacity = useMemo(() => {
-    try {
-      const raw = Number(window.localStorage.getItem(APP_BACKGROUND_OPACITY_STORAGE_KEY) ?? "0.7");
-      if (!Number.isFinite(raw)) {
-        return 0.7;
-      }
-      return Math.min(1, Math.max(0, raw));
-    } catch {
-      return 0.7;
-    }
-  }, []);
-
   const [workspaceTab, setWorkspaceTab] = useState<WorkspaceTab>("dashboard");
   const [dashboardDetailTopic, setDashboardDetailTopic] = useState<DashboardDetailTopic | null>(null);
   const [pendingWebConnectCheck, setPendingWebConnectCheck] = useState<{
@@ -345,9 +315,6 @@ function App() {
   const [workflowQuestion, setWorkflowQuestion] = useState(
     "",
   );
-  const [backgroundImageDataUrl, setBackgroundImageDataUrl] = useState(defaultBackgroundImage);
-  const [backgroundImageName, setBackgroundImageName] = useState(defaultBackgroundImageName);
-  const [backgroundImageOpacity, setBackgroundImageOpacity] = useState(defaultBackgroundOpacity);
 
   const {
     engineStarted,
@@ -844,24 +811,6 @@ function App() {
         setError(toErrorText(error));
       });
   }, [cwd, engineStarted, ensureEngineStarted, hasTauriRuntime, refreshAuthStateFromEngine, setError, setStatus]);
-
-  useEffect(() => {
-    try {
-      if (backgroundImageDataUrl) {
-        window.localStorage.setItem(APP_BACKGROUND_IMAGE_STORAGE_KEY, backgroundImageDataUrl);
-      } else {
-        window.localStorage.removeItem(APP_BACKGROUND_IMAGE_STORAGE_KEY);
-      }
-      if (backgroundImageName) {
-        window.localStorage.setItem(APP_BACKGROUND_IMAGE_NAME_STORAGE_KEY, backgroundImageName);
-      } else {
-        window.localStorage.removeItem(APP_BACKGROUND_IMAGE_NAME_STORAGE_KEY);
-      }
-      window.localStorage.setItem(APP_BACKGROUND_OPACITY_STORAGE_KEY, String(backgroundImageOpacity));
-    } catch {
-      // ignore persistence failures
-    }
-  }, [backgroundImageDataUrl, backgroundImageName, backgroundImageOpacity]);
 
   const batchScheduler = useBatchScheduler({
     enabled: hasTauriRuntime,
@@ -1835,46 +1784,6 @@ function App() {
       setDashboardDetailTopic(null);
     }
   };
-  const onSelectBackgroundImage = useCallback(
-    (file: File | null) => {
-      if (!file) {
-        return;
-      }
-      if (!file.type.startsWith("image/")) {
-        setError("이미지 파일만 배경으로 지정할 수 있습니다.");
-        return;
-      }
-
-      const reader = new FileReader();
-      reader.onload = () => {
-        const result = typeof reader.result === "string" ? reader.result : "";
-        if (!result) {
-          setError("배경 이미지 로드에 실패했습니다.");
-          return;
-        }
-        setBackgroundImageDataUrl(result);
-        setBackgroundImageName(file.name);
-        setBackgroundImageOpacity((prev) => (prev > 0 ? prev : 0.7));
-        setStatus(`배경 이미지 적용됨: ${file.name}`);
-        setError("");
-      };
-      reader.onerror = () => {
-        setError("배경 이미지 로드에 실패했습니다.");
-      };
-      reader.readAsDataURL(file);
-    },
-    [setError, setStatus],
-  );
-  const onClearBackgroundImage = useCallback(() => {
-    setBackgroundImageDataUrl("");
-    setBackgroundImageName("");
-    setBackgroundImageOpacity(0);
-    setStatus("배경 이미지가 제거되었습니다.");
-  }, [setStatus]);
-  const onSetBackgroundImageOpacity = useCallback((nextOpacity: number) => {
-    const normalized = Number.isFinite(nextOpacity) ? Math.min(1, Math.max(0, nextOpacity)) : 0;
-    setBackgroundImageOpacity(normalized);
-  }, []);
   const onAgentQuickAction = (prompt: string) => {
     setWorkflowQuestion(prompt);
     setWorkspaceTab("workflow");
@@ -1883,10 +1792,11 @@ function App() {
   const appShellStyle = useMemo(
     () =>
       ({
-        "--user-bg-image": backgroundImageDataUrl ? `url("${backgroundImageDataUrl}")` : "none",
-        "--user-bg-opacity": String(backgroundImageDataUrl ? backgroundImageOpacity : 0),
+        "--user-bg-image": "none",
+        "--user-bg-opacity": "0",
+        backgroundColor: "#f6f6f6",
       }) as CSSProperties,
-    [backgroundImageDataUrl, backgroundImageOpacity],
+    [],
   );
   return (
     <main className={`app-shell ${canvasFullscreen ? "canvas-fullscreen-mode" : ""}`} style={appShellStyle}>
@@ -2040,16 +1950,10 @@ function App() {
               codexMultiAgentModeOptions={[...codexMultiAgentModeOptions]}
               themeMode={themeMode}
               themeModeOptions={[...themeModeOptions]}
-              backgroundImageName={backgroundImageName}
-              hasBackgroundImage={Boolean(backgroundImageDataUrl)}
-              backgroundImageOpacity={backgroundImageOpacity}
               onCheckUsage={() => void onCheckUsage()}
               onCloseUsageResult={() => setUsageResultClosed(true)}
-              onClearBackgroundImage={onClearBackgroundImage}
               onOpenRunsFolder={() => void onOpenRunsFolder()}
-              onSelectBackgroundImage={onSelectBackgroundImage}
               onSelectCwdDirectory={() => void onSelectCwdDirectory()}
-              onSetBackgroundImageOpacity={onSetBackgroundImageOpacity}
               onSetModel={setModel}
               onSetCodexMultiAgentMode={(next) => setCodexMultiAgentMode(normalizeCodexMultiAgentMode(next))}
               onSetThemeMode={(next) => setThemeMode(normalizeThemeMode(next))}
