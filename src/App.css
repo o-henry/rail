@@ -4738,6 +4738,10 @@ h3 {
   padding-bottom: 0;
 }
 
+.dashboard-layout .panel-card {
+  border: 0 !important;
+}
+
 .dashboard-overview-layout {
   height: 100%;
   overflow: hidden;
