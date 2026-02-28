@@ -1863,7 +1863,6 @@ function App() {
       ({
         "--user-bg-image": "none",
         "--user-bg-opacity": "0",
-        backgroundColor: "#f6f6f6",
       }) as CSSProperties,
     [],
   );
