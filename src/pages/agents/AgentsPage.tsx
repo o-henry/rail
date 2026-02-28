@@ -84,6 +84,12 @@ function mergeRowPreview(description: string, snapshotLine: string): string {
   return `${desc} · ${snap}`;
 }
 
+function isDevSetOption(option: AgentSetOption): boolean {
+  const normalizedId = normalizeText(option.id);
+  const normalizedLabel = normalizeText(option.label);
+  return normalizedId.includes("dev") || normalizedLabel.includes("개발");
+}
+
 function createDefaultSetState(): AgentSetState {
   return {
     threads: [{ id: "agent-1", name: "agent-1" }],
@@ -157,6 +163,29 @@ export default function AgentsPage({ onQuickAction, topicSnapshots }: AgentsPage
     [modelOptions, selectedModel],
   );
   const isReasonLevelSelectable = selectedModelOption?.allowsReasonLevel !== false;
+  const setOrderIndexById = useMemo(
+    () =>
+      setOptions.reduce<Record<string, number>>((acc, option, index) => {
+        acc[option.id] = index;
+        return acc;
+      }, {}),
+    [setOptions],
+  );
+  const groupedSetOptions = useMemo(
+    () => [
+      {
+        id: "general",
+        title: "일반",
+        items: setOptions.filter((option) => !isDevSetOption(option)),
+      },
+      {
+        id: "dev",
+        title: "개발 전용",
+        items: setOptions.filter((option) => isDevSetOption(option)),
+      },
+    ].filter((group) => group.items.length > 0),
+    [setOptions],
+  );
 
   useEffect(() => {
     setSetStateMap((prev) => {
@@ -419,30 +448,38 @@ export default function AgentsPage({ onQuickAction, topicSnapshots }: AgentsPage
             <h2>AGENT INDEX</h2>
             <p>세트를 선택하면 해당 에이전트 워크스페이스가 열립니다.</p>
           </header>
-          <div className="agents-set-index-head" role="presentation">
-            <span>NO</span>
-            <span>SET</span>
-          </div>
-          <div className="agents-set-list" role="list" aria-label="Agent sets">
-            {setOptions.map((setOption, index) => {
-              const snapshotLine = (setStateMap[setOption.id]?.dashboardInsights[0] ?? "").trim();
-              const mergedPreview = mergeRowPreview(setOption.description, snapshotLine);
-              return (
-                <button
-                  className="agents-set-index-row"
-                  key={setOption.id}
-                  onClick={() => onSelectSet(setOption.id)}
-                  role="listitem"
-                  type="button"
-                >
-                  <span className="agents-set-index-no">{String(index + 1).padStart(2, "0")}</span>
-                  <div className="agents-set-index-meta">
-                    <strong>{setOption.label}</strong>
-                    <code>{mergedPreview}</code>
-                  </div>
-                </button>
-              );
-            })}
+          <div className="agents-set-groups">
+            {groupedSetOptions.map((group) => (
+              <section className="agents-set-group" key={group.id}>
+                <h3 className="agents-set-group-title">{group.title}</h3>
+                <div className="agents-set-index-head" role="presentation">
+                  <span>NO</span>
+                  <span>SET</span>
+                </div>
+                <div className="agents-set-list" role="list" aria-label={`${group.title} Agent sets`}>
+                  {group.items.map((setOption) => {
+                    const snapshotLine = (setStateMap[setOption.id]?.dashboardInsights[0] ?? "").trim();
+                    const mergedPreview = mergeRowPreview(setOption.description, snapshotLine);
+                    const orderNo = setOrderIndexById[setOption.id] ?? 0;
+                    return (
+                      <button
+                        className="agents-set-index-row"
+                        key={setOption.id}
+                        onClick={() => onSelectSet(setOption.id)}
+                        role="listitem"
+                        type="button"
+                      >
+                        <span className="agents-set-index-no">{String(orderNo + 1).padStart(2, "0")}</span>
+                        <div className="agents-set-index-meta">
+                          <strong>{setOption.label}</strong>
+                          <code>{mergedPreview}</code>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </section>
+            ))}
           </div>
         </div>
       </section>

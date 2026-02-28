@@ -5762,6 +5762,28 @@ h3 {
   margin-inline: auto;
 }
 
+.agents-set-groups {
+  min-height: 0;
+  overflow: auto;
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.agents-set-group {
+  display: grid;
+  align-content: start;
+}
+
+.agents-set-group-title {
+  margin: 0;
+  font-size: 12px;
+  font-family: "BasicallyAMono", "Noto Sans KR", monospace;
+  color: var(--text-muted);
+  letter-spacing: 0.04em;
+}
+
 .agents-set-picker-head {
   display: grid;
   gap: 3px;
@@ -5786,7 +5808,7 @@ h3 {
   grid-template-columns: 46px minmax(0, 1fr);
   gap: 8px;
   align-items: center;
-  margin-top: 8px;
+  margin-top: 2rem;
   padding: 0 8px;
 }
 
@@ -5801,11 +5823,10 @@ h3 {
 .agents-set-list {
   margin-top: 4px;
   min-height: 0;
-  overflow: auto;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   align-content: start;
-  gap: 6px;
+  gap: 2px;
 }
 
 .agents-set-index-row {
