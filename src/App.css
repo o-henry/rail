@@ -4713,7 +4713,6 @@ h3 {
 }
 
 .dashboard-card {
-  opacity: 0.7;
   border: 0;
   box-shadow: none;
   gap: 8px;
@@ -4744,7 +4743,6 @@ h3 {
 }
 
 .dashboard-widget-card {
-  opacity: 0.7;
   gap: 10px;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
