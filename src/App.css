@@ -4719,11 +4719,10 @@ h3 {
   display: grid;
   gap: var(--dashboard-gap);
   grid-template-columns: repeat(12, minmax(0, 1fr));
-  grid-template-rows: minmax(0, 1.05fr) minmax(0, 0.95fr) minmax(118px, 0.45fr);
+  grid-template-rows: minmax(0, 1fr) minmax(118px, 0.42fr);
   grid-template-areas:
-    "marketSummary marketSummary marketSummary marketSummary marketSummary marketSummary marketSummary marketSummary topicGrid topicGrid topicGrid topicGrid"
-    "marketSummary marketSummary marketSummary marketSummary marketSummary marketSummary marketSummary marketSummary topicGrid topicGrid topicGrid topicGrid"
-    "workflow workflow approvals approvals webConnect webConnect schedules schedules topicGrid topicGrid topicGrid topicGrid";
+    "marketSummary marketSummary marketSummary marketSummary marketSummary marketSummary marketSummary marketSummary marketSummary marketSummary marketSummary marketSummary"
+    "workflow workflow workflow approvals approvals approvals webConnect webConnect webConnect schedules schedules schedules";
 }
 
 .dashboard-tile {
@@ -4778,82 +4777,6 @@ h3 {
 
 .dashboard-area-devEcosystem {
   grid-area: devEcosystem;
-}
-
-.dashboard-area-topicGrid {
-  grid-area: topicGrid;
-}
-
-.dashboard-topic-hub {
-  min-height: 0;
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
-  gap: 10px;
-  overflow: hidden;
-}
-
-.dashboard-topic-hub-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-
-.dashboard-topic-hub-head h3 {
-  margin: 0;
-  font-size: 0.84rem;
-  color: var(--text-main);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.dashboard-topic-hub-head span {
-  min-width: 22px;
-  height: 22px;
-  border-radius: 999px;
-  background: #e8f1ff;
-  color: #2c5ea8;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 0.72rem;
-}
-
-.dashboard-topic-hub-list {
-  min-height: 0;
-  overflow: hidden;
-  display: grid;
-  grid-template-rows: repeat(7, minmax(0, 1fr));
-  gap: 8px;
-}
-
-.dashboard-topic-hub-item {
-  width: 100%;
-  height: 100%;
-  text-align: left;
-  border: 0;
-  border-radius: 12px;
-  background: #f3f7fd;
-  padding: 10px;
-  display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr);
-  align-content: start;
-  gap: 5px;
-}
-
-.dashboard-topic-hub-item:hover {
-  background: #e8f0fc;
-}
-
-.dashboard-topic-hub-item.is-focus {
-  background: #dfeafb;
-}
-
-.dashboard-topic-hub-preview {
-  margin: 0;
-  color: var(--text-main);
-  font-size: 0.76rem;
-  line-height: 1.35;
 }
 
 .dashboard-card {
@@ -5514,6 +5437,22 @@ h3 {
   color: var(--text-muted);
   font-size: 12px;
   line-height: 1.45;
+}
+
+.agents-set-insight-list {
+  margin: 2px 0 0;
+  padding-left: 15px;
+  display: grid;
+  gap: 3px;
+}
+
+.agents-set-insight-list li {
+  color: var(--text-main);
+  font-size: 11px;
+  line-height: 1.35;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .agents-set-card:hover {
@@ -6337,11 +6276,10 @@ pre {
     container-type: normal;
     height: auto;
     grid-template-columns: repeat(6, minmax(0, 1fr));
-    grid-template-rows: repeat(5, minmax(120px, auto));
+    grid-template-rows: repeat(4, minmax(120px, auto));
     grid-template-areas:
       "marketSummary marketSummary marketSummary marketSummary marketSummary marketSummary"
       "marketSummary marketSummary marketSummary marketSummary marketSummary marketSummary"
-      "topicGrid topicGrid topicGrid topicGrid topicGrid topicGrid"
       "workflow workflow approvals approvals webConnect webConnect"
       "schedules schedules schedules schedules schedules schedules";
   }
@@ -6404,12 +6342,11 @@ pre {
     grid-template-columns: 1fr;
     grid-template-rows: unset;
     grid-template-areas:
+      "marketSummary"
       "workflow"
       "approvals"
       "webConnect"
-      "schedules"
-      "marketSummary"
-      "topicGrid";
+      "schedules";
   }
 
   .agents-topbar {

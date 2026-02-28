@@ -1,8 +1,10 @@
 import { type ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
+import type { DashboardTopicId, DashboardTopicSnapshot } from "../../features/dashboard/intelligence";
 import { useI18n } from "../../i18n";
 
 type AgentsPageProps = {
   onQuickAction: (prompt: string) => void;
+  topicSnapshots: Partial<Record<DashboardTopicId, DashboardTopicSnapshot>>;
 };
 
 type AgentThread = {
@@ -26,7 +28,10 @@ type AgentSetState = {
   activeThreadId: string;
   draft: string;
   attachedFiles: AttachedFile[];
+  dashboardInsights: string[];
 };
+
+const AGENT_SET_DASHBOARD_DATA_STORAGE_KEY = "RAIL_AGENT_SET_DASHBOARD_DATA_V1";
 
 const AGENT_SET_OPTIONS: AgentSetOption[] = [
   {
@@ -52,6 +57,7 @@ function createDefaultSetState(): AgentSetState {
     activeThreadId: "agent-1",
     draft: "",
     attachedFiles: [],
+    dashboardInsights: [],
   };
 }
 
@@ -62,10 +68,34 @@ function createInitialSetStateMap(): Record<string, AgentSetState> {
   >;
 }
 
-export default function AgentsPage({ onQuickAction }: AgentsPageProps) {
+export default function AgentsPage({ onQuickAction, topicSnapshots }: AgentsPageProps) {
   const { t } = useI18n();
   const [activeSetId, setActiveSetId] = useState<string | null>(null);
-  const [setStateMap, setSetStateMap] = useState<Record<string, AgentSetState>>(() => createInitialSetStateMap());
+  const [setStateMap, setSetStateMap] = useState<Record<string, AgentSetState>>(() => {
+    const initial = createInitialSetStateMap();
+    if (typeof window === "undefined") {
+      return initial;
+    }
+    try {
+      const raw = window.localStorage.getItem(AGENT_SET_DASHBOARD_DATA_STORAGE_KEY);
+      if (!raw) {
+        return initial;
+      }
+      const parsed = JSON.parse(raw) as Record<string, string[]>;
+      for (const setOption of AGENT_SET_OPTIONS) {
+        const saved = parsed[setOption.id];
+        if (Array.isArray(saved)) {
+          initial[setOption.id].dashboardInsights = saved
+            .map((item) => String(item ?? "").trim())
+            .filter((item) => item.length > 0)
+            .slice(0, 7);
+        }
+      }
+    } catch {
+      // ignore invalid local storage
+    }
+    return initial;
+  });
   const [isModelMenuOpen, setIsModelMenuOpen] = useState(false);
   const [isReasonMenuOpen, setIsReasonMenuOpen] = useState(false);
   const [selectedModel, setSelectedModel] = useState("5.3-Codex");
@@ -90,6 +120,39 @@ export default function AgentsPage({ onQuickAction }: AgentsPageProps) {
   const activeThreadId = currentSetState?.activeThreadId ?? "";
   const draft = currentSetState?.draft ?? "";
   const attachedFiles = currentSetState?.attachedFiles ?? [];
+
+  useEffect(() => {
+    const snapshots = Object.values(topicSnapshots)
+      .filter((snapshot): snapshot is DashboardTopicSnapshot => Boolean(snapshot))
+      .sort((left, right) => new Date(right.generatedAt).getTime() - new Date(left.generatedAt).getTime())
+      .slice(0, 7)
+      .map((snapshot) => `${snapshot.topic}: ${snapshot.summary}`);
+    if (snapshots.length === 0) {
+      return;
+    }
+    setSetStateMap((prev) => {
+      const next = { ...prev };
+      for (const setOption of AGENT_SET_OPTIONS) {
+        const current = next[setOption.id] ?? createDefaultSetState();
+        next[setOption.id] = {
+          ...current,
+          dashboardInsights: snapshots,
+        };
+      }
+      if (typeof window !== "undefined") {
+        try {
+          const toStore: Record<string, string[]> = {};
+          for (const setOption of AGENT_SET_OPTIONS) {
+            toStore[setOption.id] = next[setOption.id]?.dashboardInsights ?? [];
+          }
+          window.localStorage.setItem(AGENT_SET_DASHBOARD_DATA_STORAGE_KEY, JSON.stringify(toStore));
+        } catch {
+          // ignore local storage failures
+        }
+      }
+      return next;
+    });
+  }, [topicSnapshots]);
 
   const activeThread = useMemo(
     () => threads.find((thread) => thread.id === activeThreadId) ?? threads[0] ?? null,
@@ -266,6 +329,13 @@ export default function AgentsPage({ onQuickAction }: AgentsPageProps) {
               >
                 <strong>{setOption.label}</strong>
                 <span>{setOption.description}</span>
+                {(setStateMap[setOption.id]?.dashboardInsights.length ?? 0) > 0 ? (
+                  <ul className="agents-set-insight-list">
+                    {setStateMap[setOption.id].dashboardInsights.slice(0, 3).map((insight) => (
+                      <li key={insight}>{insight}</li>
+                    ))}
+                  </ul>
+                ) : null}
               </button>
             ))}
           </div>

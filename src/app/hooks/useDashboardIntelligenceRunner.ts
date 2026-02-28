@@ -1,6 +1,11 @@
 import { type Dispatch, type SetStateAction, useCallback, useEffect, useState } from "react";
-import type { DashboardAgentConfigMap, DashboardTopicId, DashboardTopicSnapshot } from "../../features/dashboard/intelligence";
-import { DASHBOARD_TOPIC_IDS } from "../../features/dashboard/intelligence";
+import {
+  type DashboardAgentConfigMap,
+  type DashboardTopicId,
+  type DashboardTopicSnapshot,
+  DASHBOARD_TOPIC_IDS,
+  buildDashboardFallbackSnapshot,
+} from "../../features/dashboard/intelligence";
 import {
   loadDashboardSnapshots,
   runDashboardCrawlerOnly,
@@ -139,6 +144,34 @@ export function useDashboardIntelligenceRunner(params: UseDashboardIntelligenceR
         invokeFn,
       });
       const now = result.finishedAt || new Date().toISOString();
+      const nextSnapshots: Partial<Record<DashboardTopicId, DashboardTopicSnapshot>> = {};
+      for (const topic of selected) {
+        const topicResult = result.topics.find((row) => row.topic === topic);
+        const fetchedCount = topicResult?.fetchedCount ?? 0;
+        const savedCount = topicResult?.savedFiles?.length ?? 0;
+        const errors = topicResult?.errors ?? [];
+        const snapshot = {
+          ...buildDashboardFallbackSnapshot(topic, config[topic].model, {
+            summary: `크롤링 수집 ${fetchedCount}건 / 저장 파일 ${savedCount}개`,
+            highlights: (topicResult?.savedFiles ?? []).slice(0, 5).map((path) => path.split(/[\\/]/).pop() || path),
+            risks: errors.slice(0, 4),
+            status: errors.length > 0 ? "degraded" : "ok",
+            statusMessage: errors.length > 0 ? errors.join(" | ") : "Crawler-only snapshot",
+            referenceEmpty: true,
+          }),
+          generatedAt: now,
+        };
+        nextSnapshots[topic] = snapshot;
+        await invokeFn<string>("dashboard_snapshot_save", {
+          cwd,
+          topic,
+          snapshotJson: snapshot,
+        });
+      }
+      setSnapshotsByTopic((prev) => ({
+        ...prev,
+        ...nextSnapshots,
+      }));
       for (const topic of selected) {
         updateRunState(setRunStateByTopic, topic, {
           running: false,

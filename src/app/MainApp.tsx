@@ -2125,7 +2125,10 @@ function App() {
           <FeedPage vm={feedPageVm} />
         )}
         {workspaceTab === "agents" && (
-          <AgentsPage onQuickAction={onAgentQuickAction} />
+          <AgentsPage
+            onQuickAction={onAgentQuickAction}
+            topicSnapshots={dashboardSnapshotsByTopic}
+          />
         )}
 
         {workspaceTab === "settings" && (
