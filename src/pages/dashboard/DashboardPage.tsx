@@ -133,7 +133,17 @@ export default function DashboardPage(props: DashboardPageProps) {
         <section className="panel-card dashboard-terminal-workspace">
           <header className="dashboard-terminal-workspace-head">
             <strong>OPERATIONS CONSOLE</strong>
-            <span>{terminalLines.length} ENTRIES</span>
+            <div className="dashboard-terminal-head-meta">
+              <span>{terminalLines.length} ENTRIES</span>
+              <div className="dashboard-terminal-head-metrics">
+                {cards.map((card) => (
+                  <article className="dashboard-terminal-head-metric" key={card.id}>
+                    <b>{card.title}</b>
+                    <strong>{card.value}</strong>
+                  </article>
+                ))}
+              </div>
+            </div>
           </header>
 
           <section className="dashboard-terminal-editor">
@@ -142,16 +152,6 @@ export default function DashboardPage(props: DashboardPageProps) {
               <span>read-only</span>
             </div>
             <pre>{terminalLines.map((line, index) => `[${String(index + 1).padStart(2, "0")}] ${line}`).join("\n")}</pre>
-          </section>
-
-          <section className="dashboard-terminal-metrics">
-            {cards.map((card) => (
-              <article className="dashboard-terminal-metric" key={card.id}>
-                <h2>{card.title}</h2>
-                <strong>{card.value}</strong>
-                <p>{card.caption}</p>
-              </article>
-            ))}
           </section>
         </section>
       </section>
