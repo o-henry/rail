@@ -3772,8 +3772,8 @@ h3 {
 .feed-main > .feed-filter-inline-wrap,
 .feed-main > .feed-topic-tabs,
 .feed-main > .feed-stream {
-  width: min(100%, var(--content-max-width));
-  margin-inline: auto;
+  width: 100%;
+  margin-inline: 0;
 }
 
 .feed-topbar {
