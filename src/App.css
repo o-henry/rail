@@ -174,12 +174,11 @@
   --surface-panel: #0f151d;
   --surface-active: #202c3a;
   --surface-elevated: #131a24;
-  --bg-app: #06080c;
+  --bg-app: #131a24;
   --app-shell-bg:
-    radial-gradient(circle at 16% 10%, rgba(95, 144, 214, 0.2) 0%, rgba(95, 144, 214, 0) 44%),
-    radial-gradient(circle at 74% 18%, rgba(237, 134, 82, 0.16) 0%, rgba(237, 134, 82, 0) 50%),
-    radial-gradient(circle at 50% 82%, rgba(62, 84, 120, 0.22) 0%, rgba(62, 84, 120, 0) 56%),
-    linear-gradient(180deg, #090d14 0%, #05070b 100%);
+    radial-gradient(circle at 18% 12%, rgba(112, 155, 221, 0.12) 0%, rgba(112, 155, 221, 0) 42%),
+    radial-gradient(circle at 50% 82%, rgba(74, 94, 126, 0.12) 0%, rgba(74, 94, 126, 0) 56%),
+    linear-gradient(180deg, #151d29 0%, #111823 100%);
   --workspace-bg: linear-gradient(180deg, rgba(11, 16, 23, 0.92) 0%, rgba(7, 11, 16, 0.96) 100%);
   --workspace-border: rgba(107, 127, 155, 0.2);
   --workspace-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 18px 36px rgba(0, 0, 0, 0.35);
