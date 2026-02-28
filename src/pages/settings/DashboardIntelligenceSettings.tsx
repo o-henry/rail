@@ -52,10 +52,9 @@ export default function DashboardIntelligenceSettings(props: DashboardIntelligen
                   onChange={(event) => props.onToggleTopic(topic, event.currentTarget.checked)}
                   type="checkbox"
                 />
-                <img
-                  alt={row.enabled ? "ON" : "OFF"}
-                  className="settings-dashboard-toggle-image"
-                  src={row.enabled ? "/on.svg" : "/off.svg"}
+                <span
+                  aria-hidden="true"
+                  className={`settings-dashboard-toggle-box ${row.enabled ? "is-on" : ""}`}
                 />
               </label>
 

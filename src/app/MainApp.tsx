@@ -1862,7 +1862,7 @@ function App() {
   const workspaceTopbarTabs = useMemo(
     () => [
       { tab: "dashboard" as WorkspaceTab, label: "DASHBOARD" },
-      { tab: "intelligence" as WorkspaceTab, label: "INTELLIGENCE" },
+      { tab: "intelligence" as WorkspaceTab, label: "DATA" },
       { tab: "agents" as WorkspaceTab, label: "AGENTS" },
       { tab: "workflow" as WorkspaceTab, label: "DAG" },
       { tab: "feed" as WorkspaceTab, label: "FEED" },
