@@ -1089,6 +1089,7 @@ h3 {
 
 .graph-canvas-shell {
   position: relative;
+  z-index: 1;
   min-width: 0;
   min-height: 0;
   height: 100%;
@@ -1104,6 +1105,8 @@ h3 {
 }
 
 .canvas-topbar {
+  position: relative;
+  z-index: 20;
   display: grid;
   gap: 8px;
   margin: 0;
@@ -1167,7 +1170,10 @@ h3 {
 }
 
 .workflow-question-input {
+  position: relative;
+  z-index: 21;
   margin-bottom: 0;
+  overflow: visible;
 }
 
 .workflow-question-input .agents-composer-left::-webkit-scrollbar {
@@ -1192,8 +1198,11 @@ h3 {
 
 .workflow-question-input .agents-model-menu,
 .workflow-question-input .agents-reason-menu {
+  top: calc(100% + 8px);
+  bottom: auto;
   width: 100%;
   min-width: 0;
+  z-index: 80;
 }
 
 .workflow-question-input .agents-model-button,
