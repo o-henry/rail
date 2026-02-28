@@ -3014,6 +3014,8 @@ h3 {
   grid-template-columns: minmax(220px, 1.8fr) minmax(190px, 1fr) 98px 88px;
   align-items: center;
   gap: 8px;
+  box-sizing: border-box;
+  padding: 0 10px;
 }
 
 .settings-dashboard-topic-columns span {
@@ -3022,6 +3024,8 @@ h3 {
   letter-spacing: 0.08em;
   font-family: "BasicallyAMono", "Noto Sans KR", monospace;
   text-transform: uppercase;
+  justify-self: start;
+  text-align: left;
 }
 
 .settings-dashboard-intelligence-list {
@@ -3148,6 +3152,8 @@ h3 {
   font-size: 12px;
   font-family: "BasicallyAMono", "Noto Sans KR", monospace;
   background: var(--surface);
+  justify-self: start;
+  text-align: left;
 }
 
 .settings-dashboard-topic-cadence small {
