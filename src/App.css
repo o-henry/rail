@@ -2369,7 +2369,7 @@ h3 {
 
 .settings-background-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
   gap: 8px;
 }
 
@@ -2394,6 +2394,14 @@ h3 {
   background: var(--surface-panel);
   color: var(--text-main);
   padding: 0 8px;
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+
+.settings-opacity-input::-webkit-outer-spin-button,
+.settings-opacity-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
 }
 
 .settings-cwd-picker {

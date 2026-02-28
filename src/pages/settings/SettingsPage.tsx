@@ -132,19 +132,17 @@ export default function SettingsPage({
           <button className="settings-cwd-picker" onClick={() => onSetUserBackgroundImage("")} type="button">
             {t("common.delete")}
           </button>
+          <input
+            aria-label="Background opacity"
+            className="settings-opacity-input"
+            min={0}
+            max={1}
+            onChange={(event) => onSetUserBackgroundOpacity(Number(event.currentTarget.value))}
+            step={0.05}
+            type="number"
+            value={userBackgroundOpacity}
+          />
         </div>
-      </label>
-      <label>
-        {t("settings.backgroundOpacity")}
-        <input
-          className="settings-opacity-input"
-          min={0}
-          max={1}
-          onChange={(event) => onSetUserBackgroundOpacity(Number(event.currentTarget.value))}
-          step={0.05}
-          type="number"
-          value={userBackgroundOpacity}
-        />
       </label>
       {!compact && (
         <div className="button-row">
