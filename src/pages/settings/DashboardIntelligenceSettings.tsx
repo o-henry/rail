@@ -97,6 +97,7 @@ export default function DashboardIntelligenceSettings(props: DashboardIntelligen
       <section className="settings-dashboard-intelligence-main">
         <header className="settings-dashboard-intelligence-head">
           <div className="settings-dashboard-intelligence-copy">
+            <h3 className="settings-dashboard-intelligence-title">데이터 파이프라인</h3>
             <p>{t("settings.dashboardIntelligence.description")}</p>
           </div>
           <div className="settings-dashboard-intelligence-actions">

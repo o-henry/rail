@@ -2989,6 +2989,14 @@ h3 {
   gap: 3px;
 }
 
+.settings-dashboard-intelligence-title {
+  margin: 0;
+  font-size: 15px;
+  letter-spacing: 0;
+  color: var(--text-main);
+  font-family: "Galmuri11", "DialogNanumBody1984", "Noto Sans KR", sans-serif !important;
+}
+
 .settings-dashboard-intelligence-eyebrow {
   font-size: 15px;
   line-height: 1;
@@ -5072,7 +5080,7 @@ h3 {
   box-shadow: none;
 }
 
-.data-intelligence-view > .controls {
+.data-intelligence-view > .settings-dashboard-intelligence {
   width: 100%;
   max-width: none;
   margin-inline: 0;

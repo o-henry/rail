@@ -2276,21 +2276,18 @@ function App() {
         )}
         {workspaceTab === "intelligence" && (
           <section className="panel-card settings-view data-intelligence-view workspace-tab-panel">
-            <section className="controls">
-              <h3>데이터 파이프라인</h3>
-              <DashboardIntelligenceSettings
-                config={dashboardIntelligenceConfig}
-                disabled={running || isGraphRunning}
-                modelOptions={dashboardIntelligenceModelOptions}
-                onRunAll={onRunAllDashboardTopics}
-                onRunCrawlerOnly={onRunDashboardCrawlerOnly}
-                onRunTopic={onRunDashboardTopic}
-                onSetTopicCadence={onSetDashboardTopicCadence}
-                onSetTopicModel={onSetDashboardTopicModel}
-                runStateByTopic={dashboardIntelligenceRunStateByTopic}
-                snapshotsByTopic={dashboardSnapshotsByTopic}
-              />
-            </section>
+            <DashboardIntelligenceSettings
+              config={dashboardIntelligenceConfig}
+              disabled={running || isGraphRunning}
+              modelOptions={dashboardIntelligenceModelOptions}
+              onRunAll={onRunAllDashboardTopics}
+              onRunCrawlerOnly={onRunDashboardCrawlerOnly}
+              onRunTopic={onRunDashboardTopic}
+              onSetTopicCadence={onSetDashboardTopicCadence}
+              onSetTopicModel={onSetDashboardTopicModel}
+              runStateByTopic={dashboardIntelligenceRunStateByTopic}
+              snapshotsByTopic={dashboardSnapshotsByTopic}
+            />
           </section>
         )}
 
