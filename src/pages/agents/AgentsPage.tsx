@@ -150,6 +150,7 @@ export default function AgentsPage({ onQuickAction, topicSnapshots, codexMultiAg
   const draft = currentSetState?.draft ?? "";
   const attachedFiles = currentSetState?.attachedFiles ?? [];
   const setMission = currentSetState?.setMission ?? "";
+  const dashboardInsights = currentSetState?.dashboardInsights ?? [];
 
   const activeThread = useMemo(
     () => threads.find((thread) => thread.id === activeThreadId) ?? threads[0] ?? null,
@@ -258,6 +259,17 @@ export default function AgentsPage({ onQuickAction, topicSnapshots, codexMultiAg
     }));
   };
 
+  const onQueuePrompt = (prompt: string) => {
+    const next = String(prompt ?? "").trim();
+    if (!next) {
+      return;
+    }
+    updateActiveSetState((current) => ({
+      ...current,
+      draft: current.draft.trim().length > 0 ? `${current.draft.trim()}\n${next}` : next,
+    }));
+  };
+
   const onSend = () => {
     const text = draft.trim();
     if (!text && attachedFiles.length === 0) {
@@ -332,9 +344,11 @@ export default function AgentsPage({ onQuickAction, topicSnapshots, codexMultiAg
   return (
     <AgentsWorkspaceView
       activeSetOption={activeSetOption}
+      activeThread={activeThread}
       activeThreadId={activeThreadId}
       attachedFiles={attachedFiles}
       codexMultiAgentMode={codexMultiAgentMode}
+      dashboardInsights={dashboardInsights}
       draft={draft}
       fileInputRef={fileInputRef}
       isModelMenuOpen={isModelMenuOpen}
@@ -347,6 +361,7 @@ export default function AgentsPage({ onQuickAction, topicSnapshots, codexMultiAg
       onBackToSetList={onBackToSetList}
       onCloseThread={onCloseThread}
       onOpenFilePicker={onOpenFilePicker}
+      onQueuePrompt={onQueuePrompt}
       onSelectModel={setSelectedModel}
       onSelectReasonLevel={setSelectedReasonLevel}
       onSend={onSend}

@@ -5,9 +5,11 @@ import type { AgentModelOption, AgentSetOption, AgentThread, AttachedFile } from
 type AgentsWorkspaceViewProps = {
   t: (key: string) => string;
   threads: AgentThread[];
+  activeThread: AgentThread | null;
   activeThreadId: string;
   activeSetOption: AgentSetOption | null;
   setMission: string;
+  dashboardInsights: string[];
   codexMultiAgentMode: CodexMultiAgentMode;
   onSetActiveThreadId: (threadId: string) => void;
   onBackToSetList: () => void;
@@ -35,14 +37,17 @@ type AgentsWorkspaceViewProps = {
   onSelectReasonLevel: (level: string) => void;
   onSend: () => void;
   sendDisabled: boolean;
+  onQueuePrompt: (prompt: string) => void;
 };
 
 export function AgentsWorkspaceView({
   t,
   threads,
+  activeThread,
   activeThreadId,
   activeSetOption,
   setMission,
+  dashboardInsights,
   codexMultiAgentMode,
   onSetActiveThreadId,
   onBackToSetList,
@@ -70,7 +75,26 @@ export function AgentsWorkspaceView({
   onSelectReasonLevel,
   onSend,
   sendDisabled,
+  onQueuePrompt,
 }: AgentsWorkspaceViewProps) {
+  const quickActionItems = [
+    {
+      id: "set-mission",
+      label: "세트 미션 기반 실행",
+      prompt: `${activeSetOption?.label ?? "현재 세트"} 기준으로 우선순위 3개를 정리하고 바로 실행해줘.`,
+    },
+    {
+      id: "active-agent",
+      label: "활성 에이전트 실행",
+      prompt: activeThread?.starterPrompt || "활성 에이전트 역할 기준으로 바로 실행해줘.",
+    },
+    {
+      id: "snapshot-briefing",
+      label: "최신 스냅샷 브리핑",
+      prompt: "최신 데이터 스냅샷을 바탕으로 highlights/risks/actions 3개씩 한국어로 정리해줘.",
+    },
+  ];
+
   return (
     <section className="agents-layout agents-workspace-mode workspace-tab-panel">
       <div className="agents-topbar">
@@ -97,58 +121,97 @@ export function AgentsWorkspaceView({
           </button>
         </div>
       </div>
-      {activeSetOption ? (
-        <section className="agents-set-brief" aria-label="Selected set briefing">
-          <strong>{activeSetOption.label}</strong>
-          <p>{setMission || activeSetOption.description}</p>
-          <small>{`Codex Multi-Agent: ${codexMultiAgentMode}`}</small>
-        </section>
-      ) : null}
 
-      <section
-        className={`agents-grid${threads.length === 1 ? " is-single" : threads.length === 2 ? " is-two" : ""}`}
-        aria-label="Agents grid"
-      >
-        {threads.map((thread) => (
-          <article
-            key={thread.id}
-            className={`panel-card agents-grid-card${thread.id === activeThreadId ? " is-active" : ""}`}
-            onClick={() => onSetActiveThreadId(thread.id)}
+      <section className="agents-workspace-shell">
+        <section className="agents-workspace-main">
+          {activeSetOption ? (
+            <section className="agents-set-brief" aria-label="Selected set briefing">
+              <strong>{activeSetOption.label}</strong>
+              <p>{setMission || activeSetOption.description}</p>
+              <small>{`Codex Multi-Agent: ${codexMultiAgentMode}`}</small>
+            </section>
+          ) : null}
+          <section
+            className={`agents-grid${threads.length === 1 ? " is-single" : threads.length === 2 ? " is-two" : ""}`}
+            aria-label="Agents grid"
           >
-            <div className="agents-grid-card-head">
-              <strong>{thread.name}</strong>
-              <button
-                aria-label={`${thread.name} ${t("agents.off")}`}
-                className="agents-off-button"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  onCloseThread(thread.id);
-                }}
-                title={t("agents.off")}
-                type="button"
+            {threads.map((thread) => (
+              <article
+                key={thread.id}
+                className={`panel-card agents-grid-card${thread.id === activeThreadId ? " is-active" : ""}`}
+                onClick={() => onSetActiveThreadId(thread.id)}
               >
-                <img alt="" aria-hidden="true" src="/xmark.svg" />
-              </button>
+                <div className="agents-grid-card-head">
+                  <strong>{thread.name}</strong>
+                  <button
+                    aria-label={`${thread.name} ${t("agents.off")}`}
+                    className="agents-off-button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onCloseThread(thread.id);
+                    }}
+                    title={t("agents.off")}
+                    type="button"
+                  >
+                    <img alt="" aria-hidden="true" src="/xmark.svg" />
+                  </button>
+                </div>
+                <div className="agents-grid-card-log" aria-label={`${thread.name} log`}>
+                  <p className="agents-grid-card-role">{thread.role}</p>
+                  {thread.guidance.length > 0 ? (
+                    <ul className="agents-grid-card-guidance">
+                      {thread.guidance.map((line) => (
+                        <li key={line}>{line}</li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="agents-grid-card-placeholder">가이드가 없는 사용자 정의 에이전트입니다.</p>
+                  )}
+                  {thread.starterPrompt ? <p className="agents-grid-card-starter">{thread.starterPrompt}</p> : null}
+                </div>
+                <div className="agents-grid-card-foot">
+                  <span>{thread.id === activeThreadId ? "Active" : "Standby"}</span>
+                  <span>{thread.status === "preset" ? "Preset" : "Custom"}</span>
+                </div>
+              </article>
+            ))}
+          </section>
+        </section>
+
+        <aside className="panel-card agents-workspace-sidebar" aria-label="Agent workspace sidebar">
+          <section className="agents-sidebar-card">
+            <h4>Set Brief</h4>
+            <p>{setMission || activeSetOption?.description || "세트 설명이 없습니다."}</p>
+            <small>{`Mode: ${codexMultiAgentMode}`}</small>
+          </section>
+
+          <section className="agents-sidebar-card">
+            <h4>Active Agent</h4>
+            <p className="agents-sidebar-agent-name">{activeThread?.name ?? "-"}</p>
+            <p className="agents-sidebar-agent-role">{activeThread?.role ?? "선택된 에이전트 없음"}</p>
+            {activeThread?.starterPrompt ? <small>{activeThread.starterPrompt}</small> : null}
+          </section>
+
+          <section className="agents-sidebar-card">
+            <h4>Data Snapshot</h4>
+            <ul className="agents-sidebar-list">
+              {(dashboardInsights.length > 0 ? dashboardInsights : ["스냅샷 데이터가 없습니다."]).slice(0, 6).map((line) => (
+                <li key={line}>{line}</li>
+              ))}
+            </ul>
+          </section>
+
+          <section className="agents-sidebar-card">
+            <h4>Action Queue</h4>
+            <div className="agents-sidebar-actions">
+              {quickActionItems.map((item) => (
+                <button key={item.id} onClick={() => onQueuePrompt(item.prompt)} type="button">
+                  {item.label}
+                </button>
+              ))}
             </div>
-            <div className="agents-grid-card-log" aria-label={`${thread.name} log`}>
-              <p className="agents-grid-card-role">{thread.role}</p>
-              {thread.guidance.length > 0 ? (
-                <ul className="agents-grid-card-guidance">
-                  {thread.guidance.map((line) => (
-                    <li key={line}>{line}</li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="agents-grid-card-placeholder">가이드가 없는 사용자 정의 에이전트입니다.</p>
-              )}
-              {thread.starterPrompt ? <p className="agents-grid-card-starter">{thread.starterPrompt}</p> : null}
-            </div>
-            <div className="agents-grid-card-foot">
-              <span>{thread.id === activeThreadId ? "Active" : "Standby"}</span>
-              <span>{thread.status === "preset" ? "Preset" : "Custom"}</span>
-            </div>
-          </article>
-        ))}
+          </section>
+        </aside>
       </section>
 
       <div className="agents-composer">

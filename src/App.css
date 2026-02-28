@@ -6169,6 +6169,99 @@ h3 {
   gap: 12px;
 }
 
+.agents-workspace-shell {
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(300px, 1fr);
+  gap: 12px;
+}
+
+.agents-workspace-main {
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 10px;
+}
+
+.agents-workspace-sidebar {
+  min-height: 0;
+  overflow: auto;
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--surface-panel) 88%, var(--surface));
+}
+
+.agents-sidebar-card {
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--surface-soft) 72%, var(--surface-elevated));
+  padding: 10px;
+  display: grid;
+  gap: 6px;
+}
+
+.agents-sidebar-card h4 {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-main);
+  font-family: "BasicallyAMono", "Noto Sans KR", monospace;
+  letter-spacing: 0.02em;
+}
+
+.agents-sidebar-card p,
+.agents-sidebar-card small {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-muted);
+}
+
+.agents-sidebar-agent-name {
+  color: var(--text-main) !important;
+  font-size: 13px !important;
+}
+
+.agents-sidebar-agent-role {
+  color: var(--text-muted) !important;
+}
+
+.agents-sidebar-list {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 4px;
+}
+
+.agents-sidebar-list li {
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.agents-sidebar-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 6px;
+}
+
+.agents-sidebar-actions button {
+  width: 100%;
+  min-height: 32px;
+  border: 1px solid var(--surface-strong);
+  border-radius: 8px;
+  background: var(--surface-elevated);
+  color: var(--text-main);
+  font-size: 12px;
+  text-align: left;
+  padding: 0 10px;
+}
+
+.agents-sidebar-actions button:hover {
+  background: color-mix(in srgb, var(--focus-ring) 32%, var(--surface-soft));
+}
+
 .agents-set-brief {
   border-radius: 10px;
   background: color-mix(in srgb, var(--surface-panel) 82%, var(--surface));
@@ -7364,6 +7457,14 @@ pre {
   .agents-topbar {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .agents-workspace-shell {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .agents-workspace-sidebar {
+    order: 3;
   }
 
   .agents-add-thread-button {
