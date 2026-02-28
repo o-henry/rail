@@ -6044,8 +6044,8 @@ h3 {
   min-height: 0;
   height: 100%;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
-  gap: 10px;
+  grid-template-rows: minmax(0, 1fr);
+  gap: 0;
   overflow: hidden;
   border-radius: 0;
   background: transparent;
@@ -6097,11 +6097,11 @@ h3 {
 
 .agents-set-picker-head {
   display: grid;
-  gap: 3px;
-  border-radius: 12px;
-  background: var(--surface);
-  box-shadow: var(--panel-shadow);
-  padding: 12px 14px;
+  gap: 2px;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  padding: 0 4px 4px;
 }
 
 .agents-set-picker-split {
@@ -6116,7 +6116,7 @@ h3 {
   overflow: auto;
   display: grid;
   align-content: start;
-  gap: 0;
+  gap: 8px;
   border-radius: 12px;
   background: var(--surface);
   box-shadow: var(--panel-shadow);
