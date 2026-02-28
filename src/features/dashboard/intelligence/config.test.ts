@@ -9,6 +9,7 @@ describe("dashboard intelligence config", () => {
   it("creates topic defaults with expected cadence", () => {
     const defaults = createDefaultDashboardAgentConfigMap();
     expect(defaults.marketSummary.cadenceHours).toBe(6);
+    expect(defaults.devCommunityHotTopics.cadenceHours).toBe(6);
     expect(defaults.eventCalendar.cadenceHours).toBe(12);
     expect(defaults.riskAlertBoard.cadenceHours).toBe(3);
     expect(defaults.devEcosystem.cadenceHours).toBe(24);

@@ -17,11 +17,12 @@ const MAX_SUMMARY_CHARS: usize = 1_200;
 const MAX_RSS_ITEMS: usize = 8;
 const USER_AGENT: &str = "RAIL-Dashboard-Crawler/1.0";
 
-const TOPIC_IDS: [&str; 7] = [
+const TOPIC_IDS: [&str; 8] = [
     "marketSummary",
     "globalHeadlines",
     "industryTrendRadar",
     "communityHotTopics",
+    "devCommunityHotTopics",
     "eventCalendar",
     "riskAlertBoard",
     "devEcosystem",
@@ -402,9 +403,26 @@ fn default_allowlist_map() -> HashMap<&'static str, Vec<String>> {
             "communityHotTopics",
             vec![
                 "reddit.com".to_string(),
+                "dcinside.com".to_string(),
                 "x.com".to_string(),
+                "tieba.baidu.com".to_string(),
+                "zhihu.com".to_string(),
+                "weibo.com".to_string(),
+                "5ch.net".to_string(),
+            ],
+        ),
+        (
+            "devCommunityHotTopics",
+            vec![
                 "news.ycombinator.com".to_string(),
                 "github.com".to_string(),
+                "stackoverflow.com".to_string(),
+                "dev.to".to_string(),
+                "hashnode.com".to_string(),
+                "lobste.rs".to_string(),
+                "reddit.com".to_string(),
+                "x.com".to_string(),
+                "threads.net".to_string(),
             ],
         ),
         (

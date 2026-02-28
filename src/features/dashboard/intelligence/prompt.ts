@@ -16,7 +16,7 @@ type BuildDashboardPromptParams = {
 
 function renderSnippets(snippets: KnowledgeSnippetLike[]): string {
   if (snippets.length === 0) {
-    return "No snippets were retrieved from current crawl files.";
+    return "현재 크롤링 파일에서 검색된 스니펫이 없습니다.";
   }
   return snippets
     .map(
@@ -82,6 +82,7 @@ ${renderSnippets(params.snippets)}
 - events max 8 items
 - references max ${params.config.maxSources} items
 - summary max 550 chars
+- Write summary/highlights/risks/events in Korean.
 - return JSON only (no markdown, no commentary)
 `.trim();
 }

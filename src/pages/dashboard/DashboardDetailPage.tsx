@@ -7,6 +7,7 @@ export type DashboardDetailTopic =
   | "marketSummary"
   | "industryTrendRadar"
   | "communityHotTopics"
+  | "devCommunityHotTopics"
   | "reliabilityPanel"
   | "eventCalendar"
   | "riskAlertBoard"
@@ -25,6 +26,7 @@ function asDashboardTopicId(topic: DashboardDetailTopic): DashboardTopicId | nul
     topic === "globalHeadlines" ||
     topic === "industryTrendRadar" ||
     topic === "communityHotTopics" ||
+    topic === "devCommunityHotTopics" ||
     topic === "eventCalendar" ||
     topic === "riskAlertBoard" ||
     topic === "devEcosystem"

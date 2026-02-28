@@ -3033,6 +3033,13 @@ h3 {
 .settings-dashboard-topic-row.is-active {
   background: color-mix(in srgb, #d9e6ff 68%, var(--surface));
   transform: translateY(-1px);
+  box-shadow: none;
+}
+
+.settings-dashboard-topic-row:focus,
+.settings-dashboard-topic-row:focus-visible {
+  outline: none;
+  box-shadow: none;
 }
 
 .settings-dashboard-topic-title {

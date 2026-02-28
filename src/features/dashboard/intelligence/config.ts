@@ -13,6 +13,7 @@ const DEFAULT_CADENCE_BY_TOPIC: Record<DashboardTopicId, number> = {
   globalHeadlines: 6,
   industryTrendRadar: 6,
   communityHotTopics: 6,
+  devCommunityHotTopics: 6,
   eventCalendar: 12,
   riskAlertBoard: 3,
   devEcosystem: 24,
@@ -22,7 +23,26 @@ const DEFAULT_ALLOWLIST_BY_TOPIC: Record<DashboardTopicId, string[]> = {
   marketSummary: ["finance.yahoo.com", "stooq.com", "investing.com"],
   globalHeadlines: ["reuters.com", "apnews.com", "ft.com", "wsj.com"],
   industryTrendRadar: ["mckinsey.com", "gartner.com", "cbinsights.com", "statista.com"],
-  communityHotTopics: ["reddit.com", "x.com", "news.ycombinator.com", "github.com"],
+  communityHotTopics: [
+    "reddit.com",
+    "dcinside.com",
+    "x.com",
+    "tieba.baidu.com",
+    "zhihu.com",
+    "weibo.com",
+    "5ch.net",
+  ],
+  devCommunityHotTopics: [
+    "news.ycombinator.com",
+    "github.com",
+    "stackoverflow.com",
+    "dev.to",
+    "hashnode.com",
+    "lobste.rs",
+    "reddit.com",
+    "x.com",
+    "threads.net",
+  ],
   eventCalendar: ["federalreserve.gov", "imf.org", "sec.gov", "coinmarketcal.com"],
   riskAlertBoard: ["sec.gov", "cisa.gov", "owasp.org", "krebsonsecurity.com"],
   devEcosystem: ["github.blog", "nodejs.org", "python.org", "react.dev"],
@@ -36,7 +56,9 @@ const DEFAULT_PROMPT_BY_TOPIC: Record<DashboardTopicId, string> = {
   industryTrendRadar:
     "You are the trend analyst. Extract validated trend signals, momentum changes, and uncertainty notes.",
   communityHotTopics:
-    "You are the community intelligence analyst. Surface fast-rising topics, cluster duplicates, and highlight representative links.",
+    "You are the general community intelligence analyst. Surface fast-rising topics, cluster duplicates, and highlight representative links.",
+  devCommunityHotTopics:
+    "You are the developer community intelligence analyst. Track fast-rising developer topics, major discussion threads, and actionable engineering signals.",
   eventCalendar:
     "You are the event calendar analyst. Summarize upcoming events with dates, impact level, and watch notes.",
   riskAlertBoard:

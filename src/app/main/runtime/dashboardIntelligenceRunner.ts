@@ -56,7 +56,9 @@ function topicQueryText(topic: DashboardTopicId): string {
     case "industryTrendRadar":
       return "industry trend momentum signal acceleration";
     case "communityHotTopics":
-      return "community hot topics social mentions growth";
+      return "general community hot topics social mentions growth";
+    case "devCommunityHotTopics":
+      return "developer community hot topics engineering discussion opensource release issue";
     case "eventCalendar":
       return "event calendar upcoming schedule deadline";
     case "riskAlertBoard":
@@ -144,14 +146,14 @@ function buildSnapshotWithoutCodex(params: {
   return buildDashboardFallbackSnapshot(params.topic, params.model, {
     summary:
       params.snippets.length > 0
-        ? "Codex response was unavailable. Generated fallback summary from retrieved snippets."
-        : "No snippets retrieved from crawler outputs.",
+        ? "Codex 응답이 없어 검색 스니펫 기반으로 대체 요약을 생성했습니다."
+        : "크롤러 결과에서 스니펫을 찾지 못했습니다.",
     highlights: summarizeSnippets(params.snippets),
     risks: params.warnings.slice(0, 4),
     events: [],
     references: [],
     status: "degraded",
-    statusMessage: params.warnings.join(" | ") || "Codex response unavailable",
+    statusMessage: params.warnings.join(" | ") || "Codex 응답 없음",
     referenceEmpty: true,
   });
 }
