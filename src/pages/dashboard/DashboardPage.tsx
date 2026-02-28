@@ -207,7 +207,7 @@ export default function DashboardPage(props: DashboardPageProps) {
         ))}
         <aside className="panel-card dashboard-tile dashboard-area-topicGrid dashboard-topic-hub">
           <header className="dashboard-topic-hub-head">
-            <h3>TOPIC HUB</h3>
+            <h3>토픽 허브</h3>
             <span>{widgets.length}</span>
           </header>
           <div className="dashboard-topic-hub-list">
