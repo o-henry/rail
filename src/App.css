@@ -5250,7 +5250,7 @@ h3 {
 .dashboard-terminal-workspace-head {
   min-height: 42px;
   border-bottom: 0;
-  background: color-mix(in srgb, var(--surface-soft) 54%, var(--surface-elevated));
+  background: #ffffff;
   padding: 0 14px;
   display: flex;
   align-items: center;
