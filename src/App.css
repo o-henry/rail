@@ -2928,7 +2928,7 @@ h3 {
 
 .settings-dashboard-topic-row {
   display: grid;
-  grid-template-columns: minmax(180px, 1.5fr) auto minmax(170px, 1fr) auto auto;
+  grid-template-columns: minmax(180px, 1.5fr) minmax(170px, 1fr) auto auto;
   gap: 8px;
   align-items: center;
   border-radius: 10px;
@@ -2957,36 +2957,6 @@ h3 {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.settings-dashboard-topic-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  font-size: calc(0.74rem + 2px);
-  color: var(--text-muted);
-}
-
-.settings-dashboard-topic-toggle input {
-  position: absolute;
-  opacity: 0;
-  pointer-events: none;
-  width: 0;
-  height: 0;
-}
-
-.settings-dashboard-toggle-box {
-  width: 18px;
-  height: 18px;
-  border-radius: 4px;
-  border: 1px solid var(--surface-strong);
-  background: transparent;
-  display: inline-block;
-}
-
-.settings-dashboard-toggle-box.is-on {
-  background: #2fa34f;
-  border-color: #2fa34f;
 }
 
 .settings-dashboard-topic-select {
@@ -6537,10 +6507,6 @@ pre {
 
 :root[data-theme="dark"] .settings-dashboard-topic-title p {
   color: #f19a9d;
-}
-
-:root[data-theme="dark"] .settings-dashboard-toggle-box {
-  border-color: var(--panel-border);
 }
 
 :root[data-theme="dark"] .settings-dashboard-topic-select .fancy-select-trigger,

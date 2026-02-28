@@ -1825,12 +1825,6 @@ function App() {
     setWorkspaceTab("workflow");
     setStatus("에이전트 요청이 워크플로우 입력에 반영되었습니다.");
   };
-  const onToggleDashboardTopic = useCallback(
-    (topic: DashboardTopicId, enabled: boolean) => {
-      updateDashboardTopicConfig(topic, { enabled });
-    },
-    [updateDashboardTopicConfig],
-  );
   const onSetDashboardTopicModel = useCallback(
     (topic: DashboardTopicId, modelEngine: string) => {
       updateDashboardTopicConfig(topic, { model: modelEngine });
@@ -2185,7 +2179,6 @@ function App() {
                 onRunTopic={onRunDashboardTopic}
                 onSetTopicCadence={onSetDashboardTopicCadence}
                 onSetTopicModel={onSetDashboardTopicModel}
-                onToggleTopic={onToggleDashboardTopic}
                 runStateByTopic={dashboardIntelligenceRunStateByTopic}
               />
             </section>

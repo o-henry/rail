@@ -7,7 +7,6 @@ type DashboardIntelligenceSettingsProps = {
   runStateByTopic: Record<DashboardTopicId, DashboardTopicRunState>;
   modelOptions: ReadonlyArray<{ value: string; label: string }>;
   disabled?: boolean;
-  onToggleTopic: (topic: DashboardTopicId, enabled: boolean) => void;
   onSetTopicModel: (topic: DashboardTopicId, model: string) => void;
   onSetTopicCadence: (topic: DashboardTopicId, cadenceHours: number) => void;
   onRunTopic: (topic: DashboardTopicId) => void;
@@ -43,19 +42,6 @@ export default function DashboardIntelligenceSettings(props: DashboardIntelligen
                 <strong>{t(`dashboard.widget.${topic}.title`)}</strong>
                 {runState?.lastError ? <p>{runState.lastError}</p> : null}
               </div>
-
-              <label className="settings-dashboard-topic-toggle">
-                <input
-                  checked={row.enabled}
-                  disabled={props.disabled}
-                  onChange={(event) => props.onToggleTopic(topic, event.currentTarget.checked)}
-                  type="checkbox"
-                />
-                <span
-                  aria-hidden="true"
-                  className={`settings-dashboard-toggle-box ${row.enabled ? "is-on" : ""}`}
-                />
-              </label>
 
               <FancySelect
                 ariaLabel={`${t("dashboard.widget." + topic + ".title")} model`}
