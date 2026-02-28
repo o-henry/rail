@@ -23,6 +23,12 @@ type AgentSetOption = {
   description: string;
 };
 
+type AgentModelOption = {
+  value: string;
+  label: string;
+  allowsReasonLevel: boolean;
+};
+
 type AgentSetState = {
   threads: AgentThread[];
   activeThreadId: string;
@@ -128,11 +134,29 @@ export default function AgentsPage({ onQuickAction, topicSnapshots }: AgentsPage
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const modelMenuRef = useRef<HTMLDivElement | null>(null);
   const reasonMenuRef = useRef<HTMLDivElement | null>(null);
-  const modelOptions = useMemo(
-    () => ["5.3-Codex", "5.3-Codex-Spark", "5.2-Codex", "5.1-Codex-Max", "5.2", "5.1-Codex-Mini"],
+  const modelOptions = useMemo<AgentModelOption[]>(
+    () => [
+      { value: "5.3-Codex", label: "5.3-Codex", allowsReasonLevel: true },
+      { value: "5.3-Codex-Spark", label: "5.3-Codex-Spark", allowsReasonLevel: true },
+      { value: "5.2-Codex", label: "5.2-Codex", allowsReasonLevel: true },
+      { value: "5.1-Codex-Max", label: "5.1-Codex-Max", allowsReasonLevel: true },
+      { value: "5.2", label: "5.2", allowsReasonLevel: true },
+      { value: "5.1-Codex-Mini", label: "5.1-Codex-Mini", allowsReasonLevel: true },
+      { value: "WEB", label: "WEB", allowsReasonLevel: false },
+      { value: "Gemini", label: "AI · Gemini", allowsReasonLevel: false },
+      { value: "Grok", label: "AI · Grok", allowsReasonLevel: false },
+      { value: "Perplexity", label: "AI · Perplexity", allowsReasonLevel: false },
+      { value: "Kimi", label: "AI · Kimi", allowsReasonLevel: false },
+      { value: "Claude", label: "AI · Claude", allowsReasonLevel: false },
+    ],
     [],
   );
   const reasonLevelOptions = useMemo(() => ["낮음", "보통", "높음"], []);
+  const selectedModelOption = useMemo(
+    () => modelOptions.find((option) => option.value === selectedModel) ?? modelOptions[0],
+    [modelOptions, selectedModel],
+  );
+  const isReasonLevelSelectable = selectedModelOption?.allowsReasonLevel !== false;
 
   useEffect(() => {
     setSetStateMap((prev) => {
@@ -242,10 +266,17 @@ export default function AgentsPage({ onQuickAction, topicSnapshots }: AgentsPage
   };
 
   useEffect(() => {
-    if (!modelOptions.includes(selectedModel)) {
-      setSelectedModel(modelOptions[0]);
+    if (!modelOptions.some((option) => option.value === selectedModel)) {
+      setSelectedModel(modelOptions[0].value);
     }
   }, [modelOptions, selectedModel]);
+
+  useEffect(() => {
+    if (isReasonLevelSelectable) {
+      return;
+    }
+    setIsReasonMenuOpen(false);
+  }, [isReasonLevelSelectable]);
 
   useEffect(() => {
     if (!isModelMenuOpen && !isReasonMenuOpen) {
@@ -334,7 +365,8 @@ export default function AgentsPage({ onQuickAction, topicSnapshots }: AgentsPage
     const filePrefix =
       attachedFiles.length > 0 ? `files: ${attachedFiles.map((file) => file.name).join(", ")}\n` : "";
     const content = `${filePrefix}${text}`.trim();
-    const promptWithConfig = `[model=${selectedModel}, reason=${selectedReasonLevel}] ${content}`;
+    const reasonTag = isReasonLevelSelectable ? selectedReasonLevel : "N/A";
+    const promptWithConfig = `[model=${selectedModel}, reason=${reasonTag}] ${content}`;
     const payload = activeThread ? `[${activeThread.name}] ${promptWithConfig}` : promptWithConfig;
     onQuickAction(payload);
     updateActiveSetState((current) => ({
@@ -521,24 +553,24 @@ export default function AgentsPage({ onQuickAction, topicSnapshots }: AgentsPage
                 onClick={() => setIsModelMenuOpen((prev) => !prev)}
                 type="button"
               >
-                <span>{selectedModel}</span>
+                <span>{selectedModelOption?.label ?? selectedModel}</span>
                 <img alt="" aria-hidden="true" src="/down-arrow.svg" />
               </button>
               {isModelMenuOpen && (
                 <ul aria-label="Agent model" className="agents-model-menu" role="listbox">
-                  {modelOptions.map((model) => (
-                    <li key={model}>
+                  {modelOptions.map((option) => (
+                    <li key={option.value}>
                       <button
-                        aria-selected={model === selectedModel}
-                        className={model === selectedModel ? "is-selected" : ""}
+                        aria-selected={option.value === selectedModel}
+                        className={option.value === selectedModel ? "is-selected" : ""}
                         onClick={() => {
-                          setSelectedModel(model);
+                          setSelectedModel(option.value);
                           setIsModelMenuOpen(false);
                         }}
                         role="option"
                         type="button"
                       >
-                        {model}
+                        {option.label}
                       </button>
                     </li>
                   ))}
@@ -550,13 +582,19 @@ export default function AgentsPage({ onQuickAction, topicSnapshots }: AgentsPage
                 aria-expanded={isReasonMenuOpen}
                 aria-haspopup="listbox"
                 className="agents-reason-button"
-                onClick={() => setIsReasonMenuOpen((prev) => !prev)}
+                disabled={!isReasonLevelSelectable}
+                onClick={() => {
+                  if (!isReasonLevelSelectable) {
+                    return;
+                  }
+                  setIsReasonMenuOpen((prev) => !prev);
+                }}
                 type="button"
               >
-                <span>{`이성 수준 · ${selectedReasonLevel}`}</span>
+                <span>{isReasonLevelSelectable ? `이성 수준 · ${selectedReasonLevel}` : "이성 수준 · 선택 불가"}</span>
                 <img alt="" aria-hidden="true" src="/down-arrow.svg" />
               </button>
-              {isReasonMenuOpen && (
+              {isReasonMenuOpen && isReasonLevelSelectable && (
                 <ul aria-label="Reasoning level" className="agents-reason-menu" role="listbox">
                   {reasonLevelOptions.map((level) => (
                     <li key={level}>

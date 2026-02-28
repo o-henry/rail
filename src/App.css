@@ -2464,6 +2464,8 @@ h3 {
 
 .settings-background-name {
   min-width: 0;
+  min-height: 36px;
+  height: 36px;
 }
 
 .settings-background-file-input {
@@ -2483,6 +2485,8 @@ h3 {
 .settings-opacity-input {
   min-width: 78px;
   width: 78px;
+  min-height: 36px;
+  height: 36px;
   border: 0;
   border-radius: 5px;
   background: var(--surface-panel);
@@ -2501,12 +2505,32 @@ h3 {
 
 .settings-cwd-picker {
   min-width: 78px;
+  min-height: 36px;
+  height: 36px;
 }
 
 .settings-view .controls .fancy-select-trigger {
   background: var(--surface-panel);
   border: 1px solid var(--surface-strong);
   box-shadow: none;
+}
+
+.settings-dashboard-topic-select .fancy-select-trigger,
+.settings-dashboard-topic-select.fancy-select.is-open .fancy-select-trigger,
+.settings-dashboard-topic-select .fancy-select-trigger:focus,
+.settings-dashboard-topic-select .fancy-select-trigger:focus-visible {
+  border-color: transparent !important;
+  border-width: 0 !important;
+  box-shadow: none !important;
+}
+
+.settings-multiagent-select .fancy-select-trigger,
+.settings-multiagent-select.fancy-select.is-open .fancy-select-trigger,
+.settings-multiagent-select .fancy-select-trigger:focus,
+.settings-multiagent-select .fancy-select-trigger:focus-visible {
+  border-color: transparent !important;
+  border-width: 0 !important;
+  box-shadow: none !important;
 }
 
 .settings-view .controls .fancy-select.is-open .fancy-select-trigger {
@@ -6137,6 +6161,11 @@ h3 {
   height: 10px;
   opacity: 0.7;
   transition: transform 120ms ease;
+}
+
+.agents-reason-button:disabled {
+  opacity: 0.56;
+  cursor: not-allowed;
 }
 
 .agents-model-menu,

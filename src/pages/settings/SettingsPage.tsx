@@ -102,7 +102,7 @@ export default function SettingsPage({
         {t("settings.multiAgentMode")}
         <FancySelect
           ariaLabel={t("settings.multiAgentMode")}
-          className="modern-select"
+          className="modern-select settings-multiagent-select"
           onChange={onSetCodexMultiAgentMode}
           options={[...codexMultiAgentModeOptions]}
           value={codexMultiAgentMode}
