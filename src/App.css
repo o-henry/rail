@@ -6431,6 +6431,7 @@ h3 {
   display: grid;
   align-content: start;
   gap: 2px;
+  padding-left: 1rem;
 }
 
 .agents-thread-brief strong {
