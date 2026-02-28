@@ -22,7 +22,7 @@ export default function DashboardIntelligenceSettings(props: DashboardIntelligen
     <section className="settings-dashboard-intelligence">
       <header className="settings-dashboard-intelligence-head">
         <div>
-          <h4>{t("settings.dashboardIntelligence.title")}</h4>
+          <h4>DATA</h4>
           <p>{t("settings.dashboardIntelligence.description")}</p>
         </div>
         <div className="settings-dashboard-intelligence-actions">
@@ -52,7 +52,11 @@ export default function DashboardIntelligenceSettings(props: DashboardIntelligen
                   onChange={(event) => props.onToggleTopic(topic, event.currentTarget.checked)}
                   type="checkbox"
                 />
-                <span>{row.enabled ? "ON" : "OFF"}</span>
+                <img
+                  alt={row.enabled ? "ON" : "OFF"}
+                  className="settings-dashboard-toggle-image"
+                  src={row.enabled ? "/on.svg" : "/off.svg"}
+                />
               </label>
 
               <FancySelect

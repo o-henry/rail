@@ -1864,9 +1864,9 @@ function App() {
       { tab: "dashboard" as WorkspaceTab, label: "DASHBOARD" },
       { tab: "intelligence" as WorkspaceTab, label: "INTELLIGENCE" },
       { tab: "agents" as WorkspaceTab, label: "AGENTS" },
-      { tab: "workflow" as WorkspaceTab, label: "WORK" },
+      { tab: "workflow" as WorkspaceTab, label: "DAG" },
       { tab: "feed" as WorkspaceTab, label: "FEED" },
-      { tab: "settings" as WorkspaceTab, label: "SETTINGS" },
+      { tab: "settings" as WorkspaceTab, label: "SETTING" },
     ],
     [],
   );
@@ -2172,7 +2172,7 @@ function App() {
         {workspaceTab === "intelligence" && (
           <section className="panel-card settings-view workspace-tab-panel">
             <section className="controls">
-              <h3>DASHBOARD INTELLIGENCE</h3>
+              <h3>DATA</h3>
               <DashboardIntelligenceSettings
                 config={dashboardIntelligenceConfig}
                 disabled={running || isGraphRunning}
