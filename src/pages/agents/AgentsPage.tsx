@@ -96,11 +96,6 @@ export default function AgentsPage({ onQuickAction }: AgentsPageProps) {
     [activeThreadId, threads],
   );
 
-  const activeSetLabel = useMemo(
-    () => AGENT_SET_OPTIONS.find((setOption) => setOption.id === activeSetId)?.label ?? "",
-    [activeSetId],
-  );
-
   const updateActiveSetState = (updater: (current: AgentSetState) => AgentSetState) => {
     if (!activeSetId) {
       return;
@@ -281,13 +276,6 @@ export default function AgentsPage({ onQuickAction }: AgentsPageProps) {
 
   return (
     <section className="agents-layout workspace-tab-panel">
-      <div className="agents-topbar agents-topbar-with-set">
-        <button className="agents-back-button" onClick={onBackToSetList} type="button">
-          ← 세트 목록
-        </button>
-        <strong className="agents-current-set-label">{activeSetLabel}</strong>
-      </div>
-
       <div className="agents-topbar">
         <div className="agents-thread-list" role="tablist" aria-label="Agent threads">
           {threads.map((thread) => (
@@ -303,9 +291,14 @@ export default function AgentsPage({ onQuickAction }: AgentsPageProps) {
             </button>
           ))}
         </div>
-        <button className="agents-add-thread-button" onClick={onAddThread} type="button">
-          + {t("agents.add")}
-        </button>
+        <div className="agents-topbar-actions">
+          <button className="agents-back-button" onClick={onBackToSetList} type="button">
+            ← 세트 목록
+          </button>
+          <button className="agents-add-thread-button" onClick={onAddThread} type="button">
+            + {t("agents.add")}
+          </button>
+        </div>
       </div>
 
       <section
