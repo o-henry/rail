@@ -4661,6 +4661,46 @@ h3 {
   border: 1px solid var(--surface-strong);
 }
 
+:root[data-theme="light"] .app-shell {
+  background: var(--bg-app);
+}
+
+:root[data-theme="light"] .workspace {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+
+:root[data-theme="light"] .panel-card {
+  border: 0;
+  border-radius: 10px;
+  background: var(--surface);
+  box-shadow: none;
+}
+
+:root[data-theme="light"] .dashboard-layout {
+  gap: 10px;
+  padding-top: 0;
+}
+
+:root[data-theme="light"] .dashboard-card strong {
+  color: var(--text-main);
+}
+
+:root[data-theme="light"] .dashboard-widget-button {
+  border: 1px solid #eef2f7;
+  background: #f9fbfe;
+}
+
+:root[data-theme="light"] .dashboard-widget-button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 18px rgba(30, 45, 62, 0.08);
+}
+
+:root[data-theme="light"] .dashboard-card {
+  background: #f8f9fc;
+}
+
 :root[data-theme="dark"] .dashboard-card,
 :root[data-theme="dark"] .dashboard-widget-button {
   border-color: #343841;
