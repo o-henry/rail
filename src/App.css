@@ -278,13 +278,13 @@ html[data-locale="jp"] {
 }
 
 html[data-locale="ko"] :where(*):not(svg):not(path):not(img) {
-  font-family: var(--ui-font-stack) !important;
+  font-family: var(--ui-font-stack);
   letter-spacing: var(--ui-letter-spacing);
 }
 
 html[data-locale="en"] :where(*):not(svg):not(path):not(img),
 html[data-locale="jp"] :where(*):not(svg):not(path):not(img) {
-  font-family: var(--ui-font-stack) !important;
+  font-family: var(--ui-font-stack);
   letter-spacing: var(--ui-letter-spacing);
 }
 
@@ -2178,7 +2178,7 @@ h3 {
   font-weight: 600;
   letter-spacing: -0.4px;
   font-size: 15px;
-  font-family: "Galmuri11", "DialogNanumBody1984", "Noto Sans KR", sans-serif;
+  font-family: "Galmuri11", "DialogNanumBody1984", "Noto Sans KR", sans-serif !important;
 }
 
 .inspector-head-tooltip-panel {
@@ -2981,7 +2981,7 @@ h3 {
   line-height: 1;
   letter-spacing: 0;
   color: var(--text-muted);
-  font-family: "Galmuri11", "DialogNanumBody1984", "Noto Sans KR", sans-serif;
+  font-family: "Galmuri11", "DialogNanumBody1984", "Noto Sans KR", sans-serif !important;
 }
 
 .settings-dashboard-intelligence-head h4 {
@@ -3757,7 +3757,7 @@ h3 {
 .feed-topbar h2 {
   margin: 0;
   font-size: 15px;
-  font-family: "Galmuri11", "DialogNanumBody1984", "Noto Sans KR", sans-serif;
+  font-family: "Galmuri11", "DialogNanumBody1984", "Noto Sans KR", sans-serif !important;
   letter-spacing: -0.015em;
   color: #14181f;
 }
@@ -6102,7 +6102,7 @@ h3 {
   margin: 0;
   font-size: 15px;
   letter-spacing: 0;
-  font-family: "Galmuri11", "DialogNanumBody1984", "Noto Sans KR", sans-serif;
+  font-family: "Galmuri11", "DialogNanumBody1984", "Noto Sans KR", sans-serif !important;
   color: var(--text-main);
 }
 
@@ -6983,7 +6983,7 @@ pre {
 
 .controls > h3 {
   font-size: 15px;
-  font-family: "Galmuri11", "DialogNanumBody1984", "Noto Sans KR", sans-serif;
+  font-family: "Galmuri11", "DialogNanumBody1984", "Noto Sans KR", sans-serif !important;
 }
 
 .settings-view .controls > h3 {
@@ -6995,7 +6995,7 @@ pre {
 .inspector-title-chip,
 .agents-set-picker-head h2,
 .settings-dashboard-intelligence-eyebrow {
-  font-family: "Galmuri11", "DialogNanumBody1984", "Noto Sans KR", sans-serif;
+  font-family: "Galmuri11", "DialogNanumBody1984", "Noto Sans KR", sans-serif !important;
   font-size: 15px;
   letter-spacing: 0;
 }
