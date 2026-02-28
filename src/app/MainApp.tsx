@@ -1861,12 +1861,12 @@ function App() {
   }, [refreshDashboardSnapshots, runDashboardCrawlerOnlyForEnabledTopics]);
   const workspaceTopbarTabs = useMemo(
     () => [
-      { tab: "dashboard" as WorkspaceTab, label: "DASHBOARD" },
-      { tab: "intelligence" as WorkspaceTab, label: "DATA" },
-      { tab: "agents" as WorkspaceTab, label: "AGENTS" },
-      { tab: "workflow" as WorkspaceTab, label: "DAG" },
-      { tab: "feed" as WorkspaceTab, label: "FEED" },
-      { tab: "settings" as WorkspaceTab, label: "SETTING" },
+      { tab: "dashboard" as WorkspaceTab, label: "대시보드" },
+      { tab: "intelligence" as WorkspaceTab, label: "데이터" },
+      { tab: "agents" as WorkspaceTab, label: "에이전트" },
+      { tab: "workflow" as WorkspaceTab, label: "그래프" },
+      { tab: "feed" as WorkspaceTab, label: "피드" },
+      { tab: "settings" as WorkspaceTab, label: "설정" },
     ],
     [],
   );

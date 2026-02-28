@@ -678,8 +678,7 @@ h3 {
   gap: 7px;
   font-size: 13px;
   font-weight: 600;
-  font-family: "BasicallyAMono", "DialogNanumBody1984", "Noto Sans KR", monospace;
-  letter-spacing: -1px;
+  font-family: "DialogNanumBody1984", "Noto Sans KR", sans-serif;
   white-space: nowrap;
 }
 
