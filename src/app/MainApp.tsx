@@ -129,9 +129,6 @@ import {
 } from "./mainAppUtils";
 import { useThemeMode } from "./theme/ThemeProvider";
 import {
-  normalizeThemeMode,
-} from "./themeMode";
-import {
   GRAPH_SCHEMA_VERSION,
   KNOWLEDGE_DEFAULT_MAX_CHARS,
   KNOWLEDGE_DEFAULT_TOP_K,
@@ -301,7 +298,7 @@ function App() {
   const defaultLoginCompleted = useMemo(() => loadPersistedLoginCompleted(), []);
   const defaultAuthMode = useMemo(() => loadPersistedAuthMode(), []);
   const defaultCodexMultiAgentMode = useMemo(() => loadPersistedCodexMultiAgentMode(), []);
-  const { mode: themeMode, setMode: setThemeMode } = useThemeMode();
+  const { mode: themeMode } = useThemeMode();
   const [workspaceTab, setWorkspaceTab] = useState<WorkspaceTab>("dashboard");
   const [dashboardDetailTopic, setDashboardDetailTopic] = useState<DashboardDetailTopic | null>(null);
   const [quickPanelOpen, setQuickPanelOpen] = useState(false);
@@ -2042,7 +2039,6 @@ function App() {
               onSelectCwdDirectory={() => void onSelectCwdDirectory()}
               onSetModel={setModel}
               onSetCodexMultiAgentMode={(next) => setCodexMultiAgentMode(normalizeCodexMultiAgentMode(next))}
-              onSetThemeMode={(next) => setThemeMode(normalizeThemeMode(next))}
               onToggleCodexLogin={() => void onLoginCodex()}
               running={running}
               status={status}

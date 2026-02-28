@@ -21,7 +21,6 @@ type SettingsPageProps = {
   onSelectCwdDirectory: () => void;
   onSetModel: (next: string) => void;
   onSetCodexMultiAgentMode: (next: string) => void;
-  onSetThemeMode: (next: string) => void;
   onCheckUsage: () => void;
   onToggleCodexLogin: () => void;
   onCloseUsageResult: () => void;
@@ -48,7 +47,6 @@ export default function SettingsPage({
   onSelectCwdDirectory,
   onSetModel,
   onSetCodexMultiAgentMode,
-  onSetThemeMode,
   onCheckUsage,
   onToggleCodexLogin,
   onCloseUsageResult,
@@ -102,20 +100,11 @@ export default function SettingsPage({
       </label>
       <label>
         {t("settings.themeMode")}
-        <div className="settings-cwd-row">
-          <input
-            className="lowercase-path-input"
-            readOnly
-            value={isDarkMode ? t("settings.theme.dark") : t("settings.theme.light")}
-          />
-          <button
-            className="settings-cwd-picker"
-            onClick={() => onSetThemeMode(isDarkMode ? "light" : "dark")}
-            type="button"
-          >
-            {`다크 모드: ${isDarkMode ? "ON" : "OFF"}`}
-          </button>
-        </div>
+        <input
+          className="lowercase-path-input"
+          readOnly
+          value={isDarkMode ? t("settings.theme.dark") : t("settings.theme.light")}
+        />
       </label>
       {!compact && (
         <div className="button-row">
