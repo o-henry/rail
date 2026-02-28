@@ -701,7 +701,7 @@ h3 {
   height: 34px;
   border: 0;
   border-radius: 4px;
-  background: transparent;
+  background: var(--workspace-chrome-bg);
   color: var(--text-muted);
   padding: 0 10px;
   display: inline-flex;
@@ -715,7 +715,7 @@ h3 {
 
 .workspace-topbar-tab:hover {
   color: var(--text-main);
-  background: color-mix(in srgb, var(--surface-soft) 56%, transparent);
+  background: var(--workspace-chrome-bg);
 }
 
 .workspace-topbar-tab.is-active {
@@ -6573,7 +6573,7 @@ pre {
 
 :root[data-theme="dark"] .workspace-topbar-tab:hover {
   color: var(--text-main);
-  background: var(--surface-soft);
+  background: var(--workspace-chrome-bg);
 }
 
 :root[data-theme="dark"] .workspace-topbar-tab.is-active::after {
