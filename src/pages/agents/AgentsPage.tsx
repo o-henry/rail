@@ -1,5 +1,5 @@
 import { type ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
-import type { DashboardTopicId, DashboardTopicSnapshot } from "../../features/dashboard/intelligence";
+import { DASHBOARD_TOPIC_IDS, type DashboardTopicId, type DashboardTopicSnapshot } from "../../features/dashboard/intelligence";
 import { useI18n } from "../../i18n";
 
 type AgentsPageProps = {
@@ -61,8 +61,8 @@ function createDefaultSetState(): AgentSetState {
   };
 }
 
-function createInitialSetStateMap(): Record<string, AgentSetState> {
-  return Object.fromEntries(AGENT_SET_OPTIONS.map((setOption) => [setOption.id, createDefaultSetState()])) as Record<
+function createInitialSetStateMap(setOptions: AgentSetOption[]): Record<string, AgentSetState> {
+  return Object.fromEntries(setOptions.map((setOption) => [setOption.id, createDefaultSetState()])) as Record<
     string,
     AgentSetState
   >;
@@ -70,31 +70,23 @@ function createInitialSetStateMap(): Record<string, AgentSetState> {
 
 export default function AgentsPage({ onQuickAction, topicSnapshots }: AgentsPageProps) {
   const { t } = useI18n();
+  const setOptions = useMemo<AgentSetOption[]>(() => {
+    const dataSetOptions = DASHBOARD_TOPIC_IDS.map((topic) => ({
+      id: `data-${topic}`,
+      label: `${t(`dashboard.widget.${topic}.title`)} 세트`,
+      description: "데이터 주제 기반 분석/실행 에이전트 세트",
+    }));
+    const byId = new Map<string, AgentSetOption>();
+    [...AGENT_SET_OPTIONS, ...dataSetOptions].forEach((option) => {
+      if (!byId.has(option.id)) {
+        byId.set(option.id, option);
+      }
+    });
+    return Array.from(byId.values());
+  }, [t]);
   const [activeSetId, setActiveSetId] = useState<string | null>(null);
   const [setStateMap, setSetStateMap] = useState<Record<string, AgentSetState>>(() => {
-    const initial = createInitialSetStateMap();
-    if (typeof window === "undefined") {
-      return initial;
-    }
-    try {
-      const raw = window.localStorage.getItem(AGENT_SET_DASHBOARD_DATA_STORAGE_KEY);
-      if (!raw) {
-        return initial;
-      }
-      const parsed = JSON.parse(raw) as Record<string, string[]>;
-      for (const setOption of AGENT_SET_OPTIONS) {
-        const saved = parsed[setOption.id];
-        if (Array.isArray(saved)) {
-          initial[setOption.id].dashboardInsights = saved
-            .map((item) => String(item ?? "").trim())
-            .filter((item) => item.length > 0)
-            .slice(0, 7);
-        }
-      }
-    } catch {
-      // ignore invalid local storage
-    }
-    return initial;
+    return createInitialSetStateMap(setOptions);
   });
   const [isModelMenuOpen, setIsModelMenuOpen] = useState(false);
   const [isReasonMenuOpen, setIsReasonMenuOpen] = useState(false);
@@ -108,6 +100,50 @@ export default function AgentsPage({ onQuickAction, topicSnapshots }: AgentsPage
     [],
   );
   const reasonLevelOptions = useMemo(() => ["낮음", "보통", "높음"], []);
+
+  useEffect(() => {
+    setSetStateMap((prev) => {
+      const next = { ...prev };
+      for (const setOption of setOptions) {
+        if (!next[setOption.id]) {
+          next[setOption.id] = createDefaultSetState();
+        }
+      }
+      return next;
+    });
+  }, [setOptions]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    try {
+      const raw = window.localStorage.getItem(AGENT_SET_DASHBOARD_DATA_STORAGE_KEY);
+      if (!raw) {
+        return;
+      }
+      const parsed = JSON.parse(raw) as Record<string, string[]>;
+      setSetStateMap((prev) => {
+        const next = { ...prev };
+        for (const setOption of setOptions) {
+          const saved = parsed[setOption.id];
+          if (Array.isArray(saved)) {
+            const current = next[setOption.id] ?? createDefaultSetState();
+            next[setOption.id] = {
+              ...current,
+              dashboardInsights: saved
+                .map((item) => String(item ?? "").trim())
+                .filter((item) => item.length > 0)
+                .slice(0, 7),
+            };
+          }
+        }
+        return next;
+      });
+    } catch {
+      // ignore invalid local storage
+    }
+  }, [setOptions]);
 
   const currentSetState = useMemo(() => {
     if (!activeSetId) {
@@ -132,7 +168,7 @@ export default function AgentsPage({ onQuickAction, topicSnapshots }: AgentsPage
     }
     setSetStateMap((prev) => {
       const next = { ...prev };
-      for (const setOption of AGENT_SET_OPTIONS) {
+      for (const setOption of setOptions) {
         const current = next[setOption.id] ?? createDefaultSetState();
         next[setOption.id] = {
           ...current,
@@ -142,7 +178,7 @@ export default function AgentsPage({ onQuickAction, topicSnapshots }: AgentsPage
       if (typeof window !== "undefined") {
         try {
           const toStore: Record<string, string[]> = {};
-          for (const setOption of AGENT_SET_OPTIONS) {
+          for (const setOption of setOptions) {
             toStore[setOption.id] = next[setOption.id]?.dashboardInsights ?? [];
           }
           window.localStorage.setItem(AGENT_SET_DASHBOARD_DATA_STORAGE_KEY, JSON.stringify(toStore));
@@ -152,7 +188,7 @@ export default function AgentsPage({ onQuickAction, topicSnapshots }: AgentsPage
       }
       return next;
     });
-  }, [topicSnapshots]);
+  }, [setOptions, topicSnapshots]);
 
   const activeThread = useMemo(
     () => threads.find((thread) => thread.id === activeThreadId) ?? threads[0] ?? null,
@@ -319,7 +355,7 @@ export default function AgentsPage({ onQuickAction, topicSnapshots }: AgentsPage
             <p>먼저 세트를 선택하면 해당 세트의 에이전트 뷰가 열립니다.</p>
           </header>
           <div className="agents-set-list" role="list" aria-label="Agent sets">
-            {AGENT_SET_OPTIONS.map((setOption) => (
+            {setOptions.map((setOption) => (
               <button
                 className="agents-set-card"
                 key={setOption.id}
