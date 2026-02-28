@@ -251,7 +251,6 @@ export function AgentsWorkspaceView({
                       className={`agents-grid-card-status-dot${thread.id === activeThreadId ? " is-active" : " is-standby"}`}
                       title={thread.id === activeThreadId ? "활성" : "대기"}
                     />
-                    <span>{thread.status === "preset" ? "Preset" : "Custom"}</span>
                   </div>
                 </article>
               );
