@@ -1193,8 +1193,8 @@ h3 {
 
 .workflow-question-input .agents-model-menu,
 .workflow-question-input .agents-reason-menu {
-  top: calc(100% + 8px);
-  bottom: auto;
+  top: auto;
+  bottom: calc(100% + 8px);
   width: 100%;
   min-width: 0;
   z-index: 80;
