@@ -3045,35 +3045,38 @@ h3 {
 }
 
 .settings-dashboard-topic-row {
-  position: relative;
   display: grid;
   grid-template-columns: minmax(220px, 1.8fr) minmax(190px, 1fr) 98px 88px;
   gap: 8px;
   align-items: center;
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--surface-panel) 78%, var(--surface));
+  border-radius: 6px;
+  background: transparent;
   padding: 9px 10px;
   cursor: pointer;
   transition: background-color 140ms ease;
 }
 
 .settings-dashboard-topic-row:hover {
-  background: color-mix(in srgb, var(--surface-soft) 74%, var(--surface));
+  background: color-mix(in srgb, var(--surface-soft) 56%, var(--surface));
 }
 
 .settings-dashboard-topic-row.is-active {
-  background: linear-gradient(
-    90deg,
-    color-mix(in srgb, var(--focus-ring) 20%, var(--surface-soft)) 0%,
-    color-mix(in srgb, var(--surface-soft) 78%, var(--surface)) 100%
-  );
-  box-shadow: inset 2px 0 0 color-mix(in srgb, var(--focus-ring) 82%, #94b8ff);
+  background: color-mix(in srgb, var(--focus-ring) 14%, var(--surface-soft));
+  box-shadow: none;
 }
 
 .settings-dashboard-topic-row:focus,
 .settings-dashboard-topic-row:focus-visible {
   outline: none;
   box-shadow: none;
+}
+
+.settings-dashboard-topic-row.is-active .settings-dashboard-topic-title strong {
+  color: var(--text-main);
+}
+
+.settings-dashboard-topic-row.is-active .settings-dashboard-topic-title code {
+  color: var(--text-muted);
 }
 
 .settings-dashboard-topic-title {
@@ -5962,6 +5965,11 @@ h3 {
   box-shadow: var(--panel-shadow);
 }
 
+:root[data-theme="light"] .settings-dashboard-intelligence-main.panel-card,
+:root[data-theme="light"] .settings-dashboard-topic-detail.panel-card {
+  box-shadow: none;
+}
+
 :root[data-theme="light"] .dashboard-layout {
   gap: 10px;
   padding-top: 0;
@@ -7158,6 +7166,11 @@ pre {
   background: var(--surface-panel);
   border-color: var(--panel-border);
   box-shadow: var(--panel-shadow);
+}
+
+:root[data-theme="dark"] .settings-dashboard-intelligence-main.panel-card,
+:root[data-theme="dark"] .settings-dashboard-topic-detail.panel-card {
+  box-shadow: none;
 }
 
 :root[data-theme="dark"] .dashboard-hero-reset,
