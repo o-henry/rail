@@ -22,7 +22,6 @@ export default function DashboardIntelligenceSettings(props: DashboardIntelligen
     <section className="settings-dashboard-intelligence">
       <header className="settings-dashboard-intelligence-head">
         <div>
-          <h4>데이터</h4>
           <p>{t("settings.dashboardIntelligence.description")}</p>
         </div>
         <div className="settings-dashboard-intelligence-actions">

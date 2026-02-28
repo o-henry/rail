@@ -2852,7 +2852,7 @@ h3 {
 .settings-dashboard-intelligence {
   display: grid;
   gap: 12px;
-  padding: 12px;
+  padding: 0;
   border-radius: 12px;
   background: var(--surface);
 }
@@ -2872,7 +2872,7 @@ h3 {
 
 .settings-dashboard-intelligence-head p {
   margin: 4px 0 0;
-  font-size: 0.78rem;
+  font-size: calc(0.78rem + 2px);
   color: var(--text-muted);
 }
 
@@ -2887,7 +2887,7 @@ h3 {
   border-radius: 8px;
   background: var(--surface-panel);
   padding: 0 10px;
-  font-size: 0.73rem;
+  font-size: calc(0.73rem + 2px);
 }
 
 .settings-dashboard-intelligence-list {
@@ -2912,7 +2912,7 @@ h3 {
 }
 
 .settings-dashboard-topic-title strong {
-  font-size: 0.79rem;
+  font-size: calc(0.79rem + 2px);
   color: var(--text-main);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2921,7 +2921,7 @@ h3 {
 
 .settings-dashboard-topic-title p {
   margin: 0;
-  font-size: 0.68rem;
+  font-size: calc(0.68rem + 2px);
   color: #9d3a3d;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2932,7 +2932,7 @@ h3 {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  font-size: 0.74rem;
+  font-size: calc(0.74rem + 2px);
   color: var(--text-muted);
 }
 
@@ -2967,7 +2967,7 @@ h3 {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 0.72rem;
+  font-size: calc(0.72rem + 2px);
   color: var(--text-muted);
 }
 
@@ -2978,6 +2978,7 @@ h3 {
   min-height: 30px;
   padding: 0 8px;
   text-align: center;
+  font-size: calc(0.72rem + 2px);
   appearance: textfield;
   -moz-appearance: textfield;
 }
@@ -2993,7 +2994,7 @@ h3 {
   height: 30px;
   border-radius: 8px;
   padding: 0 10px;
-  font-size: 0.73rem;
+  font-size: calc(0.73rem + 2px);
   background: var(--surface);
 }
 
