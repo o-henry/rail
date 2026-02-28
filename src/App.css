@@ -6250,7 +6250,7 @@ h3 {
 .agents-back-button {
 
   border: 1px solid var(--surface-strong);
-  border-radius: 999px;
+  border-radius: 4px;
   background: var(--surface-panel);
   min-height: 32px;
   height: 32px;
@@ -6396,7 +6396,7 @@ h3 {
 
 .agents-thread-list button {
   border: 1px solid var(--surface-strong);
-  border-radius: 999px;
+  border-radius: 4px;
   background: var(--surface-panel);
   min-height: 32px;
   height: 32px;
@@ -6410,7 +6410,7 @@ h3 {
 
 .agents-add-thread-button {
   border: 1px solid var(--surface-strong);
-  border-radius: 999px;
+  border-radius: 4px;
   background: var(--surface-panel);
   min-height: 34px;
   height: 34px;
