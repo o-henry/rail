@@ -1,8 +1,7 @@
 import { useMemo } from "react";
 import { type DashboardTopicId, type DashboardTopicSnapshot } from "../../features/dashboard/intelligence";
 import { useI18n } from "../../i18n";
-import StockWidgetChart from "./StockWidgetChart";
-import { buildDashboardStockChartData, type DashboardStockDocumentPost } from "./stockWidgetChartData";
+import { type DashboardStockDocumentPost } from "./stockWidgetChartData";
 import type { DashboardDetailTopic } from "./DashboardDetailPage";
 
 type DashboardPageProps = {
@@ -48,10 +47,6 @@ function asDashboardTopicId(topic: DashboardDetailTopic): DashboardTopicId | nul
 
 export default function DashboardPage(props: DashboardPageProps) {
   const { t } = useI18n();
-  const stockChartData = useMemo(
-    () => buildDashboardStockChartData(props.stockDocumentPosts),
-    [props.stockDocumentPosts],
-  );
   const widgets = useMemo<DashboardWidget[]>(
     () => [
       {
@@ -122,14 +117,16 @@ export default function DashboardPage(props: DashboardPageProps) {
     ],
     [],
   );
-  const activeTopic: DashboardDetailTopic = props.focusTopic ?? "devEcosystem";
-  const activeTopicId = asDashboardTopicId(activeTopic);
-  const activeSnapshot = activeTopicId ? props.topicSnapshots[activeTopicId] : undefined;
-  const activeSections = [
-    t(`dashboard.detail.${activeTopic}.section1`),
-    t(`dashboard.detail.${activeTopic}.section2`),
-    t(`dashboard.detail.${activeTopic}.section3`),
-  ].filter((line) => !line.includes(`dashboard.detail.${activeTopic}.section`));
+  const activeTopic: DashboardDetailTopic = props.focusTopic ?? "marketSummary";
+  const recentWorkSummaries = useMemo(
+    () =>
+      [...props.stockDocumentPosts]
+        .filter((post) => (post.summary ?? "").trim().length > 0)
+        .sort((left, right) => new Date(right.createdAt ?? 0).getTime() - new Date(left.createdAt ?? 0).getTime())
+        .slice(0, 6)
+        .map((post) => String(post.summary ?? "").trim()),
+    [props.stockDocumentPosts],
+  );
 
   const cards = useMemo<DashboardCard[]>(
     () => [
@@ -178,40 +175,26 @@ export default function DashboardPage(props: DashboardPageProps) {
         <article className="panel-card dashboard-tile dashboard-widget-card dashboard-area-marketSummary">
           <div className="dashboard-hero-head">
             <div>
-              <h3>{t(`dashboard.widget.${activeTopic}.title`)}</h3>
-              <p>
-                {activeSnapshot?.status === "degraded"
-                  ? "DEGRADED SNAPSHOT"
-                  : t(`dashboard.detail.${activeTopic}.subtitle`)}
-              </p>
+              <h3>작업 요약</h3>
+              <p>최근 수행한 작업 결과를 요약합니다.</p>
             </div>
-            {activeTopic !== "devEcosystem" ? (
-              <button className="dashboard-hero-reset" onClick={() => props.onFocusTopic("devEcosystem")} type="button">
-                {t("dashboard.widget.devEcosystem.title")}
-              </button>
-            ) : null}
           </div>
           <div className="dashboard-hero-body">
             <section className="dashboard-hero-related">
-              {activeSnapshot?.summary ? <p className="dashboard-widget-summary">{activeSnapshot.summary}</p> : null}
-              {activeTopic === "marketSummary" && stockChartData ? (
-                <StockWidgetChart data={stockChartData} />
-              ) : (
-                <div className="dashboard-hero-list-wrap">
-                  <ul>
-                    {(activeSnapshot?.references.length ? activeSnapshot.references : activeSections).map((item, index) => {
-                      if (typeof item === "string") {
-                        return <li key={`section-${index}`}>{item}</li>;
-                      }
-                      return (
-                        <li key={item.url}>
-                          <strong>{item.title}</strong> · {item.source}
-                        </li>
-                      );
-                    })}
-                  </ul>
-                </div>
-              )}
+              <p className="dashboard-widget-summary">
+                최근 요약 {recentWorkSummaries.length}건
+              </p>
+              <div className="dashboard-hero-list-wrap">
+                <ul>
+                  {recentWorkSummaries.length > 0 ? (
+                    recentWorkSummaries.map((summary, index) => (
+                      <li key={`${summary}-${index}`}>{summary}</li>
+                    ))
+                  ) : (
+                    <li>{t("dashboard.value.none")}</li>
+                  )}
+                </ul>
+              </div>
             </section>
           </div>
         </article>

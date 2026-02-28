@@ -2172,7 +2172,7 @@ function App() {
         {workspaceTab === "intelligence" && (
           <section className="panel-card settings-view workspace-tab-panel">
             <section className="controls">
-              <h3>DATA</h3>
+              <h3>데이터</h3>
               <DashboardIntelligenceSettings
                 config={dashboardIntelligenceConfig}
                 disabled={running || isGraphRunning}

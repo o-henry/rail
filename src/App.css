@@ -4801,7 +4801,7 @@ h3 {
 .dashboard-topic-hub-head h3 {
   margin: 0;
   font-size: 0.84rem;
-  color: #e3ebf8;
+  color: var(--text-main);
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
@@ -4810,8 +4810,8 @@ h3 {
   min-width: 22px;
   height: 22px;
   border-radius: 999px;
-  background: rgba(74, 96, 129, 0.45);
-  color: #c8d7ef;
+  background: #e8f1ff;
+  color: #2c5ea8;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -4830,25 +4830,26 @@ h3 {
 .dashboard-topic-hub-item {
   width: 100%;
   text-align: left;
-  border: 1px solid rgba(61, 74, 93, 0.72);
+  border: 1px solid var(--surface-strong);
   border-radius: 12px;
-  background: linear-gradient(165deg, rgba(18, 23, 31, 0.9) 0%, rgba(12, 16, 22, 0.94) 100%);
+  background: var(--surface);
   padding: 10px;
   display: grid;
   gap: 6px;
 }
 
 .dashboard-topic-hub-item:hover {
-  border-color: rgba(115, 146, 201, 0.7);
+  border-color: #9db8e3;
 }
 
 .dashboard-topic-hub-item.is-focus {
-  border-color: rgba(143, 177, 236, 0.86);
+  border-color: #7fa3db;
+  background: #edf4ff;
 }
 
 .dashboard-topic-hub-preview {
   margin: 0;
-  color: #d7deea;
+  color: var(--text-main);
   font-size: 0.76rem;
   line-height: 1.35;
 }
@@ -4918,12 +4919,12 @@ h3 {
 .dashboard-widget-head h3 {
   margin: 0;
   font-size: 0.88rem;
-  color: #edf3fd;
+  color: var(--text-main);
   line-height: 1.2;
 }
 
 .dashboard-widget-head span {
-  color: #94a9c7;
+  color: var(--text-muted);
   font-size: 0.64rem;
   letter-spacing: 0.08em;
 }
@@ -4938,13 +4939,13 @@ h3 {
 
 .dashboard-widget-summary {
   margin: 0;
-  color: #9aacc6;
+  color: var(--text-muted);
   font-size: 0.72rem;
   line-height: 1.35;
 }
 
 .dashboard-widget-card li {
-  color: #d7deea;
+  color: var(--text-main);
   font-size: 0.76rem;
   line-height: 1.35;
 }
@@ -4952,11 +4953,11 @@ h3 {
 .dashboard-area-marketSummary {
   position: relative;
   isolation: isolate;
-  border-color: rgba(116, 135, 170, 0.6);
+  border-color: #cfd8e4;
   background:
-    radial-gradient(circle at 60% 58%, rgba(255, 131, 69, 0.34) 0%, rgba(92, 41, 17, 0.3) 24%, rgba(8, 11, 16, 0) 46%),
-    radial-gradient(circle at 32% 112%, rgba(245, 117, 53, 0.58) 0%, rgba(63, 27, 14, 0.76) 44%, rgba(8, 11, 17, 0.96) 80%),
-    radial-gradient(circle at 18% 18%, rgba(98, 138, 205, 0.2) 0%, rgba(16, 21, 29, 0.88) 44%, rgba(8, 11, 16, 0.98) 100%);
+    radial-gradient(circle at 74% 18%, rgba(118, 163, 232, 0.22), rgba(118, 163, 232, 0) 42%),
+    radial-gradient(circle at 18% 100%, rgba(239, 199, 135, 0.22), rgba(239, 199, 135, 0) 46%),
+    linear-gradient(180deg, #ffffff 0%, #f5f8fd 100%);
 }
 
 .dashboard-area-marketSummary::before {
@@ -4966,15 +4967,15 @@ h3 {
   z-index: -1;
   pointer-events: none;
   background-image:
-    radial-gradient(circle at 7% 12%, rgba(255, 255, 255, 0.8) 0 1px, transparent 1px),
-    radial-gradient(circle at 24% 28%, rgba(255, 255, 255, 0.55) 0 1px, transparent 1px),
-    radial-gradient(circle at 42% 22%, rgba(255, 255, 255, 0.46) 0 1px, transparent 1px),
-    radial-gradient(circle at 55% 32%, rgba(255, 255, 255, 0.5) 0 1px, transparent 1px),
-    radial-gradient(circle at 68% 18%, rgba(255, 255, 255, 0.5) 0 1px, transparent 1px),
-    radial-gradient(circle at 84% 22%, rgba(255, 255, 255, 0.52) 0 1px, transparent 1px),
-    radial-gradient(circle at 76% 42%, rgba(255, 255, 255, 0.38) 0 1px, transparent 1px);
+    radial-gradient(circle at 7% 12%, rgba(133, 156, 188, 0.42) 0 1px, transparent 1px),
+    radial-gradient(circle at 24% 28%, rgba(133, 156, 188, 0.24) 0 1px, transparent 1px),
+    radial-gradient(circle at 42% 22%, rgba(133, 156, 188, 0.22) 0 1px, transparent 1px),
+    radial-gradient(circle at 55% 32%, rgba(133, 156, 188, 0.24) 0 1px, transparent 1px),
+    radial-gradient(circle at 68% 18%, rgba(133, 156, 188, 0.24) 0 1px, transparent 1px),
+    radial-gradient(circle at 84% 22%, rgba(133, 156, 188, 0.26) 0 1px, transparent 1px),
+    radial-gradient(circle at 76% 42%, rgba(133, 156, 188, 0.22) 0 1px, transparent 1px);
   background-size: 100% 100%;
-  opacity: 0.8;
+  opacity: 0.52;
 }
 
 .dashboard-hero-head {
@@ -4987,13 +4988,13 @@ h3 {
 .dashboard-hero-head h3 {
   margin: 0;
   font-size: 1.08rem;
-  color: #f2f6fd;
+  color: var(--text-main);
 }
 
 .dashboard-hero-head p {
   margin: 4px 0 0;
   font-size: 0.74rem;
-  color: #a1b2cb;
+  color: var(--text-muted);
 }
 
 .dashboard-hero-reset {
@@ -5034,7 +5035,7 @@ h3 {
 }
 
 .dashboard-hero-list-wrap li {
-  color: #d9e2f0;
+  color: var(--text-main);
   font-size: 0.78rem;
   line-height: 1.4;
 }

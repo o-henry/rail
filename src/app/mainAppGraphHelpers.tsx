@@ -182,7 +182,50 @@ export function toWebBridgeStatus(raw: unknown): WebBridgeStatus {
 }
 
 export function NavIcon({ tab, active = false }: { tab: WorkspaceTab; active?: boolean }) {
-  return <span aria-hidden="true" className={`nav-icon-dot nav-icon-dot-${tab} ${active ? "is-active" : ""}`} />;
+  if (tab === "dashboard") {
+    return <img alt="" aria-hidden="true" className="nav-workflow-image" src="/home.svg" />;
+  }
+  if (tab === "intelligence") {
+    return <img alt="" aria-hidden="true" className="nav-workflow-image" src="/data-service-svgrepo-com.svg" />;
+  }
+  if (tab === "workflow") {
+    return (
+      <img alt="" aria-hidden="true" className="nav-workflow-image" src="/node-svgrepo-com.svg" />
+    );
+  }
+  if (tab === "feed") {
+    return (
+      <img
+        alt=""
+        aria-hidden="true"
+        className="nav-workflow-image nav-feed-image"
+        src={active ? "/post.svg" : "/post.svg"}
+      />
+    );
+  }
+  if (tab === "agents") {
+    return (
+      <img alt="" aria-hidden="true" className="nav-workflow-image" src="/workflow.svg" />
+    );
+  }
+  if (tab === "settings") {
+    return <img alt="" aria-hidden="true" className="nav-workflow-image" src="/setting.svg" />;
+  }
+  if (tab === "bridge") {
+    return <img alt="" aria-hidden="true" className="nav-workflow-image" src="/scroll.svg" />;
+  }
+  return (
+    <svg aria-hidden="true" fill="none" height="20" viewBox="0 0 24 24" width="20">
+      <path
+        d="M12 3.5l2 1.1 2.3-.2 1 2 2 .9-.1 2.4 1.4 1.8-1.4 1.8.1 2.4-2 .9-1 2-2.3-.2-2 1.1-2-1.1-2.3.2-1-2-2-.9.1-2.4-1.4-1.8 1.4-1.8-.1-2.4 2-.9 1-2 2.3.2 2-1.1z"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.5"
+      />
+      <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="1.8" />
+    </svg>
+  );
 }
 
 export function InspectorSectionTitle({ title, help }: { title: string; help: string }) {
