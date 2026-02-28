@@ -5710,8 +5710,8 @@ h3 {
   min-height: 0;
   height: 100%;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
-  gap: 12px;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  gap: 0;
   overflow: hidden;
   border-radius: 12px;
   background: var(--surface);
@@ -5739,9 +5739,10 @@ h3 {
 
 .agents-set-index-head {
   display: grid;
-  grid-template-columns: 46px minmax(0, 1fr) 88px 52px;
+  grid-template-columns: 46px minmax(0, 1fr) 88px;
   gap: 8px;
   align-items: center;
+  margin-top: 8px;
   padding: 0 8px;
 }
 
@@ -5770,7 +5771,7 @@ h3 {
   background: color-mix(in srgb, var(--surface-panel) 72%, var(--surface));
   padding: 9px 10px;
   display: grid;
-  grid-template-columns: 46px minmax(0, 1fr) 88px 52px;
+  grid-template-columns: 46px minmax(0, 1fr) 88px;
   gap: 8px;
   align-items: center;
   text-align: left;
@@ -5825,15 +5826,8 @@ h3 {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 11px;
-  color: var(--text-main);
-  font-family: "BasicallyAMono", "Noto Sans KR", monospace;
-}
-
-.agents-set-index-open {
-  justify-self: center;
   font-size: 13px;
-  color: var(--text-muted);
+  color: var(--text-main);
   font-family: "BasicallyAMono", "Noto Sans KR", monospace;
 }
 

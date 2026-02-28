@@ -305,6 +305,8 @@ function App() {
   const defaultCodexMultiAgentMode = useMemo(() => loadPersistedCodexMultiAgentMode(), []);
   const [workspaceTab, setWorkspaceTab] = useState<WorkspaceTab>("dashboard");
   const [dashboardDetailTopic, setDashboardDetailTopic] = useState<DashboardDetailTopic | null>(null);
+  const workspaceBackStackRef = useRef<WorkspaceTab[]>([]);
+  const suppressWorkspaceHistoryPushRef = useRef(false);
   const {
     config: dashboardIntelligenceConfig,
     runStateByTopic: dashboardIntelligenceRunStateByTopic,
@@ -1820,6 +1822,51 @@ function App() {
       setDashboardDetailTopic(null);
     }
   };
+  useEffect(() => {
+    if (suppressWorkspaceHistoryPushRef.current) {
+      suppressWorkspaceHistoryPushRef.current = false;
+      return;
+    }
+    const stack = workspaceBackStackRef.current;
+    if (stack.length === 0 || stack[stack.length - 1] !== workspaceTab) {
+      stack.push(workspaceTab);
+      if (stack.length > 40) {
+        stack.splice(0, stack.length - 40);
+      }
+    }
+  }, [workspaceTab]);
+  const onNavigateWorkspaceBack = useCallback(() => {
+    if (dashboardDetailTopic) {
+      setDashboardDetailTopic(null);
+      return;
+    }
+    const stack = workspaceBackStackRef.current;
+    if (stack.length <= 1) {
+      return;
+    }
+    const current = stack.pop();
+    let previous = stack[stack.length - 1];
+    while (previous === current && stack.length > 1) {
+      stack.pop();
+      previous = stack[stack.length - 1];
+    }
+    if (!previous) {
+      return;
+    }
+    suppressWorkspaceHistoryPushRef.current = true;
+    setWorkspaceTab(previous);
+  }, [dashboardDetailTopic]);
+  useEffect(() => {
+    const onMouseBackButton = (event: MouseEvent) => {
+      if (event.button !== 3) {
+        return;
+      }
+      event.preventDefault();
+      onNavigateWorkspaceBack();
+    };
+    window.addEventListener("mousedown", onMouseBackButton);
+    return () => window.removeEventListener("mousedown", onMouseBackButton);
+  }, [onNavigateWorkspaceBack]);
   const onAgentQuickAction = (prompt: string) => {
     setWorkflowQuestion(prompt);
     setWorkspaceTab("workflow");
