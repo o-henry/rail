@@ -6358,6 +6358,26 @@ h3 {
   letter-spacing: 0.02em;
 }
 
+.agents-sidebar-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.agents-sidebar-card-head-with-tooltip {
+  position: relative;
+}
+
+.agents-sidebar-tooltip-panel {
+  left: 6px;
+  right: 6px;
+  width: auto;
+  max-width: none;
+  transform: none;
+  z-index: 36;
+}
+
 .agents-sidebar-card p,
 .agents-sidebar-card small {
   margin: 0;
