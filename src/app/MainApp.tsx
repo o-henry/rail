@@ -143,7 +143,6 @@ import {
   validateSimpleSchema,
 } from "./mainAppGraphHelpers";
 import { useI18n } from "../i18n";
-import { useThemeMode } from "./theme/ThemeProvider";
 import {
   getArtifactTypeOptions,
   getCodexMultiAgentModeOptions,
@@ -300,7 +299,6 @@ function App() {
   const USER_BG_IMAGE_STORAGE_KEY = "rail.settings.user_bg_image";
   const USER_BG_OPACITY_STORAGE_KEY = "rail.settings.user_bg_opacity";
   const { locale, t, tp } = useI18n();
-  const { mode: themeMode, setMode: setThemeMode } = useThemeMode();
   const defaultCwd = useMemo(() => loadPersistedCwd(""), []);
   const defaultLoginCompleted = useMemo(() => loadPersistedLoginCompleted(), []);
   const defaultAuthMode = useMemo(() => loadPersistedAuthMode(), []);
@@ -2143,7 +2141,6 @@ function App() {
               engineStarted={engineStarted}
               isGraphRunning={isGraphRunning}
               loginCompleted={loginCompleted}
-              themeMode={themeMode}
               codexMultiAgentMode={codexMultiAgentMode}
               codexMultiAgentModeOptions={[...codexMultiAgentModeOptions]}
               userBackgroundImage={userBackgroundImage}
@@ -2153,7 +2150,6 @@ function App() {
               onOpenRunsFolder={() => void onOpenRunsFolder()}
               onSelectCwdDirectory={() => void onSelectCwdDirectory()}
               onSetCodexMultiAgentMode={(next) => setCodexMultiAgentMode(normalizeCodexMultiAgentMode(next))}
-              onSetThemeMode={(next) => setThemeMode(next)}
               onSetUserBackgroundImage={setUserBackgroundImage}
               onSetUserBackgroundOpacity={(next) =>
                 setUserBackgroundOpacity(Number.isFinite(next) ? Math.min(1, Math.max(0, next)) : 0)

@@ -20,19 +20,19 @@ afterEach(() => {
 });
 
 describe("themeMode", () => {
-  it("normalizes valid and invalid values", () => {
-    expect(normalizeThemeMode("dark")).toBe("dark");
+  it("normalizes all values to light-only mode", () => {
+    expect(normalizeThemeMode("dark")).toBe("light");
     expect(normalizeThemeMode("light")).toBe("light");
     expect(normalizeThemeMode("LIGHT")).toBe("light");
-    expect(normalizeThemeMode("unknown")).toBe("dark");
+    expect(normalizeThemeMode("unknown")).toBe("light");
   });
 
-  it("falls back to dark when window is unavailable", () => {
+  it("falls back to light when window is unavailable", () => {
     Reflect.deleteProperty(globalThis, "window");
-    expect(loadPersistedThemeMode()).toBe("dark");
+    expect(loadPersistedThemeMode()).toBe("light");
   });
 
-  it("loads persisted mode and keeps dark fallback for malformed data", () => {
+  it("returns light even when persisted mode exists", () => {
     setWindowMock({
       localStorage: {
         getItem: () => "light",
@@ -45,6 +45,6 @@ describe("themeMode", () => {
         getItem: () => "INVALID_THEME",
       },
     });
-    expect(loadPersistedThemeMode()).toBe("dark");
+    expect(loadPersistedThemeMode()).toBe("light");
   });
 });
