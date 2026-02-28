@@ -639,7 +639,7 @@ h3 {
   overflow: hidden;
   display: grid;
   grid-template-rows: auto auto auto minmax(0, 1fr);
-  background: color-mix(in srgb, var(--surface) 70%, transparent);
+  background: color-mix(in srgb, var(--surface) 80%, transparent);
   border: 1px solid var(--workspace-border);
   box-shadow: var(--workspace-shadow);
 }
@@ -671,7 +671,7 @@ h3 {
 
 .workspace-topbar {
   grid-row: 3;
-  background: var(--surface);
+  background: color-mix(in srgb, var(--surface) 80%, transparent);
   min-height: 44px;
   padding: 0 12px;
   display: flex;
@@ -5343,7 +5343,7 @@ h3 {
 }
 
 :root[data-theme="light"] .workspace {
-  background: color-mix(in srgb, var(--surface) 70%, transparent);
+  background: color-mix(in srgb, var(--surface) 80%, transparent);
   border: 0;
   box-shadow: none;
 }
@@ -6274,14 +6274,14 @@ pre {
 }
 
 :root[data-theme="dark"] .workspace {
-  background: color-mix(in srgb, var(--surface-elevated) 70%, transparent);
+  background: color-mix(in srgb, var(--surface-elevated) 80%, transparent);
   border-color: var(--workspace-border);
   box-shadow: var(--workspace-shadow);
 }
 
 :root[data-theme="dark"] .workspace-header,
 :root[data-theme="dark"] .workspace-topbar {
-  background: var(--surface-elevated);
+  background: color-mix(in srgb, var(--surface-elevated) 80%, transparent);
 }
 
 :root[data-theme="dark"] .workspace-topbar-tab {
