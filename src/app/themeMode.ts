@@ -8,18 +8,18 @@ export const THEME_MODE_META_COLOR: Record<ThemeModeValue, string> = {
 
 export function normalizeThemeMode(value: unknown): ThemeModeValue {
   const raw = String(value ?? "").trim().toLowerCase();
-  return raw === "dark" ? "dark" : "light";
+  return raw === "light" ? "light" : "dark";
 }
 
 export function loadPersistedThemeMode(): ThemeModeValue {
   if (typeof window === "undefined") {
-    return "light";
+    return "dark";
   }
   try {
     const raw = window.localStorage.getItem(THEME_MODE_STORAGE_KEY);
     return normalizeThemeMode(raw);
   } catch {
-    return "light";
+    return "dark";
   }
 }
 
