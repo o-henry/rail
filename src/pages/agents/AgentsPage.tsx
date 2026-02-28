@@ -219,7 +219,7 @@ export default function AgentsPage({ onQuickAction }: AgentsPageProps) {
         <div className="agents-composer-row">
           <div className="agents-composer-left">
             <button aria-label="파일 추가" className="agents-icon-button" onClick={onOpenFilePicker} type="button">
-              <img alt="" aria-hidden="true" src="/plus.svg" />
+              <img alt="" aria-hidden="true" src="/plus-large-svgrepo-com.svg" />
             </button>
             <div
               className={`agents-model-dropdown${isModelMenuOpen ? " is-open" : ""}`}

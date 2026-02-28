@@ -4857,6 +4857,10 @@ h3 {
   margin: 0;
 }
 
+:root[data-theme="dark"] .agents-composer {
+  background: rgba(37, 37, 38, 0.8);
+}
+
 .agents-composer.workflow-question-input {
   margin-bottom: 0;
 }
