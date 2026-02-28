@@ -2855,7 +2855,7 @@ h3 {
 }
 
 .panel-card {
-  border: 1px solid var(--panel-border);
+  border: 0;
   border-radius: 8px;
   background: var(--surface-panel);
   padding: 12px;
@@ -5589,7 +5589,7 @@ h3 {
 }
 
 :root[data-theme="light"] .panel-card {
-  border: 1px solid var(--panel-border);
+  border: 0;
   border-radius: 10px;
   background: var(--surface);
   box-shadow: var(--panel-shadow);
