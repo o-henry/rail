@@ -4458,7 +4458,6 @@ h3 {
   display: grid;
   grid-template-rows: auto auto;
   gap: 36px;
-  align-content: space-between;
   overflow: auto;
   -ms-overflow-style: none;
   scrollbar-width: none;
