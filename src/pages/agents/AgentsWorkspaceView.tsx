@@ -35,6 +35,30 @@ function toKoreanThreadName(name: string): string {
   return normalized;
 }
 
+type ProcessStepState = "running" | "pending";
+
+type ProcessStep = {
+  id: string;
+  label: string;
+  state: ProcessStepState;
+};
+
+function buildProcessSteps(thread: AgentThread, isActive: boolean): ProcessStep[] {
+  const fallback = ["요청 해석", "근거 정리", "응답 구성"];
+  const labels =
+    thread.guidance
+      .map((line) => String(line ?? "").trim())
+      .filter((line) => line.length > 0)
+      .slice(0, 3)
+      .map((line) => line.replace(/\.$/, "")) || [];
+  const steps = labels.length > 0 ? labels : fallback;
+  return steps.map((label, index) => ({
+    id: `${thread.id}-step-${index}`,
+    label,
+    state: isActive && index === 0 ? "running" : "pending",
+  }));
+}
+
 type AgentsWorkspaceViewProps = {
   t: (key: string) => string;
   threads: AgentThread[];
@@ -178,10 +202,12 @@ export function AgentsWorkspaceView({
           >
             {threads.map((thread) => {
               const displayThreadName = toKoreanThreadName(thread.name);
+              const isActive = thread.id === activeThreadId;
+              const processSteps = buildProcessSteps(thread, isActive);
               return (
                 <article
                   key={thread.id}
-                  className={`panel-card agents-grid-card${thread.id === activeThreadId ? " is-active" : ""}`}
+                  className={`panel-card agents-grid-card${isActive ? " is-active" : ""}`}
                   onClick={() => onSetActiveThreadId(thread.id)}
                 >
                   <div className="agents-grid-card-head">
@@ -199,24 +225,43 @@ export function AgentsWorkspaceView({
                       <img alt="" aria-hidden="true" src="/xmark.svg" />
                     </button>
                   </div>
+                  <div className="agents-grid-card-meta">
+                    <span className={`agents-grid-card-chip${isActive ? " is-running" : " is-pending"}`}>
+                      {isActive ? "실행 대상" : "대기"}
+                    </span>
+                    <span className="agents-grid-card-chip is-neutral">
+                      {thread.status === "preset" ? "기본 에이전트" : "사용자 에이전트"}
+                    </span>
+                  </div>
                   <div className="agents-grid-card-log" aria-label={`${displayThreadName} 로그`}>
-                    <p className="agents-grid-card-role">{thread.role}</p>
-                    {thread.guidance.length > 0 ? (
-                      <ul className="agents-grid-card-guidance">
-                        {thread.guidance.map((line) => (
-                          <li key={line}>{line}</li>
+                    <section className="agents-grid-card-log-block">
+                      <h5>역할</h5>
+                      <p className="agents-grid-card-role">{thread.role}</p>
+                    </section>
+                    <section className="agents-grid-card-log-block">
+                      <h5>처리 단계</h5>
+                      <ol className="agents-grid-card-process-list">
+                        {processSteps.map((step, index) => (
+                          <li key={step.id}>
+                            <span className="agents-grid-card-process-index">{index + 1}</span>
+                            <span className={`agents-grid-card-process-dot is-${step.state}`} />
+                            <span>{step.label}</span>
+                          </li>
                         ))}
-                      </ul>
-                    ) : (
-                      <p className="agents-grid-card-placeholder">가이드가 없는 사용자 정의 에이전트입니다.</p>
-                    )}
-                    {thread.starterPrompt ? <p className="agents-grid-card-starter">{thread.starterPrompt}</p> : null}
+                      </ol>
+                    </section>
+                    {thread.starterPrompt ? (
+                      <section className="agents-grid-card-log-block">
+                        <h5>최근 요청 템플릿</h5>
+                        <p className="agents-grid-card-starter">{thread.starterPrompt}</p>
+                      </section>
+                    ) : null}
                   </div>
                   <div className="agents-grid-card-foot">
                     <span
-                      aria-label={thread.id === activeThreadId ? "활성" : "대기"}
-                      className={`agents-grid-card-status-dot${thread.id === activeThreadId ? " is-active" : " is-standby"}`}
-                      title={thread.id === activeThreadId ? "활성" : "대기"}
+                      aria-label={isActive ? "활성" : "대기"}
+                      className={`agents-grid-card-status-dot${isActive ? " is-active" : " is-standby"}`}
+                      title={isActive ? "활성" : "대기"}
                     />
                   </div>
                 </article>
