@@ -280,7 +280,7 @@ export default function DashboardIntelligenceSettings(props: DashboardIntelligen
           ) : null}
         </div>
 
-        <form className="data-topic-followup-composer question-input" onSubmit={onSubmitFollowup}>
+        <form className="data-topic-followup-composer question-input agents-composer workflow-question-input" onSubmit={onSubmitFollowup}>
           <textarea
             disabled={props.disabled || activeTopicRunState?.running}
             onChange={(event) => setFollowupDraft(event.currentTarget.value)}

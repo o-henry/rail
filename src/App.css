@@ -3344,40 +3344,10 @@ h3 {
   text-decoration: underline;
 }
 
-.data-topic-followup-composer {
-  padding: 8px 10px 6px;
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--surface-panel) 82%, var(--surface));
-  box-shadow: none;
-}
-
-.data-topic-followup-composer textarea {
-  min-height: 54px;
-  max-height: 110px;
-  font-size: 12px;
-  line-height: 1.45;
-}
-
-.data-topic-followup-composer .question-input-footer {
-  min-height: 30px;
-}
-
 .data-topic-followup-label {
   font-size: 11px;
   color: var(--text-muted);
   font-family: "BasicallyAMono", "Noto Sans KR", monospace;
-}
-
-.data-topic-followup-send {
-  width: 26px;
-  min-width: 26px;
-  height: 26px;
-  min-height: 26px;
-}
-
-.data-topic-followup-send .question-create-icon {
-  width: 10px;
-  height: 10px;
 }
 
 .settings-run-history-hidden {
