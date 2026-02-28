@@ -155,14 +155,32 @@ export function AgentsWorkspaceView({
           ))}
         </div>
         <div className="agents-topbar-actions">
-          <button className="agents-restore-template-button" onClick={onRestoreTemplateSet} type="button">
-            ↺ 템플릿 복원
+          <button
+            aria-label="템플릿 복원"
+            className="agents-restore-template-button agents-topbar-icon-button"
+            onClick={onRestoreTemplateSet}
+            title="템플릿 복원"
+            type="button"
+          >
+            <img alt="" aria-hidden="true" src="/reload.svg" />
           </button>
-          <button className="agents-back-button" onClick={onBackToSetList} type="button">
-            ← 세트 목록
+          <button
+            aria-label="세트 목록"
+            className="agents-back-button agents-topbar-icon-button"
+            onClick={onBackToSetList}
+            title="세트 목록"
+            type="button"
+          >
+            <img alt="" aria-hidden="true" src="/home.svg" />
           </button>
-          <button className="agents-add-thread-button" onClick={onAddThread} type="button">
-            + {t("agents.add")}
+          <button
+            aria-label={t("agents.add")}
+            className="agents-add-thread-button agents-topbar-icon-button"
+            onClick={onAddThread}
+            title={t("agents.add")}
+            type="button"
+          >
+            <img alt="" aria-hidden="true" src="/plus-large-svgrepo-com.svg" />
           </button>
         </div>
       </div>

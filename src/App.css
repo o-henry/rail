@@ -6458,6 +6458,22 @@ h3 {
   white-space: nowrap;
 }
 
+.agents-topbar-icon-button {
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  min-height: 32px;
+  padding: 0;
+  display: inline-grid;
+  place-items: center;
+}
+
+.agents-topbar-icon-button img {
+  width: 14px;
+  height: 14px;
+  opacity: 0.82;
+}
+
 .agents-grid {
   min-height: 0;
   overflow: auto;
