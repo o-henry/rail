@@ -4869,11 +4869,12 @@ h3 {
   overflow: auto;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  grid-auto-rows: minmax(120px, auto);
+  grid-auto-rows: 1fr;
   gap: 10px;
 }
 
 .agents-set-card {
+  aspect-ratio: 1 / 1;
   border: 1px solid var(--surface-strong);
   border-radius: 12px;
   background: var(--surface-panel);
