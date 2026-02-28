@@ -4901,6 +4901,12 @@ h3 {
 
 .agents-grid.is-two {
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-auto-rows: minmax(0, 1fr);
+}
+
+.agents-grid.is-two .agents-grid-card {
+  min-height: 0;
+  height: 100%;
 }
 
 .agents-grid.is-single {

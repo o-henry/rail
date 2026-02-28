@@ -17,7 +17,7 @@ type AttachedFile = {
 
 export default function AgentsPage({ onQuickAction }: AgentsPageProps) {
   const { t } = useI18n();
-  const [threads, setThreads] = useState<AgentThread[]>([{ id: "agent-1", name: "Agent 1" }]);
+  const [threads, setThreads] = useState<AgentThread[]>([{ id: "agent-1", name: "agent-1" }]);
   const [activeThreadId, setActiveThreadId] = useState("agent-1");
   const [draft, setDraft] = useState("");
   const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([]);
@@ -69,10 +69,16 @@ export default function AgentsPage({ onQuickAction }: AgentsPageProps) {
   }, [isModelMenuOpen, isReasonMenuOpen]);
 
   const onAddThread = () => {
-    const nextIndex = threads.length + 1;
+    const nextIndex = threads.reduce((max, thread) => {
+      const byName = /^agent-(\d+)$/.exec(thread.name)?.[1];
+      const byId = /^agent-(\d+)$/.exec(thread.id)?.[1];
+      const current = Number(byName ?? byId ?? 0);
+      return Number.isFinite(current) ? Math.max(max, current) : max;
+    }, 0) + 1;
+    const nextLabel = `agent-${nextIndex}`;
     const next: AgentThread = {
-      id: `agent-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      name: `Agent ${nextIndex}`,
+      id: nextLabel,
+      name: nextLabel,
     };
     setThreads((prev) => [...prev, next]);
     setActiveThreadId(next.id);
@@ -80,7 +86,7 @@ export default function AgentsPage({ onQuickAction }: AgentsPageProps) {
 
   const onCloseThread = (threadId: string) => {
     const filtered = threads.filter((thread) => thread.id !== threadId);
-    const nextThreads = filtered.length > 0 ? filtered : [{ id: "agent-1", name: "Agent 1" }];
+    const nextThreads = filtered.length > 0 ? filtered : [{ id: "agent-1", name: "agent-1" }];
     setThreads(nextThreads);
     if (!nextThreads.some((thread) => thread.id === activeThreadId)) {
       setActiveThreadId(nextThreads[0].id);
