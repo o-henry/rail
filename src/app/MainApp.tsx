@@ -27,6 +27,7 @@ import { useWebConnectState } from "./hooks/useWebConnectState";
 import { useWorkflowGraphActions } from "./hooks/useWorkflowGraphActions";
 import { useWorkflowShortcuts } from "./hooks/useWorkflowShortcuts";
 import { useDashboardIntelligenceConfig } from "./hooks/useDashboardIntelligenceConfig";
+import { useDashboardIntelligenceRunner } from "./hooks/useDashboardIntelligenceRunner";
 import {
   COST_PRESET_DEFAULT_MODEL,
   DEFAULT_TURN_MODEL,
@@ -103,7 +104,7 @@ import {
 import type {
   GraphNode,
 } from "../features/workflow/types";
-import { DASHBOARD_TOPIC_IDS, type DashboardTopicId } from "../features/dashboard/intelligence";
+import { type DashboardTopicId } from "../features/dashboard/intelligence";
 import {
   AUTH_MODE_STORAGE_KEY,
   CODEX_MULTI_AGENT_MODE_STORAGE_KEY,
@@ -556,6 +557,20 @@ function App() {
     () => Boolean((window as Window & { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__),
     [],
   );
+  const {
+    refreshSnapshots: refreshDashboardSnapshots,
+    runTopic: runDashboardTopic,
+    runAll: runAllDashboardTopics,
+    runCrawlerOnlyForEnabledTopics: runDashboardCrawlerOnlyForEnabledTopics,
+  } = useDashboardIntelligenceRunner({
+    cwd,
+    hasTauriRuntime,
+    config: dashboardIntelligenceConfig,
+    setRunStateByTopic: setDashboardIntelligenceRunStateByTopic,
+    invokeFn: invoke,
+    setStatus: setStatusState,
+    setError: setErrorState,
+  });
   const internalMemoryCorpusRef = useRef<InternalMemorySnippet[]>([]);
   const activeRunPresetKindRef = useRef<PresetKind | undefined>(undefined);
   const webTurnPanel = useFloatingPanel({
@@ -1827,40 +1842,21 @@ function App() {
     },
     [updateDashboardTopicConfig],
   );
-  const markDashboardTopicRun = useCallback(
-    (topic: DashboardTopicId, running: boolean, lastError?: string) => {
-      setDashboardIntelligenceRunStateByTopic((prev) => ({
-        ...prev,
-        [topic]: {
-          ...prev[topic],
-          running,
-          lastRunAt: !running ? new Date().toISOString() : prev[topic]?.lastRunAt,
-          lastError: lastError || undefined,
-        },
-      }));
-    },
-    [setDashboardIntelligenceRunStateByTopic],
-  );
   const onRunDashboardTopic = useCallback(
-    (topic: DashboardTopicId) => {
-      markDashboardTopicRun(topic, true);
-      window.setTimeout(() => {
-        markDashboardTopicRun(topic, false);
-      }, 0);
-      setStatus(`Dashboard Intelligence 실행 대기: ${topic}`);
+    async (topic: DashboardTopicId) => {
+      await runDashboardTopic(topic);
+      await refreshDashboardSnapshots();
     },
-    [markDashboardTopicRun, setStatus],
+    [refreshDashboardSnapshots, runDashboardTopic],
   );
-  const onRunAllDashboardTopics = useCallback(() => {
-    const enabledTopics = DASHBOARD_TOPIC_IDS.filter((topic) => dashboardIntelligenceConfig[topic].enabled);
-    for (const topic of enabledTopics) {
-      onRunDashboardTopic(topic);
-    }
-    setStatus(`Dashboard Intelligence 전체 실행 대기 (${enabledTopics.length})`);
-  }, [dashboardIntelligenceConfig, onRunDashboardTopic, setStatus]);
-  const onRunDashboardCrawlerOnly = useCallback(() => {
-    setStatus("Dashboard 크롤러 실행 대기");
-  }, [setStatus]);
+  const onRunAllDashboardTopics = useCallback(async () => {
+    await runAllDashboardTopics();
+    await refreshDashboardSnapshots();
+  }, [refreshDashboardSnapshots, runAllDashboardTopics]);
+  const onRunDashboardCrawlerOnly = useCallback(async () => {
+    await runDashboardCrawlerOnlyForEnabledTopics();
+    await refreshDashboardSnapshots();
+  }, [refreshDashboardSnapshots, runDashboardCrawlerOnlyForEnabledTopics]);
   const workspaceTopbarTabs = useMemo(
     () => [
       { tab: "dashboard" as WorkspaceTab, label: t("nav.dashboard") },

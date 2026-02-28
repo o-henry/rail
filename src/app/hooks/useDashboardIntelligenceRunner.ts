@@ -1,0 +1,170 @@
+import { type Dispatch, type SetStateAction, useCallback, useEffect, useState } from "react";
+import type { DashboardAgentConfigMap, DashboardTopicId, DashboardTopicSnapshot } from "../../features/dashboard/intelligence";
+import { DASHBOARD_TOPIC_IDS } from "../../features/dashboard/intelligence";
+import {
+  loadDashboardSnapshots,
+  runDashboardCrawlerOnly,
+  runDashboardTopicIntelligence,
+} from "../main/runtime/dashboardIntelligenceRunner";
+import type { DashboardTopicRunState } from "../../features/dashboard/intelligence";
+
+type InvokeFn = <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
+
+type UseDashboardIntelligenceRunnerParams = {
+  cwd: string;
+  hasTauriRuntime: boolean;
+  config: DashboardAgentConfigMap;
+  setRunStateByTopic: Dispatch<SetStateAction<Record<DashboardTopicId, DashboardTopicRunState>>>;
+  invokeFn: InvokeFn;
+  setStatus: (message: string) => void;
+  setError: (message: string) => void;
+};
+
+function updateRunState(
+  setRunStateByTopic: Dispatch<SetStateAction<Record<DashboardTopicId, DashboardTopicRunState>>>,
+  topic: DashboardTopicId,
+  patch: Partial<DashboardTopicRunState>,
+) {
+  setRunStateByTopic((prev) => ({
+    ...prev,
+    [topic]: {
+      ...prev[topic],
+      ...patch,
+    },
+  }));
+}
+
+export function useDashboardIntelligenceRunner(params: UseDashboardIntelligenceRunnerParams) {
+  const { cwd, hasTauriRuntime, config, setRunStateByTopic, invokeFn, setStatus, setError } = params;
+  const [snapshotsByTopic, setSnapshotsByTopic] = useState<Partial<Record<DashboardTopicId, DashboardTopicSnapshot>>>(
+    {},
+  );
+
+  const refreshSnapshots = useCallback(async () => {
+    if (!hasTauriRuntime) {
+      return;
+    }
+    if (!String(cwd ?? "").trim()) {
+      return;
+    }
+    try {
+      const loaded = await loadDashboardSnapshots({
+        cwd,
+        invokeFn,
+      });
+      setSnapshotsByTopic(loaded);
+    } catch (error) {
+      setError(`대시보드 스냅샷 로드 실패: ${String(error)}`);
+    }
+  }, [cwd, hasTauriRuntime, invokeFn, setError]);
+
+  useEffect(() => {
+    void refreshSnapshots();
+  }, [refreshSnapshots]);
+
+  const runTopic = useCallback(
+    async (topic: DashboardTopicId) => {
+      const topicConfig = config[topic];
+      if (!topicConfig?.enabled) {
+        setStatus(`Dashboard Intelligence 비활성 주제: ${topic}`);
+        return;
+      }
+      if (!hasTauriRuntime) {
+        setError("Dashboard Intelligence는 Tauri 런타임에서만 실행할 수 있습니다.");
+        return;
+      }
+      updateRunState(setRunStateByTopic, topic, {
+        running: true,
+        lastError: undefined,
+      });
+      try {
+        const result = await runDashboardTopicIntelligence({
+          cwd,
+          topic,
+          config: topicConfig,
+          invokeFn,
+          previousSnapshot: snapshotsByTopic[topic],
+        });
+        setSnapshotsByTopic((prev) => ({
+          ...prev,
+          [topic]: result.snapshot,
+        }));
+        updateRunState(setRunStateByTopic, topic, {
+          running: false,
+          lastRunAt: result.snapshot.generatedAt,
+          lastError: undefined,
+        });
+        setStatus(`Dashboard Intelligence 완료: ${topic}`);
+      } catch (error) {
+        updateRunState(setRunStateByTopic, topic, {
+          running: false,
+          lastRunAt: new Date().toISOString(),
+          lastError: String(error),
+        });
+        setError(`Dashboard Intelligence 실행 실패(${topic}): ${String(error)}`);
+      }
+    },
+    [config, cwd, hasTauriRuntime, invokeFn, setError, setRunStateByTopic, setStatus, snapshotsByTopic],
+  );
+
+  const runAll = useCallback(async () => {
+    for (const topic of DASHBOARD_TOPIC_IDS) {
+      if (!config[topic].enabled) {
+        continue;
+      }
+      // Sequential execution reduces engine contention and keeps logs readable.
+      // eslint-disable-next-line no-await-in-loop
+      await runTopic(topic);
+    }
+  }, [config, runTopic]);
+
+  const runCrawlerOnlyForEnabledTopics = useCallback(async () => {
+    if (!hasTauriRuntime) {
+      setError("크롤러 실행은 Tauri 런타임에서만 가능합니다.");
+      return;
+    }
+    const selected = DASHBOARD_TOPIC_IDS.filter((topic) => config[topic].enabled);
+    if (selected.length === 0) {
+      setError("실행 가능한 주제가 없습니다. 주제 ON/OFF를 확인하세요.");
+      return;
+    }
+    for (const topic of selected) {
+      updateRunState(setRunStateByTopic, topic, { running: true, lastError: undefined });
+    }
+    try {
+      const result = await runDashboardCrawlerOnly({
+        cwd,
+        configByTopic: config,
+        topics: selected,
+        invokeFn,
+      });
+      const now = result.finishedAt || new Date().toISOString();
+      for (const topic of selected) {
+        updateRunState(setRunStateByTopic, topic, {
+          running: false,
+          lastRunAt: now,
+          lastError: undefined,
+        });
+      }
+      setStatus(`Dashboard 크롤러 완료 (${result.totalFetched} sources)`);
+    } catch (error) {
+      for (const topic of selected) {
+        updateRunState(setRunStateByTopic, topic, {
+          running: false,
+          lastRunAt: new Date().toISOString(),
+          lastError: String(error),
+        });
+      }
+      setError(`Dashboard 크롤러 실행 실패: ${String(error)}`);
+    }
+  }, [config, cwd, hasTauriRuntime, invokeFn, setError, setRunStateByTopic, setStatus]);
+
+  return {
+    snapshotsByTopic,
+    setSnapshotsByTopic,
+    refreshSnapshots,
+    runTopic,
+    runAll,
+    runCrawlerOnlyForEnabledTopics,
+  };
+}
