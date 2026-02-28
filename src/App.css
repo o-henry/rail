@@ -2991,6 +2991,7 @@ h3 {
   align-items: flex-start;
   justify-content: space-between;
   gap: 10px;
+  margin-top: 6px;
   margin-bottom: 0;
 }
 
@@ -6110,6 +6111,7 @@ h3 {
   border-radius: 0;
   background: transparent;
   box-shadow: none;
+  margin-top: 6px;
   padding: 0 4px 4px;
 }
 
