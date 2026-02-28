@@ -6,6 +6,7 @@ type SettingsPageProps = {
   compact?: boolean;
   engineStarted: boolean;
   loginCompleted: boolean;
+  themeMode: "light" | "dark";
   authModeText: string;
   cwd: string;
   codexMultiAgentMode: string;
@@ -20,6 +21,7 @@ type SettingsPageProps = {
   codexAuthBusy: boolean;
   onSelectCwdDirectory: () => void;
   onSetCodexMultiAgentMode: (next: string) => void;
+  onSetThemeMode: (next: "light" | "dark") => void;
   onSetUserBackgroundImage: (next: string) => void;
   onSetUserBackgroundOpacity: (next: number) => void;
   onCheckUsage: () => void;
@@ -32,6 +34,7 @@ export default function SettingsPage({
   compact = false,
   engineStarted,
   loginCompleted,
+  themeMode,
   authModeText,
   cwd,
   codexMultiAgentMode,
@@ -46,6 +49,7 @@ export default function SettingsPage({
   codexAuthBusy,
   onSelectCwdDirectory,
   onSetCodexMultiAgentMode,
+  onSetThemeMode,
   onSetUserBackgroundImage,
   onSetUserBackgroundOpacity,
   onCheckUsage,
@@ -106,6 +110,19 @@ export default function SettingsPage({
           onChange={onSetCodexMultiAgentMode}
           options={[...codexMultiAgentModeOptions]}
           value={codexMultiAgentMode}
+        />
+      </label>
+      <label>
+        {t("settings.themeMode")}
+        <FancySelect
+          ariaLabel={t("settings.themeMode")}
+          className="modern-select settings-theme-select"
+          onChange={(next) => onSetThemeMode(next === "light" ? "light" : "dark")}
+          options={[
+            { value: "dark", label: t("settings.theme.dark") },
+            { value: "light", label: t("settings.theme.light") },
+          ]}
+          value={themeMode}
         />
       </label>
       <label className="settings-background-controls">
