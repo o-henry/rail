@@ -686,31 +686,36 @@ h3 {
 }
 
 .workspace-quick-toggle {
-  min-height: 30px;
-  height: 30px;
-  border-radius: 8px;
+  width: 36px;
+  min-width: 36px;
+  min-height: 36px;
+  height: 36px;
+  border-radius: 50%;
   border: 1px solid transparent;
   background: transparent;
   color: var(--text-muted);
-  padding: 0 9px;
+  padding: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   font-size: 12px;
   line-height: 1;
   box-shadow: none;
+  transition: background-color 140ms ease, color 140ms ease, box-shadow 140ms ease;
 }
 
 .workspace-quick-toggle:hover {
   color: var(--text-main);
-  border-color: var(--surface-strong);
-  background: var(--surface-soft);
+  border-color: transparent;
+  background: var(--surface);
+  box-shadow: var(--nav-button-shadow);
 }
 
 .workspace-quick-toggle.is-open {
   color: var(--text-main);
-  border-color: var(--surface-strong);
-  background: var(--surface-soft);
+  border-color: transparent;
+  background: var(--surface-active);
+  box-shadow: var(--nav-active-shadow);
 }
 
 .workspace-quick-panel {
