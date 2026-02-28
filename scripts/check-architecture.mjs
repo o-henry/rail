@@ -23,9 +23,41 @@ const TEMP_LINE_ALLOWLIST = new Map([
   [
     "src/app/MainApp.tsx",
     {
-      maxLines: 2200,
+      maxLines: 2300,
       expiresOn: "2026-06-30",
-      reason: "Main app controller split in progress",
+      reason: "Main app controller split in progress (dashboard intelligence wiring pending extraction)",
+    },
+  ],
+  [
+    "src/i18n/messages/en.ts",
+    {
+      maxLines: 540,
+      expiresOn: "2026-07-31",
+      reason: "Message dictionary modularization pending (dashboard intelligence keys added)",
+    },
+  ],
+  [
+    "src/i18n/messages/ko.ts",
+    {
+      maxLines: 540,
+      expiresOn: "2026-07-31",
+      reason: "Message dictionary modularization pending (dashboard intelligence keys added)",
+    },
+  ],
+  [
+    "src/i18n/messages/ja.ts",
+    {
+      maxLines: 540,
+      expiresOn: "2026-07-31",
+      reason: "Message dictionary modularization pending (dashboard intelligence keys added)",
+    },
+  ],
+  [
+    "src/i18n/messages/zh.ts",
+    {
+      maxLines: 540,
+      expiresOn: "2026-07-31",
+      reason: "Message dictionary modularization pending (dashboard intelligence keys added)",
     },
   ],
   [
