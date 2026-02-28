@@ -4473,7 +4473,7 @@ h3 {
 
 .settings-view > .controls,
 .settings-view > .bridge-embedded {
-  width: min(960px, 100%);
+  width: min(820px, 100%);
 }
 
 .settings-view::-webkit-scrollbar {
@@ -4819,7 +4819,11 @@ h3 {
 }
 
 :root[data-theme="light"] .dashboard-card {
-  background: #f8f9fc;
+  background: #ffffff;
+}
+
+:root[data-theme="light"] .dashboard-widget-button {
+  background: #ffffff;
 }
 
 :root[data-theme="dark"] .dashboard-card,
@@ -4858,7 +4862,9 @@ h3 {
   grid-template-rows: auto minmax(0, 1fr) auto;
   gap: 12px;
   overflow: hidden;
-  padding: 6px 0 0;
+  padding: 14px;
+  border-radius: 12px;
+  background: #ffffff;
 }
 
 .agents-layout > .agents-set-picker {
@@ -4872,6 +4878,9 @@ h3 {
   grid-template-rows: auto minmax(0, 1fr);
   gap: 12px;
   overflow: hidden;
+  border-radius: 12px;
+  background: var(--surface-panel);
+  padding: 14px;
 }
 
 .agents-set-picker-head {
