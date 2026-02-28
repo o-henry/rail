@@ -147,7 +147,7 @@ export function AgentsWorkspaceView({
                   title={t("agents.off")}
                   type="button"
                 >
-                  <img alt="" aria-hidden="true" src="/xmark.svg" />
+                  <img alt="" aria-hidden="true" src="/close.svg" />
                 </button>
               </div>
               <p>{setMission || activeSetOption.description}</p>
@@ -213,7 +213,7 @@ export function AgentsWorkspaceView({
               title={isSidebarCollapsed ? "사이드바 확대" : "사이드바 최소화"}
               type="button"
             >
-              <img alt="" aria-hidden="true" src={isSidebarCollapsed ? "/plus-large-svgrepo-com.svg" : "/xmark.svg"} />
+              <img alt="" aria-hidden="true" src={isSidebarCollapsed ? "/open.svg" : "/close.svg"} />
             </button>
           </div>
 
