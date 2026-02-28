@@ -4,14 +4,12 @@ import type { AgentSetGroup, AgentSetState } from "./agentTypes";
 type AgentSetIndexViewProps = {
   groupedSetOptions: AgentSetGroup[];
   setStateMap: Record<string, AgentSetState>;
-  setOrderIndexById: Record<string, number>;
   onSelectSet: (setId: string) => void;
 };
 
 export function AgentSetIndexView({
   groupedSetOptions,
   setStateMap,
-  setOrderIndexById,
   onSelectSet,
 }: AgentSetIndexViewProps) {
   return (
@@ -27,7 +25,6 @@ export function AgentSetIndexView({
               <div className="agents-set-group-head">
                 <h3 className="agents-set-group-title">{group.title}</h3>
                 <div className="agents-set-index-head" role="presentation">
-                  <span>NO</span>
                   <span>SET</span>
                 </div>
               </div>
@@ -35,7 +32,6 @@ export function AgentSetIndexView({
                 {group.items.map((setOption) => {
                   const snapshotLine = (setStateMap[setOption.id]?.dashboardInsights[0] ?? "").trim();
                   const mergedPreview = mergeRowPreview(setOption.description, snapshotLine);
-                  const orderNo = setOrderIndexById[setOption.id] ?? 0;
                   return (
                     <button
                       className="agents-set-index-row"
@@ -44,7 +40,6 @@ export function AgentSetIndexView({
                       role="listitem"
                       type="button"
                     >
-                      <span className="agents-set-index-no">{String(orderNo + 1).padStart(2, "0")}</span>
                       <div className="agents-set-index-meta">
                         <strong>{setOption.label}</strong>
                         <code>{mergedPreview}</code>

@@ -6069,8 +6069,8 @@ h3 {
 
 .agents-set-index-head {
   display: grid;
-  grid-template-columns: 46px minmax(0, 1fr);
-  gap: 8px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0;
   align-items: center;
   margin-top: 0;
   padding: 0;
@@ -6100,20 +6100,14 @@ h3 {
   background: color-mix(in srgb, var(--surface-panel) 72%, var(--surface));
   padding: 9px 10px;
   display: grid;
-  grid-template-columns: 46px minmax(0, 1fr);
-  gap: 8px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0;
   align-items: center;
   text-align: left;
 }
 
 .agents-set-index-row:hover {
   background: color-mix(in srgb, var(--surface-soft) 68%, var(--surface-elevated));
-}
-
-.agents-set-index-no {
-  font-size: 12px;
-  color: var(--text-muted);
-  font-family: "BasicallyAMono", "Noto Sans KR", monospace;
 }
 
 .agents-set-index-meta {
@@ -7376,7 +7370,7 @@ pre {
 
   .agents-set-index-head,
   .agents-set-index-row {
-    grid-template-columns: 40px minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .settings-dashboard-topic-row {
@@ -7484,7 +7478,7 @@ pre {
   }
 
   .agents-set-index-row {
-    grid-template-columns: 34px minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr);
   }
 
 }

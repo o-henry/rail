@@ -10,7 +10,6 @@ import {
   buildGroupedSetOptions,
   buildPresetSnapshot,
   buildSetOptions,
-  buildSetOrderIndexById,
   createCustomThread,
   createFallbackSetState,
   createInitialSetStateMap,
@@ -51,7 +50,6 @@ export default function AgentsPage({ onQuickAction, topicSnapshots, codexMultiAg
   );
   const isReasonLevelSelectable = selectedModelOption?.allowsReasonLevel !== false;
 
-  const setOrderIndexById = useMemo(() => buildSetOrderIndexById(setOptions), [setOptions]);
   const groupedSetOptions = useMemo(() => buildGroupedSetOptions(setOptions), [setOptions]);
 
   useEffect(() => {
@@ -335,7 +333,6 @@ export default function AgentsPage({ onQuickAction, topicSnapshots, codexMultiAg
       <AgentSetIndexView
         groupedSetOptions={groupedSetOptions}
         onSelectSet={onSelectSet}
-        setOrderIndexById={setOrderIndexById}
         setStateMap={setStateMap}
       />
     );
