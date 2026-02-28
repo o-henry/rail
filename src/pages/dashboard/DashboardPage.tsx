@@ -247,37 +247,39 @@ export default function DashboardPage(props: DashboardPageProps) {
             <p>{card.caption}</p>
           </article>
         ))}
-        {widgets
-          .filter((widget) => widget.topic !== "marketSummary")
-          .map((widget) => (
-          (() => {
-            const snapshotTopic = asDashboardTopicId(widget.topic);
-            const snapshot = snapshotTopic ? props.topicSnapshots[snapshotTopic] : undefined;
-            const listItems =
-              snapshot && snapshot.highlights.length > 0
-                ? snapshot.highlights
-                : widget.fallbackItemKeys.map((key) => t(key));
-            return (
-              <button
-                className={`panel-card dashboard-tile dashboard-widget-card dashboard-widget-button dashboard-area-${widget.topic} ${activeTopic === widget.topic ? "is-focus" : ""}`}
-                key={widget.topic}
-                onClick={() => props.onFocusTopic(widget.topic)}
-                type="button"
-              >
-                <div className="dashboard-widget-head">
-                  <h3>{t(`dashboard.widget.${widget.topic}.title`)}</h3>
-                  <span>{snapshot?.status === "degraded" ? "DEGRADED" : t(widget.badgeKey)}</span>
-                </div>
-                {snapshot?.summary ? <p className="dashboard-widget-summary">{snapshot.summary}</p> : null}
-                <ul>
-                  {listItems.map((item) => (
-                    <li key={item}>{item}</li>
-                  ))}
-                </ul>
-              </button>
-            );
-          })()
-        ))}
+        <aside className="panel-card dashboard-tile dashboard-area-topicGrid dashboard-topic-grid">
+          {widgets
+            .filter((widget) => widget.topic !== "marketSummary")
+            .map((widget) =>
+              (() => {
+                const snapshotTopic = asDashboardTopicId(widget.topic);
+                const snapshot = snapshotTopic ? props.topicSnapshots[snapshotTopic] : undefined;
+                const listItems =
+                  snapshot && snapshot.highlights.length > 0
+                    ? snapshot.highlights
+                    : widget.fallbackItemKeys.map((key) => t(key));
+                return (
+                  <button
+                    className={`dashboard-widget-card dashboard-widget-button ${activeTopic === widget.topic ? "is-focus" : ""}`}
+                    key={widget.topic}
+                    onClick={() => props.onFocusTopic(widget.topic)}
+                    type="button"
+                  >
+                    <div className="dashboard-widget-head">
+                      <h3>{t(`dashboard.widget.${widget.topic}.title`)}</h3>
+                      <span>{snapshot?.status === "degraded" ? "DEGRADED" : t(widget.badgeKey)}</span>
+                    </div>
+                    {snapshot?.summary ? <p className="dashboard-widget-summary">{snapshot.summary}</p> : null}
+                    <ul>
+                      {listItems.map((item) => (
+                        <li key={item}>{item}</li>
+                      ))}
+                    </ul>
+                  </button>
+                );
+              })(),
+            )}
+        </aside>
       </section>
     </section>
   );
