@@ -2954,8 +2954,8 @@ h3 {
 }
 
 .settings-dashboard-intelligence-actions button {
-  min-height: 30px;
-  height: 30px;
+  min-height: 36px;
+  height: 36px;
   border-radius: 5px;
   background: var(--surface-panel);
   padding: 0 12px;
@@ -3044,8 +3044,8 @@ h3 {
 .settings-dashboard-topic-cadence input {
   width: 56px;
   min-width: 56px;
-  height: 30px;
-  min-height: 30px;
+  height: 36px;
+  min-height: 36px;
   padding: 0 8px;
   text-align: center;
   font-size: 12px;
@@ -3062,8 +3062,8 @@ h3 {
 }
 
 .settings-dashboard-topic-row > button {
-  min-height: 30px;
-  height: 30px;
+  min-height: 36px;
+  height: 36px;
   border-radius: 5px;
   padding: 0 10px;
   font-size: 12px;
