@@ -292,6 +292,8 @@ import type {
 } from "./main";
 
 function App() {
+  const USER_BG_IMAGE_STORAGE_KEY = "rail.settings.user_bg_image";
+  const USER_BG_OPACITY_STORAGE_KEY = "rail.settings.user_bg_opacity";
   const { locale, t, tp } = useI18n();
   const defaultCwd = useMemo(() => loadPersistedCwd(""), []);
   const defaultLoginCompleted = useMemo(() => loadPersistedLoginCompleted(), []);
@@ -309,6 +311,23 @@ function App() {
 
   const [cwd, setCwd] = useState(defaultCwd);
   const [model, setModel] = useState<string>(DEFAULT_TURN_MODEL);
+  const [userBackgroundImage, setUserBackgroundImage] = useState<string>(() => {
+    if (typeof window === "undefined") {
+      return "";
+    }
+    return window.localStorage.getItem(USER_BG_IMAGE_STORAGE_KEY) ?? "";
+  });
+  const [userBackgroundOpacity, setUserBackgroundOpacity] = useState<number>(() => {
+    if (typeof window === "undefined") {
+      return 0;
+    }
+    const raw = window.localStorage.getItem(USER_BG_OPACITY_STORAGE_KEY);
+    const parsed = Number(raw);
+    if (!Number.isFinite(parsed)) {
+      return 0;
+    }
+    return Math.min(1, Math.max(0, parsed));
+  });
   const [costPreset, setCostPreset] = useState<CostPreset>("balanced");
   const [workflowQuestion, setWorkflowQuestion] = useState(
     "",
@@ -1864,13 +1883,19 @@ function App() {
       setQuickPanelOpen(false);
     }
   }, [canvasFullscreen]);
+  useEffect(() => {
+    window.localStorage.setItem(USER_BG_IMAGE_STORAGE_KEY, userBackgroundImage);
+  }, [USER_BG_IMAGE_STORAGE_KEY, userBackgroundImage]);
+  useEffect(() => {
+    window.localStorage.setItem(USER_BG_OPACITY_STORAGE_KEY, String(userBackgroundOpacity));
+  }, [USER_BG_OPACITY_STORAGE_KEY, userBackgroundOpacity]);
   const appShellStyle = useMemo(
     () =>
       ({
-        "--user-bg-image": "none",
-        "--user-bg-opacity": "0",
+        "--user-bg-image": userBackgroundImage ? `url(${JSON.stringify(userBackgroundImage)})` : "none",
+        "--user-bg-opacity": userBackgroundImage ? String(userBackgroundOpacity) : "0",
       }) as CSSProperties,
-    [],
+    [userBackgroundImage, userBackgroundOpacity],
   );
   return (
     <main className={`app-shell ${canvasFullscreen ? "canvas-fullscreen-mode" : ""}`} style={appShellStyle}>
@@ -2058,11 +2083,17 @@ function App() {
               loginCompleted={loginCompleted}
               codexMultiAgentMode={codexMultiAgentMode}
               codexMultiAgentModeOptions={[...codexMultiAgentModeOptions]}
+              userBackgroundImage={userBackgroundImage}
+              userBackgroundOpacity={userBackgroundOpacity}
               onCheckUsage={() => void onCheckUsage()}
               onCloseUsageResult={() => setUsageResultClosed(true)}
               onOpenRunsFolder={() => void onOpenRunsFolder()}
               onSelectCwdDirectory={() => void onSelectCwdDirectory()}
               onSetCodexMultiAgentMode={(next) => setCodexMultiAgentMode(normalizeCodexMultiAgentMode(next))}
+              onSetUserBackgroundImage={setUserBackgroundImage}
+              onSetUserBackgroundOpacity={(next) =>
+                setUserBackgroundOpacity(Number.isFinite(next) ? Math.min(1, Math.max(0, next)) : 0)
+              }
               onToggleCodexLogin={() => void onLoginCodex()}
               running={running}
               status={status}

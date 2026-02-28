@@ -2386,6 +2386,16 @@ h3 {
   accent-color: #5f88d7;
 }
 
+.settings-opacity-input {
+  width: 84px;
+  min-height: 32px;
+  border: 1px solid var(--surface-strong);
+  border-radius: 8px;
+  background: var(--surface-panel);
+  color: var(--text-main);
+  padding: 0 8px;
+}
+
 .settings-cwd-picker {
   min-width: 78px;
 }

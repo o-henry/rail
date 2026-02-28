@@ -1,3 +1,4 @@
+import { type ChangeEvent, useRef } from "react";
 import FancySelect from "../../components/FancySelect";
 import { useI18n } from "../../i18n";
 
@@ -9,6 +10,8 @@ type SettingsPageProps = {
   cwd: string;
   codexMultiAgentMode: string;
   codexMultiAgentModeOptions: ReadonlyArray<{ value: string; label: string }>;
+  userBackgroundImage: string;
+  userBackgroundOpacity: number;
   status: string;
   usageInfoText: string;
   usageResultClosed: boolean;
@@ -17,6 +20,8 @@ type SettingsPageProps = {
   codexAuthBusy: boolean;
   onSelectCwdDirectory: () => void;
   onSetCodexMultiAgentMode: (next: string) => void;
+  onSetUserBackgroundImage: (next: string) => void;
+  onSetUserBackgroundOpacity: (next: number) => void;
   onCheckUsage: () => void;
   onToggleCodexLogin: () => void;
   onCloseUsageResult: () => void;
@@ -31,6 +36,8 @@ export default function SettingsPage({
   cwd,
   codexMultiAgentMode,
   codexMultiAgentModeOptions,
+  userBackgroundImage,
+  userBackgroundOpacity,
   status,
   usageInfoText,
   usageResultClosed,
@@ -39,12 +46,34 @@ export default function SettingsPage({
   codexAuthBusy,
   onSelectCwdDirectory,
   onSetCodexMultiAgentMode,
+  onSetUserBackgroundImage,
+  onSetUserBackgroundOpacity,
   onCheckUsage,
   onToggleCodexLogin,
   onCloseUsageResult,
   onOpenRunsFolder,
 }: SettingsPageProps) {
   const { t } = useI18n();
+  const backgroundFileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const onOpenBackgroundFilePicker = () => {
+    backgroundFileInputRef.current?.click();
+  };
+
+  const onBackgroundFileChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) {
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === "string") {
+        onSetUserBackgroundImage(reader.result);
+      }
+    };
+    reader.readAsDataURL(file);
+    event.target.value = "";
+  };
 
   return (
     <section className={`controls ${compact ? "settings-compact" : ""}`}>
@@ -77,6 +106,44 @@ export default function SettingsPage({
           onChange={onSetCodexMultiAgentMode}
           options={[...codexMultiAgentModeOptions]}
           value={codexMultiAgentMode}
+        />
+      </label>
+      <label>
+        {t("settings.backgroundImage")}
+        <input
+          className="settings-background-file-input"
+          onChange={onBackgroundFileChange}
+          ref={backgroundFileInputRef}
+          type="file"
+          accept="image/*"
+          tabIndex={-1}
+          aria-hidden="true"
+        />
+        <div className="settings-background-row">
+          <input
+            className="lowercase-path-input settings-background-name"
+            placeholder="https://... / data:image..."
+            value={userBackgroundImage}
+            onChange={(event) => onSetUserBackgroundImage(event.currentTarget.value)}
+          />
+          <button className="settings-cwd-picker" onClick={onOpenBackgroundFilePicker} type="button">
+            {t("settings.backgroundImage.pick")}
+          </button>
+          <button className="settings-cwd-picker" onClick={() => onSetUserBackgroundImage("")} type="button">
+            {t("common.delete")}
+          </button>
+        </div>
+      </label>
+      <label>
+        {t("settings.backgroundOpacity")}
+        <input
+          className="settings-opacity-input"
+          min={0}
+          max={1}
+          onChange={(event) => onSetUserBackgroundOpacity(Number(event.currentTarget.value))}
+          step={0.05}
+          type="number"
+          value={userBackgroundOpacity}
         />
       </label>
       {!compact && (
