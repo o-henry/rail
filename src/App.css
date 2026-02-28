@@ -3253,6 +3253,7 @@ h3 {
   font-size: 14px;
   color: var(--text-main);
   line-height: 1.25;
+  font-family: "Galmuri11", "DialogNanumBody1984", "Noto Sans KR", sans-serif !important;
 }
 
 .settings-dashboard-topic-detail-title code {
@@ -6144,6 +6145,39 @@ h3 {
   border-radius: 12px;
   background: var(--surface);
   box-shadow: var(--panel-shadow);
+}
+
+.agents-set-picker-sidebar-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.agents-set-picker-sidebar-title {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.agents-set-picker-sidebar-title small {
+  font-size: 10px;
+  color: var(--text-muted);
+  letter-spacing: 0.08em;
+  font-family: "BasicallyAMono", "Noto Sans KR", monospace;
+}
+
+.agents-set-picker-sidebar-title strong {
+  font-size: 14px;
+  color: var(--text-main);
+  line-height: 1.25;
+  font-family: "Galmuri11", "DialogNanumBody1984", "Noto Sans KR", sans-serif !important;
+}
+
+.agents-set-picker-sidebar-title code {
+  font-size: 10px;
+  color: var(--text-muted);
+  font-family: "BasicallyAMono", "Noto Sans KR", monospace;
 }
 
 .agents-set-picker-head h2 {

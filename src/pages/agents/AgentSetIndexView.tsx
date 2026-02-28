@@ -72,6 +72,13 @@ export function AgentSetIndexView({
           </div>
 
           <aside className="panel-card agents-set-picker-sidebar" aria-label="Set preview">
+            <header className="agents-set-picker-sidebar-head">
+              <div className="agents-set-picker-sidebar-title">
+                <small>미리보기</small>
+                <strong>{previewSet?.label ?? "선택된 세트 없음"}</strong>
+                {previewSet?.id ? <code>{previewSet.id}</code> : null}
+              </div>
+            </header>
             <section className="agents-sidebar-card">
               <h4>세트 미리보기</h4>
               <p className="agents-sidebar-agent-name">{previewSet?.label ?? "선택된 세트 없음"}</p>
