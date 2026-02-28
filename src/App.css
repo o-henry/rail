@@ -6072,7 +6072,7 @@ h3 {
   overflow: visible;
   display: grid;
   align-content: start;
-  gap: 8px;
+  gap: 1rem;
   margin-top: 1rem;
 }
 
