@@ -122,16 +122,9 @@ export default function DashboardPage(props: DashboardPageProps) {
     ],
     [],
   );
-  const activeTopic: DashboardDetailTopic = props.focusTopic ?? "marketSummary";
+  const activeTopic: DashboardDetailTopic = props.focusTopic ?? "devEcosystem";
   const activeTopicId = asDashboardTopicId(activeTopic);
   const activeSnapshot = activeTopicId ? props.topicSnapshots[activeTopicId] : undefined;
-  const activeWidget = widgets.find((widget) => widget.topic === activeTopic);
-  const activeFallbackHighlights = activeWidget
-    ? activeWidget.fallbackItemKeys.map((key) => t(key))
-    : [];
-  const activeHighlights = activeSnapshot?.highlights.length
-    ? activeSnapshot.highlights
-    : activeFallbackHighlights;
   const activeSections = [
     t(`dashboard.detail.${activeTopic}.section1`),
     t(`dashboard.detail.${activeTopic}.section2`),
@@ -192,9 +185,9 @@ export default function DashboardPage(props: DashboardPageProps) {
                   : t(`dashboard.detail.${activeTopic}.subtitle`)}
               </p>
             </div>
-            {activeTopic !== "marketSummary" ? (
-              <button className="dashboard-hero-reset" onClick={() => props.onFocusTopic("marketSummary")} type="button">
-                {t("dashboard.widget.marketSummary.title")}
+            {activeTopic !== "devEcosystem" ? (
+              <button className="dashboard-hero-reset" onClick={() => props.onFocusTopic("devEcosystem")} type="button">
+                {t("dashboard.widget.devEcosystem.title")}
               </button>
             ) : null}
           </div>
@@ -220,24 +213,6 @@ export default function DashboardPage(props: DashboardPageProps) {
                 </div>
               )}
             </section>
-            <aside className="dashboard-hero-summary">
-              <h4>{t("dashboard.detail.cta.label")}</h4>
-              <ul>
-                {activeHighlights.map((item) => (
-                  <li key={item}>{item}</li>
-                ))}
-              </ul>
-              {activeSnapshot?.risks.length ? (
-                <>
-                  <h4>Risks</h4>
-                  <ul>
-                    {activeSnapshot.risks.map((risk) => (
-                      <li key={risk}>{risk}</li>
-                    ))}
-                  </ul>
-                </>
-              ) : null}
-            </aside>
           </div>
         </article>
         {cards.map((card) => (
@@ -250,11 +225,10 @@ export default function DashboardPage(props: DashboardPageProps) {
         <aside className="panel-card dashboard-tile dashboard-area-topicGrid dashboard-topic-hub">
           <header className="dashboard-topic-hub-head">
             <h3>TOPIC HUB</h3>
-            <span>{widgets.filter((widget) => widget.topic !== "marketSummary").length}</span>
+            <span>{widgets.length}</span>
           </header>
           <div className="dashboard-topic-hub-list">
           {widgets
-            .filter((widget) => widget.topic !== "marketSummary")
             .map((widget) =>
               (() => {
                 const snapshotTopic = asDashboardTopicId(widget.topic);

@@ -5004,7 +5004,7 @@ h3 {
 .dashboard-hero-body {
   min-height: 0;
   display: grid;
-  grid-template-columns: minmax(0, 1.65fr) minmax(260px, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: 12px;
 }
 
