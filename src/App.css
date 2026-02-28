@@ -6297,7 +6297,7 @@ h3 {
 
 .agents-topbar {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 12px;
 }
 
@@ -6315,8 +6315,8 @@ h3 {
 .agents-workspace-main {
   min-height: 0;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
-  gap: 10px;
+  grid-template-rows: minmax(0, 1fr);
+  gap: 0;
 }
 
 .agents-workspace-sidebar {
@@ -6424,62 +6424,30 @@ h3 {
   background: color-mix(in srgb, var(--focus-ring) 32%, var(--surface-soft));
 }
 
-.agents-set-brief {
-  border-radius: 12px;
-  border: 0;
-  background: #ffffff;
-  box-shadow: var(--panel-shadow);
-  padding: 12px;
+.agents-thread-list {
+  flex: 1 1 auto;
+  min-width: 0;
   display: grid;
-  gap: 4px;
+  align-content: start;
+  gap: 2px;
 }
 
-.agents-set-brief-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-}
-
-.agents-set-brief strong {
+.agents-thread-brief strong {
   font-size: 13px;
   color: var(--text-main);
 }
 
-.agents-set-brief p {
+.agents-thread-brief p {
   margin: 0;
   font-size: 12px;
   color: var(--text-muted);
   line-height: 1.4;
 }
 
-.agents-set-brief small {
+.agents-thread-brief small {
   font-size: 10px;
   color: var(--text-muted);
   font-family: "BasicallyAMono", "Noto Sans KR", monospace;
-}
-
-.agents-thread-list {
-  flex: 1 1 auto;
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  overflow-x: auto;
-}
-
-.agents-thread-list button {
-  border: 1px solid var(--surface-strong);
-  border-radius: 4px;
-  background: var(--surface-panel);
-  min-height: 32px;
-  height: 32px;
-  padding: 0 12px;
-  white-space: nowrap;
-}
-
-.agents-thread-list button.is-active {
-  background: var(--surface-active);
 }
 
 .agents-add-thread-button {

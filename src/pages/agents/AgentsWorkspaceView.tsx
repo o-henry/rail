@@ -1,4 +1,4 @@
-import { useEffect, useState, type ChangeEvent, type RefObject } from "react";
+import { useState, type ChangeEvent, type RefObject } from "react";
 import type { CodexMultiAgentMode } from "./agentPrompt";
 import type { AgentModelOption, AgentSetOption, AgentThread, AttachedFile } from "./agentTypes";
 
@@ -112,12 +112,7 @@ export function AgentsWorkspaceView({
   sendDisabled,
   onQueuePrompt,
 }: AgentsWorkspaceViewProps) {
-  const [isSetBriefVisible, setIsSetBriefVisible] = useState(true);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-
-  useEffect(() => {
-    setIsSetBriefVisible(true);
-  }, [activeSetOption?.id]);
 
   const quickActionItems = [
     {
@@ -140,19 +135,10 @@ export function AgentsWorkspaceView({
   return (
     <section className="agents-layout agents-workspace-mode workspace-tab-panel">
       <div className="agents-topbar">
-        <div className="agents-thread-list" role="tablist" aria-label="Agent threads">
-          {threads.map((thread) => (
-            <button
-              key={thread.id}
-              aria-selected={thread.id === activeThreadId}
-              className={thread.id === activeThreadId ? "is-active" : ""}
-              onClick={() => onSetActiveThreadId(thread.id)}
-              role="tab"
-              type="button"
-            >
-              {thread.name}
-            </button>
-          ))}
+        <div className="agents-thread-list agents-thread-brief" aria-label="세트 브리핑">
+          <strong>{activeSetOption?.label ?? "세트 미선택"}</strong>
+          <p>{setMission || activeSetOption?.description || "세트 설명이 없습니다."}</p>
+          <small>{`Codex Multi-Agent: ${codexMultiAgentMode}`}</small>
         </div>
         <div className="agents-topbar-actions">
           <button
@@ -187,24 +173,6 @@ export function AgentsWorkspaceView({
 
       <section className={`agents-workspace-shell${isSidebarCollapsed ? " is-sidebar-collapsed" : ""}`}>
         <section className="agents-workspace-main">
-          {activeSetOption && isSetBriefVisible ? (
-            <section className="agents-set-brief" aria-label="Selected set briefing">
-              <div className="agents-set-brief-head">
-                <strong>{activeSetOption.label}</strong>
-                <button
-                  aria-label={`${activeSetOption.label} ${t("agents.off")}`}
-                  className="agents-off-button"
-                  onClick={() => setIsSetBriefVisible(false)}
-                  title={t("agents.off")}
-                  type="button"
-                >
-                  <img alt="" aria-hidden="true" src="/close.svg" />
-                </button>
-              </div>
-              <p>{setMission || activeSetOption.description}</p>
-              <small>{`Codex Multi-Agent: ${codexMultiAgentMode}`}</small>
-            </section>
-          ) : null}
           <section
             className={`agents-grid${threads.length === 1 ? " is-single" : threads.length === 2 ? " is-two" : ""}`}
             aria-label="Agents grid"
