@@ -2475,6 +2475,10 @@ h3 {
   gap: 16px;
 }
 
+.settings-view .controls {
+  gap: 21px;
+}
+
 .settings-compact {
   margin-top: 16px;
   padding-top: 0;
@@ -2805,14 +2809,19 @@ h3 {
 }
 
 .settings-account-button {
-  height: 30px;
-  min-height: 30px;
-  padding: 0 9px;
-  font-size: 11px;
+  height: 36px;
+  min-height: 36px;
+  padding: 0 12px;
+  font-size: 12px;
   line-height: 1;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+}
+
+.settings-account-button .settings-button-label {
+  font-size: 12px;
+  line-height: 1;
 }
 
 .provider-session-toggle,
