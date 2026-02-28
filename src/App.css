@@ -2998,6 +2998,7 @@ h3 {
   min-width: 0;
   display: grid;
   gap: 3px;
+  padding-left: 10px;
 }
 
 .settings-dashboard-intelligence-title {
@@ -3023,7 +3024,7 @@ h3 {
 }
 
 .settings-dashboard-intelligence-head p {
-  margin: 0;
+  margin: 0 0 2rem;
   font-size: 13px;
   color: var(--text-muted);
 }
@@ -5098,6 +5099,7 @@ h3 {
   padding: 0;
   gap: 0;
   overflow: hidden;
+  border-radius: 0;
   grid-template-rows: minmax(0, 1fr);
 }
 
@@ -6022,6 +6024,12 @@ h3 {
   box-shadow: var(--panel-shadow);
 }
 
+:root[data-theme="light"] .panel-card.settings-view.data-intelligence-view {
+  background: transparent;
+  border-radius: 0;
+  box-shadow: none;
+}
+
 :root[data-theme="light"] .dashboard-layout {
   gap: 10px;
   padding-top: 0;
@@ -6897,6 +6905,10 @@ h3 {
   padding-bottom: var(--workspace-tab-bottom-inset) !important;
 }
 
+.settings-view.data-intelligence-view.workspace-tab-panel {
+  padding-bottom: 0 !important;
+}
+
 .history-layout,
 .history-layout h2,
 .history-layout h3,
@@ -7270,6 +7282,12 @@ pre {
   background: var(--surface-panel);
   border-color: var(--panel-border);
   box-shadow: var(--panel-shadow);
+}
+
+:root[data-theme="dark"] .panel-card.settings-view.data-intelligence-view {
+  background: transparent;
+  border-radius: 0;
+  box-shadow: none;
 }
 
 :root[data-theme="dark"] .dashboard-hero-reset,
