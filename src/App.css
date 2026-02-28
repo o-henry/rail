@@ -3873,7 +3873,7 @@ h3 {
   transform: translateY(0);
   pointer-events: auto;
   overflow: visible;
-  margin-bottom: 8px;
+  margin-bottom: 4px;
 }
 
 .feed-filter-inline {
@@ -3881,10 +3881,10 @@ h3 {
   overflow: visible;
   border-radius: 4px;
   background: #eff2f6;
-  padding: 12px;
+  padding: 8px;
   display: grid;
   grid-template-columns: repeat(4, minmax(120px, 1fr));
-  gap: 10px;
+  gap: 8px;
 }
 
 .feed-filter-inline label {
