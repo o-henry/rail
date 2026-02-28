@@ -1840,15 +1840,27 @@ function App() {
   );
   const onRunDashboardTopic = useCallback(
     async (topic: DashboardTopicId) => {
+      if (!loginCompleted) {
+        setError("Codex 로그인이 필요합니다. 설정에서 먼저 로그인해 주세요.");
+        return;
+      }
+      setWorkspaceTab("dashboard");
+      setStatus("대시보드 인텔리전스 실행 중...");
       await runDashboardTopic(topic);
       await refreshDashboardSnapshots();
     },
-    [refreshDashboardSnapshots, runDashboardTopic],
+    [loginCompleted, refreshDashboardSnapshots, runDashboardTopic, setError, setStatus],
   );
   const onRunAllDashboardTopics = useCallback(async () => {
+    if (!loginCompleted) {
+      setError("Codex 로그인이 필요합니다. 설정에서 먼저 로그인해 주세요.");
+      return;
+    }
+    setWorkspaceTab("dashboard");
+    setStatus("대시보드 전체 인텔리전스 실행 중...");
     await runAllDashboardTopics();
     await refreshDashboardSnapshots();
-  }, [refreshDashboardSnapshots, runAllDashboardTopics]);
+  }, [loginCompleted, refreshDashboardSnapshots, runAllDashboardTopics, setError, setStatus]);
   const onRunDashboardCrawlerOnly = useCallback(async () => {
     await runDashboardCrawlerOnlyForEnabledTopics();
     await refreshDashboardSnapshots();
@@ -2108,6 +2120,7 @@ function App() {
             isGraphRunning={isGraphRunning}
             onFocusTopic={(topic) => setDashboardDetailTopic(topic)}
             pendingApprovalsCount={pendingApprovals.length}
+            runStateByTopic={dashboardIntelligenceRunStateByTopic}
             scheduleCount={batchScheduler.schedules.length}
             stockDocumentPosts={feedPosts}
             topicSnapshots={dashboardSnapshotsByTopic}

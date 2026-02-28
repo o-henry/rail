@@ -1,5 +1,10 @@
 import { useMemo } from "react";
-import { type DashboardTopicId, type DashboardTopicSnapshot } from "../../features/dashboard/intelligence";
+import {
+  DASHBOARD_TOPIC_IDS,
+  type DashboardTopicId,
+  type DashboardTopicRunState,
+  type DashboardTopicSnapshot,
+} from "../../features/dashboard/intelligence";
 import { useI18n } from "../../i18n";
 import { type DashboardStockDocumentPost } from "./stockWidgetChartData";
 import type { DashboardDetailTopic } from "./DashboardDetailPage";
@@ -15,6 +20,7 @@ type DashboardPageProps = {
   onFocusTopic: (topic: DashboardDetailTopic | null) => void;
   stockDocumentPosts: DashboardStockDocumentPost[];
   topicSnapshots: Partial<Record<DashboardTopicId, DashboardTopicSnapshot>>;
+  runStateByTopic: Record<DashboardTopicId, DashboardTopicRunState>;
 };
 
 type DashboardCard = {
@@ -185,6 +191,25 @@ export default function DashboardPage(props: DashboardPageProps) {
     return timestamp.toLocaleString();
   }, [props.topicSnapshots, t]);
 
+  const topicRunStateRows = useMemo(
+    () =>
+      DASHBOARD_TOPIC_IDS.map((topic) => {
+        const row = props.runStateByTopic[topic];
+        const lastRunText = row?.lastRunAt ? new Date(row.lastRunAt).toLocaleTimeString() : "";
+        const statusText = row?.running ? "RUNNING" : row?.lastError ? "ERROR" : row?.lastRunAt ? "DONE" : "IDLE";
+        return {
+          id: topic,
+          topic,
+          statusText,
+          detailText: row?.lastError ? String(row.lastError) : lastRunText,
+          running: Boolean(row?.running),
+          hasState: Boolean(row?.running || row?.lastError || row?.lastRunAt),
+        };
+      }).filter((row) => row.hasState),
+    [props.runStateByTopic],
+  );
+  const runningTopicCount = topicRunStateRows.filter((row) => row.running).length;
+
   return (
     <section className="dashboard-layout dashboard-terminal-layout workspace-tab-panel">
       <section className="dashboard-terminal-shell">
@@ -196,6 +221,17 @@ export default function DashboardPage(props: DashboardPageProps) {
             <p>{t("dashboard.card.lastBatch")}</p>
             <b>{latestSnapshotText}</b>
           </div>
+          {topicRunStateRows.length > 0 ? (
+            <div className="dashboard-terminal-runstate" role="status">
+              {topicRunStateRows.map((row) => (
+                <article className="dashboard-terminal-runstate-row" key={row.id}>
+                  <b>{t(topicTitleKey(row.topic))}</b>
+                  <span className={`dashboard-terminal-runstate-state ${row.statusText.toLowerCase()}`}>{row.statusText}</span>
+                  {row.detailText ? <p>{row.detailText}</p> : null}
+                </article>
+              ))}
+            </div>
+          ) : null}
           <ul className="dashboard-terminal-log-list">
             {resourceLines.map((line) => (
               <li key={line.id}>
@@ -212,7 +248,7 @@ export default function DashboardPage(props: DashboardPageProps) {
           <header className="dashboard-terminal-workspace-head">
             <strong>{t("dashboard.card.workflow")}</strong>
             <div className="dashboard-terminal-head-meta">
-              <span>{resourceLines.length}</span>
+              <span>{runningTopicCount > 0 ? `RUNNING ${runningTopicCount}` : resourceLines.length}</span>
               <div className="dashboard-terminal-head-metrics">
                 {cards.map((card) => (
                   <article className="dashboard-terminal-head-metric" key={card.id}>
