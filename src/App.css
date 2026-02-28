@@ -1178,7 +1178,7 @@ h3 {
   /* border: 4px solid white; */
   border-radius: 12px;
   background-color: var(--surface);
-  background-image: radial-gradient(#d4d9df 1px, transparent 1px);
+  background-image: radial-gradient(var(--canvas-dot-color) 1px, transparent 1px);
   background-size: 16px 16px;
   overflow: auto;
   padding: 0;
@@ -4396,57 +4396,6 @@ h3 {
   border-radius: 8px;
   background: var(--surface-soft);
   border: 1px solid var(--surface-strong);
-}
-
-:root[data-theme="light"] .app-shell {
-  background: var(--bg-app);
-}
-
-:root[data-theme="light"] .left-nav {
-  border: 0;
-  background: transparent;
-  box-shadow: none;
-}
-
-:root[data-theme="light"] .nav-lang-button,
-:root[data-theme="light"] .nav-list button {
-  box-shadow: none;
-}
-
-:root[data-theme="light"] .workspace {
-  background: transparent;
-  border: 0;
-  box-shadow: none;
-}
-
-:root[data-theme="light"] .panel-card {
-  border: 0;
-  border-radius: 10px;
-  background: var(--surface);
-  box-shadow: none;
-}
-
-:root[data-theme="light"] .dashboard-layout {
-  gap: 10px;
-  padding-top: 0;
-}
-
-:root[data-theme="light"] .dashboard-card strong {
-  color: var(--text-main);
-}
-
-:root[data-theme="light"] .dashboard-widget-button {
-  border: 1px solid #eef2f7;
-  background: #f9fbfe;
-}
-
-:root[data-theme="light"] .dashboard-widget-button:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 8px 18px rgba(30, 45, 62, 0.08);
-}
-
-:root[data-theme="light"] .dashboard-card {
-  background: #f8f9fc;
 }
 
 :root[data-theme="dark"] .dashboard-card,
