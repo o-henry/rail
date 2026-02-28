@@ -249,7 +249,7 @@ export default function AgentsPage({ onQuickAction }: AgentsPageProps) {
 
   if (!activeSetId) {
     return (
-      <section className="agents-layout workspace-tab-panel">
+      <section className="agents-layout agents-set-mode workspace-tab-panel">
         <div className="agents-set-picker">
           <header className="agents-set-picker-head">
             <h2>에이전트 세트</h2>
@@ -275,7 +275,7 @@ export default function AgentsPage({ onQuickAction }: AgentsPageProps) {
   }
 
   return (
-    <section className="agents-layout workspace-tab-panel">
+    <section className="agents-layout agents-workspace-mode workspace-tab-panel">
       <div className="agents-topbar">
         <div className="agents-thread-list" role="tablist" aria-label="Agent threads">
           {threads.map((thread) => (

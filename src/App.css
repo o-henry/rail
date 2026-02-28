@@ -4993,6 +4993,12 @@ h3 {
   grid-template-rows: auto minmax(0, 1fr) auto;
   gap: 12px;
   overflow: hidden;
+  padding: 6px 0 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.agents-layout.agents-set-mode {
   padding: 14px;
   border-radius: 12px;
   background: #ffffff;
