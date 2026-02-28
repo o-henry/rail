@@ -423,7 +423,7 @@ h3 {
   opacity: var(--user-bg-opacity);
 }
 
-.app-shell > * {
+.app-shell > :not(.window-drag-region) {
   position: relative;
   z-index: 1;
 }
