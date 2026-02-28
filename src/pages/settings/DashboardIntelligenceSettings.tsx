@@ -20,7 +20,8 @@ export default function DashboardIntelligenceSettings(props: DashboardIntelligen
   return (
     <section className="settings-dashboard-intelligence">
       <header className="settings-dashboard-intelligence-head">
-        <div>
+        <div className="settings-dashboard-intelligence-copy">
+          <strong className="settings-dashboard-intelligence-eyebrow">DATA PIPELINE</strong>
           <p>{t("settings.dashboardIntelligence.description")}</p>
         </div>
         <div className="settings-dashboard-intelligence-actions">
@@ -32,6 +33,12 @@ export default function DashboardIntelligenceSettings(props: DashboardIntelligen
           </button>
         </div>
       </header>
+      <div className="settings-dashboard-topic-columns" role="presentation">
+        <span>TOPIC</span>
+        <span>MODEL</span>
+        <span>CADENCE</span>
+        <span>RUN</span>
+      </div>
       <div className="settings-dashboard-intelligence-list">
         {DASHBOARD_TOPIC_IDS.map((topic) => {
           const row = props.config[topic];
@@ -39,6 +46,7 @@ export default function DashboardIntelligenceSettings(props: DashboardIntelligen
           return (
             <article className="settings-dashboard-topic-row" key={topic}>
               <div className="settings-dashboard-topic-title">
+                <code>{topic}</code>
                 <strong>{t(`dashboard.widget.${topic}.title`)}</strong>
                 {runState?.lastError ? <p>{runState.lastError}</p> : null}
               </div>
@@ -61,6 +69,7 @@ export default function DashboardIntelligenceSettings(props: DashboardIntelligen
                   type="number"
                   value={row.cadenceHours}
                 />
+                <small>h</small>
               </label>
 
               <button

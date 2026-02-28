@@ -2882,9 +2882,9 @@ h3 {
 
 .settings-dashboard-intelligence {
   display: grid;
-  gap: 12px;
+  gap: 10px;
   padding: 0;
-  border-radius: 12px;
+  border-radius: 8px;
   background: var(--surface);
 }
 
@@ -2895,6 +2895,20 @@ h3 {
   gap: 10px;
 }
 
+.settings-dashboard-intelligence-copy {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.settings-dashboard-intelligence-eyebrow {
+  font-size: 11px;
+  line-height: 1;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  font-family: "BasicallyAMono", "Noto Sans KR", monospace;
+}
+
 .settings-dashboard-intelligence-head h4 {
   margin: 0;
   font-size: 0.95rem;
@@ -2902,8 +2916,8 @@ h3 {
 }
 
 .settings-dashboard-intelligence-head p {
-  margin: 4px 0 0;
-  font-size: calc(0.78rem + 2px);
+  margin: 0;
+  font-size: 13px;
   color: var(--text-muted);
 }
 
@@ -2915,35 +2929,62 @@ h3 {
 .settings-dashboard-intelligence-actions button {
   min-height: 30px;
   height: 30px;
-  border-radius: 8px;
+  border-radius: 5px;
   background: var(--surface-panel);
+  padding: 0 12px;
+  font-size: 12px;
+  font-family: "BasicallyAMono", "Noto Sans KR", monospace;
+}
+
+.settings-dashboard-topic-columns {
+  display: grid;
+  grid-template-columns: minmax(220px, 1.8fr) minmax(190px, 1fr) 98px 88px;
+  align-items: center;
+  gap: 8px;
   padding: 0 10px;
-  font-size: calc(0.73rem + 2px);
+}
+
+.settings-dashboard-topic-columns span {
+  font-size: 10px;
+  color: var(--text-muted);
+  letter-spacing: 0.08em;
+  font-family: "BasicallyAMono", "Noto Sans KR", monospace;
+  text-transform: uppercase;
 }
 
 .settings-dashboard-intelligence-list {
   display: grid;
-  gap: 8px;
+  gap: 6px;
 }
 
 .settings-dashboard-topic-row {
   display: grid;
-  grid-template-columns: minmax(180px, 1.5fr) minmax(170px, 1fr) auto auto;
+  grid-template-columns: minmax(220px, 1.8fr) minmax(190px, 1fr) 98px 88px;
   gap: 8px;
   align-items: center;
-  border-radius: 10px;
-  background: var(--surface-panel);
-  padding: 8px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--surface-panel) 74%, var(--surface));
+  padding: 9px 10px;
 }
 
 .settings-dashboard-topic-title {
   min-width: 0;
   display: grid;
-  gap: 3px;
+  gap: 2px;
+}
+
+.settings-dashboard-topic-title code {
+  display: inline-block;
+  width: fit-content;
+  font-size: 10px;
+  line-height: 1;
+  color: var(--text-muted);
+  letter-spacing: 0.04em;
+  font-family: "BasicallyAMono", "Noto Sans KR", monospace;
 }
 
 .settings-dashboard-topic-title strong {
-  font-size: calc(0.79rem + 2px);
+  font-size: 13px;
   color: var(--text-main);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2952,7 +2993,7 @@ h3 {
 
 .settings-dashboard-topic-title p {
   margin: 0;
-  font-size: calc(0.68rem + 2px);
+  font-size: 11px;
   color: #9d3a3d;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2967,21 +3008,24 @@ h3 {
 .settings-dashboard-topic-cadence {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  font-size: calc(0.72rem + 2px);
+  justify-content: flex-start;
+  gap: 5px;
+  font-size: 0;
   color: var(--text-muted);
 }
 
 .settings-dashboard-topic-cadence input {
-  width: 60px;
-  min-width: 60px;
+  width: 56px;
+  min-width: 56px;
   height: 30px;
   min-height: 30px;
   padding: 0 8px;
   text-align: center;
-  font-size: calc(0.72rem + 2px);
+  font-size: 12px;
   appearance: textfield;
   -moz-appearance: textfield;
+  border-radius: 4px;
+  font-family: "BasicallyAMono", "Noto Sans KR", monospace;
 }
 
 .settings-dashboard-topic-cadence input::-webkit-outer-spin-button,
@@ -2993,10 +3037,17 @@ h3 {
 .settings-dashboard-topic-row > button {
   min-height: 30px;
   height: 30px;
-  border-radius: 8px;
+  border-radius: 5px;
   padding: 0 10px;
-  font-size: calc(0.73rem + 2px);
+  font-size: 12px;
+  font-family: "BasicallyAMono", "Noto Sans KR", monospace;
   background: var(--surface);
+}
+
+.settings-dashboard-topic-cadence small {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: "BasicallyAMono", "Noto Sans KR", monospace;
 }
 
 .settings-run-history-hidden {
@@ -6753,6 +6804,10 @@ pre {
   .settings-dashboard-topic-row {
     grid-template-columns: minmax(0, 1fr);
     align-items: stretch;
+  }
+
+  .settings-dashboard-topic-columns {
+    display: none;
   }
 
   .settings-dashboard-topic-cadence {
