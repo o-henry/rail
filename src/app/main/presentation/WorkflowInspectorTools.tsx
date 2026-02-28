@@ -39,25 +39,6 @@ export default function WorkflowInspectorTools({
       </div>
 
       <div className="tool-dropdown-group">
-        <h4>{t("workflow.graphFile")}</h4>
-        <FancySelect
-          ariaLabel={t("workflow.graphFile.select")}
-          className="graph-file-select modern-select"
-          emptyMessage={t("workflow.graphFile.empty")}
-          onChange={(value) => {
-            if (value) {
-              props.setSelectedGraphFileName(value);
-              props.setGraphFileName(value);
-              props.loadGraph(value);
-            }
-          }}
-          options={props.graphFiles.map((file) => ({ value: file, label: file }))}
-          placeholder={t("workflow.graphFile.select")}
-          value={props.graphFiles.includes(props.selectedGraphFileName) ? props.selectedGraphFileName : ""}
-        />
-      </div>
-
-      <div className="tool-dropdown-group">
         <h4>{t("workflow.knowledge.attachments")}</h4>
         <div className="graph-file-actions">
           <button className="mini-action-button" onClick={props.onOpenKnowledgeFilePicker} type="button">
