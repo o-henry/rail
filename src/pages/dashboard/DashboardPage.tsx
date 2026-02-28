@@ -91,41 +91,69 @@ export default function DashboardPage(props: DashboardPageProps) {
   );
 
   const workSummaryItems = snapshotSummaries.length > 0 ? snapshotSummaries : fallbackFeedSummaries;
+  const terminalLines = workSummaryItems.length > 0 ? workSummaryItems : [t("dashboard.value.none")];
+
+  const latestSnapshotText = useMemo(() => {
+    const snapshots = Object.values(props.topicSnapshots).filter(
+      (snapshot): snapshot is DashboardTopicSnapshot => Boolean(snapshot),
+    );
+    if (snapshots.length === 0) {
+      return t("dashboard.value.none");
+    }
+    const latest = snapshots.sort((left, right) => new Date(right.generatedAt).getTime() - new Date(left.generatedAt).getTime())[0];
+    const timestamp = new Date(latest.generatedAt);
+    if (Number.isNaN(timestamp.getTime())) {
+      return latest.generatedAt;
+    }
+    return timestamp.toLocaleString();
+  }, [props.topicSnapshots, t]);
 
   return (
-    <section className="dashboard-layout dashboard-overview-layout workspace-tab-panel">
-      <section className="dashboard-mosaic">
-        <article className="panel-card dashboard-tile dashboard-widget-card dashboard-area-marketSummary">
-          <div className="dashboard-hero-head">
-            <div>
-              <h3>작업 요약</h3>
-              <p>데이터 수집 및 분석 결과를 최신 순으로 표시합니다.</p>
+    <section className="dashboard-layout dashboard-terminal-layout workspace-tab-panel">
+      <section className="dashboard-terminal-shell">
+        <aside className="panel-card dashboard-terminal-sidebar">
+          <header className="dashboard-terminal-sidebar-head">
+            <strong>DASHBOARD LOG</strong>
+            <span>LIVE</span>
+          </header>
+          <div className="dashboard-terminal-sidebar-meta">
+            <p>latest sync</p>
+            <b>{latestSnapshotText}</b>
+          </div>
+          <ul className="dashboard-terminal-log-list">
+            {terminalLines.map((line, index) => (
+              <li key={`${line}-${index}`}>
+                <span aria-hidden="true">$</span>
+                <p>{line}</p>
+              </li>
+            ))}
+          </ul>
+        </aside>
+
+        <section className="panel-card dashboard-terminal-workspace">
+          <header className="dashboard-terminal-workspace-head">
+            <strong>OPERATIONS CONSOLE</strong>
+            <span>{terminalLines.length} ENTRIES</span>
+          </header>
+
+          <section className="dashboard-terminal-editor">
+            <div className="dashboard-terminal-filebar">
+              <span>summary.log</span>
+              <span>read-only</span>
             </div>
-          </div>
-          <div className="dashboard-hero-body">
-            <section className="dashboard-hero-related">
-              <p className="dashboard-widget-summary">요약 항목 {workSummaryItems.length}건</p>
-              <div className="dashboard-hero-list-wrap">
-                <ul>
-                  {workSummaryItems.length > 0 ? (
-                    workSummaryItems.map((summary, index) => (
-                      <li key={`${summary}-${index}`}>{summary}</li>
-                    ))
-                  ) : (
-                    <li>{t("dashboard.value.none")}</li>
-                  )}
-                </ul>
-              </div>
-            </section>
-          </div>
-        </article>
-        {cards.map((card) => (
-          <article className={`panel-card dashboard-tile dashboard-card dashboard-area-${card.id}`} key={card.id}>
-            <h2>{card.title}</h2>
-            <strong>{card.value}</strong>
-            <p>{card.caption}</p>
-          </article>
-        ))}
+            <pre>{terminalLines.map((line, index) => `[${String(index + 1).padStart(2, "0")}] ${line}`).join("\n")}</pre>
+          </section>
+
+          <section className="dashboard-terminal-metrics">
+            {cards.map((card) => (
+              <article className="dashboard-terminal-metric" key={card.id}>
+                <h2>{card.title}</h2>
+                <strong>{card.value}</strong>
+                <p>{card.caption}</p>
+              </article>
+            ))}
+          </section>
+        </section>
       </section>
     </section>
   );
