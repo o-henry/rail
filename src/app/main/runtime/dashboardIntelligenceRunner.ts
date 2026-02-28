@@ -33,6 +33,7 @@ type RunDashboardTopicParams = {
   config: DashboardTopicAgentConfig;
   invokeFn: InvokeFn;
   previousSnapshot?: DashboardTopicSnapshot;
+  followupInstruction?: string;
 };
 
 type RunDashboardTopicResult = {
@@ -171,12 +172,16 @@ export async function runDashboardTopicIntelligence(params: RunDashboardTopicPar
   });
   const warnings = [...knowledge.retrieve.warnings];
 
-  const prompt = buildDashboardTopicPrompt({
+  const promptBase = buildDashboardTopicPrompt({
     topic: params.topic,
     config: params.config,
     snippets: knowledge.retrieve.snippets,
     previousSnapshot: params.previousSnapshot,
   });
+  const followup = String(params.followupInstruction ?? "").trim();
+  const prompt = followup
+    ? `${promptBase}\n\n[Additional User Request]\n${followup}\n\n[Instruction]\nReflect this request in the JSON while staying grounded to retrieved snippets.`
+    : promptBase;
 
   let snapshot: DashboardTopicSnapshot;
   try {

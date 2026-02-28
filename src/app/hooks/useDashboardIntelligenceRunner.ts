@@ -68,7 +68,7 @@ export function useDashboardIntelligenceRunner(params: UseDashboardIntelligenceR
   }, [refreshSnapshots]);
 
   const runTopic = useCallback(
-    async (topic: DashboardTopicId) => {
+    async (topic: DashboardTopicId, followupInstruction?: string) => {
       const topicConfig = config[topic];
       if (!topicConfig?.enabled) {
         setStatus(`Dashboard Intelligence 비활성 주제: ${topic}`);
@@ -89,6 +89,7 @@ export function useDashboardIntelligenceRunner(params: UseDashboardIntelligenceR
           config: topicConfig,
           invokeFn,
           previousSnapshot: snapshotsByTopic[topic],
+          followupInstruction,
         });
         setSnapshotsByTopic((prev) => ({
           ...prev,

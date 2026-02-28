@@ -1,90 +1,301 @@
+import { type FormEvent, type KeyboardEvent as ReactKeyboardEvent, useEffect, useMemo, useState } from "react";
 import FancySelect from "../../components/FancySelect";
 import { useI18n } from "../../i18n";
-import { DASHBOARD_TOPIC_IDS, type DashboardAgentConfigMap, type DashboardTopicId, type DashboardTopicRunState } from "../../features/dashboard/intelligence";
+import {
+  DASHBOARD_TOPIC_IDS,
+  type DashboardAgentConfigMap,
+  type DashboardTopicId,
+  type DashboardTopicRunState,
+  type DashboardTopicSnapshot,
+} from "../../features/dashboard/intelligence";
 
 type DashboardIntelligenceSettingsProps = {
   config: DashboardAgentConfigMap;
   runStateByTopic: Record<DashboardTopicId, DashboardTopicRunState>;
+  snapshotsByTopic: Partial<Record<DashboardTopicId, DashboardTopicSnapshot>>;
   modelOptions: ReadonlyArray<{ value: string; label: string }>;
   disabled?: boolean;
   onSetTopicModel: (topic: DashboardTopicId, model: string) => void;
   onSetTopicCadence: (topic: DashboardTopicId, cadenceHours: number) => void;
-  onRunTopic: (topic: DashboardTopicId) => void;
+  onRunTopic: (topic: DashboardTopicId, followupInstruction?: string) => void;
   onRunAll: () => void;
   onRunCrawlerOnly: () => void;
 };
 
 export default function DashboardIntelligenceSettings(props: DashboardIntelligenceSettingsProps) {
   const { t } = useI18n();
+  const [activeTopic, setActiveTopic] = useState<DashboardTopicId>(DASHBOARD_TOPIC_IDS[0]);
+  const [followupDraft, setFollowupDraft] = useState("");
+
+  useEffect(() => {
+    if (DASHBOARD_TOPIC_IDS.includes(activeTopic)) {
+      return;
+    }
+    setActiveTopic(DASHBOARD_TOPIC_IDS[0]);
+  }, [activeTopic]);
+
+  const activeTopicConfig = props.config[activeTopic];
+  const activeTopicRunState = props.runStateByTopic[activeTopic];
+  const activeSnapshot = props.snapshotsByTopic[activeTopic];
+
+  const activeTopicStatus = useMemo(() => {
+    if (activeTopicRunState?.running) {
+      return "RUNNING";
+    }
+    if (activeTopicRunState?.lastError) {
+      return "ERROR";
+    }
+    if (activeTopicRunState?.lastRunAt) {
+      return "DONE";
+    }
+    return "IDLE";
+  }, [activeTopicRunState]);
+
+  const activeTopicUpdatedAtText = useMemo(() => {
+    const source = activeSnapshot?.generatedAt || activeTopicRunState?.lastRunAt;
+    if (!source) {
+      return "아직 실행 기록이 없습니다.";
+    }
+    const parsed = new Date(source);
+    if (Number.isNaN(parsed.getTime())) {
+      return source;
+    }
+    return parsed.toLocaleString();
+  }, [activeSnapshot?.generatedAt, activeTopicRunState?.lastRunAt]);
+
+  const onSelectTopic = (topic: DashboardTopicId) => {
+    setActiveTopic(topic);
+  };
+
+  const onSelectTopicByKeyboard = (
+    event: ReactKeyboardEvent<HTMLElement>,
+    topic: DashboardTopicId,
+  ) => {
+    if (event.key !== "Enter" && event.key !== " ") {
+      return;
+    }
+    event.preventDefault();
+    setActiveTopic(topic);
+  };
+
+  const onSubmitFollowup = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const prompt = followupDraft.trim();
+    if (!prompt || props.disabled || activeTopicRunState?.running) {
+      return;
+    }
+    props.onRunTopic(activeTopic, prompt);
+    setFollowupDraft("");
+  };
 
   return (
-    <section className="settings-dashboard-intelligence">
-      <header className="settings-dashboard-intelligence-head">
-        <div className="settings-dashboard-intelligence-copy">
-          <strong className="settings-dashboard-intelligence-eyebrow">DATA PIPELINE</strong>
-          <p>{t("settings.dashboardIntelligence.description")}</p>
+    <section className="settings-dashboard-intelligence settings-dashboard-intelligence-split">
+      <section className="settings-dashboard-intelligence-main">
+        <header className="settings-dashboard-intelligence-head">
+          <div className="settings-dashboard-intelligence-copy">
+            <strong className="settings-dashboard-intelligence-eyebrow">DATA PIPELINE</strong>
+            <p>{t("settings.dashboardIntelligence.description")}</p>
+          </div>
+          <div className="settings-dashboard-intelligence-actions">
+            <button disabled={props.disabled} onClick={props.onRunCrawlerOnly} type="button">
+              {t("settings.dashboardIntelligence.runCrawlerOnly")}
+            </button>
+            <button disabled={props.disabled} onClick={props.onRunAll} type="button">
+              {t("settings.dashboardIntelligence.runAll")}
+            </button>
+          </div>
+        </header>
+        <div className="settings-dashboard-topic-columns" role="presentation">
+          <span>TOPIC</span>
+          <span>MODEL</span>
+          <span>CADENCE</span>
+          <span>RUN</span>
         </div>
-        <div className="settings-dashboard-intelligence-actions">
-          <button disabled={props.disabled} onClick={props.onRunCrawlerOnly} type="button">
-            {t("settings.dashboardIntelligence.runCrawlerOnly")}
-          </button>
-          <button disabled={props.disabled} onClick={props.onRunAll} type="button">
-            {t("settings.dashboardIntelligence.runAll")}
-          </button>
-        </div>
-      </header>
-      <div className="settings-dashboard-topic-columns" role="presentation">
-        <span>TOPIC</span>
-        <span>MODEL</span>
-        <span>CADENCE</span>
-        <span>RUN</span>
-      </div>
-      <div className="settings-dashboard-intelligence-list">
-        {DASHBOARD_TOPIC_IDS.map((topic) => {
-          const row = props.config[topic];
-          const runState = props.runStateByTopic[topic];
-          return (
-            <article className="settings-dashboard-topic-row" key={topic}>
-              <div className="settings-dashboard-topic-title">
-                <code>{topic}</code>
-                <strong>{t(`dashboard.widget.${topic}.title`)}</strong>
-                {runState?.lastError ? <p>{runState.lastError}</p> : null}
-              </div>
-
-              <FancySelect
-                ariaLabel={`${t("dashboard.widget." + topic + ".title")} model`}
-                className="modern-select settings-dashboard-topic-select"
-                onChange={(next) => props.onSetTopicModel(topic, next)}
-                options={[...props.modelOptions]}
-                value={row.model}
-              />
-
-              <label className="settings-dashboard-topic-cadence">
-                <span>{t("settings.dashboardIntelligence.cadence")}</span>
-                <input
-                  disabled={props.disabled}
-                  min={1}
-                  max={168}
-                  onChange={(event) => props.onSetTopicCadence(topic, Number(event.currentTarget.value))}
-                  type="number"
-                  value={row.cadenceHours}
-                />
-                <small>h</small>
-              </label>
-
-              <button
-                disabled={props.disabled || runState?.running}
-                onClick={() => props.onRunTopic(topic)}
-                type="button"
+        <div className="settings-dashboard-intelligence-list" role="tablist" aria-label="데이터 토픽">
+          {DASHBOARD_TOPIC_IDS.map((topic) => {
+            const row = props.config[topic];
+            const runState = props.runStateByTopic[topic];
+            return (
+              <article
+                aria-selected={activeTopic === topic}
+                className={`settings-dashboard-topic-row${activeTopic === topic ? " is-active" : ""}`}
+                key={topic}
+                onClick={() => onSelectTopic(topic)}
+                onKeyDown={(event) => onSelectTopicByKeyboard(event, topic)}
+                role="tab"
+                tabIndex={0}
               >
-                {runState?.running
-                  ? t("settings.dashboardIntelligence.running")
-                  : t("settings.dashboardIntelligence.runTopic")}
-              </button>
-            </article>
-          );
-        })}
-      </div>
+                <div className="settings-dashboard-topic-title">
+                  <code>{topic}</code>
+                  <strong>{t(`dashboard.widget.${topic}.title`)}</strong>
+                  {runState?.lastError ? <p>{runState.lastError}</p> : null}
+                </div>
+
+                <div
+                  className="settings-dashboard-topic-model"
+                  onClick={(event) => event.stopPropagation()}
+                  onKeyDown={(event) => event.stopPropagation()}
+                >
+                  <FancySelect
+                    ariaLabel={`${t("dashboard.widget." + topic + ".title")} model`}
+                    className="modern-select settings-dashboard-topic-select"
+                    onChange={(next) => props.onSetTopicModel(topic, next)}
+                    options={[...props.modelOptions]}
+                    value={row.model}
+                  />
+                </div>
+
+                <label
+                  className="settings-dashboard-topic-cadence"
+                  onClick={(event) => event.stopPropagation()}
+                  onKeyDown={(event) => event.stopPropagation()}
+                >
+                  <span>{t("settings.dashboardIntelligence.cadence")}</span>
+                  <input
+                    disabled={props.disabled}
+                    min={1}
+                    max={168}
+                    onChange={(event) => props.onSetTopicCadence(topic, Number(event.currentTarget.value))}
+                    type="number"
+                    value={row.cadenceHours}
+                  />
+                  <small>h</small>
+                </label>
+
+                <button
+                  disabled={props.disabled || runState?.running}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    props.onRunTopic(topic);
+                  }}
+                  type="button"
+                >
+                  {runState?.running
+                    ? t("settings.dashboardIntelligence.running")
+                    : t("settings.dashboardIntelligence.runTopic")}
+                </button>
+              </article>
+            );
+          })}
+        </div>
+      </section>
+
+      <aside className="settings-dashboard-topic-detail" aria-live="polite">
+        <header className="settings-dashboard-topic-detail-head">
+          <div className="settings-dashboard-topic-detail-title">
+            <small>선택 토픽</small>
+            <strong>{t(`dashboard.widget.${activeTopic}.title`)}</strong>
+            <code>{activeTopic}</code>
+          </div>
+          <button
+            disabled={props.disabled || activeTopicRunState?.running}
+            onClick={() => props.onRunTopic(activeTopic)}
+            type="button"
+          >
+            {activeTopicRunState?.running
+              ? t("settings.dashboardIntelligence.running")
+              : t("settings.dashboardIntelligence.runTopic")}
+          </button>
+        </header>
+
+        <div className="settings-dashboard-topic-detail-scroll">
+          <section className="settings-dashboard-topic-detail-section">
+            <h5>실행 상태</h5>
+            <p>{activeTopicStatus}</p>
+            <small>{activeTopicUpdatedAtText}</small>
+            {activeTopicRunState?.lastError ? <small>{activeTopicRunState.lastError}</small> : null}
+          </section>
+
+          <section className="settings-dashboard-topic-detail-section">
+            <h5>구현 내용</h5>
+            <p>{activeTopicConfig.systemPrompt}</p>
+            <small>{`allowlist ${activeTopicConfig.allowlist.length}개`}</small>
+            {activeTopicConfig.allowlist.length > 0 ? (
+              <ul className="settings-dashboard-topic-detail-links">
+                {activeTopicConfig.allowlist.slice(0, 6).map((source) => (
+                  <li key={source}>{source}</li>
+                ))}
+              </ul>
+            ) : null}
+          </section>
+
+          <section className="settings-dashboard-topic-detail-section">
+            <h5>요약</h5>
+            <p>{activeSnapshot?.summary || "스냅샷이 없습니다. 토픽 실행 후 결과가 표시됩니다."}</p>
+          </section>
+
+          {activeSnapshot?.highlights?.length ? (
+            <section className="settings-dashboard-topic-detail-section">
+              <h5>핵심 포인트</h5>
+              <ul>
+                {activeSnapshot.highlights.map((item, index) => (
+                  <li key={`${index}-${item}`}>{item}</li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
+
+          {activeSnapshot?.risks?.length ? (
+            <section className="settings-dashboard-topic-detail-section">
+              <h5>리스크</h5>
+              <ul>
+                {activeSnapshot.risks.map((item, index) => (
+                  <li key={`${index}-${item}`}>{item}</li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
+
+          {activeSnapshot?.events?.length ? (
+            <section className="settings-dashboard-topic-detail-section">
+              <h5>이벤트</h5>
+              <ul>
+                {activeSnapshot.events.map((item, index) => (
+                  <li key={`${index}-${item.title}`}>
+                    <span>{item.title}</span>
+                    {item.date ? <small>{item.date}</small> : null}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
+
+          {activeSnapshot?.references?.length ? (
+            <section className="settings-dashboard-topic-detail-section">
+              <h5>근거 링크</h5>
+              <ul className="settings-dashboard-topic-detail-links">
+                {activeSnapshot.references.map((ref, index) => (
+                  <li key={`${index}-${ref.url}`}>
+                    <a href={ref.url} target="_blank" rel="noreferrer">
+                      {ref.title || ref.source || ref.url}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
+        </div>
+
+        <form className="data-topic-followup-composer question-input" onSubmit={onSubmitFollowup}>
+          <textarea
+            disabled={props.disabled || activeTopicRunState?.running}
+            onChange={(event) => setFollowupDraft(event.currentTarget.value)}
+            placeholder="추가 요청을 입력하면 현재 토픽에 반영해 다시 실행합니다."
+            rows={2}
+            value={followupDraft}
+          />
+          <div className="question-input-footer">
+            <span className="data-topic-followup-label">추가 요청</span>
+            <button
+              className="primary-action question-create-button agents-send-button data-topic-followup-send"
+              disabled={!followupDraft.trim() || props.disabled || activeTopicRunState?.running}
+              type="submit"
+            >
+              <img alt="" aria-hidden="true" className="question-create-icon" src="/up.svg" />
+            </button>
+          </div>
+        </form>
+      </aside>
     </section>
   );
 }

@@ -4,7 +4,7 @@ import { loadDashboardSnapshots, runDashboardTopicIntelligence } from "./dashboa
 
 describe("dashboard intelligence runner", () => {
   it("runs crawl + rag + codex and saves snapshot", async () => {
-    const invokeMock = vi.fn(async (command: string) => {
+    const invokeMock = vi.fn(async (command: string, _args?: Record<string, unknown>) => {
       switch (command) {
         case "dashboard_crawl_run":
           return {
@@ -71,7 +71,7 @@ describe("dashboard intelligence runner", () => {
   });
 
   it("returns degraded snapshot when codex call fails", async () => {
-    const invokeMock = vi.fn(async (command: string) => {
+    const invokeMock = vi.fn(async (command: string, _args?: Record<string, unknown>) => {
       switch (command) {
         case "dashboard_crawl_run":
           return { startedAt: "1", finishedAt: "2", totalFetched: 0, totalFiles: 0, topics: [] };
@@ -99,6 +99,69 @@ describe("dashboard intelligence runner", () => {
 
     expect(result.snapshot.status).toBe("degraded");
     expect(result.snapshot.referenceEmpty).toBe(true);
+  });
+
+  it("injects follow-up instruction into codex prompt", async () => {
+    const invokeMock = vi.fn(async (command: string, _args?: Record<string, unknown>) => {
+      switch (command) {
+        case "dashboard_crawl_run":
+          return { startedAt: "1", finishedAt: "2", totalFetched: 1, totalFiles: 1, topics: [] };
+        case "dashboard_raw_list":
+          return ["/tmp/a.md"];
+        case "knowledge_probe":
+          return [
+            {
+              id: "1",
+              name: "a.md",
+              path: "/tmp/a.md",
+              ext: ".md",
+              enabled: true,
+              status: "ready",
+            },
+          ];
+        case "knowledge_retrieve":
+          return {
+            snippets: [{ fileId: "1", fileName: "a.md", chunkIndex: 1, text: "Snippet", score: 1 }],
+            warnings: [],
+          };
+        case "thread_start":
+          return { threadId: "t1" };
+        case "turn_start":
+          return {
+            text: JSON.stringify({
+              summary: "ok",
+              highlights: [],
+              risks: [],
+              events: [],
+              references: [],
+              generatedAt: "2026-02-28T00:00:00.000Z",
+              topic: "marketSummary",
+              model: "gpt-5.2-codex",
+            }),
+          };
+        case "dashboard_snapshot_save":
+          return "/tmp/snapshot.json";
+        default:
+          throw new Error(`unexpected command ${command}`);
+      }
+    });
+    const invoke = invokeMock as unknown as <T>(
+      command: string,
+      args?: Record<string, unknown>,
+    ) => Promise<T>;
+
+    await runDashboardTopicIntelligence({
+      cwd: "/tmp",
+      topic: "marketSummary",
+      config: createDefaultDashboardTopicConfig("marketSummary"),
+      invokeFn: invoke,
+      followupInstruction: "변동성 항목을 더 강조해줘",
+    });
+
+    const turnStartCall = invokeMock.mock.calls.find((row) => row[0] === "turn_start");
+    const turnStartArgs = (turnStartCall?.[1] ?? {}) as { text?: string };
+    expect(turnStartArgs.text ?? "").toContain("[Additional User Request]");
+    expect(turnStartArgs.text ?? "").toContain("변동성 항목을 더 강조해줘");
   });
 
   it("loads latest snapshot per topic", async () => {

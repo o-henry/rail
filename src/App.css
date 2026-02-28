@@ -2909,10 +2909,29 @@ h3 {
 
 .settings-dashboard-intelligence {
   display: grid;
-  gap: 10px;
+  gap: 12px;
   padding: 0;
-  border-radius: 8px;
+  border-radius: 0;
+  background: transparent;
+  min-height: 0;
+  height: 100%;
+}
+
+.settings-dashboard-intelligence-split {
+  grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr);
+  align-items: stretch;
+}
+
+.settings-dashboard-intelligence-main {
+  min-height: 0;
+  height: 100%;
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  gap: 10px;
+  border-radius: 12px;
   background: var(--surface);
+  padding: 12px;
+  box-shadow: var(--panel-shadow);
 }
 
 .settings-dashboard-intelligence-head {
@@ -2983,6 +3002,17 @@ h3 {
 .settings-dashboard-intelligence-list {
   display: grid;
   gap: 6px;
+  min-height: 0;
+  overflow: auto;
+  align-content: start;
+  padding-right: 2px;
+  scrollbar-width: none;
+}
+
+.settings-dashboard-intelligence-list::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
 }
 
 .settings-dashboard-topic-row {
@@ -2993,6 +3023,17 @@ h3 {
   border-radius: 6px;
   background: color-mix(in srgb, var(--surface-panel) 74%, var(--surface));
   padding: 9px 10px;
+  cursor: pointer;
+  transition: background-color 140ms ease, transform 140ms ease;
+}
+
+.settings-dashboard-topic-row:hover {
+  background: color-mix(in srgb, var(--surface-soft) 68%, var(--surface));
+}
+
+.settings-dashboard-topic-row.is-active {
+  background: color-mix(in srgb, #d9e6ff 68%, var(--surface));
+  transform: translateY(-1px);
 }
 
 .settings-dashboard-topic-title {
@@ -3031,6 +3072,11 @@ h3 {
 .settings-dashboard-topic-select {
   width: 100%;
   min-width: 0;
+}
+
+.settings-dashboard-topic-model {
+  min-width: 0;
+  width: 100%;
 }
 
 .settings-dashboard-topic-cadence {
@@ -3076,6 +3122,170 @@ h3 {
   font-size: 11px;
   color: var(--text-muted);
   font-family: "BasicallyAMono", "Noto Sans KR", monospace;
+}
+
+.settings-dashboard-topic-detail {
+  min-height: 0;
+  height: 100%;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 10px;
+  border-radius: 12px;
+  background: var(--surface);
+  padding: 12px;
+  box-shadow: var(--panel-shadow);
+}
+
+.settings-dashboard-topic-detail-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.settings-dashboard-topic-detail-title {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.settings-dashboard-topic-detail-title small {
+  font-size: 10px;
+  color: var(--text-muted);
+  letter-spacing: 0.08em;
+  font-family: "BasicallyAMono", "Noto Sans KR", monospace;
+}
+
+.settings-dashboard-topic-detail-title strong {
+  font-size: 14px;
+  color: var(--text-main);
+  line-height: 1.25;
+}
+
+.settings-dashboard-topic-detail-title code {
+  font-size: 10px;
+  color: var(--text-muted);
+  font-family: "BasicallyAMono", "Noto Sans KR", monospace;
+}
+
+.settings-dashboard-topic-detail-head > button {
+  min-height: 30px;
+  height: 30px;
+  border-radius: 5px;
+  padding: 0 10px;
+  font-size: 11px;
+  font-family: "BasicallyAMono", "Noto Sans KR", monospace;
+  background: var(--surface-panel);
+}
+
+.settings-dashboard-topic-detail-scroll {
+  min-height: 0;
+  overflow: auto;
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  scrollbar-width: none;
+}
+
+.settings-dashboard-topic-detail-scroll::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}
+
+.settings-dashboard-topic-detail-section {
+  display: grid;
+  gap: 5px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--surface-panel) 76%, var(--surface));
+  padding: 8px;
+}
+
+.settings-dashboard-topic-detail-section h5 {
+  margin: 0;
+  font-size: 11px;
+  color: var(--text-main);
+  letter-spacing: 0.04em;
+  font-family: "BasicallyAMono", "Noto Sans KR", monospace;
+}
+
+.settings-dashboard-topic-detail-section p {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-main);
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+
+.settings-dashboard-topic-detail-section small {
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.35;
+}
+
+.settings-dashboard-topic-detail-section ul {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 4px;
+}
+
+.settings-dashboard-topic-detail-section li {
+  font-size: 12px;
+  color: var(--text-main);
+  line-height: 1.35;
+}
+
+.settings-dashboard-topic-detail-links {
+  margin: 0;
+  padding-left: 16px;
+  display: grid;
+  gap: 4px;
+}
+
+.settings-dashboard-topic-detail-links a {
+  color: var(--text-main);
+  text-decoration: none;
+}
+
+.settings-dashboard-topic-detail-links a:hover {
+  text-decoration: underline;
+}
+
+.data-topic-followup-composer {
+  padding: 8px 10px 6px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--surface-panel) 82%, var(--surface));
+  box-shadow: none;
+}
+
+.data-topic-followup-composer textarea {
+  min-height: 54px;
+  max-height: 110px;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.data-topic-followup-composer .question-input-footer {
+  min-height: 30px;
+}
+
+.data-topic-followup-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: "BasicallyAMono", "Noto Sans KR", monospace;
+}
+
+.data-topic-followup-send {
+  width: 26px;
+  min-width: 26px;
+  height: 26px;
+  min-height: 26px;
+}
+
+.data-topic-followup-send .question-create-icon {
+  width: 10px;
+  height: 10px;
 }
 
 .settings-run-history-hidden {
@@ -4783,6 +4993,21 @@ h3 {
 
 .panel-card.settings-view {
   background: #ffffff;
+}
+
+.panel-card.settings-view.data-intelligence-view {
+  background: transparent;
+  box-shadow: none;
+}
+
+.data-intelligence-view > .controls {
+  width: 100%;
+  max-width: none;
+  margin-inline: 0;
+  min-height: 0;
+  height: 100%;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
 }
 
 .settings-view::-webkit-scrollbar {
@@ -6969,6 +7194,10 @@ pre {
   .settings-dashboard-topic-row {
     grid-template-columns: minmax(0, 1fr);
     align-items: stretch;
+  }
+
+  .settings-dashboard-intelligence-split {
+    grid-template-columns: 1fr;
   }
 
   .settings-dashboard-topic-columns {

@@ -1886,14 +1886,14 @@ function App() {
     [updateDashboardTopicConfig],
   );
   const onRunDashboardTopic = useCallback(
-    async (topic: DashboardTopicId) => {
+    async (topic: DashboardTopicId, followupInstruction?: string) => {
       if (!loginCompleted) {
         setError("Codex 로그인이 필요합니다. 설정에서 먼저 로그인해 주세요.");
         return;
       }
       setWorkspaceTab("dashboard");
       setStatus("대시보드 인텔리전스 실행 중...");
-      await runDashboardTopic(topic);
+      await runDashboardTopic(topic, followupInstruction);
       await refreshDashboardSnapshots();
     },
     [loginCompleted, refreshDashboardSnapshots, runDashboardTopic, setError, setStatus],
@@ -2227,7 +2227,7 @@ function App() {
           </section>
         )}
         {workspaceTab === "intelligence" && (
-          <section className="panel-card settings-view workspace-tab-panel">
+          <section className="panel-card settings-view data-intelligence-view workspace-tab-panel">
             <section className="controls">
               <h3>데이터</h3>
               <DashboardIntelligenceSettings
@@ -2240,6 +2240,7 @@ function App() {
                 onSetTopicCadence={onSetDashboardTopicCadence}
                 onSetTopicModel={onSetDashboardTopicModel}
                 runStateByTopic={dashboardIntelligenceRunStateByTopic}
+                snapshotsByTopic={dashboardSnapshotsByTopic}
               />
             </section>
           </section>
