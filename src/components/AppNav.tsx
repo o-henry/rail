@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { localeShortLabel, useI18n } from "../i18n";
 
-type WorkspaceTab = "dashboard" | "workflow" | "feed" | "agents" | "bridge" | "settings";
+type WorkspaceTab = "dashboard" | "intelligence" | "workflow" | "feed" | "agents" | "bridge" | "settings";
 
 type NavItem = {
   tab: WorkspaceTab;
@@ -18,6 +18,7 @@ type AppNavProps = {
 
 const NAV_ITEMS: NavItem[] = [
   { tab: "dashboard", label: "nav.dashboard", ariaLabel: "nav.dashboard", title: "nav.dashboard" },
+  { tab: "intelligence", label: "nav.intelligence", ariaLabel: "nav.intelligence", title: "nav.intelligence" },
   { tab: "agents", label: "nav.agents", ariaLabel: "nav.agents", title: "nav.agents" },
   { tab: "workflow", label: "nav.workflow.short", ariaLabel: "nav.workflow.title", title: "nav.workflow.title" },
   { tab: "feed", label: "nav.feed", ariaLabel: "nav.feed", title: "nav.feed" },

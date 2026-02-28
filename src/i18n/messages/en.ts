@@ -8,6 +8,7 @@ export const EN_MESSAGES: Dictionary = {
     "nav.workflow.short": "Flow",
     "nav.workflow.title": "Workflow",
     "nav.dashboard": "Dashboard",
+    "nav.intelligence": "Intelligence",
     "nav.agents": "Agents",
     "nav.feed": "Feed",
     "nav.settings": "Settings",

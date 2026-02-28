@@ -65,13 +65,15 @@ export function useWorkflowShortcuts(params: UseWorkflowShortcutsParams) {
   useEffect(() => {
     const tabHotkeys: Record<string, WorkspaceTab> = {
       "1": "dashboard",
-      "2": "agents",
-      "3": "workflow",
-      "4": "feed",
-      "5": "settings",
+      "2": "intelligence",
+      "3": "agents",
+      "4": "workflow",
+      "5": "feed",
+      "6": "settings",
     };
     const tabStatusByKey: Record<WorkspaceTab, string> = {
       dashboard: "대시보드 탭으로 이동",
+      intelligence: "대시보드 인텔리전스 탭으로 이동",
       agents: "에이전트 탭으로 이동",
       workflow: "워크플로우 탭으로 이동",
       feed: "피드 탭으로 이동",

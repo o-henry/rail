@@ -523,6 +523,56 @@ h3 {
   line-height: 1;
 }
 
+.nav-icon-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: #8ea0b9;
+  opacity: 0.72;
+  transition: transform 140ms ease, opacity 140ms ease, box-shadow 140ms ease;
+}
+
+.nav-icon-dot.is-active {
+  opacity: 1;
+  transform: scale(1.08);
+  box-shadow: 0 0 0 2px color-mix(in srgb, currentColor 22%, transparent);
+}
+
+.nav-icon-dot-dashboard {
+  background: #4f89d8;
+  color: #4f89d8;
+}
+
+.nav-icon-dot-intelligence {
+  background: #57b38f;
+  color: #57b38f;
+}
+
+.nav-icon-dot-agents {
+  background: #f59b45;
+  color: #f59b45;
+}
+
+.nav-icon-dot-workflow {
+  background: #8f79da;
+  color: #8f79da;
+}
+
+.nav-icon-dot-feed {
+  background: #de6f9d;
+  color: #de6f9d;
+}
+
+.nav-icon-dot-settings {
+  background: #7f8c9f;
+  color: #7f8c9f;
+}
+
+.nav-icon-dot-bridge {
+  background: #7f8c9f;
+  color: #7f8c9f;
+}
+
 .nav-icon svg {
   width: 16px;
   height: 16px;
@@ -627,7 +677,9 @@ h3 {
   align-items: center;
   gap: 7px;
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 600;
+  font-family: "BasicallyAMono", "DialogNanumBody1984", "Noto Sans KR", monospace;
+  letter-spacing: -1px;
   white-space: nowrap;
 }
 
@@ -652,15 +704,15 @@ h3 {
 }
 
 .workspace-topbar-tab-icon {
-  width: 14px;
-  height: 14px;
+  width: 12px;
+  height: 12px;
   display: inline-grid;
   place-items: center;
 }
 
 .workspace-topbar-tab-icon > * {
-  width: 14px;
-  height: 14px;
+  width: 12px;
+  height: 12px;
 }
 
 .workspace-topbar-actions {
@@ -2366,6 +2418,11 @@ h3 {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 8px;
+}
+
+.settings-cwd-row .lowercase-path-input {
+  min-height: 36px;
+  height: 36px;
 }
 
 .settings-background-row {

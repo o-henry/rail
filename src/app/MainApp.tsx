@@ -15,6 +15,7 @@ import DashboardPage from "../pages/dashboard/DashboardPage";
 import { type DashboardDetailTopic } from "../pages/dashboard/DashboardDetailPage";
 import AgentsPage from "../pages/agents/AgentsPage";
 import SettingsPage from "../pages/settings/SettingsPage";
+import DashboardIntelligenceSettings from "../pages/settings/DashboardIntelligenceSettings";
 import WorkflowPage from "../pages/workflow/WorkflowPage";
 import { useFloatingPanel } from "../features/ui/useFloatingPanel";
 import { useExecutionState } from "./hooks/useExecutionState";
@@ -1860,18 +1861,20 @@ function App() {
   }, [refreshDashboardSnapshots, runDashboardCrawlerOnlyForEnabledTopics]);
   const workspaceTopbarTabs = useMemo(
     () => [
-      { tab: "dashboard" as WorkspaceTab, label: t("nav.dashboard") },
-      { tab: "agents" as WorkspaceTab, label: t("nav.agents") },
-      { tab: "workflow" as WorkspaceTab, label: t("nav.workflow.short") },
-      { tab: "feed" as WorkspaceTab, label: t("nav.feed") },
-      { tab: "settings" as WorkspaceTab, label: t("nav.settings") },
+      { tab: "dashboard" as WorkspaceTab, label: "DASHBOARD" },
+      { tab: "intelligence" as WorkspaceTab, label: "INTELLIGENCE" },
+      { tab: "agents" as WorkspaceTab, label: "AGENTS" },
+      { tab: "workflow" as WorkspaceTab, label: "WORK" },
+      { tab: "feed" as WorkspaceTab, label: "FEED" },
+      { tab: "settings" as WorkspaceTab, label: "SETTINGS" },
     ],
-    [t],
+    [],
   );
 
   const quickPanelWorkspaceLabel = useMemo(() => {
     const byTab: Record<WorkspaceTab, string> = {
       dashboard: "홈 오버뷰",
+      intelligence: "대시보드 인텔리전스",
       agents: "에이전트 채팅",
       workflow: "워크플로우",
       feed: "요점 정리",
@@ -2137,20 +2140,11 @@ function App() {
               loginCompleted={loginCompleted}
               codexMultiAgentMode={codexMultiAgentMode}
               codexMultiAgentModeOptions={[...codexMultiAgentModeOptions]}
-              dashboardIntelligenceConfig={dashboardIntelligenceConfig}
-              dashboardIntelligenceModelOptions={dashboardIntelligenceModelOptions}
-              dashboardIntelligenceRunStateByTopic={dashboardIntelligenceRunStateByTopic}
               userBackgroundImage={userBackgroundImage}
               userBackgroundOpacity={userBackgroundOpacity}
               onCheckUsage={() => void onCheckUsage()}
               onCloseUsageResult={() => setUsageResultClosed(true)}
-              onDashboardTopicCadence={onSetDashboardTopicCadence}
-              onDashboardTopicModel={onSetDashboardTopicModel}
-              onDashboardTopicToggle={onToggleDashboardTopic}
               onOpenRunsFolder={() => void onOpenRunsFolder()}
-              onRunAllDashboardTopics={onRunAllDashboardTopics}
-              onRunDashboardCrawlerOnly={onRunDashboardCrawlerOnly}
-              onRunDashboardTopic={onRunDashboardTopic}
               onSelectCwdDirectory={() => void onSelectCwdDirectory()}
               onSetCodexMultiAgentMode={(next) => setCodexMultiAgentMode(normalizeCodexMultiAgentMode(next))}
               onSetUserBackgroundImage={setUserBackgroundImage}
@@ -2173,6 +2167,25 @@ function App() {
               status={webBridgeStatus}
             />
             {/* {lastSavedRunFile && <div>최근 실행 파일: {formatRunFileLabel(lastSavedRunFile)}</div>} */}
+          </section>
+        )}
+        {workspaceTab === "intelligence" && (
+          <section className="panel-card settings-view workspace-tab-panel">
+            <section className="controls">
+              <h3>DASHBOARD INTELLIGENCE</h3>
+              <DashboardIntelligenceSettings
+                config={dashboardIntelligenceConfig}
+                disabled={running || isGraphRunning}
+                modelOptions={dashboardIntelligenceModelOptions}
+                onRunAll={onRunAllDashboardTopics}
+                onRunCrawlerOnly={onRunDashboardCrawlerOnly}
+                onRunTopic={onRunDashboardTopic}
+                onSetTopicCadence={onSetDashboardTopicCadence}
+                onSetTopicModel={onSetDashboardTopicModel}
+                onToggleTopic={onToggleDashboardTopic}
+                runStateByTopic={dashboardIntelligenceRunStateByTopic}
+              />
+            </section>
           </section>
         )}
 
