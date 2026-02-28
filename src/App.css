@@ -5754,6 +5754,7 @@ h3 {
 }
 
 .agents-set-list {
+  margin-top: 4px;
   min-height: 0;
   overflow: auto;
   display: grid;

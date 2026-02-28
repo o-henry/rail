@@ -51,6 +51,33 @@ const AGENT_SET_OPTIONS: AgentSetOption[] = [
   },
 ];
 
+function normalizeText(value: string): string {
+  return value.replace(/\s+/g, " ").trim().toLowerCase();
+}
+
+function mergeRowPreview(description: string, snapshotLine: string): string {
+  const desc = String(description ?? "").trim();
+  const snap = String(snapshotLine ?? "").trim();
+  if (!desc && !snap) {
+    return "no snapshot";
+  }
+  if (!desc) {
+    return snap;
+  }
+  if (!snap) {
+    return desc;
+  }
+  const normalizedDesc = normalizeText(desc);
+  const normalizedSnap = normalizeText(snap);
+  if (normalizedSnap.includes(normalizedDesc)) {
+    return snap;
+  }
+  if (normalizedDesc.includes(normalizedSnap)) {
+    return desc;
+  }
+  return `${desc} · ${snap}`;
+}
+
 function createDefaultSetState(): AgentSetState {
   return {
     threads: [{ id: "agent-1", name: "agent-1" }],
@@ -77,8 +104,14 @@ export default function AgentsPage({ onQuickAction, topicSnapshots }: AgentsPage
       description: "데이터 주제 기반 분석/실행 에이전트 세트",
     }));
     const byId = new Map<string, AgentSetOption>();
+    const byContentKey = new Set<string>();
     [...AGENT_SET_OPTIONS, ...dataSetOptions].forEach((option) => {
+      const contentKey = `${normalizeText(option.label)}::${normalizeText(option.description)}`;
+      if (byContentKey.has(contentKey)) {
+        return;
+      }
       if (!byId.has(option.id)) {
+        byContentKey.add(contentKey);
         byId.set(option.id, option);
       }
     });
@@ -361,28 +394,27 @@ export default function AgentsPage({ onQuickAction, topicSnapshots }: AgentsPage
             <span>OPEN</span>
           </div>
           <div className="agents-set-list" role="list" aria-label="Agent sets">
-            {setOptions.map((setOption, index) => (
-              <button
-                className="agents-set-index-row"
-                key={setOption.id}
-                onClick={() => onSelectSet(setOption.id)}
-                role="listitem"
-                type="button"
-              >
-                <span className="agents-set-index-no">{String(index + 1).padStart(2, "0")}</span>
-                <div className="agents-set-index-meta">
-                  <strong>{setOption.label}</strong>
-                  <span>{setOption.description}</span>
-                  {(setStateMap[setOption.id]?.dashboardInsights.length ?? 0) > 0 ? (
-                    <code>{setStateMap[setOption.id].dashboardInsights[0]}</code>
-                  ) : (
-                    <code>no snapshot</code>
-                  )}
-                </div>
-                <span className="agents-set-index-count">{setStateMap[setOption.id]?.dashboardInsights.length ?? 0}</span>
-                <span className="agents-set-index-open" aria-hidden="true">↗</span>
-              </button>
-            ))}
+            {setOptions.map((setOption, index) => {
+              const snapshotLine = (setStateMap[setOption.id]?.dashboardInsights[0] ?? "").trim();
+              const mergedPreview = mergeRowPreview(setOption.description, snapshotLine);
+              return (
+                <button
+                  className="agents-set-index-row"
+                  key={setOption.id}
+                  onClick={() => onSelectSet(setOption.id)}
+                  role="listitem"
+                  type="button"
+                >
+                  <span className="agents-set-index-no">{String(index + 1).padStart(2, "0")}</span>
+                  <div className="agents-set-index-meta">
+                    <strong>{setOption.label}</strong>
+                    <code>{mergedPreview}</code>
+                  </div>
+                  <span className="agents-set-index-count">{setStateMap[setOption.id]?.dashboardInsights.length ?? 0}</span>
+                  <span className="agents-set-index-open" aria-hidden="true">↗</span>
+                </button>
+              );
+            })}
           </div>
         </div>
       </section>
