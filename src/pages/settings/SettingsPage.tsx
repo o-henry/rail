@@ -89,6 +89,35 @@ export default function SettingsPage({
           <span className="status-tag neutral">{t("settings.auth.prefix")}: {authModeText}</span>
         </div>
       )}
+      {!compact && (
+        <label className="settings-codex-controls">
+          <span>코덱스</span>
+          <div className="button-row">
+            <button
+              className="settings-usage-button settings-account-button"
+              disabled={running || isGraphRunning}
+              onClick={onCheckUsage}
+              type="button"
+            >
+              <span className="settings-button-label">{t("settings.usage.check")}</span>
+            </button>
+            <button
+              className="settings-usage-button settings-account-button"
+              disabled={running || isGraphRunning || codexAuthBusy}
+              onClick={onToggleCodexLogin}
+              type="button"
+            >
+              <span className="settings-button-label">
+                {codexAuthBusy
+                  ? t("settings.processing")
+                  : loginCompleted
+                    ? t("settings.codex.logout")
+                    : t("settings.codex.login")}
+              </span>
+            </button>
+          </div>
+        </label>
+      )}
       <label>
         {t("settings.cwd")}
         <div className="settings-cwd-row">
@@ -144,32 +173,6 @@ export default function SettingsPage({
           />
         </div>
       </label>
-      {!compact && (
-        <div className="button-row">
-          <button
-            className="settings-usage-button settings-account-button"
-            disabled={running || isGraphRunning}
-            onClick={onCheckUsage}
-            type="button"
-          >
-            <span className="settings-button-label">{t("settings.usage.check")}</span>
-          </button>
-          <button
-            className="settings-usage-button settings-account-button"
-            disabled={running || isGraphRunning || codexAuthBusy}
-            onClick={onToggleCodexLogin}
-            type="button"
-          >
-            <span className="settings-button-label">
-              {codexAuthBusy
-                ? t("settings.processing")
-                : loginCompleted
-                  ? t("settings.codex.logout")
-                  : t("settings.codex.login")}
-            </span>
-          </button>
-        </div>
-      )}
       <div className="usage-method usage-method-hidden">{t("settings.recentStatus")}: {status}</div>
       {usageInfoText && !usageResultClosed && (
         <div className="usage-result">
