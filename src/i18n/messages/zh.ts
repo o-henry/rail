@@ -395,6 +395,7 @@ export const ZH_MESSAGES: Dictionary = {
     "transform.mode.merge": "附加固定信息",
     "transform.mode.template": "按模板重写",
     "workflow.nodeSettings": "节点设置",
+    "workflow.nodeSettings.help": "当前服务提供：添加代理、配置执行器/模型/角色/提示词、附加参考资料、质量/输出 Schema 设置、网页半自动连接。",
     "workflow.node.completion": "完成状态",
     "workflow.node.elapsed": "生成时间",
     "workflow.node.outputInFeed": "输出/日志请在 Feed 中查看",

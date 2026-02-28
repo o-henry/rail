@@ -395,6 +395,7 @@ export const KO_MESSAGES: Dictionary = {
     "transform.mode.merge": "고정 정보 덧붙이기",
     "transform.mode.template": "문장 틀로 다시 쓰기",
     "workflow.nodeSettings": "노드 설정",
+    "workflow.nodeSettings.help": "현재 서비스에서 제공하는 기능: 에이전트 추가, 실행기/모델/역할/프롬프트 설정, 참고자료 첨부, 품질/출력 스키마 설정, 웹 연결 반자동.",
     "workflow.node.completion": "완료 여부",
     "workflow.node.elapsed": "생성 시간",
     "workflow.node.outputInFeed": "출력/로그는 피드에서 보기",

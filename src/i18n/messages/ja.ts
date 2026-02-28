@@ -395,6 +395,7 @@ export const JA_MESSAGES: Dictionary = {
     "transform.mode.merge": "固定情報を追加",
     "transform.mode.template": "テンプレートで再構成",
     "workflow.nodeSettings": "ノード設定",
+    "workflow.nodeSettings.help": "現在のサービスで提供: エージェント追加、実行器/モデル/役割/プロンプト設定、参照添付、品質/出力スキーマ設定、Web連携半自動。",
     "workflow.node.completion": "完了状態",
     "workflow.node.elapsed": "生成時間",
     "workflow.node.outputInFeed": "出力/ログはフィードで確認",

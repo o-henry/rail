@@ -395,6 +395,7 @@ export const EN_MESSAGES: Dictionary = {
     "transform.mode.merge": "Append fixed metadata",
     "transform.mode.template": "Rewrite with template",
     "workflow.nodeSettings": "Node Settings",
+    "workflow.nodeSettings.help": "Available in current service: add agents, configure executor/model/role/prompt, attach references, set quality/output schema, and use web-assist mode.",
     "workflow.node.completion": "Completion",
     "workflow.node.elapsed": "Elapsed",
     "workflow.node.outputInFeed": "View output/logs in Feed",

@@ -2162,12 +2162,27 @@ h3 {
   background: var(--surface);
 }
 
+.inspector-head-title {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .inspector-title-chip {
   /* background: #dfe5ee; */
   border-radius: 5px;
   /* padding: 8px 12px; */
   font-weight: 600;
   letter-spacing: -0.4px;
+  font-size: 15px;
+  font-family: "Galmuri11", "DialogNanumBody1984", "Noto Sans KR", sans-serif;
+}
+
+.inspector-head-tooltip-panel {
+  left: 0;
+  right: auto;
+  width: 320px;
 }
 
 .inspector-pane h2 {

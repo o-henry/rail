@@ -1,6 +1,7 @@
 import WorkflowInspectorTools from "./WorkflowInspectorTools";
 import WorkflowNodeInspector from "./WorkflowNodeInspector";
 import type { WorkflowInspectorNodeProps, WorkflowInspectorToolsProps } from "../workflowInspectorTypes";
+import { useI18n } from "../../../i18n";
 
 type WorkflowInspectorPaneProps = {
   canvasFullscreen: boolean;
@@ -9,6 +10,7 @@ type WorkflowInspectorPaneProps = {
 };
 
 export default function WorkflowInspectorPane({ canvasFullscreen, toolsProps, nodeProps }: WorkflowInspectorPaneProps) {
+  const { t } = useI18n();
   if (canvasFullscreen) {
     return null;
   }
@@ -18,7 +20,20 @@ export default function WorkflowInspectorPane({ canvasFullscreen, toolsProps, no
   return (
     <aside className="inspector-pane">
       <div className="inspector-head">
-        <div className="inspector-title-chip">{nodeProps.nodeSettingsTitle}</div>
+        <div className="inspector-head-title">
+          <div className="inspector-title-chip">{nodeProps.nodeSettingsTitle}</div>
+          <span
+            aria-label={`${nodeProps.nodeSettingsTitle} ${t("common.help")}`}
+            className="help-tooltip"
+            role="note"
+            tabIndex={0}
+          >
+            ?
+          </span>
+          <div className="help-tooltip-panel inspector-head-tooltip-panel" role="tooltip">
+            {t("workflow.nodeSettings.help")}
+          </div>
+        </div>
       </div>
       <div className="inspector-content">
         <div className="inspector-section inspector-switcher">

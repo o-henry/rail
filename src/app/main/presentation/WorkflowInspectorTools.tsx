@@ -1,7 +1,6 @@
 import FancySelect from "../../../components/FancySelect";
 import { knowledgeStatusMeta } from "../../../features/workflow/labels";
 import { useI18n } from "../../../i18n";
-import { InspectorSectionTitle } from "../../mainAppGraphHelpers";
 import type { WorkflowInspectorToolsProps } from "../workflowInspectorTypes";
 
 export default function WorkflowInspectorTools({
@@ -11,10 +10,6 @@ export default function WorkflowInspectorTools({
 
   return (
     <section className="inspector-block">
-      <InspectorSectionTitle
-        help={t("workflow.graphTools.help")}
-        title={t("workflow.graphTools.title")}
-      />
       <div className="tool-dropdown-group">
         <h4>{tp("에이전트 추가")}</h4>
         <button className="mini-action-button workflow-add-agent-button" onClick={() => props.addNode("turn")} type="button">
