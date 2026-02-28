@@ -639,7 +639,7 @@ h3 {
   overflow: hidden;
   display: grid;
   grid-template-rows: auto auto auto minmax(0, 1fr);
-  background: var(--surface);
+  background: color-mix(in srgb, var(--surface) 70%, transparent);
   border: 1px solid var(--workspace-border);
   box-shadow: var(--workspace-shadow);
 }
@@ -5343,7 +5343,7 @@ h3 {
 }
 
 :root[data-theme="light"] .workspace {
-  background: var(--surface);
+  background: color-mix(in srgb, var(--surface) 70%, transparent);
   border: 0;
   box-shadow: none;
 }
@@ -6274,7 +6274,7 @@ pre {
 }
 
 :root[data-theme="dark"] .workspace {
-  background: var(--surface-elevated);
+  background: color-mix(in srgb, var(--surface-elevated) 70%, transparent);
   border-color: var(--workspace-border);
   box-shadow: var(--workspace-shadow);
 }
