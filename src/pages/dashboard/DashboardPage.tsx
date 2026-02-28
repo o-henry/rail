@@ -24,6 +24,13 @@ type DashboardCard = {
   caption: string;
 };
 
+type DashboardResourceLine = {
+  id: string;
+  topic: DashboardTopicId | "feed";
+  kind: "reference" | "event" | "highlight" | "summary";
+  text: string;
+};
+
 function topicTitleKey(topic: DashboardTopicId): string {
   return `dashboard.widget.${topic}.title`;
 }
@@ -92,6 +99,76 @@ export default function DashboardPage(props: DashboardPageProps) {
 
   const workSummaryItems = snapshotSummaries.length > 0 ? snapshotSummaries : fallbackFeedSummaries;
   const terminalLines = workSummaryItems.length > 0 ? workSummaryItems : [t("dashboard.value.none")];
+  const resourceLines = useMemo<DashboardResourceLine[]>(() => {
+    const snapshots = Object.values(props.topicSnapshots)
+      .filter((snapshot): snapshot is DashboardTopicSnapshot => Boolean(snapshot))
+      .sort((left, right) => new Date(right.generatedAt).getTime() - new Date(left.generatedAt).getTime());
+    const collected: DashboardResourceLine[] = [];
+    snapshots.forEach((snapshot) => {
+      snapshot.references.slice(0, 2).forEach((reference, index) => {
+        const title = String(reference.title ?? "").trim();
+        const source = String(reference.source ?? "").trim();
+        const text = [title, source].filter((part) => part.length > 0).join(" · ") || reference.url;
+        if (!text) {
+          return;
+        }
+        collected.push({
+          id: `${snapshot.topic}-ref-${index}-${text}`,
+          topic: snapshot.topic,
+          kind: "reference",
+          text,
+        });
+      });
+      snapshot.events.slice(0, 1).forEach((event, index) => {
+        const title = String(event.title ?? "").trim();
+        const note = String(event.note ?? "").trim();
+        const text = [title, note].filter((part) => part.length > 0).join(" · ");
+        if (!text) {
+          return;
+        }
+        collected.push({
+          id: `${snapshot.topic}-event-${index}-${text}`,
+          topic: snapshot.topic,
+          kind: "event",
+          text,
+        });
+      });
+      snapshot.highlights.slice(0, 1).forEach((highlight, index) => {
+        const text = String(highlight ?? "").trim();
+        if (!text) {
+          return;
+        }
+        collected.push({
+          id: `${snapshot.topic}-highlight-${index}-${text}`,
+          topic: snapshot.topic,
+          kind: "highlight",
+          text,
+        });
+      });
+    });
+
+    if (collected.length > 0) {
+      return collected.slice(0, 12);
+    }
+
+    const fallback: DashboardResourceLine[] = fallbackFeedSummaries.slice(0, 12).map((summary, index) => ({
+      id: `feed-summary-${index}-${summary}`,
+      topic: "feed",
+      kind: "summary",
+      text: summary,
+    }));
+    if (fallback.length > 0) {
+      return fallback;
+    }
+    return [
+      {
+        id: "resource-empty",
+        topic: "feed",
+        kind: "summary",
+        text: t("dashboard.value.none"),
+      },
+    ];
+  }, [fallbackFeedSummaries, props.topicSnapshots]);
 
   const latestSnapshotText = useMemo(() => {
     const snapshots = Object.values(props.topicSnapshots).filter(
@@ -113,18 +190,19 @@ export default function DashboardPage(props: DashboardPageProps) {
       <section className="dashboard-terminal-shell">
         <aside className="panel-card dashboard-terminal-sidebar">
           <header className="dashboard-terminal-sidebar-head">
-            <strong>DASHBOARD LOG</strong>
-            <span>LIVE</span>
+            <strong>{t("dashboard.title")}</strong>
           </header>
           <div className="dashboard-terminal-sidebar-meta">
-            <p>latest sync</p>
+            <p>{t("dashboard.card.lastBatch")}</p>
             <b>{latestSnapshotText}</b>
           </div>
           <ul className="dashboard-terminal-log-list">
-            {terminalLines.map((line, index) => (
-              <li key={`${line}-${index}`}>
-                <span aria-hidden="true">$</span>
-                <p>{line}</p>
+            {resourceLines.map((line) => (
+              <li key={line.id}>
+                <span aria-hidden="true">
+                  {line.kind === "reference" ? "REF" : line.kind === "event" ? "EVT" : line.kind === "highlight" ? "HLT" : "SUM"}
+                </span>
+                <p>{line.topic === "feed" ? line.text : `${t(topicTitleKey(line.topic))} · ${line.text}`}</p>
               </li>
             ))}
           </ul>
@@ -132,9 +210,9 @@ export default function DashboardPage(props: DashboardPageProps) {
 
         <section className="panel-card dashboard-terminal-workspace">
           <header className="dashboard-terminal-workspace-head">
-            <strong>OPERATIONS CONSOLE</strong>
+            <strong>{t("dashboard.card.workflow")}</strong>
             <div className="dashboard-terminal-head-meta">
-              <span>{terminalLines.length} ENTRIES</span>
+              <span>{resourceLines.length}</span>
               <div className="dashboard-terminal-head-metrics">
                 {cards.map((card) => (
                   <article className="dashboard-terminal-head-metric" key={card.id}>
@@ -147,10 +225,6 @@ export default function DashboardPage(props: DashboardPageProps) {
           </header>
 
           <section className="dashboard-terminal-editor">
-            <div className="dashboard-terminal-filebar">
-              <span>summary.log</span>
-              <span>read-only</span>
-            </div>
             <pre>{terminalLines.map((line, index) => `[${String(index + 1).padStart(2, "0")}] ${line}`).join("\n")}</pre>
           </section>
         </section>
