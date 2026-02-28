@@ -22,6 +22,10 @@ type DashboardIntelligenceSettingsProps = {
   onRunCrawlerOnly: () => void;
 };
 
+function formatTopicId(topic: DashboardTopicId): string {
+  return topic.replace(/([a-z0-9])([A-Z])/g, "$1-$2").toLowerCase();
+}
+
 export default function DashboardIntelligenceSettings(props: DashboardIntelligenceSettingsProps) {
   const { t } = useI18n();
   const [activeTopic, setActiveTopic] = useState<DashboardTopicId>(DASHBOARD_TOPIC_IDS[0]);
@@ -126,7 +130,7 @@ export default function DashboardIntelligenceSettings(props: DashboardIntelligen
                 tabIndex={0}
               >
                 <div className="settings-dashboard-topic-title">
-                  <code>{topic}</code>
+                  <code>{formatTopicId(topic)}</code>
                   <strong>{t(`dashboard.widget.${topic}.title`)}</strong>
                   {runState?.lastError ? <p>{runState.lastError}</p> : null}
                 </div>
@@ -185,7 +189,7 @@ export default function DashboardIntelligenceSettings(props: DashboardIntelligen
           <div className="settings-dashboard-topic-detail-title">
             <small>선택 토픽</small>
             <strong>{t(`dashboard.widget.${activeTopic}.title`)}</strong>
-            <code>{activeTopic}</code>
+            <code>{formatTopicId(activeTopic)}</code>
           </div>
           <button
             disabled={props.disabled || activeTopicRunState?.running}
