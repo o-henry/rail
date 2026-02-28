@@ -4760,19 +4760,74 @@ h3 {
   grid-area: topicGrid;
 }
 
-.dashboard-topic-grid {
+.dashboard-topic-hub {
   min-height: 0;
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  grid-auto-rows: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
   gap: 10px;
-  align-content: start;
-  overflow: auto;
-  padding: 0;
+  overflow: hidden;
 }
 
-.dashboard-topic-grid .dashboard-widget-button {
-  min-height: 160px;
+.dashboard-topic-hub-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.dashboard-topic-hub-head h3 {
+  margin: 0;
+  font-size: 0.84rem;
+  color: #e3ebf8;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.dashboard-topic-hub-head span {
+  min-width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background: rgba(74, 96, 129, 0.45);
+  color: #c8d7ef;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.72rem;
+}
+
+.dashboard-topic-hub-list {
+  min-height: 0;
+  overflow: auto;
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  padding-right: 2px;
+}
+
+.dashboard-topic-hub-item {
+  width: 100%;
+  text-align: left;
+  border: 1px solid rgba(61, 74, 93, 0.72);
+  border-radius: 12px;
+  background: linear-gradient(165deg, rgba(18, 23, 31, 0.9) 0%, rgba(12, 16, 22, 0.94) 100%);
+  padding: 10px;
+  display: grid;
+  gap: 6px;
+}
+
+.dashboard-topic-hub-item:hover {
+  border-color: rgba(115, 146, 201, 0.7);
+}
+
+.dashboard-topic-hub-item.is-focus {
+  border-color: rgba(143, 177, 236, 0.86);
+}
+
+.dashboard-topic-hub-preview {
+  margin: 0;
+  color: #d7deea;
+  font-size: 0.76rem;
+  line-height: 1.35;
 }
 
 .dashboard-card {
@@ -6265,11 +6320,6 @@ pre {
       "schedules schedules schedules schedules schedules schedules";
   }
 
-  .dashboard-topic-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    grid-auto-rows: minmax(150px, auto);
-  }
-
   .dashboard-hero-body {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -6334,11 +6384,6 @@ pre {
       "schedules"
       "marketSummary"
       "topicGrid";
-  }
-
-  .dashboard-topic-grid {
-    grid-template-columns: 1fr;
-    grid-auto-rows: minmax(130px, auto);
   }
 
   .agents-topbar {

@@ -247,7 +247,12 @@ export default function DashboardPage(props: DashboardPageProps) {
             <p>{card.caption}</p>
           </article>
         ))}
-        <aside className="panel-card dashboard-tile dashboard-area-topicGrid dashboard-topic-grid">
+        <aside className="panel-card dashboard-tile dashboard-area-topicGrid dashboard-topic-hub">
+          <header className="dashboard-topic-hub-head">
+            <h3>TOPIC HUB</h3>
+            <span>{widgets.filter((widget) => widget.topic !== "marketSummary").length}</span>
+          </header>
+          <div className="dashboard-topic-hub-list">
           {widgets
             .filter((widget) => widget.topic !== "marketSummary")
             .map((widget) =>
@@ -260,7 +265,7 @@ export default function DashboardPage(props: DashboardPageProps) {
                     : widget.fallbackItemKeys.map((key) => t(key));
                 return (
                   <button
-                    className={`dashboard-widget-card dashboard-widget-button ${activeTopic === widget.topic ? "is-focus" : ""}`}
+                    className={`dashboard-topic-hub-item ${activeTopic === widget.topic ? "is-focus" : ""}`}
                     key={widget.topic}
                     onClick={() => props.onFocusTopic(widget.topic)}
                     type="button"
@@ -270,15 +275,12 @@ export default function DashboardPage(props: DashboardPageProps) {
                       <span>{snapshot?.status === "degraded" ? "DEGRADED" : t(widget.badgeKey)}</span>
                     </div>
                     {snapshot?.summary ? <p className="dashboard-widget-summary">{snapshot.summary}</p> : null}
-                    <ul>
-                      {listItems.map((item) => (
-                        <li key={item}>{item}</li>
-                      ))}
-                    </ul>
+                    {listItems[0] ? <p className="dashboard-topic-hub-preview">{listItems[0]}</p> : null}
                   </button>
                 );
               })(),
             )}
+          </div>
         </aside>
       </section>
     </section>
