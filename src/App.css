@@ -85,6 +85,7 @@
   --header-control-height: 34px;
   --titlebar-overlay-height: 34px;
   --workspace-tab-bottom-inset: 12px;
+  --content-max-width: 1120px;
   --surface: #ffffff;
   --surface-strong: #d9e2ec;
   --surface-soft: #f3f6fa;
@@ -3471,6 +3472,14 @@ h3 {
   font-family: "BasicallyAMono", "DialogNanumBody1984", "Noto Sans KR", sans-serif;
 }
 
+.feed-main > .feed-topbar,
+.feed-main > .feed-filter-inline-wrap,
+.feed-main > .feed-topic-tabs,
+.feed-main > .feed-stream {
+  width: min(100%, var(--content-max-width));
+  margin-inline: auto;
+}
+
 .feed-topbar {
   display: flex;
   align-items: center;
@@ -4767,7 +4776,8 @@ h3 {
 .settings-view > .controls,
 .settings-view > .bridge-embedded {
   width: 100%;
-  max-width: none;
+  max-width: var(--content-max-width);
+  margin-inline: auto;
 }
 
 .panel-card.settings-view {
@@ -5743,6 +5753,13 @@ h3 {
   padding: 14px;
 }
 
+.agents-set-picker-head,
+.agents-set-index-head,
+.agents-set-list {
+  width: min(100%, var(--content-max-width));
+  margin-inline: auto;
+}
+
 .agents-set-picker-head {
   display: grid;
   gap: 3px;
@@ -5764,7 +5781,7 @@ h3 {
 
 .agents-set-index-head {
   display: grid;
-  grid-template-columns: 46px minmax(0, 1fr) 88px;
+  grid-template-columns: 46px minmax(0, 1fr);
   gap: 8px;
   align-items: center;
   margin-top: 8px;
@@ -5796,7 +5813,7 @@ h3 {
   background: color-mix(in srgb, var(--surface-panel) 72%, var(--surface));
   padding: 9px 10px;
   display: grid;
-  grid-template-columns: 46px minmax(0, 1fr) 88px;
+  grid-template-columns: 46px minmax(0, 1fr);
   gap: 8px;
   align-items: center;
   text-align: left;
@@ -5840,20 +5857,6 @@ h3 {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-.agents-set-index-count {
-  justify-self: center;
-  min-width: 32px;
-  height: 22px;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--surface-soft) 54%, var(--surface-elevated));
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 13px;
-  color: var(--text-main);
-  font-family: "BasicallyAMono", "Noto Sans KR", monospace;
 }
 
 .agents-topbar-actions {
@@ -6937,7 +6940,7 @@ pre {
 
   .agents-set-index-head,
   .agents-set-index-row {
-    grid-template-columns: 40px minmax(0, 1fr) 70px 42px;
+    grid-template-columns: 40px minmax(0, 1fr);
   }
 
   .settings-dashboard-topic-row {
@@ -7029,7 +7032,7 @@ pre {
   }
 
   .agents-set-index-row {
-    grid-template-columns: 34px minmax(0, 1fr) 56px 30px;
+    grid-template-columns: 34px minmax(0, 1fr);
   }
 
 }

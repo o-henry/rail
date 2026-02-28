@@ -422,7 +422,6 @@ export default function AgentsPage({ onQuickAction, topicSnapshots }: AgentsPage
           <div className="agents-set-index-head" role="presentation">
             <span>NO</span>
             <span>SET</span>
-            <span>SNAPSHOT</span>
           </div>
           <div className="agents-set-list" role="list" aria-label="Agent sets">
             {setOptions.map((setOption, index) => {
@@ -441,7 +440,6 @@ export default function AgentsPage({ onQuickAction, topicSnapshots }: AgentsPage
                     <strong>{setOption.label}</strong>
                     <code>{mergedPreview}</code>
                   </div>
-                  <span className="agents-set-index-count">{setStateMap[setOption.id]?.dashboardInsights.length ?? 0}</span>
                 </button>
               );
             })}
