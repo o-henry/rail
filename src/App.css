@@ -6338,19 +6338,6 @@ h3 {
   gap: 8px;
 }
 
-.agents-sidebar-card-head-with-tooltip {
-  position: relative;
-}
-
-.agents-sidebar-tooltip-panel {
-  left: 6px;
-  right: 6px;
-  width: auto;
-  max-width: none;
-  transform: none;
-  z-index: 36;
-}
-
 .agents-sidebar-card p,
 .agents-sidebar-card small {
   margin: 0;

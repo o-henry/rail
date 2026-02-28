@@ -233,18 +233,8 @@ export function AgentsWorkspaceView({
               </section>
 
               <section className="agents-sidebar-card">
-                <div className="agents-sidebar-card-head agents-sidebar-card-head-with-tooltip">
+                <div className="agents-sidebar-card-head">
                   <h4>데이터 스냅샷</h4>
-                  <button
-                    aria-label="데이터 스냅샷 도움말"
-                    className="help-tooltip"
-                    type="button"
-                  >
-                    ?
-                  </button>
-                  <div className="help-tooltip-panel agents-sidebar-tooltip-panel" role="tooltip">
-                    데이터 탭/대시보드에서 생성된 최신 스냅샷 요약입니다. 토픽별 핵심 변화와 상태를 빠르게 확인할 수 있습니다.
-                  </div>
                 </div>
                 <ul className="agents-sidebar-list">
                   {(dashboardInsights.length > 0 ? dashboardInsights : ["스냅샷 데이터가 없습니다."]).slice(0, 6).map((line) => (
