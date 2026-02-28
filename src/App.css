@@ -1160,7 +1160,7 @@ h3 {
 
 .workflow-question-input .agents-composer-left {
   min-width: 0;
-  overflow: auto;
+  overflow: visible;
   padding-bottom: 1px;
 }
 
