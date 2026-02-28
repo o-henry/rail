@@ -4619,7 +4619,7 @@ h3 {
   margin: 0 10px 10px;
   min-height: 0;
   display: grid;
-  gap: 10px;
+  gap: 12px;
   overflow: auto;
   padding-bottom: 0;
 }
@@ -4627,27 +4627,28 @@ h3 {
 .dashboard-overview-layout {
   height: 100%;
   overflow: hidden;
-  padding-top: 2px;
+  padding: 4px;
 }
 
 .dashboard-mosaic {
-  --dashboard-gap: 8px;
+  --dashboard-gap: 10px;
   container-type: inline-size;
   min-height: 0;
   height: 100%;
   display: grid;
   gap: var(--dashboard-gap);
   grid-template-columns: repeat(12, minmax(0, 1fr));
-  grid-template-rows: clamp(158px, 15cqw, 250px) minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1.05fr) minmax(0, 0.95fr) minmax(118px, 0.45fr);
   grid-template-areas:
-    "workflow workflow approvals approvals webConnect webConnect schedules schedules marketSummary marketSummary marketSummary marketSummary"
-    "globalHeadlines globalHeadlines globalHeadlines industryTrendRadar industryTrendRadar industryTrendRadar communityHotTopics communityHotTopics communityHotTopics communityHotTopics communityHotTopics communityHotTopics"
-    "eventCalendar eventCalendar eventCalendar eventCalendar riskAlertBoard riskAlertBoard riskAlertBoard riskAlertBoard devEcosystem devEcosystem devEcosystem devEcosystem";
+    "marketSummary marketSummary marketSummary marketSummary marketSummary marketSummary marketSummary marketSummary globalHeadlines globalHeadlines globalHeadlines globalHeadlines"
+    "marketSummary marketSummary marketSummary marketSummary marketSummary marketSummary marketSummary marketSummary communityHotTopics communityHotTopics riskAlertBoard riskAlertBoard"
+    "workflow workflow approvals approvals webConnect webConnect schedules schedules industryTrendRadar industryTrendRadar eventCalendar eventCalendar";
 }
 
 .dashboard-tile {
   min-height: 0;
   overflow: hidden;
+  border-radius: 14px;
 }
 
 .dashboard-area-workflow {
@@ -4700,43 +4701,52 @@ h3 {
 
 .dashboard-card {
   gap: 8px;
+  background: linear-gradient(180deg, rgba(21, 26, 33, 0.92) 0%, rgba(14, 18, 24, 0.95) 100%);
+  border: 1px solid rgba(67, 78, 94, 0.72);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03), 0 8px 18px rgba(0, 0, 0, 0.24);
 }
 
 .dashboard-card h2 {
   margin: 0;
-  font-size: 0.77rem;
-  color: var(--text-muted);
+  font-size: 0.72rem;
+  color: #8fa1bc;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
 }
 
 .dashboard-card strong {
-  font-size: 1.5rem;
+  font-size: 1.42rem;
   letter-spacing: -0.02em;
-  color: var(--text-main);
+  color: #f1f5fb;
   line-height: 1;
 }
 
 .dashboard-card p {
   margin: 0;
-  font-size: 0.81rem;
-  color: var(--text-muted);
+  font-size: 0.76rem;
+  color: #9caac0;
   word-break: break-word;
 }
 
 .dashboard-widget-card {
-  gap: 8px;
+  gap: 10px;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
+  border: 1px solid rgba(61, 72, 87, 0.76);
+  background: linear-gradient(165deg, rgba(18, 23, 31, 0.92) 0%, rgba(12, 16, 22, 0.96) 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03), 0 10px 22px rgba(0, 0, 0, 0.26);
 }
 
 .dashboard-widget-button {
   text-align: left;
-  border: 1px solid transparent;
+  border: 1px solid rgba(54, 66, 84, 0.72);
   transition: border-color 160ms ease, transform 160ms ease, box-shadow 160ms ease, background 160ms ease;
 }
 
 .dashboard-widget-button:hover {
-  border-color: var(--surface-strong);
+  border-color: rgba(115, 146, 201, 0.7);
   transform: translateY(-1px);
+  box-shadow: 0 16px 26px rgba(5, 8, 12, 0.46);
 }
 
 .dashboard-widget-head {
@@ -4748,13 +4758,15 @@ h3 {
 
 .dashboard-widget-head h3 {
   margin: 0;
-  font-size: 0.92rem;
+  font-size: 0.88rem;
+  color: #edf3fd;
   line-height: 1.2;
 }
 
 .dashboard-widget-head span {
-  color: var(--text-muted);
-  font-size: 0.68rem;
+  color: #94a9c7;
+  font-size: 0.64rem;
+  letter-spacing: 0.08em;
 }
 
 .dashboard-widget-card ul {
@@ -4767,24 +4779,50 @@ h3 {
 
 .dashboard-widget-summary {
   margin: 0;
-  color: var(--text-muted);
-  font-size: 0.76rem;
+  color: #9aacc6;
+  font-size: 0.72rem;
   line-height: 1.35;
 }
 
 .dashboard-widget-card li {
-  color: var(--text-main);
-  font-size: 0.8rem;
+  color: #d7deea;
+  font-size: 0.76rem;
   line-height: 1.35;
 }
 
 .dashboard-area-marketSummary {
-  background: linear-gradient(162deg, rgba(95, 136, 215, 0.22), rgba(95, 136, 215, 0.04) 58%);
+  position: relative;
+  isolation: isolate;
+  border-color: rgba(116, 135, 170, 0.6);
+  background:
+    radial-gradient(circle at 60% 58%, rgba(255, 131, 69, 0.34) 0%, rgba(92, 41, 17, 0.3) 24%, rgba(8, 11, 16, 0) 46%),
+    radial-gradient(circle at 32% 112%, rgba(245, 117, 53, 0.58) 0%, rgba(63, 27, 14, 0.76) 44%, rgba(8, 11, 17, 0.96) 80%),
+    radial-gradient(circle at 18% 18%, rgba(98, 138, 205, 0.2) 0%, rgba(16, 21, 29, 0.88) 44%, rgba(8, 11, 16, 0.98) 100%);
+}
+
+.dashboard-area-marketSummary::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image:
+    radial-gradient(circle at 7% 12%, rgba(255, 255, 255, 0.8) 0 1px, transparent 1px),
+    radial-gradient(circle at 24% 28%, rgba(255, 255, 255, 0.55) 0 1px, transparent 1px),
+    radial-gradient(circle at 42% 22%, rgba(255, 255, 255, 0.46) 0 1px, transparent 1px),
+    radial-gradient(circle at 55% 32%, rgba(255, 255, 255, 0.5) 0 1px, transparent 1px),
+    radial-gradient(circle at 68% 18%, rgba(255, 255, 255, 0.5) 0 1px, transparent 1px),
+    radial-gradient(circle at 84% 22%, rgba(255, 255, 255, 0.52) 0 1px, transparent 1px),
+    radial-gradient(circle at 76% 42%, rgba(255, 255, 255, 0.38) 0 1px, transparent 1px);
+  background-size: 100% 100%;
+  opacity: 0.8;
 }
 
 .dashboard-area-globalHeadlines,
 .dashboard-area-industryTrendRadar {
-  background: linear-gradient(160deg, rgba(255, 255, 255, 0.66), rgba(245, 248, 252, 0.92));
+  background:
+    linear-gradient(160deg, rgba(22, 28, 37, 0.95), rgba(14, 19, 26, 0.94)),
+    radial-gradient(circle at 84% 15%, rgba(120, 156, 218, 0.18), transparent 52%);
 }
 
 .dashboard-footer {
@@ -4851,7 +4889,7 @@ h3 {
 }
 
 .dashboard-stock-chart-source {
-  color: var(--text-muted);
+  color: #a9b7cd;
   font-size: 0.74rem;
   line-height: 1.35;
   white-space: nowrap;
@@ -4860,7 +4898,7 @@ h3 {
 }
 
 .dashboard-stock-chart-empty {
-  color: var(--text-muted);
+  color: #9caec7;
   font-size: 0.82rem;
   line-height: 1.45;
 }
@@ -5058,8 +5096,9 @@ h3 {
 .dashboard-actions button {
   width: 100%;
   border-radius: 8px;
-  background: var(--surface-soft);
-  border: 1px solid var(--surface-strong);
+  background: #1b2230;
+  border: 1px solid #334258;
+  color: #d7e4f8;
 }
 
 @media (max-width: 980px) {
@@ -5115,15 +5154,6 @@ h3 {
 :root[data-theme="dark"] .dashboard-card,
 :root[data-theme="dark"] .dashboard-widget-button {
   border-color: #343841;
-}
-
-:root[data-theme="dark"] .dashboard-area-marketSummary {
-  background: linear-gradient(162deg, rgba(87, 134, 220, 0.28), rgba(58, 84, 130, 0.1) 60%);
-}
-
-:root[data-theme="dark"] .dashboard-area-globalHeadlines,
-:root[data-theme="dark"] .dashboard-area-industryTrendRadar {
-  background: linear-gradient(155deg, rgba(48, 53, 62, 0.78), rgba(41, 45, 52, 0.95));
 }
 
 :root[data-theme="dark"] .dashboard-stock-chart-line,
@@ -6052,12 +6082,12 @@ pre {
     grid-template-columns: repeat(6, minmax(0, 1fr));
     grid-template-rows: repeat(6, minmax(120px, auto));
     grid-template-areas:
+      "marketSummary marketSummary marketSummary marketSummary marketSummary marketSummary"
+      "marketSummary marketSummary marketSummary marketSummary marketSummary marketSummary"
+      "globalHeadlines globalHeadlines globalHeadlines communityHotTopics communityHotTopics communityHotTopics"
+      "riskAlertBoard riskAlertBoard riskAlertBoard industryTrendRadar industryTrendRadar industryTrendRadar"
       "workflow workflow approvals approvals webConnect webConnect"
-      "schedules schedules marketSummary marketSummary marketSummary marketSummary"
-      "globalHeadlines globalHeadlines globalHeadlines industryTrendRadar industryTrendRadar industryTrendRadar"
-      "communityHotTopics communityHotTopics communityHotTopics communityHotTopics communityHotTopics communityHotTopics"
-      "eventCalendar eventCalendar riskAlertBoard riskAlertBoard devEcosystem devEcosystem"
-      "eventCalendar eventCalendar riskAlertBoard riskAlertBoard devEcosystem devEcosystem";
+      "schedules schedules eventCalendar eventCalendar eventCalendar eventCalendar";
   }
 
   .agents-grid {
