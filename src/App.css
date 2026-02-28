@@ -774,7 +774,7 @@ h3 {
 
 .workspace-quick-panel-actions {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(180px, 220px));
   gap: 8px;
 }
 
@@ -4869,19 +4869,23 @@ h3 {
   overflow: auto;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  grid-auto-rows: 1fr;
+  grid-auto-rows: auto;
+  justify-content: start;
+  align-content: start;
   gap: 10px;
 }
 
 .agents-set-card {
+  width: 100%;
+  max-width: 220px;
   aspect-ratio: 1 / 1;
   border: 1px solid var(--surface-strong);
   border-radius: 12px;
   background: var(--surface-panel);
-  padding: 14px;
+  padding: 12px;
   display: grid;
   align-content: start;
-  gap: 8px;
+  gap: 6px;
   text-align: left;
 }
 
