@@ -6436,6 +6436,7 @@ h3 {
 .agents-thread-brief strong {
   font-size: 13px;
   color: var(--text-main);
+  font-family: "Galmuri11", "DialogNanumBody1984", "Noto Sans KR", sans-serif;
 }
 
 .agents-thread-brief p {
@@ -6443,12 +6444,11 @@ h3 {
   font-size: 12px;
   color: var(--text-muted);
   line-height: 1.4;
+  font-family: "Galmuri11", "DialogNanumBody1984", "Noto Sans KR", sans-serif;
 }
 
-.agents-thread-brief small {
-  font-size: 10px;
-  color: var(--text-muted);
-  font-family: "BasicallyAMono", "Noto Sans KR", monospace;
+.agents-thread-brief :lang(en) {
+  font-family: "BasicallyAMono", "DialogNanumBody1984", "Noto Sans KR", monospace;
 }
 
 .agents-add-thread-button {

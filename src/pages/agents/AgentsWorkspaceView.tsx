@@ -136,9 +136,8 @@ export function AgentsWorkspaceView({
     <section className="agents-layout agents-workspace-mode workspace-tab-panel">
       <div className="agents-topbar">
         <div className="agents-thread-list agents-thread-brief" aria-label="세트 브리핑">
-          <strong>{activeSetOption?.label ?? "세트 미선택"}</strong>
-          <p>{setMission || activeSetOption?.description || "세트 설명이 없습니다."}</p>
-          <small>{`Codex Multi-Agent: ${codexMultiAgentMode}`}</small>
+          <strong lang="ko">{activeSetOption?.label ?? "세트 미선택"}</strong>
+          <p lang="ko">{setMission || activeSetOption?.description || "세트 설명이 없습니다."}</p>
         </div>
         <div className="agents-topbar-actions">
           <button
