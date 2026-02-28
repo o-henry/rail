@@ -239,6 +239,7 @@ import { createWebTurnRunHandlers } from "./main/runtime/webTurnRunHandlers";
 import { useBatchScheduler } from "./main/runtime/useBatchScheduler";
 import { useCanvasGraphDerivedState } from "./main/canvas/useCanvasGraphDerivedState";
 import { MainAppModals } from "./main/presentation/MainAppModals";
+import { WorkspaceQuickPanel } from "./main/presentation/WorkspaceQuickPanel";
 import {
   buildRailCompatibleDagSnapshot,
   buildRunApprovalSnapshot,
@@ -303,6 +304,8 @@ function App() {
   const { mode: themeMode, setMode: setThemeMode } = useThemeMode();
   const [workspaceTab, setWorkspaceTab] = useState<WorkspaceTab>("dashboard");
   const [dashboardDetailTopic, setDashboardDetailTopic] = useState<DashboardDetailTopic | null>(null);
+  const [quickPanelOpen, setQuickPanelOpen] = useState(false);
+  const [quickPanelQuery, setQuickPanelQuery] = useState("");
   const [pendingWebConnectCheck, setPendingWebConnectCheck] = useState<{
     providers: WebProvider[];
     reason: string;
@@ -1782,6 +1785,79 @@ function App() {
     setWorkspaceTab("workflow");
     setStatus("에이전트 요청이 워크플로우 입력에 반영되었습니다.");
   };
+  const quickPanelWorkspaceLabel = useMemo(() => {
+    const byTab: Record<WorkspaceTab, string> = {
+      dashboard: "홈 오버뷰",
+      agents: "에이전트 채팅",
+      workflow: "워크플로우",
+      feed: "요점 정리",
+      settings: "설정",
+      bridge: "설정",
+    };
+    return byTab[workspaceTab] ?? "워크스페이스";
+  }, [workspaceTab]);
+  const quickPanelRecentPosts = useMemo(
+    () =>
+      [...feedPosts]
+        .sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt))
+        .slice(0, 5)
+        .map((post) => ({
+          id: post.id,
+          title: post.summary.trim().slice(0, 90) || ("[" + post.agentName + "] " + post.status),
+          meta: post.agentName + " · " + formatRelativeFeedTime(post.createdAt),
+        })),
+    [feedPosts],
+  );
+  const onToggleQuickPanel = () => {
+    setQuickPanelOpen((prev) => !prev);
+  };
+  const onCloseQuickPanel = () => {
+    setQuickPanelOpen(false);
+  };
+  const onOpenQuickPanelFeed = () => {
+    setWorkspaceTab("feed");
+    setFeedCategory("all_posts");
+    setFeedStatusFilter("all");
+    setFeedKeyword("");
+    setQuickPanelOpen(false);
+  };
+  const onOpenQuickPanelAgents = () => {
+    setWorkspaceTab("agents");
+    setQuickPanelOpen(false);
+  };
+  const onSubmitQuickPanelQuery = () => {
+    const next = quickPanelQuery.trim();
+    if (!next) {
+      setWorkspaceTab("agents");
+      setQuickPanelOpen(false);
+      return;
+    }
+    setWorkflowQuestion(next);
+    setWorkspaceTab("workflow");
+    setStatus("우측 패널 입력이 워크플로우에 반영되었습니다.");
+    setQuickPanelQuery("");
+    setQuickPanelOpen(false);
+  };
+  useEffect(() => {
+    const onQuickPanelHotkey = (event: KeyboardEvent) => {
+      const key = event.key.toLowerCase();
+      if ((event.metaKey || event.ctrlKey) && !event.altKey && !event.shiftKey && key === "k") {
+        event.preventDefault();
+        setQuickPanelOpen((prev) => !prev);
+        return;
+      }
+      if (event.key === "Escape") {
+        setQuickPanelOpen(false);
+      }
+    };
+    window.addEventListener("keydown", onQuickPanelHotkey);
+    return () => window.removeEventListener("keydown", onQuickPanelHotkey);
+  }, []);
+  useEffect(() => {
+    if (canvasFullscreen) {
+      setQuickPanelOpen(false);
+    }
+  }, [canvasFullscreen]);
   const appShellStyle = useMemo(
     () =>
       ({
@@ -1802,6 +1878,20 @@ function App() {
 
       <section className={`workspace ${canvasFullscreen ? "canvas-fullscreen-active" : ""}`}>
         {!canvasFullscreen && <header className="workspace-header workspace-header-spacer" />}
+        {!canvasFullscreen && (
+          <WorkspaceQuickPanel
+            isOpen={quickPanelOpen}
+            onChangeQuery={setQuickPanelQuery}
+            onClose={onCloseQuickPanel}
+            onOpenAgents={onOpenQuickPanelAgents}
+            onOpenFeed={onOpenQuickPanelFeed}
+            onSubmitQuery={onSubmitQuickPanelQuery}
+            onToggle={onToggleQuickPanel}
+            query={quickPanelQuery}
+            recentPosts={quickPanelRecentPosts}
+            workspaceLabel={quickPanelWorkspaceLabel}
+          />
+        )}
 
         {error && (
           <div className="error">
