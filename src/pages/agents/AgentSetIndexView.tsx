@@ -16,7 +16,7 @@ export function AgentSetIndexView({
     <section className="agents-layout agents-set-mode workspace-tab-panel">
       <div className="agents-set-picker">
         <header className="agents-set-picker-head">
-          <h2>AGENT INDEX</h2>
+          <h2>에이전트 세트</h2>
           <p>세트를 선택하면 해당 에이전트 워크스페이스가 열립니다.</p>
         </header>
         <div className="agents-set-groups">

@@ -6944,6 +6944,16 @@ pre {
   margin-top: 4px;
 }
 
+.settings-view .controls > h3,
+.feed-topbar h2,
+.inspector-title-chip,
+.agents-set-picker-head h2,
+.settings-dashboard-intelligence-eyebrow {
+  font-family: "Galmuri11", "DialogNanumBody1984", "Noto Sans KR", sans-serif;
+  font-size: 15px;
+  letter-spacing: 0;
+}
+
 .bridge-head-panel,
 .bridge-provider-panel,
 .bridge-log-panel {
