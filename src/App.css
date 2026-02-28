@@ -609,7 +609,6 @@ h3 {
   gap: 10px;
   position: relative;
   z-index: 8;
-  border-bottom: 1px solid var(--surface-strong);
 }
 
 .workspace-topbar-nav {
@@ -906,10 +905,6 @@ h3 {
   padding: 0;
   display: inline-grid;
   place-items: center;
-}
-
-:root[data-theme="dark"] .workspace-topbar {
-  border-bottom-color: #343841;
 }
 
 :root[data-theme="dark"] .workspace-quick-toggle {
