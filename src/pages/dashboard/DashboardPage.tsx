@@ -5,7 +5,6 @@ import { buildDashboardStockChartData, type DashboardStockDocumentPost } from ".
 import type { DashboardDetailTopic } from "./DashboardDetailPage";
 
 type DashboardPageProps = {
-  cwd: string;
   isGraphRunning: boolean;
   pendingApprovalsCount: number;
   webBridgeRunning: boolean;
@@ -112,7 +111,7 @@ export default function DashboardPage(props: DashboardPageProps) {
         id: "workflow",
         title: t("dashboard.card.workflow"),
         value: props.isGraphRunning ? t("dashboard.status.running") : t("dashboard.status.idle"),
-        caption: props.cwd || t("dashboard.value.none"),
+        caption: "",
       },
       {
         id: "approvals",
@@ -138,7 +137,6 @@ export default function DashboardPage(props: DashboardPageProps) {
     ],
     [
       props.connectedProviderCount,
-      props.cwd,
       props.enabledScheduleCount,
       props.isGraphRunning,
       props.pendingApprovalsCount,

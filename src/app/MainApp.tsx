@@ -2024,7 +2024,6 @@ function App() {
         {workspaceTab === "dashboard" && dashboardDetailTopic == null && (
           <DashboardPage
             connectedProviderCount={webBridgeStatus.connectedProviders.length}
-            cwd={cwd}
             enabledScheduleCount={batchScheduler.schedules.filter((item) => item.status === "enabled").length}
             isGraphRunning={isGraphRunning}
             onOpenDetail={(topic) => setDashboardDetailTopic(topic)}
