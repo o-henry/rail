@@ -351,27 +351,36 @@ export default function AgentsPage({ onQuickAction, topicSnapshots }: AgentsPage
       <section className="agents-layout agents-set-mode workspace-tab-panel">
         <div className="agents-set-picker">
           <header className="agents-set-picker-head">
-            <h2>에이전트 세트</h2>
-            <p>먼저 세트를 선택하면 해당 세트의 에이전트 뷰가 열립니다.</p>
+            <h2>AGENT INDEX</h2>
+            <p>세트를 선택하면 해당 에이전트 워크스페이스가 열립니다.</p>
           </header>
+          <div className="agents-set-index-head" role="presentation">
+            <span>NO</span>
+            <span>SET</span>
+            <span>SNAPSHOT</span>
+            <span>OPEN</span>
+          </div>
           <div className="agents-set-list" role="list" aria-label="Agent sets">
-            {setOptions.map((setOption) => (
+            {setOptions.map((setOption, index) => (
               <button
-                className="agents-set-card"
+                className="agents-set-index-row"
                 key={setOption.id}
                 onClick={() => onSelectSet(setOption.id)}
                 role="listitem"
                 type="button"
               >
-                <strong>{setOption.label}</strong>
-                <span>{setOption.description}</span>
-                {(setStateMap[setOption.id]?.dashboardInsights.length ?? 0) > 0 ? (
-                  <ul className="agents-set-insight-list">
-                    {setStateMap[setOption.id].dashboardInsights.slice(0, 3).map((insight) => (
-                      <li key={insight}>{insight}</li>
-                    ))}
-                  </ul>
-                ) : null}
+                <span className="agents-set-index-no">{String(index + 1).padStart(2, "0")}</span>
+                <div className="agents-set-index-meta">
+                  <strong>{setOption.label}</strong>
+                  <span>{setOption.description}</span>
+                  {(setStateMap[setOption.id]?.dashboardInsights.length ?? 0) > 0 ? (
+                    <code>{setStateMap[setOption.id].dashboardInsights[0]}</code>
+                  ) : (
+                    <code>no snapshot</code>
+                  )}
+                </div>
+                <span className="agents-set-index-count">{setStateMap[setOption.id]?.dashboardInsights.length ?? 0}</span>
+                <span className="agents-set-index-open" aria-hidden="true">↗</span>
               </button>
             ))}
           </div>
