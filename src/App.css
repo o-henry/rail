@@ -6300,7 +6300,7 @@ h3 {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  min-height: 22px;
+  min-height: 26px;
 }
 
 .agents-workspace-sidebar.is-collapsed {
@@ -6574,10 +6574,10 @@ h3 {
 }
 
 .agents-off-button {
-  width: 22px;
-  min-width: 22px;
-  height: 22px;
-  min-height: 22px;
+  width: 26px;
+  min-width: 26px;
+  height: 26px;
+  min-height: 26px;
   border-radius: 999px;
   padding: 0;
   border: 0;
@@ -6587,8 +6587,8 @@ h3 {
 }
 
 .agents-off-button img {
-  width: 11px;
-  height: 11px;
+  width: 13px;
+  height: 13px;
   opacity: 0.76;
 }
 
