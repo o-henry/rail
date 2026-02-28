@@ -2469,7 +2469,8 @@ h3 {
 }
 
 .settings-background-controls {
-  display: none;
+  display: grid;
+  gap: 8px;
 }
 
 .settings-opacity-slider {
