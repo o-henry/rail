@@ -6073,7 +6073,7 @@ h3 {
   display: grid;
   align-content: start;
   gap: 8px;
-  margin-top: 0;
+  margin-top: 1rem;
 }
 
 .agents-set-group {
@@ -6090,7 +6090,7 @@ h3 {
   grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
   column-gap: 10px;
-  margin-top: 0.4rem;
+  margin-top: 0;
   padding: 0 6px;
 }
 
@@ -6358,9 +6358,11 @@ h3 {
 }
 
 .agents-set-brief {
-  border-radius: 10px;
-  background: color-mix(in srgb, var(--surface-panel) 82%, var(--surface));
-  padding: 10px 12px;
+  border-radius: 12px;
+  border: 0;
+  background: #ffffff;
+  box-shadow: var(--panel-shadow);
+  padding: 12px;
   display: grid;
   gap: 4px;
 }
