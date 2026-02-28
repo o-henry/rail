@@ -40,7 +40,7 @@ export const KO_MESSAGES: Dictionary = {
     "settings.dashboardIntelligence.description": "주제별 Codex 에이전트 설정, 수집 주기, 즉시 실행을 관리합니다.",
     "settings.dashboardIntelligence.runAll": "전체 실행",
     "settings.dashboardIntelligence.runCrawlerOnly": "크롤러만 실행",
-    "settings.dashboardIntelligence.runTopic": "실행",
+    "settings.dashboardIntelligence.runTopic": "실행하기",
     "settings.dashboardIntelligence.running": "실행 중...",
     "settings.dashboardIntelligence.cadence": "주기 (시간)",
     "settings.legal.title": "법적 고지",
