@@ -2988,7 +2988,6 @@ h3 {
   grid-template-columns: minmax(220px, 1.8fr) minmax(190px, 1fr) 98px 88px;
   align-items: center;
   gap: 8px;
-  padding: 0 10px;
 }
 
 .settings-dashboard-topic-columns span {
