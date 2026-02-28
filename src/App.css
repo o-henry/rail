@@ -4464,10 +4464,16 @@ h3 {
   max-width: 1440px;
   display: grid;
   grid-template-rows: auto auto;
+  justify-items: center;
   gap: 36px;
   overflow: auto;
   -ms-overflow-style: none;
   scrollbar-width: none;
+}
+
+.settings-view > .controls,
+.settings-view > .bridge-embedded {
+  width: min(960px, 100%);
 }
 
 .settings-view::-webkit-scrollbar {
