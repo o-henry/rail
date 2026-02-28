@@ -6443,6 +6443,11 @@ h3 {
   padding-left: 1rem;
 }
 
+.agents-thread-brief {
+  font-family: "Galmuri11", "DialogNanumBody1984", "Noto Sans KR", sans-serif;
+  letter-spacing: 0;
+}
+
 .agents-thread-brief strong {
   font-size: 13px;
   color: var(--text-main);
@@ -6455,10 +6460,6 @@ h3 {
   color: var(--text-muted);
   line-height: 1.4;
   font-family: "Galmuri11", "DialogNanumBody1984", "Noto Sans KR", sans-serif;
-}
-
-.agents-thread-brief :lang(en) {
-  font-family: "BasicallyAMono", "DialogNanumBody1984", "Noto Sans KR", monospace;
 }
 
 .agents-add-thread-button {
@@ -6492,7 +6493,7 @@ h3 {
   overflow: auto;
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  grid-auto-rows: minmax(260px, auto);
+  grid-auto-rows: 100%;
   gap: 10px;
   align-content: start;
   padding-right: 2px;
@@ -6507,8 +6508,8 @@ h3 {
 }
 
 .agents-grid-card {
-  min-height: 260px;
-  height: auto;
+  min-height: 0;
+  height: 100%;
   border-radius: 12px;
   border: 1px solid var(--panel-border);
   background: linear-gradient(
@@ -6522,6 +6523,13 @@ h3 {
   gap: 10px;
   cursor: pointer;
   overflow: hidden;
+  font-family: "Galmuri11", "DialogNanumBody1984", "Noto Sans KR", sans-serif;
+  letter-spacing: 0;
+}
+
+.agents-grid-card :lang(en) {
+  font-family: "BasicallyAMono", "DialogNanumBody1984", "Noto Sans KR", monospace;
+  letter-spacing: -0.7px;
 }
 
 .agents-grid-card.is-active {
@@ -6554,8 +6562,7 @@ h3 {
   display: inline-flex;
   align-items: center;
   font-size: 10px;
-  letter-spacing: 0.02em;
-  font-family: "BasicallyAMono", "Noto Sans KR", monospace;
+  letter-spacing: 0;
 }
 
 .agents-grid-card-chip.is-running {
@@ -6600,9 +6607,8 @@ h3 {
   margin: 0;
   font-size: 10px;
   color: var(--text-muted);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  font-family: "BasicallyAMono", "Noto Sans KR", monospace;
+  letter-spacing: 0;
+  text-transform: none;
 }
 
 .agents-grid-card-process-list {
@@ -6626,7 +6632,6 @@ h3 {
 
 .agents-grid-card-process-index {
   color: var(--text-muted);
-  font-family: "BasicallyAMono", "Noto Sans KR", monospace;
   font-size: 10px;
   text-align: right;
 }
@@ -6658,7 +6663,6 @@ h3 {
   margin: 0;
   color: var(--text-main);
   font-size: 12px;
-  font-family: "BasicallyAMono", "Noto Sans KR", monospace;
 }
 
 .agents-grid-card-guidance {

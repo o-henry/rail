@@ -35,6 +35,10 @@ function toKoreanThreadName(name: string): string {
   return normalized;
 }
 
+function detectTextLang(value: string): "en" | "ko" {
+  return /[A-Za-z]/.test(String(value ?? "")) ? "en" : "ko";
+}
+
 type ProcessStepState = "running" | "pending";
 
 type ProcessStep = {
@@ -204,6 +208,9 @@ export function AgentsWorkspaceView({
               const displayThreadName = toKoreanThreadName(thread.name);
               const isActive = thread.id === activeThreadId;
               const processSteps = buildProcessSteps(thread, isActive);
+              const roleLang = detectTextLang(thread.role);
+              const starterPromptLang = detectTextLang(thread.starterPrompt ?? "");
+              const nameLang = detectTextLang(displayThreadName);
               return (
                 <article
                   key={thread.id}
@@ -211,7 +218,7 @@ export function AgentsWorkspaceView({
                   onClick={() => onSetActiveThreadId(thread.id)}
                 >
                   <div className="agents-grid-card-head">
-                    <strong>{displayThreadName}</strong>
+                    <strong lang={nameLang}>{displayThreadName}</strong>
                     <button
                       aria-label={`${displayThreadName} ${t("agents.off")}`}
                       className="agents-off-button"
@@ -236,7 +243,7 @@ export function AgentsWorkspaceView({
                   <div className="agents-grid-card-log" aria-label={`${displayThreadName} 로그`}>
                     <section className="agents-grid-card-log-block">
                       <h5>역할</h5>
-                      <p className="agents-grid-card-role">{thread.role}</p>
+                      <p className="agents-grid-card-role" lang={roleLang}>{thread.role}</p>
                     </section>
                     <section className="agents-grid-card-log-block">
                       <h5>처리 단계</h5>
@@ -245,7 +252,7 @@ export function AgentsWorkspaceView({
                           <li key={step.id}>
                             <span className="agents-grid-card-process-index">{index + 1}</span>
                             <span className={`agents-grid-card-process-dot is-${step.state}`} />
-                            <span>{step.label}</span>
+                            <span lang={detectTextLang(step.label)}>{step.label}</span>
                           </li>
                         ))}
                       </ol>
@@ -253,7 +260,7 @@ export function AgentsWorkspaceView({
                     {thread.starterPrompt ? (
                       <section className="agents-grid-card-log-block">
                         <h5>최근 요청 템플릿</h5>
-                        <p className="agents-grid-card-starter">{thread.starterPrompt}</p>
+                        <p className="agents-grid-card-starter" lang={starterPromptLang}>{thread.starterPrompt}</p>
                       </section>
                     ) : null}
                   </div>
