@@ -1512,13 +1512,6 @@ function App() {
   const artifactTypeOptions = useMemo(() => getArtifactTypeOptions(locale), [locale]);
   const costPresetOptions = useMemo(() => getCostPresetOptions(locale), [locale]);
   const codexMultiAgentModeOptions = useMemo(() => getCodexMultiAgentModeOptions(locale), [locale]);
-  const themeModeOptions = useMemo(
-    () => [
-      { value: "light", label: t("settings.theme.light") },
-      { value: "dark", label: t("settings.theme.dark") },
-    ],
-    [t],
-  );
   const presetTemplateOptions = useMemo(() => getPresetTemplateOptions(locale), [locale]);
   const knowledgeTopKOptions = useMemo(
     () => KNOWLEDGE_TOP_K_OPTIONS.map((option) => ({ ...option, label: tp(option.label) })),
@@ -1949,7 +1942,6 @@ function App() {
               codexMultiAgentMode={codexMultiAgentMode}
               codexMultiAgentModeOptions={[...codexMultiAgentModeOptions]}
               themeMode={themeMode}
-              themeModeOptions={[...themeModeOptions]}
               onCheckUsage={() => void onCheckUsage()}
               onCloseUsageResult={() => setUsageResultClosed(true)}
               onOpenRunsFolder={() => void onOpenRunsFolder()}

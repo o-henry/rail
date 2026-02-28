@@ -12,7 +12,6 @@ type SettingsPageProps = {
   codexMultiAgentMode: string;
   codexMultiAgentModeOptions: ReadonlyArray<{ value: string; label: string }>;
   themeMode: string;
-  themeModeOptions: ReadonlyArray<{ value: string; label: string }>;
   status: string;
   usageInfoText: string;
   usageResultClosed: boolean;
@@ -29,8 +28,6 @@ type SettingsPageProps = {
   onOpenRunsFolder: () => void;
 };
 
-const SHOW_THEME_MODE_SETTING = false;
-
 export default function SettingsPage({
   compact = false,
   engineStarted,
@@ -42,7 +39,6 @@ export default function SettingsPage({
   codexMultiAgentMode,
   codexMultiAgentModeOptions,
   themeMode,
-  themeModeOptions,
   status,
   usageInfoText,
   usageResultClosed,
@@ -59,6 +55,7 @@ export default function SettingsPage({
   onOpenRunsFolder,
 }: SettingsPageProps) {
   const { t } = useI18n();
+  const isDarkMode = themeMode === "dark";
 
   return (
     <section className={`controls ${compact ? "settings-compact" : ""}`}>
@@ -103,18 +100,23 @@ export default function SettingsPage({
           value={codexMultiAgentMode}
         />
       </label>
-      {SHOW_THEME_MODE_SETTING && (
-        <label>
-          {t("settings.themeMode")}
-          <FancySelect
-            ariaLabel={t("settings.themeMode")}
-            className="modern-select"
-            onChange={onSetThemeMode}
-            options={[...themeModeOptions]}
-            value={themeMode}
+      <label>
+        {t("settings.themeMode")}
+        <div className="settings-cwd-row">
+          <input
+            className="lowercase-path-input"
+            readOnly
+            value={isDarkMode ? t("settings.theme.dark") : t("settings.theme.light")}
           />
-        </label>
-      )}
+          <button
+            className="settings-cwd-picker"
+            onClick={() => onSetThemeMode(isDarkMode ? "light" : "dark")}
+            type="button"
+          >
+            {`다크 모드: ${isDarkMode ? "ON" : "OFF"}`}
+          </button>
+        </div>
+      </label>
       {!compact && (
         <div className="button-row">
           <button
