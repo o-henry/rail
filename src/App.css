@@ -2153,6 +2153,7 @@ h3 {
 }
 
 .inspector-head {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -2168,6 +2169,7 @@ h3 {
   align-items: center;
   gap: 6px;
   flex: 1 1 auto;
+  width: 100%;
   min-width: 0;
 }
 
@@ -2182,10 +2184,11 @@ h3 {
 }
 
 .inspector-head-tooltip-panel {
-  left: 0;
-  right: auto;
-  width: calc(100% - 8px);
-  max-width: calc(100% - 8px);
+  left: -8px;
+  right: -8px;
+  width: auto;
+  max-width: none;
+  transform: none;
 }
 
 .inspector-pane h2 {
@@ -2221,7 +2224,9 @@ h3 {
   line-height: 1;
   color: #5b6573;
   background: #e8edf4;
-  /* border: 1px solid #cfd8e4; */
+  border: 0;
+  outline: none;
+  box-shadow: none;
   cursor: help;
   user-select: none;
 }
@@ -2252,6 +2257,14 @@ h3 {
 .help-tooltip:focus + .help-tooltip-panel,
 .help-tooltip:focus-visible + .help-tooltip-panel {
   opacity: 1;
+}
+
+.help-tooltip-panel.inspector-head-tooltip-panel {
+  left: -8px;
+  right: -8px;
+  width: auto;
+  max-width: none;
+  transform: none;
 }
 
 .inspector-content {
