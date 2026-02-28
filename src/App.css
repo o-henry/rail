@@ -3114,8 +3114,8 @@ h3 {
   display: grid;
   grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr);
-  align-content: center;
-  align-items: center;
+  align-content: start;
+  align-items: stretch;
   justify-content: stretch;
   gap: 12px;
   overflow: hidden;
@@ -4766,7 +4766,7 @@ h3 {
   display: grid;
   grid-template-rows: auto auto;
   justify-items: stretch;
-  align-content: center;
+  align-content: start;
   gap: 12px;
   padding: 18px 20px 12px;
   overflow: auto;
@@ -5736,7 +5736,7 @@ h3 {
   padding: 14px;
   border-radius: 12px;
   background: var(--surface);
-  align-content: center;
+  align-content: start;
 }
 
 .agents-layout > .agents-set-picker {
