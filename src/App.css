@@ -6580,7 +6580,7 @@ h3 {
   min-height: 22px;
   border-radius: 999px;
   padding: 0;
-  border: 1px solid var(--surface-strong);
+  border: 0;
   background: var(--surface);
   display: inline-grid;
   place-items: center;
