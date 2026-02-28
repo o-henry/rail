@@ -2184,8 +2184,8 @@ h3 {
 }
 
 .inspector-head-tooltip-panel {
-  left: -8px;
-  right: -8px;
+  left: 6px;
+  right: 6px;
   width: auto;
   max-width: none;
   transform: none;
@@ -2214,6 +2214,7 @@ h3 {
 
 .help-tooltip {
   position: relative;
+  bottom: -2px;
   width: 16px;
   height: 16px;
   border-radius: 999px;
@@ -2260,8 +2261,8 @@ h3 {
 }
 
 .help-tooltip-panel.inspector-head-tooltip-panel {
-  left: -8px;
-  right: -8px;
+  left: 6px;
+  right: 6px;
   width: auto;
   max-width: none;
   transform: none;
