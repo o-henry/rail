@@ -31,24 +31,6 @@ type DashboardWidget = {
   fallbackItemKeys: string[];
 };
 
-const DASHBOARD_TOPIC_TITLES: Record<DashboardDetailTopic, string> = {
-  marketSummary: "MARKET SUMMARY",
-  globalHeadlines: "GLOBAL HEADLINES",
-  industryTrendRadar: "TRENDS",
-  communityHotTopics: "COMMUNITY HOT TOPICS",
-  reliabilityPanel: "RELIABILITY PANEL",
-  eventCalendar: "EVENT CALENDAR",
-  riskAlertBoard: "RISK ALERT BOARD",
-  devEcosystem: "DEV ECOSYSTEM UPDATES",
-};
-
-const DASHBOARD_CARD_TITLES: Record<DashboardCard["id"], string> = {
-  workflow: "WORKFLOW RUNTIME",
-  approvals: "PENDING APPROVALS",
-  webConnect: "WEB CONNECT",
-  schedules: "BATCH SCHEDULES",
-};
-
 function asDashboardTopicId(topic: DashboardDetailTopic): DashboardTopicId | null {
   if (
     topic === "marketSummary" ||
@@ -199,12 +181,11 @@ export default function DashboardPage(props: DashboardPageProps) {
 
   return (
     <section className="dashboard-layout dashboard-overview-layout workspace-tab-panel">
-      <article className="panel-card dashboard-suite">
-        <section className="dashboard-mosaic">
-          <article className="dashboard-tile dashboard-widget-card dashboard-area-marketSummary">
+      <section className="dashboard-mosaic">
+        <article className="panel-card dashboard-tile dashboard-widget-card dashboard-area-marketSummary">
           <div className="dashboard-hero-head">
             <div>
-              <h3>{DASHBOARD_TOPIC_TITLES[activeTopic]}</h3>
+              <h3>{t(`dashboard.widget.${activeTopic}.title`)}</h3>
               <p>
                 {activeSnapshot?.status === "degraded"
                   ? "DEGRADED SNAPSHOT"
@@ -213,7 +194,7 @@ export default function DashboardPage(props: DashboardPageProps) {
             </div>
             {activeTopic !== "marketSummary" ? (
               <button className="dashboard-hero-reset" onClick={() => props.onFocusTopic("marketSummary")} type="button">
-                {DASHBOARD_TOPIC_TITLES.marketSummary}
+                {t("dashboard.widget.marketSummary.title")}
               </button>
             ) : null}
           </div>
@@ -258,47 +239,46 @@ export default function DashboardPage(props: DashboardPageProps) {
               ) : null}
             </aside>
           </div>
+        </article>
+        {cards.map((card) => (
+          <article className={`panel-card dashboard-tile dashboard-card dashboard-area-${card.id}`} key={card.id}>
+            <h2>{card.title}</h2>
+            <strong>{card.value}</strong>
+            <p>{card.caption}</p>
           </article>
-          {cards.map((card) => (
-            <article className={`dashboard-tile dashboard-card dashboard-area-${card.id}`} key={card.id}>
-              <h2>{DASHBOARD_CARD_TITLES[card.id]}</h2>
-              <strong>{card.value}</strong>
-              <p>{card.caption}</p>
-            </article>
-          ))}
-          {widgets
-            .filter((widget) => widget.topic !== "marketSummary")
-            .map((widget) =>
-              (() => {
-                const snapshotTopic = asDashboardTopicId(widget.topic);
-                const snapshot = snapshotTopic ? props.topicSnapshots[snapshotTopic] : undefined;
-                const listItems =
-                  snapshot && snapshot.highlights.length > 0
-                    ? snapshot.highlights
-                    : widget.fallbackItemKeys.map((key) => t(key));
-                return (
-                  <button
-                    className={`dashboard-tile dashboard-widget-card dashboard-widget-button dashboard-area-${widget.topic} ${activeTopic === widget.topic ? "is-focus" : ""}`}
-                    key={widget.topic}
-                    onClick={() => props.onFocusTopic(widget.topic)}
-                    type="button"
-                  >
-                    <div className="dashboard-widget-head">
-                      <h3>{DASHBOARD_TOPIC_TITLES[widget.topic]}</h3>
-                      <span>{snapshot?.status === "degraded" ? "DEGRADED" : t(widget.badgeKey)}</span>
-                    </div>
-                    {snapshot?.summary ? <p className="dashboard-widget-summary">{snapshot.summary}</p> : null}
-                    <ul>
-                      {listItems.map((item) => (
-                        <li key={item}>{item}</li>
-                      ))}
-                    </ul>
-                  </button>
-                );
-              })(),
-            )}
-        </section>
-      </article>
+        ))}
+        {widgets
+          .filter((widget) => widget.topic !== "marketSummary")
+          .map((widget) => (
+          (() => {
+            const snapshotTopic = asDashboardTopicId(widget.topic);
+            const snapshot = snapshotTopic ? props.topicSnapshots[snapshotTopic] : undefined;
+            const listItems =
+              snapshot && snapshot.highlights.length > 0
+                ? snapshot.highlights
+                : widget.fallbackItemKeys.map((key) => t(key));
+            return (
+              <button
+                className={`panel-card dashboard-tile dashboard-widget-card dashboard-widget-button dashboard-area-${widget.topic} ${activeTopic === widget.topic ? "is-focus" : ""}`}
+                key={widget.topic}
+                onClick={() => props.onFocusTopic(widget.topic)}
+                type="button"
+              >
+                <div className="dashboard-widget-head">
+                  <h3>{t(`dashboard.widget.${widget.topic}.title`)}</h3>
+                  <span>{snapshot?.status === "degraded" ? "DEGRADED" : t(widget.badgeKey)}</span>
+                </div>
+                {snapshot?.summary ? <p className="dashboard-widget-summary">{snapshot.summary}</p> : null}
+                <ul>
+                  {listItems.map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ul>
+              </button>
+            );
+          })()
+        ))}
+      </section>
     </section>
   );
 }
