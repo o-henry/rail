@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { type DashboardTopicId, type DashboardTopicSnapshot } from "../../features/dashboard/intelligence";
 import { useI18n } from "../../i18n";
 import StockWidgetChart from "./StockWidgetChart";
 import { buildDashboardStockChartData, type DashboardStockDocumentPost } from "./stockWidgetChartData";
@@ -13,6 +14,7 @@ type DashboardPageProps = {
   enabledScheduleCount: number;
   onOpenDetail: (topic: DashboardDetailTopic) => void;
   stockDocumentPosts: DashboardStockDocumentPost[];
+  topicSnapshots: Partial<Record<DashboardTopicId, DashboardTopicSnapshot>>;
 };
 
 type DashboardCard = {
@@ -25,8 +27,23 @@ type DashboardCard = {
 type DashboardWidget = {
   topic: DashboardDetailTopic;
   badgeKey: string;
-  itemKeys: string[];
+  fallbackItemKeys: string[];
 };
+
+function asDashboardTopicId(topic: DashboardDetailTopic): DashboardTopicId | null {
+  if (
+    topic === "marketSummary" ||
+    topic === "globalHeadlines" ||
+    topic === "industryTrendRadar" ||
+    topic === "communityHotTopics" ||
+    topic === "eventCalendar" ||
+    topic === "riskAlertBoard" ||
+    topic === "devEcosystem"
+  ) {
+    return topic;
+  }
+  return null;
+}
 
 export default function DashboardPage(props: DashboardPageProps) {
   const { t } = useI18n();
@@ -39,7 +56,7 @@ export default function DashboardPage(props: DashboardPageProps) {
       {
         topic: "globalHeadlines",
         badgeKey: "dashboard.widget.badge.global",
-        itemKeys: [
+        fallbackItemKeys: [
           "dashboard.widget.globalHeadlines.item1",
           "dashboard.widget.globalHeadlines.item2",
           "dashboard.widget.globalHeadlines.item3",
@@ -48,7 +65,7 @@ export default function DashboardPage(props: DashboardPageProps) {
       {
         topic: "industryTrendRadar",
         badgeKey: "dashboard.widget.badge.radar",
-        itemKeys: [
+        fallbackItemKeys: [
           "dashboard.widget.industryTrendRadar.item1",
           "dashboard.widget.industryTrendRadar.item2",
           "dashboard.widget.industryTrendRadar.item3",
@@ -57,7 +74,7 @@ export default function DashboardPage(props: DashboardPageProps) {
       {
         topic: "marketSummary",
         badgeKey: "dashboard.widget.badge.market",
-        itemKeys: [
+        fallbackItemKeys: [
           "dashboard.widget.marketSummary.item1",
           "dashboard.widget.marketSummary.item2",
           "dashboard.widget.marketSummary.item3",
@@ -66,7 +83,7 @@ export default function DashboardPage(props: DashboardPageProps) {
       {
         topic: "communityHotTopics",
         badgeKey: "dashboard.widget.badge.community",
-        itemKeys: [
+        fallbackItemKeys: [
           "dashboard.widget.communityHotTopics.item1",
           "dashboard.widget.communityHotTopics.item2",
           "dashboard.widget.communityHotTopics.item3",
@@ -77,7 +94,7 @@ export default function DashboardPage(props: DashboardPageProps) {
       {
         topic: "eventCalendar",
         badgeKey: "dashboard.widget.badge.events",
-        itemKeys: [
+        fallbackItemKeys: [
           "dashboard.widget.eventCalendar.item1",
           "dashboard.widget.eventCalendar.item2",
           "dashboard.widget.eventCalendar.item3",
@@ -86,7 +103,7 @@ export default function DashboardPage(props: DashboardPageProps) {
       {
         topic: "riskAlertBoard",
         badgeKey: "dashboard.widget.badge.risk",
-        itemKeys: [
+        fallbackItemKeys: [
           "dashboard.widget.riskAlertBoard.item1",
           "dashboard.widget.riskAlertBoard.item2",
           "dashboard.widget.riskAlertBoard.item3",
@@ -95,7 +112,7 @@ export default function DashboardPage(props: DashboardPageProps) {
       {
         topic: "devEcosystem",
         badgeKey: "dashboard.widget.badge.dev",
-        itemKeys: [
+        fallbackItemKeys: [
           "dashboard.widget.devEcosystem.item1",
           "dashboard.widget.devEcosystem.item2",
           "dashboard.widget.devEcosystem.item3",
@@ -157,26 +174,37 @@ export default function DashboardPage(props: DashboardPageProps) {
           </article>
         ))}
         {widgets.map((widget) => (
-          <button
-            className={`panel-card dashboard-tile dashboard-widget-card dashboard-widget-button dashboard-area-${widget.topic}`}
-            key={widget.topic}
-            onClick={() => props.onOpenDetail(widget.topic)}
-            type="button"
-          >
-            <div className="dashboard-widget-head">
-              <h3>{t(`dashboard.widget.${widget.topic}.title`)}</h3>
-              <span>{t(widget.badgeKey)}</span>
-            </div>
-            {widget.topic === "marketSummary" ? (
-              <StockWidgetChart data={stockChartData} />
-            ) : (
-              <ul>
-                {widget.itemKeys.map((key) => (
-                  <li key={key}>{t(key)}</li>
-                ))}
-              </ul>
-            )}
-          </button>
+          (() => {
+            const snapshotTopic = asDashboardTopicId(widget.topic);
+            const snapshot = snapshotTopic ? props.topicSnapshots[snapshotTopic] : undefined;
+            const listItems =
+              snapshot && snapshot.highlights.length > 0
+                ? snapshot.highlights
+                : widget.fallbackItemKeys.map((key) => t(key));
+            return (
+              <button
+                className={`panel-card dashboard-tile dashboard-widget-card dashboard-widget-button dashboard-area-${widget.topic}`}
+                key={widget.topic}
+                onClick={() => props.onOpenDetail(widget.topic)}
+                type="button"
+              >
+                <div className="dashboard-widget-head">
+                  <h3>{t(`dashboard.widget.${widget.topic}.title`)}</h3>
+                  <span>{snapshot?.status === "degraded" ? "DEGRADED" : t(widget.badgeKey)}</span>
+                </div>
+                {snapshot?.summary ? <p className="dashboard-widget-summary">{snapshot.summary}</p> : null}
+                {widget.topic === "marketSummary" && stockChartData ? (
+                  <StockWidgetChart data={stockChartData} />
+                ) : (
+                  <ul>
+                    {listItems.map((item) => (
+                      <li key={item}>{item}</li>
+                    ))}
+                  </ul>
+                )}
+              </button>
+            );
+          })()
         ))}
       </section>
     </section>

@@ -558,6 +558,7 @@ function App() {
     [],
   );
   const {
+    snapshotsByTopic: dashboardSnapshotsByTopic,
     refreshSnapshots: refreshDashboardSnapshots,
     runTopic: runDashboardTopic,
     runAll: runAllDashboardTopics,
@@ -2111,6 +2112,7 @@ function App() {
             pendingApprovalsCount={pendingApprovals.length}
             scheduleCount={batchScheduler.schedules.length}
             stockDocumentPosts={feedPosts}
+            topicSnapshots={dashboardSnapshotsByTopic}
             webBridgeRunning={webBridgeStatus.running}
           />
         )}
@@ -2118,6 +2120,17 @@ function App() {
           <DashboardDetailPage
             onBack={() => setDashboardDetailTopic(null)}
             onOpenFeed={() => setWorkspaceTab("feed")}
+            snapshot={
+              dashboardDetailTopic === "marketSummary" ||
+              dashboardDetailTopic === "globalHeadlines" ||
+              dashboardDetailTopic === "industryTrendRadar" ||
+              dashboardDetailTopic === "communityHotTopics" ||
+              dashboardDetailTopic === "eventCalendar" ||
+              dashboardDetailTopic === "riskAlertBoard" ||
+              dashboardDetailTopic === "devEcosystem"
+                ? dashboardSnapshotsByTopic[dashboardDetailTopic]
+                : undefined
+            }
             topic={dashboardDetailTopic}
           />
         )}
