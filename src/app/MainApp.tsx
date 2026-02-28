@@ -2058,8 +2058,6 @@ function App() {
               engineStarted={engineStarted}
               isGraphRunning={isGraphRunning}
               loginCompleted={loginCompleted}
-              model={model}
-              modelOptions={TURN_MODEL_OPTIONS}
               codexMultiAgentMode={codexMultiAgentMode}
               codexMultiAgentModeOptions={[...codexMultiAgentModeOptions]}
               themeMode={themeMode}
@@ -2067,7 +2065,6 @@ function App() {
               onCloseUsageResult={() => setUsageResultClosed(true)}
               onOpenRunsFolder={() => void onOpenRunsFolder()}
               onSelectCwdDirectory={() => void onSelectCwdDirectory()}
-              onSetModel={setModel}
               onSetCodexMultiAgentMode={(next) => setCodexMultiAgentMode(normalizeCodexMultiAgentMode(next))}
               onToggleCodexLogin={() => void onLoginCodex()}
               running={running}

@@ -7,8 +7,6 @@ type SettingsPageProps = {
   loginCompleted: boolean;
   authModeText: string;
   cwd: string;
-  model: string;
-  modelOptions: readonly string[];
   codexMultiAgentMode: string;
   codexMultiAgentModeOptions: ReadonlyArray<{ value: string; label: string }>;
   themeMode: string;
@@ -19,7 +17,6 @@ type SettingsPageProps = {
   isGraphRunning: boolean;
   codexAuthBusy: boolean;
   onSelectCwdDirectory: () => void;
-  onSetModel: (next: string) => void;
   onSetCodexMultiAgentMode: (next: string) => void;
   onCheckUsage: () => void;
   onToggleCodexLogin: () => void;
@@ -33,8 +30,6 @@ export default function SettingsPage({
   loginCompleted,
   authModeText,
   cwd,
-  model,
-  modelOptions,
   codexMultiAgentMode,
   codexMultiAgentModeOptions,
   themeMode,
@@ -45,7 +40,6 @@ export default function SettingsPage({
   isGraphRunning,
   codexAuthBusy,
   onSelectCwdDirectory,
-  onSetModel,
   onSetCodexMultiAgentMode,
   onCheckUsage,
   onToggleCodexLogin,
@@ -77,16 +71,6 @@ export default function SettingsPage({
             {t("settings.pickFolder")}
           </button>
         </div>
-      </label>
-      <label>
-        {t("settings.defaultModel")}
-        <FancySelect
-          ariaLabel={t("settings.defaultModel")}
-          className="modern-select"
-          onChange={onSetModel}
-          options={modelOptions.map((option) => ({ value: option, label: option }))}
-          value={model}
-        />
       </label>
       <label>
         {t("settings.multiAgentMode")}
