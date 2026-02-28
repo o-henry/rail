@@ -80,6 +80,7 @@ export function AgentsWorkspaceView({
   onQueuePrompt,
 }: AgentsWorkspaceViewProps) {
   const [isSetBriefVisible, setIsSetBriefVisible] = useState(true);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
   useEffect(() => {
     setIsSetBriefVisible(true);
@@ -133,7 +134,7 @@ export function AgentsWorkspaceView({
         </div>
       </div>
 
-      <section className="agents-workspace-shell">
+      <section className={`agents-workspace-shell${isSidebarCollapsed ? " is-sidebar-collapsed" : ""}`}>
         <section className="agents-workspace-main">
           {activeSetOption && isSetBriefVisible ? (
             <section className="agents-set-brief" aria-label="Selected set briefing">
@@ -200,39 +201,58 @@ export function AgentsWorkspaceView({
           </section>
         </section>
 
-        <aside className="panel-card agents-workspace-sidebar" aria-label="Agent workspace sidebar">
-          <section className="agents-sidebar-card">
-            <h4>세트 브리프</h4>
-            <p>{setMission || activeSetOption?.description || "세트 설명이 없습니다."}</p>
-            <small>{`Mode: ${codexMultiAgentMode}`}</small>
-          </section>
+        <aside
+          className={`panel-card agents-workspace-sidebar${isSidebarCollapsed ? " is-collapsed" : ""}`}
+          aria-label="Agent workspace sidebar"
+        >
+          <div className="agents-workspace-sidebar-head">
+            <button
+              aria-label={isSidebarCollapsed ? "사이드바 확대" : "사이드바 최소화"}
+              className="agents-off-button agents-sidebar-toggle-button"
+              onClick={() => setIsSidebarCollapsed((prev) => !prev)}
+              title={isSidebarCollapsed ? "사이드바 확대" : "사이드바 최소화"}
+              type="button"
+            >
+              <img alt="" aria-hidden="true" src={isSidebarCollapsed ? "/plus-large-svgrepo-com.svg" : "/xmark.svg"} />
+            </button>
+          </div>
 
-          <section className="agents-sidebar-card">
-            <h4>활성 에이전트</h4>
-            <p className="agents-sidebar-agent-name">{activeThread?.name ?? "-"}</p>
-            <p className="agents-sidebar-agent-role">{activeThread?.role ?? "선택된 에이전트 없음"}</p>
-            {activeThread?.starterPrompt ? <small>{activeThread.starterPrompt}</small> : null}
-          </section>
+          {!isSidebarCollapsed ? (
+            <>
+              <section className="agents-sidebar-card">
+                <h4>세트 브리프</h4>
+                <p>{setMission || activeSetOption?.description || "세트 설명이 없습니다."}</p>
+                <small>{`Mode: ${codexMultiAgentMode}`}</small>
+              </section>
 
-          <section className="agents-sidebar-card">
-            <h4>데이터 스냅샷</h4>
-            <ul className="agents-sidebar-list">
-              {(dashboardInsights.length > 0 ? dashboardInsights : ["스냅샷 데이터가 없습니다."]).slice(0, 6).map((line) => (
-                <li key={line}>{line}</li>
-              ))}
-            </ul>
-          </section>
+              <section className="agents-sidebar-card">
+                <h4>활성 에이전트</h4>
+                <p className="agents-sidebar-agent-name">{activeThread?.name ?? "-"}</p>
+                <p className="agents-sidebar-agent-role">{activeThread?.role ?? "선택된 에이전트 없음"}</p>
+                {activeThread?.starterPrompt ? <small>{activeThread.starterPrompt}</small> : null}
+              </section>
 
-          <section className="agents-sidebar-card">
-            <h4>액션 큐</h4>
-            <div className="agents-sidebar-actions">
-              {quickActionItems.map((item) => (
-                <button key={item.id} onClick={() => onQueuePrompt(item.prompt)} type="button">
-                  {item.label}
-                </button>
-              ))}
-            </div>
-          </section>
+              <section className="agents-sidebar-card">
+                <h4>데이터 스냅샷</h4>
+                <ul className="agents-sidebar-list">
+                  {(dashboardInsights.length > 0 ? dashboardInsights : ["스냅샷 데이터가 없습니다."]).slice(0, 6).map((line) => (
+                    <li key={line}>{line}</li>
+                  ))}
+                </ul>
+              </section>
+
+              <section className="agents-sidebar-card">
+                <h4>액션 큐</h4>
+                <div className="agents-sidebar-actions">
+                  {quickActionItems.map((item) => (
+                    <button key={item.id} onClick={() => onQueuePrompt(item.prompt)} type="button">
+                      {item.label}
+                    </button>
+                  ))}
+                </div>
+              </section>
+            </>
+          ) : null}
         </aside>
       </section>
 

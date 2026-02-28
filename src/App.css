@@ -6282,6 +6282,10 @@ h3 {
   gap: 12px;
 }
 
+.agents-workspace-shell.is-sidebar-collapsed {
+  grid-template-columns: minmax(0, 1fr) 46px;
+}
+
 .agents-workspace-main {
   min-height: 0;
   display: grid;
@@ -6298,6 +6302,25 @@ h3 {
   padding: 12px;
   border-radius: 12px;
   background: color-mix(in srgb, var(--surface-panel) 88%, var(--surface));
+}
+
+.agents-workspace-sidebar-head {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-height: 22px;
+}
+
+.agents-workspace-sidebar.is-collapsed {
+  overflow: hidden;
+  align-content: start;
+  justify-items: center;
+  gap: 0;
+  padding: 10px 8px;
+}
+
+.agents-sidebar-toggle-button {
+  justify-self: end;
 }
 
 .agents-sidebar-card {
@@ -7595,6 +7618,10 @@ pre {
   }
 
   .agents-workspace-shell {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .agents-workspace-shell.is-sidebar-collapsed {
     grid-template-columns: minmax(0, 1fr);
   }
 
