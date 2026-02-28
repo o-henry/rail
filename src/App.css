@@ -85,7 +85,7 @@
   --header-control-height: 34px;
   --titlebar-overlay-height: 34px;
   --workspace-tab-bottom-inset: 12px;
-  --content-max-width: 1120px;
+  --content-max-width: 860px;
   --surface: #ffffff;
   --surface-strong: #d9e2ec;
   --surface-soft: #f3f6fa;
@@ -2520,8 +2520,8 @@ h3 {
 .settings-dashboard-topic-select.fancy-select.is-open .fancy-select-trigger,
 .settings-dashboard-topic-select .fancy-select-trigger:focus,
 .settings-dashboard-topic-select .fancy-select-trigger:focus-visible {
-  border-color: transparent !important;
-  border-width: 0 !important;
+  border: 1px solid var(--surface-strong) !important;
+  border-radius: 2px !important;
   box-shadow: none !important;
 }
 
@@ -2920,7 +2920,7 @@ h3 {
   align-items: flex-start;
   justify-content: space-between;
   gap: 10px;
-  margin-bottom: 4px;
+  margin-bottom: 1rem;
 }
 
 .settings-dashboard-intelligence-copy {
@@ -3114,8 +3114,8 @@ h3 {
   display: grid;
   grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr);
-  align-content: stretch;
-  align-items: stretch;
+  align-content: center;
+  align-items: center;
   justify-content: stretch;
   gap: 12px;
   overflow: hidden;
@@ -4766,6 +4766,7 @@ h3 {
   display: grid;
   grid-template-rows: auto auto;
   justify-items: stretch;
+  align-content: center;
   gap: 12px;
   padding: 18px 20px 12px;
   overflow: auto;
@@ -5735,6 +5736,7 @@ h3 {
   padding: 14px;
   border-radius: 12px;
   background: var(--surface);
+  align-content: center;
 }
 
 .agents-layout > .agents-set-picker {
