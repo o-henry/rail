@@ -59,6 +59,8 @@ function topicQueryText(topic: DashboardTopicId): string {
       return "general community hot topics social mentions growth";
     case "devCommunityHotTopics":
       return "developer community hot topics engineering discussion opensource release issue";
+    case "paperResearch":
+      return "research papers preprint journal peer review benchmark methodology";
     case "eventCalendar":
       return "event calendar upcoming schedule deadline";
     case "riskAlertBoard":

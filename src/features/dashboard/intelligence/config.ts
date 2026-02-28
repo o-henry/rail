@@ -14,6 +14,7 @@ const DEFAULT_CADENCE_BY_TOPIC: Record<DashboardTopicId, number> = {
   industryTrendRadar: 6,
   communityHotTopics: 6,
   devCommunityHotTopics: 6,
+  paperResearch: 24,
   eventCalendar: 12,
   riskAlertBoard: 3,
   devEcosystem: 24,
@@ -43,6 +44,18 @@ const DEFAULT_ALLOWLIST_BY_TOPIC: Record<DashboardTopicId, string[]> = {
     "x.com",
     "threads.net",
   ],
+  paperResearch: [
+    "arxiv.org",
+    "openreview.net",
+    "pubmed.ncbi.nlm.nih.gov",
+    "ieeexplore.ieee.org",
+    "dl.acm.org",
+    "nature.com",
+    "science.org",
+    "springer.com",
+    "sciencedirect.com",
+    "ssrn.com",
+  ],
   eventCalendar: ["federalreserve.gov", "imf.org", "sec.gov", "coinmarketcal.com"],
   riskAlertBoard: ["sec.gov", "cisa.gov", "owasp.org", "krebsonsecurity.com"],
   devEcosystem: ["github.blog", "nodejs.org", "python.org", "react.dev"],
@@ -59,6 +72,8 @@ const DEFAULT_PROMPT_BY_TOPIC: Record<DashboardTopicId, string> = {
     "You are the general community intelligence analyst. Surface fast-rising topics, cluster duplicates, and highlight representative links.",
   devCommunityHotTopics:
     "You are the developer community intelligence analyst. Track fast-rising developer topics, major discussion threads, and actionable engineering signals.",
+  paperResearch:
+    "You are the research paper analyst. Track globally relevant papers, summarize core contributions, and explain practical implications.",
   eventCalendar:
     "You are the event calendar analyst. Summarize upcoming events with dates, impact level, and watch notes.",
   riskAlertBoard:

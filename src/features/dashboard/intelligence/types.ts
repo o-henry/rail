@@ -4,6 +4,7 @@ export const DASHBOARD_TOPIC_IDS = [
   "industryTrendRadar",
   "communityHotTopics",
   "devCommunityHotTopics",
+  "paperResearch",
   "eventCalendar",
   "riskAlertBoard",
   "devEcosystem",

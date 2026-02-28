@@ -17,12 +17,13 @@ const MAX_SUMMARY_CHARS: usize = 1_200;
 const MAX_RSS_ITEMS: usize = 8;
 const USER_AGENT: &str = "RAIL-Dashboard-Crawler/1.0";
 
-const TOPIC_IDS: [&str; 8] = [
+const TOPIC_IDS: [&str; 9] = [
     "marketSummary",
     "globalHeadlines",
     "industryTrendRadar",
     "communityHotTopics",
     "devCommunityHotTopics",
+    "paperResearch",
     "eventCalendar",
     "riskAlertBoard",
     "devEcosystem",
@@ -423,6 +424,21 @@ fn default_allowlist_map() -> HashMap<&'static str, Vec<String>> {
                 "reddit.com".to_string(),
                 "x.com".to_string(),
                 "threads.net".to_string(),
+            ],
+        ),
+        (
+            "paperResearch",
+            vec![
+                "arxiv.org".to_string(),
+                "openreview.net".to_string(),
+                "pubmed.ncbi.nlm.nih.gov".to_string(),
+                "ieeexplore.ieee.org".to_string(),
+                "dl.acm.org".to_string(),
+                "nature.com".to_string(),
+                "science.org".to_string(),
+                "springer.com".to_string(),
+                "sciencedirect.com".to_string(),
+                "ssrn.com".to_string(),
             ],
         ),
         (
