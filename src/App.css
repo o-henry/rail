@@ -2895,6 +2895,7 @@ h3 {
   align-items: flex-start;
   justify-content: space-between;
   gap: 10px;
+  margin-bottom: 4px;
 }
 
 .settings-dashboard-intelligence-copy {
