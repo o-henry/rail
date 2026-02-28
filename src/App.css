@@ -5181,9 +5181,9 @@ h3 {
   height: 30px;
   width: 100%;
   border-radius: 16px;
-  border: 1px solid var(--surface-strong);
-  background: var(--surface-soft);
-  color: var(--text-main);
+  border: 1px solid #b7ccf3;
+  background: #e8f1ff;
+  color: #1f57a8;
   padding: 0 11px;
   display: inline-flex;
   align-items: center;
@@ -5258,7 +5258,15 @@ h3 {
 .agents-model-menu button.is-selected,
 .agents-reason-menu button:hover,
 .agents-reason-menu button.is-selected {
-  background: var(--surface-soft);
+  background: #dceaff;
+  color: #1e5cc6;
+}
+
+:root[data-theme="dark"] .agents-model-button,
+:root[data-theme="dark"] .agents-reason-button {
+  border-color: #3b5f9d;
+  background: #233044;
+  color: #cfe2ff;
 }
 
 .agents-send-button {
