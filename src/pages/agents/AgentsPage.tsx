@@ -14,6 +14,7 @@ import {
   createCustomThread,
   createFallbackSetState,
   createInitialSetStateMap,
+  restoreSetStateFromPreset,
   createStateFromPresetSnapshot,
 } from "./agentSetState";
 import type { AgentSetPresetSnapshot, AgentSetState, AgentsPageProps, AttachedFile } from "./agentTypes";
@@ -210,6 +211,19 @@ export default function AgentsPage({ onQuickAction, topicSnapshots, codexMultiAg
     setIsReasonMenuOpen(false);
   };
 
+  const onRestoreTemplateSet = () => {
+    if (!activeSetId) {
+      return;
+    }
+    const preset = setPresetById[activeSetId];
+    if (!preset) {
+      return;
+    }
+    updateActiveSetState((current) => restoreSetStateFromPreset(current, preset));
+    setIsModelMenuOpen(false);
+    setIsReasonMenuOpen(false);
+  };
+
   const onAddThread = () => {
     updateActiveSetState((current) => {
       const nextIndex =
@@ -366,6 +380,7 @@ export default function AgentsPage({ onQuickAction, topicSnapshots, codexMultiAg
       onCloseThread={onCloseThread}
       onOpenFilePicker={onOpenFilePicker}
       onQueuePrompt={onQueuePrompt}
+      onRestoreTemplateSet={onRestoreTemplateSet}
       onSelectModel={setSelectedModel}
       onSelectReasonLevel={setSelectedReasonLevel}
       onSend={onSend}

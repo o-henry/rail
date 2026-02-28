@@ -13,6 +13,7 @@ type AgentsWorkspaceViewProps = {
   codexMultiAgentMode: CodexMultiAgentMode;
   onSetActiveThreadId: (threadId: string) => void;
   onBackToSetList: () => void;
+  onRestoreTemplateSet: () => void;
   onAddThread: () => void;
   onCloseThread: (threadId: string) => void;
   fileInputRef: RefObject<HTMLInputElement | null>;
@@ -51,6 +52,7 @@ export function AgentsWorkspaceView({
   codexMultiAgentMode,
   onSetActiveThreadId,
   onBackToSetList,
+  onRestoreTemplateSet,
   onAddThread,
   onCloseThread,
   fileInputRef,
@@ -113,6 +115,9 @@ export function AgentsWorkspaceView({
           ))}
         </div>
         <div className="agents-topbar-actions">
+          <button className="agents-restore-template-button" onClick={onRestoreTemplateSet} type="button">
+            ↺ 템플릿 복원
+          </button>
           <button className="agents-back-button" onClick={onBackToSetList} type="button">
             ← 세트 목록
           </button>

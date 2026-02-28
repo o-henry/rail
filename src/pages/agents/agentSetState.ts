@@ -67,6 +67,17 @@ export function createStateFromPresetSnapshot(snapshot: AgentSetPresetSnapshot):
   };
 }
 
+export function restoreSetStateFromPreset(
+  current: AgentSetState,
+  snapshot: AgentSetPresetSnapshot,
+): AgentSetState {
+  const restored = createStateFromPresetSnapshot(snapshot);
+  return {
+    ...restored,
+    dashboardInsights: current.dashboardInsights,
+  };
+}
+
 export function createInitialSetStateMap(
   setOptions: AgentSetOption[],
   setPresetById: Record<string, AgentSetPresetSnapshot>,
