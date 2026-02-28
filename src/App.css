@@ -564,7 +564,7 @@ h3 {
   min-height: 0;
   overflow: hidden;
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr);
+  grid-template-rows: auto auto auto minmax(0, 1fr);
   background: var(--workspace-bg);
   border: 1px solid var(--workspace-border);
   box-shadow: var(--workspace-shadow);
@@ -595,19 +595,22 @@ h3 {
   overflow: hidden;
 }
 
-.workspace.workspace-has-error .workspace-quick-toggle {
-  top: 66px;
+.workspace-topbar {
+  grid-row: 3;
+  min-height: 38px;
+  padding: 0 12px 6px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+  position: relative;
+  z-index: 8;
 }
 
 .workspace.workspace-has-error .workspace-quick-panel {
-  top: 104px;
+  top: 122px;
 }
 
 .workspace-quick-toggle {
-  position: absolute;
-  top: 8px;
-  right: 12px;
-  z-index: 8;
   min-height: 32px;
   height: 32px;
   border-radius: 10px;
@@ -617,7 +620,7 @@ h3 {
   padding: 0 9px;
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  justify-content: center;
   font-size: 12px;
   line-height: 1;
   box-shadow: 0 4px 10px rgba(15, 24, 34, 0.08);
@@ -629,7 +632,7 @@ h3 {
 
 .workspace-quick-panel {
   position: absolute;
-  top: 46px;
+  top: 82px;
   right: 10px;
   bottom: 10px;
   width: min(380px, calc(100vw - 112px));
@@ -824,20 +827,16 @@ h3 {
 }
 
 @media (max-width: 900px) {
-  .workspace.workspace-has-error .workspace-quick-toggle {
-    top: 62px;
-  }
-
   .workspace.workspace-has-error .workspace-quick-panel {
-    top: 98px;
+    top: 112px;
   }
 
-  .workspace-quick-toggle {
-    right: 8px;
+  .workspace-topbar {
+    padding: 0 8px 6px;
   }
 
   .workspace-quick-panel {
-    top: 44px;
+    top: 76px;
     right: 8px;
     bottom: 8px;
     width: min(320px, calc(100vw - 82px));
@@ -921,8 +920,8 @@ h3 {
   right: 8px;
 }
 
-.workspace > :not(.workspace-header):not(.error):not(.workspace-quick-toggle):not(.workspace-quick-panel) {
-  grid-row: 3;
+.workspace > :not(.workspace-header):not(.workspace-topbar):not(.error):not(.workspace-quick-toggle):not(.workspace-quick-panel) {
+  grid-row: 4;
   min-height: 0;
 }
 

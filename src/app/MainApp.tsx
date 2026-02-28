@@ -1880,18 +1880,20 @@ function App() {
       >
         {!canvasFullscreen && <header className="workspace-header workspace-header-spacer" />}
         {!canvasFullscreen && (
-          <WorkspaceQuickPanel
-            isOpen={quickPanelOpen}
-            onChangeQuery={setQuickPanelQuery}
-            onClose={onCloseQuickPanel}
-            onOpenAgents={onOpenQuickPanelAgents}
-            onOpenFeed={onOpenQuickPanelFeed}
-            onSubmitQuery={onSubmitQuickPanelQuery}
-            onToggle={onToggleQuickPanel}
-            query={quickPanelQuery}
-            recentPosts={quickPanelRecentPosts}
-            workspaceLabel={quickPanelWorkspaceLabel}
-          />
+          <div className="workspace-topbar">
+            <WorkspaceQuickPanel
+              isOpen={quickPanelOpen}
+              onChangeQuery={setQuickPanelQuery}
+              onClose={onCloseQuickPanel}
+              onOpenAgents={onOpenQuickPanelAgents}
+              onOpenFeed={onOpenQuickPanelFeed}
+              onSubmitQuery={onSubmitQuickPanelQuery}
+              onToggle={onToggleQuickPanel}
+              query={quickPanelQuery}
+              recentPosts={quickPanelRecentPosts}
+              workspaceLabel={quickPanelWorkspaceLabel}
+            />
+          </div>
         )}
 
         {error && (
