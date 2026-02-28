@@ -24,10 +24,12 @@ export function AgentSetIndexView({
         <div className="agents-set-groups">
           {groupedSetOptions.map((group) => (
             <section className="agents-set-group" key={group.id}>
-              <h3 className="agents-set-group-title">{group.title}</h3>
-              <div className="agents-set-index-head" role="presentation">
-                <span>NO</span>
-                <span>SET</span>
+              <div className="agents-set-group-head">
+                <h3 className="agents-set-group-title">{group.title}</h3>
+                <div className="agents-set-index-head" role="presentation">
+                  <span>NO</span>
+                  <span>SET</span>
+                </div>
               </div>
               <div className="agents-set-list" role="list" aria-label={`${group.title} Agent sets`}>
                 {group.items.map((setOption) => {
