@@ -5021,7 +5021,7 @@ h3 {
 
 .agents-set-picker-head h2 {
   margin: 0;
-  font-size: 1rem;
+  font-size: 20px;
   color: var(--text-main);
 }
 
@@ -5708,7 +5708,7 @@ pre {
 }
 
 .controls > h3 {
-  font-size: 14px;
+  font-size: 20px;
   font-family: "DialogNanumBody1984", "Noto Sans KR", sans-serif;
 }
 
