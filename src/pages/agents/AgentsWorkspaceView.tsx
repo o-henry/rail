@@ -228,7 +228,11 @@ export function AgentsWorkspaceView({
                     {thread.starterPrompt ? <p className="agents-grid-card-starter">{thread.starterPrompt}</p> : null}
                   </div>
                   <div className="agents-grid-card-foot">
-                    <span>{thread.id === activeThreadId ? "Active" : "Standby"}</span>
+                    <span
+                      aria-label={thread.id === activeThreadId ? "활성" : "대기"}
+                      className={`agents-grid-card-status-dot${thread.id === activeThreadId ? " is-active" : " is-standby"}`}
+                      title={thread.id === activeThreadId ? "활성" : "대기"}
+                    />
                     <span>{thread.status === "preset" ? "Preset" : "Custom"}</span>
                   </div>
                 </article>

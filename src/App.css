@@ -6573,6 +6573,23 @@ h3 {
   font-size: 12px;
 }
 
+.agents-grid-card-status-dot {
+  width: 8px;
+  min-width: 8px;
+  height: 8px;
+  min-height: 8px;
+  border-radius: 999px;
+  display: inline-block;
+}
+
+.agents-grid-card-status-dot.is-active {
+  background: #2cab5a;
+}
+
+.agents-grid-card-status-dot.is-standby {
+  background: #a7aeb8;
+}
+
 .agents-off-button {
   width: 26px;
   min-width: 26px;
