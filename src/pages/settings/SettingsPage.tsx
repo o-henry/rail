@@ -1,6 +1,8 @@
 import { type ChangeEvent, useRef } from "react";
 import FancySelect from "../../components/FancySelect";
+import { type DashboardAgentConfigMap, type DashboardTopicId, type DashboardTopicRunState } from "../../features/dashboard/intelligence";
 import { useI18n } from "../../i18n";
+import DashboardIntelligenceSettings from "./DashboardIntelligenceSettings";
 
 type SettingsPageProps = {
   compact?: boolean;
@@ -18,10 +20,19 @@ type SettingsPageProps = {
   running: boolean;
   isGraphRunning: boolean;
   codexAuthBusy: boolean;
+  dashboardIntelligenceConfig: DashboardAgentConfigMap;
+  dashboardIntelligenceRunStateByTopic: Record<DashboardTopicId, DashboardTopicRunState>;
+  dashboardIntelligenceModelOptions: ReadonlyArray<{ value: string; label: string }>;
   onSelectCwdDirectory: () => void;
   onSetCodexMultiAgentMode: (next: string) => void;
   onSetUserBackgroundImage: (next: string) => void;
   onSetUserBackgroundOpacity: (next: number) => void;
+  onDashboardTopicToggle: (topic: DashboardTopicId, enabled: boolean) => void;
+  onDashboardTopicModel: (topic: DashboardTopicId, model: string) => void;
+  onDashboardTopicCadence: (topic: DashboardTopicId, cadenceHours: number) => void;
+  onRunDashboardTopic: (topic: DashboardTopicId) => void;
+  onRunAllDashboardTopics: () => void;
+  onRunDashboardCrawlerOnly: () => void;
   onCheckUsage: () => void;
   onToggleCodexLogin: () => void;
   onCloseUsageResult: () => void;
@@ -44,10 +55,19 @@ export default function SettingsPage({
   running,
   isGraphRunning,
   codexAuthBusy,
+  dashboardIntelligenceConfig,
+  dashboardIntelligenceRunStateByTopic,
+  dashboardIntelligenceModelOptions,
   onSelectCwdDirectory,
   onSetCodexMultiAgentMode,
   onSetUserBackgroundImage,
   onSetUserBackgroundOpacity,
+  onDashboardTopicToggle,
+  onDashboardTopicModel,
+  onDashboardTopicCadence,
+  onRunDashboardTopic,
+  onRunAllDashboardTopics,
+  onRunDashboardCrawlerOnly,
   onCheckUsage,
   onToggleCodexLogin,
   onCloseUsageResult,
@@ -170,6 +190,18 @@ export default function SettingsPage({
           </button>
         </div>
       )}
+      <DashboardIntelligenceSettings
+        config={dashboardIntelligenceConfig}
+        disabled={running || isGraphRunning}
+        modelOptions={dashboardIntelligenceModelOptions}
+        onRunAll={onRunAllDashboardTopics}
+        onRunCrawlerOnly={onRunDashboardCrawlerOnly}
+        onRunTopic={onRunDashboardTopic}
+        onSetTopicCadence={onDashboardTopicCadence}
+        onSetTopicModel={onDashboardTopicModel}
+        onToggleTopic={onDashboardTopicToggle}
+        runStateByTopic={dashboardIntelligenceRunStateByTopic}
+      />
       <div className="usage-method usage-method-hidden">{t("settings.recentStatus")}: {status}</div>
       {usageInfoText && !usageResultClosed && (
         <div className="usage-result">

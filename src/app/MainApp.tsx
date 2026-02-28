@@ -26,6 +26,7 @@ import { useGraphState } from "./hooks/useGraphState";
 import { useWebConnectState } from "./hooks/useWebConnectState";
 import { useWorkflowGraphActions } from "./hooks/useWorkflowGraphActions";
 import { useWorkflowShortcuts } from "./hooks/useWorkflowShortcuts";
+import { useDashboardIntelligenceConfig } from "./hooks/useDashboardIntelligenceConfig";
 import {
   COST_PRESET_DEFAULT_MODEL,
   DEFAULT_TURN_MODEL,
@@ -102,6 +103,7 @@ import {
 import type {
   GraphNode,
 } from "../features/workflow/types";
+import { DASHBOARD_TOPIC_IDS, type DashboardTopicId } from "../features/dashboard/intelligence";
 import {
   AUTH_MODE_STORAGE_KEY,
   CODEX_MULTI_AGENT_MODE_STORAGE_KEY,
@@ -301,6 +303,13 @@ function App() {
   const defaultCodexMultiAgentMode = useMemo(() => loadPersistedCodexMultiAgentMode(), []);
   const [workspaceTab, setWorkspaceTab] = useState<WorkspaceTab>("dashboard");
   const [dashboardDetailTopic, setDashboardDetailTopic] = useState<DashboardDetailTopic | null>(null);
+  const {
+    config: dashboardIntelligenceConfig,
+    runStateByTopic: dashboardIntelligenceRunStateByTopic,
+    setRunStateByTopic: setDashboardIntelligenceRunStateByTopic,
+    updateTopicConfig: updateDashboardTopicConfig,
+    modelOptions: dashboardIntelligenceModelOptions,
+  } = useDashboardIntelligenceConfig();
   const [quickPanelOpen, setQuickPanelOpen] = useState(false);
   const [quickPanelQuery, setQuickPanelQuery] = useState("");
   const [pendingWebConnectCheck, setPendingWebConnectCheck] = useState<{
@@ -1799,6 +1808,59 @@ function App() {
     setWorkspaceTab("workflow");
     setStatus("에이전트 요청이 워크플로우 입력에 반영되었습니다.");
   };
+  const onToggleDashboardTopic = useCallback(
+    (topic: DashboardTopicId, enabled: boolean) => {
+      updateDashboardTopicConfig(topic, { enabled });
+    },
+    [updateDashboardTopicConfig],
+  );
+  const onSetDashboardTopicModel = useCallback(
+    (topic: DashboardTopicId, modelEngine: string) => {
+      updateDashboardTopicConfig(topic, { model: modelEngine });
+    },
+    [updateDashboardTopicConfig],
+  );
+  const onSetDashboardTopicCadence = useCallback(
+    (topic: DashboardTopicId, cadenceHours: number) => {
+      const normalized = Number.isFinite(cadenceHours) ? Math.max(1, Math.min(168, Math.round(cadenceHours))) : 6;
+      updateDashboardTopicConfig(topic, { cadenceHours: normalized });
+    },
+    [updateDashboardTopicConfig],
+  );
+  const markDashboardTopicRun = useCallback(
+    (topic: DashboardTopicId, running: boolean, lastError?: string) => {
+      setDashboardIntelligenceRunStateByTopic((prev) => ({
+        ...prev,
+        [topic]: {
+          ...prev[topic],
+          running,
+          lastRunAt: !running ? new Date().toISOString() : prev[topic]?.lastRunAt,
+          lastError: lastError || undefined,
+        },
+      }));
+    },
+    [setDashboardIntelligenceRunStateByTopic],
+  );
+  const onRunDashboardTopic = useCallback(
+    (topic: DashboardTopicId) => {
+      markDashboardTopicRun(topic, true);
+      window.setTimeout(() => {
+        markDashboardTopicRun(topic, false);
+      }, 0);
+      setStatus(`Dashboard Intelligence 실행 대기: ${topic}`);
+    },
+    [markDashboardTopicRun, setStatus],
+  );
+  const onRunAllDashboardTopics = useCallback(() => {
+    const enabledTopics = DASHBOARD_TOPIC_IDS.filter((topic) => dashboardIntelligenceConfig[topic].enabled);
+    for (const topic of enabledTopics) {
+      onRunDashboardTopic(topic);
+    }
+    setStatus(`Dashboard Intelligence 전체 실행 대기 (${enabledTopics.length})`);
+  }, [dashboardIntelligenceConfig, onRunDashboardTopic, setStatus]);
+  const onRunDashboardCrawlerOnly = useCallback(() => {
+    setStatus("Dashboard 크롤러 실행 대기");
+  }, [setStatus]);
   const workspaceTopbarTabs = useMemo(
     () => [
       { tab: "dashboard" as WorkspaceTab, label: t("nav.dashboard") },
@@ -2083,11 +2145,20 @@ function App() {
               loginCompleted={loginCompleted}
               codexMultiAgentMode={codexMultiAgentMode}
               codexMultiAgentModeOptions={[...codexMultiAgentModeOptions]}
+              dashboardIntelligenceConfig={dashboardIntelligenceConfig}
+              dashboardIntelligenceModelOptions={dashboardIntelligenceModelOptions}
+              dashboardIntelligenceRunStateByTopic={dashboardIntelligenceRunStateByTopic}
               userBackgroundImage={userBackgroundImage}
               userBackgroundOpacity={userBackgroundOpacity}
               onCheckUsage={() => void onCheckUsage()}
               onCloseUsageResult={() => setUsageResultClosed(true)}
+              onDashboardTopicCadence={onSetDashboardTopicCadence}
+              onDashboardTopicModel={onSetDashboardTopicModel}
+              onDashboardTopicToggle={onToggleDashboardTopic}
               onOpenRunsFolder={() => void onOpenRunsFolder()}
+              onRunAllDashboardTopics={onRunAllDashboardTopics}
+              onRunDashboardCrawlerOnly={onRunDashboardCrawlerOnly}
+              onRunDashboardTopic={onRunDashboardTopic}
               onSelectCwdDirectory={() => void onSelectCwdDirectory()}
               onSetCodexMultiAgentMode={(next) => setCodexMultiAgentMode(normalizeCodexMultiAgentMode(next))}
               onSetUserBackgroundImage={setUserBackgroundImage}
