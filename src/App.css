@@ -639,7 +639,7 @@ h3 {
   overflow: hidden;
   display: grid;
   grid-template-rows: auto auto auto minmax(0, 1fr);
-  background: var(--workspace-bg);
+  background: var(--surface);
   border: 1px solid var(--workspace-border);
   box-shadow: var(--workspace-shadow);
 }
@@ -671,6 +671,7 @@ h3 {
 
 .workspace-topbar {
   grid-row: 3;
+  background: var(--surface);
   min-height: 44px;
   padding: 0 12px;
   display: flex;
@@ -5338,7 +5339,7 @@ h3 {
 }
 
 :root[data-theme="light"] .workspace {
-  background: transparent;
+  background: var(--surface);
   border: 0;
   box-shadow: none;
 }
@@ -6269,14 +6270,14 @@ pre {
 }
 
 :root[data-theme="dark"] .workspace {
-  background: var(--workspace-bg);
+  background: var(--surface-elevated);
   border-color: var(--workspace-border);
   box-shadow: var(--workspace-shadow);
 }
 
 :root[data-theme="dark"] .workspace-header,
 :root[data-theme="dark"] .workspace-topbar {
-  background: transparent;
+  background: var(--surface-elevated);
 }
 
 :root[data-theme="dark"] .workspace-topbar-tab {
