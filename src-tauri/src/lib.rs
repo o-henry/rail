@@ -1,3 +1,4 @@
+pub mod dashboard_crawler;
 mod engine;
 mod knowledge;
 mod quality;
@@ -37,6 +38,10 @@ pub fn run() {
             engine::web_bridge_status,
             engine::web_bridge_rotate_token,
             engine::ollama_generate,
+            dashboard_crawler::dashboard_crawl_run,
+            dashboard_crawler::dashboard_snapshot_save,
+            dashboard_crawler::dashboard_snapshot_list,
+            dashboard_crawler::dashboard_raw_list,
             knowledge::knowledge_probe,
             knowledge::knowledge_retrieve,
             quality::quality_run_checks,

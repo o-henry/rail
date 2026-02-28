@@ -15,7 +15,8 @@
     "tauri": "tauri",
     "tauri:dev": "npm run tauri:dev:isolated",
     "tauri:dev:isolated": "RAIL_CODEX_HOME_MODE=isolated tauri dev",
-    "tauri:dev:global": "RAIL_CODEX_HOME_MODE=global tauri dev"
+    "tauri:dev:global": "RAIL_CODEX_HOME_MODE=global tauri dev",
+    "dashboard:crawl": "cargo run --manifest-path src-tauri/Cargo.toml --bin dashboard_crawler -- --cwd ."
   },
   "dependencies": {
     "@tauri-apps/api": "^2",
