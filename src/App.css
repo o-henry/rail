@@ -5070,7 +5070,13 @@ h3 {
   scrollbar-width: none;
 }
 
-.settings-view > .controls,
+.settings-view > .controls {
+  width: 100%;
+  max-width: 720px;
+  margin-inline: auto;
+  margin-top: 2rem;
+}
+
 .settings-view > .bridge-embedded {
   width: 100%;
   max-width: var(--content-max-width);
