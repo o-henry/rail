@@ -2180,6 +2180,7 @@ function App() {
         )}
         {workspaceTab === "agents" && (
           <AgentsPage
+            codexMultiAgentMode={codexMultiAgentMode}
             onQuickAction={onAgentQuickAction}
             topicSnapshots={dashboardSnapshotsByTopic}
           />

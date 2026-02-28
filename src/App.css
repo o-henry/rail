@@ -6129,6 +6129,32 @@ h3 {
   gap: 12px;
 }
 
+.agents-set-brief {
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--surface-panel) 82%, var(--surface));
+  padding: 10px 12px;
+  display: grid;
+  gap: 4px;
+}
+
+.agents-set-brief strong {
+  font-size: 13px;
+  color: var(--text-main);
+}
+
+.agents-set-brief p {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.agents-set-brief small {
+  font-size: 10px;
+  color: var(--text-muted);
+  font-family: "BasicallyAMono", "Noto Sans KR", monospace;
+}
+
 .agents-thread-list {
   flex: 1 1 auto;
   min-width: 0;
@@ -6228,8 +6254,11 @@ h3 {
   /* border: 1px solid var(--surface-strong); */
   border-radius: 10px;
   background: color-mix(in srgb, var(--surface-elevated) 90%, var(--surface-panel));
-  padding: 12px 0;
+  padding: 10px;
   overflow: auto;
+  display: grid;
+  align-content: start;
+  gap: 6px;
 }
 
 .agents-grid-card-placeholder {
@@ -6238,11 +6267,38 @@ h3 {
   line-height: 1.5;
 }
 
+.agents-grid-card-role {
+  margin: 0;
+  color: var(--text-main);
+  font-size: 12px;
+  font-family: "BasicallyAMono", "Noto Sans KR", monospace;
+}
+
+.agents-grid-card-guidance {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 4px;
+}
+
+.agents-grid-card-guidance li {
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.agents-grid-card-starter {
+  margin: 0;
+  color: var(--text-main);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
 .agents-grid-card-foot {
   min-height: 22px;
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: space-between;
   color: var(--text-muted);
   font-size: 12px;
 }
