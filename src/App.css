@@ -6071,10 +6071,10 @@ h3 {
 .agents-set-group {
   display: grid;
   align-content: start;
-  gap: 6px;
-  border-radius: 10px;
-  background: color-mix(in srgb, var(--surface-panel) 78%, var(--surface-elevated));
-  padding: 8px;
+  gap: 4px;
+  border-radius: 0;
+  background: transparent;
+  padding: 0;
 }
 
 .agents-set-group-head {
