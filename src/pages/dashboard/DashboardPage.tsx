@@ -214,9 +214,6 @@ export default function DashboardPage(props: DashboardPageProps) {
     <section className="dashboard-layout dashboard-terminal-layout workspace-tab-panel">
       <section className="dashboard-terminal-shell">
         <aside className="panel-card dashboard-terminal-sidebar">
-          <header className="dashboard-terminal-sidebar-head">
-            <strong>{t("dashboard.title")}</strong>
-          </header>
           <div className="dashboard-terminal-sidebar-meta">
             <p>{t("dashboard.card.lastBatch")}</p>
             <b>{latestSnapshotText}</b>
