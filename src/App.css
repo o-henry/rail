@@ -3088,8 +3088,8 @@ h3 {
 }
 
 .settings-dashboard-topic-cadence input {
-  width: 56px;
-  min-width: 56px;
+  width: 48px;
+  min-width: 48px;
   height: 36px;
   min-height: 36px;
   padding: 0 8px;
@@ -7260,12 +7260,12 @@ pre {
   }
 
   .settings-dashboard-topic-cadence {
-    justify-content: space-between;
+    justify-content: flex-start;
   }
 
   .settings-dashboard-topic-cadence input {
-    width: 100%;
-    min-width: 0;
+    width: 48px;
+    min-width: 48px;
   }
 }
 
