@@ -1,5 +1,4 @@
 import { type FormEvent, type KeyboardEvent as ReactKeyboardEvent, useEffect, useMemo, useState } from "react";
-import FancySelect from "../../components/FancySelect";
 import { useI18n } from "../../i18n";
 import {
   DASHBOARD_TOPIC_IDS,
@@ -13,9 +12,7 @@ type DashboardIntelligenceSettingsProps = {
   config: DashboardAgentConfigMap;
   runStateByTopic: Record<DashboardTopicId, DashboardTopicRunState>;
   snapshotsByTopic: Partial<Record<DashboardTopicId, DashboardTopicSnapshot>>;
-  modelOptions: ReadonlyArray<{ value: string; label: string }>;
   disabled?: boolean;
-  onSetTopicModel: (topic: DashboardTopicId, model: string) => void;
   onRequestRunInAgents: (topic: DashboardTopicId, followupInstruction?: string) => void;
   onOpenAgentsWorkspace: () => void;
 };
@@ -113,6 +110,7 @@ export default function DashboardIntelligenceSettings(props: DashboardIntelligen
           {DASHBOARD_TOPIC_IDS.map((topic) => {
             const row = props.config[topic];
             const runState = props.runStateByTopic[topic];
+            const rowSnapshot = props.snapshotsByTopic[topic];
             return (
               <article
                 aria-selected={activeTopic === topic}
@@ -129,18 +127,8 @@ export default function DashboardIntelligenceSettings(props: DashboardIntelligen
                   {runState?.lastError ? <p>{runState.lastError}</p> : null}
                 </div>
 
-                <div
-                  className="settings-dashboard-topic-model"
-                  onClick={(event) => event.stopPropagation()}
-                  onKeyDown={(event) => event.stopPropagation()}
-                >
-                  <FancySelect
-                    ariaLabel={`${t("dashboard.widget." + topic + ".title")} model`}
-                    className="modern-select settings-dashboard-topic-select"
-                    onChange={(next) => props.onSetTopicModel(topic, next)}
-                    options={[...props.modelOptions]}
-                    value={row.model}
-                  />
+                <div className="settings-dashboard-topic-model">
+                  <code className="settings-dashboard-topic-model-code">{rowSnapshot?.model || row.model}</code>
                 </div>
 
                 <div className={`settings-dashboard-topic-state${runState?.running ? " is-running" : ""}`}>
@@ -175,6 +163,12 @@ export default function DashboardIntelligenceSettings(props: DashboardIntelligen
             {activeTopicRunState?.progressText ? <small>{activeTopicRunState.progressText}</small> : null}
             <small>{activeTopicUpdatedAtText}</small>
             {activeTopicRunState?.lastError ? <small>{activeTopicRunState.lastError}</small> : null}
+          </section>
+
+          <section className="settings-dashboard-topic-detail-section">
+            <h5>실행 메타</h5>
+            <small>{`model ${activeSnapshot?.model || activeTopicConfig.model}`}</small>
+            <small>{`references ${activeSnapshot?.references?.length ?? 0}`}</small>
           </section>
 
           <section className="settings-dashboard-topic-detail-section">

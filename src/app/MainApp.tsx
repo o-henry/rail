@@ -335,8 +335,6 @@ function App() {
     config: dashboardIntelligenceConfig,
     runStateByTopic: dashboardIntelligenceRunStateByTopic,
     setRunStateByTopic: setDashboardIntelligenceRunStateByTopic,
-    updateTopicConfig: updateDashboardTopicConfig,
-    modelOptions: dashboardIntelligenceModelOptions,
   } = useDashboardIntelligenceConfig();
   const [quickPanelOpen, setQuickPanelOpen] = useState(false);
   const [quickPanelQuery, setQuickPanelQuery] = useState("");
@@ -1966,12 +1964,6 @@ function App() {
     setWorkflowQuestion(request.prompt);
     setWorkspaceTab("workflow");
   };
-  const onSetDashboardTopicModel = useCallback(
-    (topic: DashboardTopicId, modelEngine: string) => {
-      updateDashboardTopicConfig(topic, { model: modelEngine });
-    },
-    [updateDashboardTopicConfig],
-  );
   const openAgentWorkspaceForTopic = useCallback(
     (topic: DashboardTopicId, draft?: string) => {
       agentLaunchRequestSeqRef.current += 1;
@@ -2340,10 +2332,8 @@ function App() {
             <DashboardIntelligenceSettings
               config={dashboardIntelligenceConfig}
               disabled={running || isGraphRunning}
-              modelOptions={dashboardIntelligenceModelOptions}
               onOpenAgentsWorkspace={onOpenAgentsWorkspaceFromData}
               onRequestRunInAgents={onRequestDashboardTopicRunInAgents}
-              onSetTopicModel={onSetDashboardTopicModel}
               runStateByTopic={dashboardIntelligenceRunStateByTopic}
               snapshotsByTopic={dashboardSnapshotsByTopic}
             />

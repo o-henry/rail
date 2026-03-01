@@ -3195,6 +3195,19 @@ h3 {
 .settings-dashboard-topic-model {
   min-width: 0;
   width: 100%;
+  display: inline-flex;
+  align-items: center;
+}
+
+.settings-dashboard-topic-model-code {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  color: var(--text-main);
+  font-family: "BasicallyAMono", "Noto Sans KR", monospace;
 }
 
 .settings-dashboard-topic-cadence {
