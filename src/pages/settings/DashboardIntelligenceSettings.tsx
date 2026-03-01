@@ -108,7 +108,6 @@ export default function DashboardIntelligenceSettings(props: DashboardIntelligen
         </div>
         <div className="settings-dashboard-intelligence-list" role="tablist" aria-label="데이터 토픽">
           {DASHBOARD_TOPIC_IDS.map((topic) => {
-            const row = props.config[topic];
             const runState = props.runStateByTopic[topic];
             const rowSnapshot = props.snapshotsByTopic[topic];
             return (
@@ -128,7 +127,7 @@ export default function DashboardIntelligenceSettings(props: DashboardIntelligen
                 </div>
 
                 <div className="settings-dashboard-topic-model">
-                  <code className="settings-dashboard-topic-model-code">{rowSnapshot?.model || row.model}</code>
+                  <code className="settings-dashboard-topic-model-code">{rowSnapshot?.model || "미실행"}</code>
                 </div>
 
                 <div className={`settings-dashboard-topic-state${runState?.running ? " is-running" : ""}`}>
@@ -167,7 +166,7 @@ export default function DashboardIntelligenceSettings(props: DashboardIntelligen
 
           <section className="settings-dashboard-topic-detail-section">
             <h5>실행 메타</h5>
-            <small>{`model ${activeSnapshot?.model || activeTopicConfig.model}`}</small>
+            <small>{`model ${activeSnapshot?.model || "미실행"}`}</small>
             <small>{`references ${activeSnapshot?.references?.length ?? 0}`}</small>
           </section>
 
