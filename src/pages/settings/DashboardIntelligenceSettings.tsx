@@ -1,4 +1,4 @@
-import { type FormEvent, type KeyboardEvent as ReactKeyboardEvent, useEffect, useMemo, useState } from "react";
+import { type KeyboardEvent as ReactKeyboardEvent, useEffect, useMemo, useState } from "react";
 import { useI18n } from "../../i18n";
 import {
   DASHBOARD_TOPIC_IDS,
@@ -23,7 +23,6 @@ function formatTopicId(topic: DashboardTopicId): string {
 export default function DashboardIntelligenceSettings(props: DashboardIntelligenceSettingsProps) {
   const { t } = useI18n();
   const [activeTopic, setActiveTopic] = useState<DashboardTopicId>(DASHBOARD_TOPIC_IDS[0]);
-  const [followupDraft, setFollowupDraft] = useState("");
 
   useEffect(() => {
     if (DASHBOARD_TOPIC_IDS.includes(activeTopic)) {
@@ -74,16 +73,6 @@ export default function DashboardIntelligenceSettings(props: DashboardIntelligen
     }
     event.preventDefault();
     setActiveTopic(topic);
-  };
-
-  const onSubmitFollowup = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const prompt = followupDraft.trim();
-    if (!prompt || props.disabled) {
-      return;
-    }
-    props.onRequestRunInAgents(activeTopic, prompt);
-    setFollowupDraft("");
   };
 
   return (
@@ -235,24 +224,6 @@ export default function DashboardIntelligenceSettings(props: DashboardIntelligen
           ) : null}
         </div>
 
-        <form className="data-topic-followup-composer question-input agents-composer workflow-question-input" onSubmit={onSubmitFollowup}>
-          <textarea
-            disabled={props.disabled}
-            onChange={(event) => setFollowupDraft(event.currentTarget.value)}
-            placeholder="추가 요청을 입력하면 에이전트 탭으로 실행 요청이 전달됩니다."
-            rows={2}
-            value={followupDraft}
-          />
-          <div className="question-input-footer">
-            <button
-              className="primary-action question-create-button agents-send-button data-topic-followup-send"
-              disabled={!followupDraft.trim() || props.disabled}
-              type="submit"
-            >
-              <img alt="" aria-hidden="true" className="question-create-icon" src="/up.svg" />
-            </button>
-          </div>
-        </form>
       </aside>
     </section>
   );

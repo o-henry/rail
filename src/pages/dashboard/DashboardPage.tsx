@@ -49,6 +49,10 @@ function topicTitleKey(topic: DashboardTopicId): string {
   return `dashboard.widget.${topic}.title`;
 }
 
+function normalizeDashboardLogText(input: string): string {
+  return input.replace(/\bstatus\b/gi, "상태");
+}
+
 export default function DashboardPage(props: DashboardPageProps) {
   const { t } = useI18n();
 
@@ -114,12 +118,15 @@ export default function DashboardPage(props: DashboardPageProps) {
   const workSummaryItems = snapshotSummaries.length > 0 ? snapshotSummaries : fallbackFeedSummaries;
   const terminalLines = workSummaryItems.length > 0 ? workSummaryItems : [t("dashboard.value.none")];
   const resourceLines = useMemo<DashboardResourceLine[]>(() => {
-    const eventLines: DashboardResourceLine[] = props.workspaceEvents.slice(0, 10).map((entry) => ({
-      id: `log-${entry.id}`,
-      topic: "feed",
-      kind: "log",
-      text: `${entry.source} · ${entry.message}`,
-    }));
+    const eventLines: DashboardResourceLine[] = props.workspaceEvents
+      .filter((entry) => entry.actor !== "user")
+      .slice(0, 10)
+      .map((entry) => ({
+        id: `log-${entry.id}`,
+        topic: "feed",
+        kind: "log",
+        text: normalizeDashboardLogText(`${entry.source} · ${entry.message}`),
+      }));
 
     const snapshots = Object.values(props.topicSnapshots)
       .filter((snapshot): snapshot is DashboardTopicSnapshot => Boolean(snapshot))
