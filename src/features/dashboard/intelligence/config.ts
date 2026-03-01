@@ -62,7 +62,20 @@ const DEFAULT_ALLOWLIST_BY_TOPIC: Record<DashboardTopicId, string[]> = {
   ],
   eventCalendar: ["federalreserve.gov", "imf.org", "sec.gov", "coinmarketcal.com"],
   riskAlertBoard: ["sec.gov", "cisa.gov", "owasp.org", "krebsonsecurity.com"],
-  devEcosystem: ["github.blog", "nodejs.org", "python.org", "react.dev"],
+  devEcosystem: [
+    "github.blog",
+    "nodejs.org",
+    "python.org",
+    "react.dev",
+    "openai.com",
+    "deepmind.google",
+    "huggingface.co",
+    "unity.com",
+    "unrealengine.com",
+    "gamedeveloper.com",
+    "gdcvault.com",
+    "godotengine.org",
+  ],
 };
 
 const DEFAULT_PROMPT_BY_TOPIC: Record<DashboardTopicId, string> = {

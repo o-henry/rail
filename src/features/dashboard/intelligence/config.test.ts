@@ -17,6 +17,16 @@ describe("dashboard intelligence config", () => {
     expect(defaults.devCommunityHotTopics.allowlist).toEqual(
       expect.arrayContaining(["csdn.net", "juejin.cn", "qiita.com", "zenn.dev", "news.ycombinator.com"]),
     );
+    expect(defaults.devEcosystem.allowlist).toEqual(
+      expect.arrayContaining([
+        "openai.com",
+        "deepmind.google",
+        "huggingface.co",
+        "unity.com",
+        "unrealengine.com",
+        "gamedeveloper.com",
+      ]),
+    );
   });
 
   it("normalizes invalid topic config values", () => {
