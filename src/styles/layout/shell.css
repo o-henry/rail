@@ -1326,6 +1326,7 @@
   /* align-items: flex-start; */
   align-items: center;
   justify-content: space-between;
+  --node-head-action-height: 24px;
   gap: 8px;
   padding: 13px 12px 10px;
   /* padding: 8px; */
@@ -1432,11 +1433,29 @@
   white-space: nowrap;
 }
 
-.node-head button {
-  padding: 4px 7px;
+.node-head-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.node-head-delete-button {
+  height: var(--node-head-action-height);
+  min-height: var(--node-head-action-height);
+  padding: 0 8px;
   border-radius: 3px;
   font-size: 0.74rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   cursor: pointer;
+}
+
+.node-head-action-badge {
+  height: var(--node-head-action-height);
+  min-height: var(--node-head-action-height);
+  padding: 0 8px;
+  border-radius: 3px;
 }
 
 .node-body {

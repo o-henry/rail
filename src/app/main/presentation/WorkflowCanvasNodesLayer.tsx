@@ -112,7 +112,6 @@ export default function WorkflowCanvasNodesLayer({
                   <>
                     <div className="node-head-title-row">
                       <strong>{turnModelLabel(node)}</strong>
-                      {isDataPipelineNode ? <span className="node-type-badge data">DATA</span> : null}
                     </div>
                     <span className="node-head-subtitle">{turnRoleLabel(node)}</span>
                   </>
@@ -122,7 +121,12 @@ export default function WorkflowCanvasNodesLayer({
                   </div>
                 )}
               </div>
-              <button onClick={() => deleteNode(node.id)} type="button">{t("common.delete")}</button>
+              <div className="node-head-actions">
+                {isDataPipelineNode ? <span className="node-type-badge data node-head-action-badge">DATA</span> : null}
+                <button className="node-head-delete-button" onClick={() => deleteNode(node.id)} type="button">
+                  {t("common.delete")}
+                </button>
+              </div>
             </div>
             <div className="node-body">
               {nodeSummary ? <div className="node-summary-row"><div>{nodeSummary}</div></div> : null}
