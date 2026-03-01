@@ -271,17 +271,17 @@ export default function DashboardIntelligenceSettings(props: DashboardIntelligen
                 >
                   ?
                 </button>
-                <div className="settings-dashboard-allowlist-tooltip" role="tooltip">
-                  {activeTopicConfig.allowlist.length > 0 ? (
-                    <ul>
-                      {activeTopicConfig.allowlist.map((source) => (
-                        <li key={source}>{source}</li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <p>등록된 링크가 없습니다.</p>
-                  )}
-                </div>
+              </div>
+              <div className="settings-dashboard-allowlist-tooltip" role="tooltip">
+                {activeTopicConfig.allowlist.length > 0 ? (
+                  <ul>
+                    {activeTopicConfig.allowlist.map((source) => (
+                      <li key={source}>{source}</li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p>등록된 링크가 없습니다.</p>
+                )}
               </div>
             </div>
           </section>
@@ -324,10 +324,9 @@ export default function DashboardIntelligenceSettings(props: DashboardIntelligen
             value={followupDraft}
           />
           <div className="question-input-footer">
-            <div className="settings-dashboard-topic-request-copy">추가 요청</div>
             <button
               aria-label="추가 요청 실행"
-              className="primary-action question-create-button settings-dashboard-topic-request-send"
+              className="question-create-button settings-dashboard-topic-request-send"
               disabled={!followupDraft.trim() || Boolean(props.disabled)}
               onClick={onSubmitFollowup}
               type="button"

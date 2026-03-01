@@ -3125,7 +3125,6 @@
 }
 
 .settings-dashboard-topic-allowlist-head {
-  position: relative;
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -3138,12 +3137,15 @@
   min-height: 18px;
   border: 0;
   background: transparent;
-  color: var(--text-muted);
+  color: #5b6573;
   font-size: 12px;
   line-height: 1;
   padding: 0;
   display: inline-grid;
   place-items: center;
+  cursor: help;
+  outline: none;
+  box-shadow: none;
 }
 
 .settings-dashboard-allowlist-tooltip {
@@ -3182,8 +3184,14 @@
   overflow-wrap: anywhere;
 }
 
-.settings-dashboard-topic-allowlist-head:hover .settings-dashboard-allowlist-tooltip,
-.settings-dashboard-topic-allowlist-head:focus-within .settings-dashboard-allowlist-tooltip {
+.settings-dashboard-topic-allowlist-head:hover + .settings-dashboard-allowlist-tooltip,
+.settings-dashboard-topic-allowlist-head:focus-within + .settings-dashboard-allowlist-tooltip {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.settings-dashboard-topic-allowlist-block:hover .settings-dashboard-allowlist-tooltip {
   opacity: 1;
   pointer-events: auto;
   transform: translateY(0);
@@ -3299,21 +3307,25 @@
 .settings-dashboard-topic-request {
   margin-top: 2px;
   padding: 8px 10px 8px;
+  background: color-mix(in srgb, var(--surface-panel) 76%, var(--surface));
+  box-shadow: none;
 }
 
 .settings-dashboard-topic-request textarea {
   min-height: 34px;
   max-height: 96px;
+  background: transparent;
 }
 
 .settings-dashboard-topic-request .question-input-footer {
   min-height: 30px;
+  justify-content: flex-end;
 }
 
-.settings-dashboard-topic-request-copy {
-  font-size: 11px;
-  color: var(--text-muted);
-  font-family: "Galmuri11", "DialogNanumBody1984", "Noto Sans KR", sans-serif;
+.settings-dashboard-topic-request-send {
+  background: color-mix(in srgb, var(--surface-soft) 76%, var(--surface));
+  border: 0;
+  box-shadow: none;
 }
 
 .settings-dashboard-topic-request-send:disabled {
