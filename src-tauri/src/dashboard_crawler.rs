@@ -1,3 +1,4 @@
+use chrono::Local;
 use reqwest::Client;
 use roxmltree::Document;
 use serde::{Deserialize, Serialize};
@@ -103,7 +104,9 @@ pub fn dashboard_snapshot_save(
     fs::create_dir_all(&snapshot_dir)
         .map_err(|err| format!("failed to create snapshot directory: {err}"))?;
     let stamp = now_epoch_millis();
-    let file_path = snapshot_dir.join(format!("{stamp}.json"));
+    let date = now_date_yyyymmdd();
+    let event_label = sanitize_filename_segment(topic_event_label(topic_id));
+    let file_path = snapshot_dir.join(format!("{stamp}_{date}_{event_label}.json"));
     let body = serde_json::to_string_pretty(&snapshot_json)
         .map_err(|err| format!("failed to serialize snapshot: {err}"))?;
     fs::write(&file_path, body).map_err(|err| format!("failed to save snapshot: {err}"))?;
@@ -234,6 +237,7 @@ pub async fn run_dashboard_crawl(request: DashboardCrawlRequest) -> Result<Dashb
         let topic_dir = workspace.join(".rail/dashboard/raw").join(topic);
         fs::create_dir_all(&topic_dir)
             .map_err(|err| format!("failed to create raw topic directory ({topic}): {err}"))?;
+        let event_label = sanitize_filename_segment(topic_event_label(topic));
 
         let allowlist = allowlist_map
             .get(topic)
@@ -263,9 +267,10 @@ pub async fn run_dashboard_crawl(request: DashboardCrawlRequest) -> Result<Dashb
             match fetch_source_document(&client, topic, &source_url).await {
                 Ok(document) => {
                     let stamp = now_epoch_millis();
+                    let date = now_date_yyyymmdd();
                     let slug = slugify_source(&source_url);
-                    let md_path = topic_dir.join(format!("{stamp}_{slug}.md"));
-                    let json_path = topic_dir.join(format!("{stamp}_{slug}.json"));
+                    let md_path = topic_dir.join(format!("{stamp}_{date}_{event_label}_{slug}.md"));
+                    let json_path = topic_dir.join(format!("{stamp}_{date}_{event_label}_{slug}.json"));
 
                     if let Err(err) = fs::write(&md_path, document.markdown) {
                         result.errors.push(format!("{}: failed to write markdown ({err})", source_url));
@@ -680,11 +685,53 @@ fn slugify_source(url: &str) -> String {
         .collect::<String>()
 }
 
+fn topic_event_label(topic: &str) -> &'static str {
+    match topic {
+        "marketSummary" => "시장요약",
+        "globalHeadlines" => "글로벌헤드라인",
+        "industryTrendRadar" => "트렌드",
+        "communityHotTopics" => "일반커뮤니티핫토픽",
+        "devCommunityHotTopics" => "개발커뮤니티핫토픽",
+        "paperResearch" => "논문토픽",
+        "eventCalendar" => "이벤트캘린더",
+        "riskAlertBoard" => "위험알림보드",
+        "devEcosystem" => "개발생태계업데이트",
+        _ => "event",
+    }
+}
+
+fn sanitize_filename_segment(input: &str) -> String {
+    let mut out = String::new();
+    let mut last_was_separator = false;
+    for ch in input.chars() {
+        let keep = ch.is_alphanumeric() || ch == '-' || ch == '_';
+        if keep {
+            out.push(ch);
+            last_was_separator = false;
+            continue;
+        }
+        if !last_was_separator {
+            out.push('-');
+            last_was_separator = true;
+        }
+    }
+    let cleaned = out.trim_matches('-').trim_matches('_');
+    if cleaned.is_empty() {
+        "event".to_string()
+    } else {
+        cleaned.to_string()
+    }
+}
+
 fn now_epoch_millis() -> u128 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map(|duration| duration.as_millis())
         .unwrap_or(0)
+}
+
+fn now_date_yyyymmdd() -> String {
+    Local::now().format("%Y%m%d").to_string()
 }
 
 fn now_iso8601_like() -> String {
@@ -823,6 +870,18 @@ fn value_to_summary_text(value: &Value) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn sanitizes_event_label_for_filename() {
+        let value = sanitize_filename_segment("시장 조사 세트 / 위험");
+        assert_eq!(value, "시장-조사-세트-위험");
+    }
+
+    #[test]
+    fn maps_known_topic_to_event_label() {
+        assert_eq!(topic_event_label("marketSummary"), "시장요약");
+        assert_eq!(topic_event_label("communityHotTopics"), "일반커뮤니티핫토픽");
+    }
 
     #[test]
     fn normalize_topics_uses_known_order() {
