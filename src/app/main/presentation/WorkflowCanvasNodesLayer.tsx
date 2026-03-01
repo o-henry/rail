@@ -75,9 +75,11 @@ export default function WorkflowCanvasNodesLayer({
         const showNodeAnchors = isNodeSelected || isConnectingDrag || selectedEdgeNodeIdSet.has(node.id);
         const receivesQuestionDirectly = questionDirectInputNodeIds.has(node.id);
         const isWebTurnNode = node.type === "turn" && String(node.config?.executor ?? "").startsWith("web_");
+        const isDataPipelineNode =
+          node.type === "turn" && String((node.config as Record<string, unknown>)?.sourceKind ?? "") === "data_pipeline";
         return (
           <div
-            className={`graph-node node-${node.type} ${isNodeSelected ? "selected" : ""} ${isNodeDragging ? "is-dragging" : ""}`.trim()}
+            className={`graph-node node-${node.type} ${isDataPipelineNode ? "is-data-pipeline-node" : ""} ${isNodeSelected ? "selected" : ""} ${isNodeDragging ? "is-dragging" : ""}`.trim()}
             data-node-id={node.id}
             key={node.id}
             onClick={(event) => {
@@ -110,6 +112,7 @@ export default function WorkflowCanvasNodesLayer({
                   <>
                     <div className="node-head-title-row">
                       <strong>{turnModelLabel(node)}</strong>
+                      {isDataPipelineNode ? <span className="node-type-badge data">DATA</span> : null}
                     </div>
                     <span className="node-head-subtitle">{turnRoleLabel(node)}</span>
                   </>

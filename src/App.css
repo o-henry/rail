@@ -1769,6 +1769,19 @@ h3 {
   background: #eef6ff;
 }
 
+.graph-node.node-turn.is-data-pipeline-node {
+  background: #f7fbf9;
+  box-shadow: 0 2px 12px rgba(18, 94, 66, 0.12);
+}
+
+.graph-node.node-turn.is-data-pipeline-node .node-head {
+  background: #e8f6ef;
+}
+
+.graph-node.node-turn.is-data-pipeline-node .node-head-subtitle {
+  color: #1f6f4d;
+}
+
 .node-transform .node-head {
   background: #f3efff;
 }
@@ -1785,6 +1798,23 @@ h3 {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.node-type-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 16px;
+  padding: 0 6px;
+  border-radius: 4px;
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  font-family: "BasicallyAMono", "Noto Sans KR", monospace;
+}
+
+.node-type-badge.data {
+  color: #1f6f4d;
+  background: #d7efdf;
 }
 
 .node-input-chip {

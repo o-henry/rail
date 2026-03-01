@@ -16,7 +16,7 @@ export default function WorkflowInspectorTools({
           <span className="mini-action-button-label">{tp("에이전트 추가")}</span>
         </button>
         <button className="mini-action-button workflow-add-agent-button" onClick={props.addCrawlerNode} type="button">
-          <span className="mini-action-button-label">{tp("크롤러 추가")}</span>
+          <span className="mini-action-button-label">{tp("데이터 추가")}</span>
         </button>
       </div>
 

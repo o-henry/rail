@@ -1736,11 +1736,12 @@ function App() {
       },
       config: {
         ...defaultNodeConfig("turn"),
-        role: "Crawler Operator",
+        role: "Data Pipeline Operator",
         promptTemplate:
           "Allowlist 소스를 기준으로 최신 데이터를 수집하고 핵심 시그널/출처를 간결하게 정리해줘.",
         qualityProfile: "research_evidence",
         artifactType: "EvidenceArtifact",
+        sourceKind: "data_pipeline",
       },
     };
     applyGraphChange((prev) => ({
@@ -1750,11 +1751,11 @@ function App() {
     setNodeSelection([nodeId], nodeId);
     appendWorkspaceEvent({
       source: "workflow",
-      message: "크롤러 노드 추가",
+      message: "데이터 노드 추가",
       actor: "user",
       level: "info",
     });
-    setStatus("그래프에 크롤러 노드를 추가했습니다.");
+    setStatus("그래프에 데이터 노드를 추가했습니다.");
   }, [appendWorkspaceEvent, applyGraphChange, graph.nodes, setNodeSelection, setStatus]);
 
   const viewportWidth = Math.ceil(canvasLogicalViewport.width);
