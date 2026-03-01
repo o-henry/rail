@@ -1,0 +1,116 @@
+html,
+body,
+#root {
+  height: 100%;
+  min-width: 1200px;
+  min-height: 760px;
+  overflow: hidden;
+}
+
+* {
+  box-sizing: border-box;
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+*::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}
+
+body {
+  margin: 0;
+  color: var(--text-main);
+  background: var(--bg-app);
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+button {
+  border: 0;
+  border-radius: 5px;
+  /* background: #e7ebf1; */
+  background: var(--surface-panel);
+  color: var(--text-main);
+  padding: 8px 11px;
+  cursor: pointer;
+}
+
+button:focus,
+button:focus-visible {
+  outline: none;
+}
+
+button:disabled {
+  /* opacity: 0.5; */
+  cursor: not-allowed;
+}
+
+input,
+textarea,
+select {
+  border: 0;
+  border-radius: 5px;
+  /* background: #e7ebf1; */
+  background: var(--surface-panel);
+  color: var(--text-main);
+  padding: 8px 10px;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--placeholder-color);
+  opacity: 1;
+}
+
+select {
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("/down-arrow.svg");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  background-size: 12px 12px;
+  padding-right: 34px;
+}
+
+textarea {
+  resize: vertical;
+}
+
+label {
+  display: grid;
+  gap: 8px;
+  font-size: 0.9rem;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+p {
+  margin: 0;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: var(--ui-font-stack);
+  letter-spacing: var(--ui-letter-spacing);
+}
+
+h3 {
+  font-size: 1.2rem;
+  /* font-size: 0.9rem; */
+}
+
