@@ -127,14 +127,14 @@ export function isDevSetOption(option: AgentSetOption): boolean {
 export function buildGroupedSetOptions(setOptions: AgentSetOption[]): AgentSetGroup[] {
   return [
     {
-      id: "general",
-      title: "일반",
-      items: setOptions.filter((option) => !isDevSetOption(option)),
-    },
-    {
       id: "dev",
       title: "개발 전용",
       items: setOptions.filter((option) => isDevSetOption(option)),
+    },
+    {
+      id: "general",
+      title: "일반",
+      items: setOptions.filter((option) => !isDevSetOption(option)),
     },
   ].filter((group) => group.items.length > 0);
 }
