@@ -1,4 +1,4 @@
-import { useState, type ChangeEvent, type RefObject } from "react";
+import { Fragment, useState, type ChangeEvent, type ReactNode, type RefObject } from "react";
 import type { DashboardTopicId, DashboardTopicRunState } from "../../features/dashboard/intelligence";
 import type { CodexMultiAgentMode } from "./agentPrompt";
 import type { AgentModelOption, AgentSetOption, AgentThread, AttachedFile } from "./agentTypes";
@@ -103,10 +103,22 @@ type AgentsWorkspaceViewProps = {
   onQueuePrompt: (prompt: string) => void;
   dataTopicId: DashboardTopicId | null;
   dataTopicRunState: DashboardTopicRunState | null;
-  onRunDataTopic: () => void;
-  onRunDataCrawlerOnly: () => void;
   onOpenDataTab: () => void;
 };
+
+function renderMixedLangText(value: string): ReactNode {
+  const text = String(value ?? "");
+  const parts = text.split(/([A-Za-z][A-Za-z0-9/._-]*)/g).filter((part) => part.length > 0);
+  return parts.map((part, index) =>
+    /[A-Za-z]/.test(part) ? (
+      <span key={`${part}-${index}`} lang="en">
+        {part}
+      </span>
+    ) : (
+      <Fragment key={`${part}-${index}`}>{part}</Fragment>
+    ),
+  );
+}
 
 export function AgentsWorkspaceView({
   t,
@@ -147,8 +159,6 @@ export function AgentsWorkspaceView({
   onQueuePrompt,
   dataTopicId,
   dataTopicRunState,
-  onRunDataTopic,
-  onRunDataCrawlerOnly,
   onOpenDataTab,
 }: AgentsWorkspaceViewProps) {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
@@ -183,7 +193,7 @@ export function AgentsWorkspaceView({
       <div className="agents-topbar">
         <div className="agents-thread-list agents-thread-brief" aria-label="세트 브리핑">
           <strong lang="ko">{activeSetOption?.label ?? "세트 미선택"}</strong>
-          <p lang="ko">{setMission || activeSetOption?.description || "세트 설명이 없습니다."}</p>
+          <p lang="ko">{renderMixedLangText(setMission || activeSetOption?.description || "세트 설명이 없습니다.")}</p>
         </div>
         {dataTopicId ? (
           <section className="agents-data-run-controls" aria-label="데이터 파이프라인 실행">
@@ -191,22 +201,9 @@ export function AgentsWorkspaceView({
               <strong>{`topic · ${dataTopicId}`}</strong>
               <span>{`status · ${dataTopicStatusLabel}`}</span>
               {dataTopicRunState?.progressText ? <small>{dataTopicRunState.progressText}</small> : null}
+              <small>메시지 전송 버튼으로 실행 요청이 전달됩니다.</small>
             </div>
             <div className="agents-data-run-actions">
-              <button
-                disabled={Boolean(dataTopicRunState?.running)}
-                onClick={onRunDataTopic}
-                type="button"
-              >
-                실행하기
-              </button>
-              <button
-                disabled={Boolean(dataTopicRunState?.running)}
-                onClick={onRunDataCrawlerOnly}
-                type="button"
-              >
-                크롤러만
-              </button>
               <button onClick={onOpenDataTab} type="button">
                 데이터 보기
               </button>

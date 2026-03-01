@@ -33,7 +33,6 @@ export default function AgentsPage({
   codexMultiAgentMode,
   runStateByTopic,
   onRunDataTopic,
-  onRunDataCrawlerOnly,
   launchRequest,
   onOpenDataTab,
 }: AgentsPageProps) {
@@ -332,6 +331,18 @@ export default function AgentsPage({
     if (!text && attachedFiles.length === 0) {
       return;
     }
+    if (activeDataTopicId) {
+      onRunDataTopic(activeDataTopicId, text || undefined);
+      updateActiveSetState((current) => ({
+        ...current,
+        draft: "",
+        attachedFiles: [],
+      }));
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+      return;
+    }
     const payload = buildAgentDispatchPayload({
       threadName: activeThread?.name,
       threadRole: activeThread?.role,
@@ -363,20 +374,6 @@ export default function AgentsPage({
 
   const onOpenFilePicker = () => {
     fileInputRef.current?.click();
-  };
-
-  const onRunActiveDataTopic = () => {
-    if (!activeDataTopicId) {
-      return;
-    }
-    onRunDataTopic(activeDataTopicId);
-  };
-
-  const onRunActiveDataCrawlerOnly = () => {
-    if (!activeDataTopicId) {
-      return;
-    }
-    onRunDataCrawlerOnly(activeDataTopicId);
   };
 
   const onAttachFiles = (event: ChangeEvent<HTMLInputElement>) => {
@@ -440,8 +437,6 @@ export default function AgentsPage({
       onOpenFilePicker={onOpenFilePicker}
       onQueuePrompt={onQueuePrompt}
       onRestoreTemplateSet={onRestoreTemplateSet}
-      onRunDataCrawlerOnly={onRunActiveDataCrawlerOnly}
-      onRunDataTopic={onRunActiveDataTopic}
       onSelectModel={setSelectedModel}
       onSelectReasonLevel={setSelectedReasonLevel}
       onSend={onSend}

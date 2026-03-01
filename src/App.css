@@ -6574,11 +6574,21 @@ h3 {
   font-family: "Galmuri11", "DialogNanumBody1984", "Noto Sans KR", sans-serif;
 }
 
+.agents-thread-brief p :lang(en) {
+  font-family: "BasicallyAMono", "DialogNanumBody1984", "Noto Sans KR", monospace;
+  letter-spacing: -0.7px;
+}
+
 html[data-locale="ko"] .agents-topbar .agents-thread-brief,
 html[data-locale="ko"] .agents-topbar .agents-thread-brief strong,
 html[data-locale="ko"] .agents-topbar .agents-thread-brief p {
   font-family: "Galmuri11", "DialogNanumBody1984", "Noto Sans KR", sans-serif;
   letter-spacing: 0;
+}
+
+html[data-locale="ko"] .agents-topbar .agents-thread-brief p :lang(en) {
+  font-family: "BasicallyAMono", "DialogNanumBody1984", "Noto Sans KR", monospace;
+  letter-spacing: -0.7px;
 }
 
 .agents-add-thread-button {

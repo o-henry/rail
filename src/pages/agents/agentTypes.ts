@@ -21,8 +21,7 @@ export type AgentsPageProps = {
   topicSnapshots: Partial<Record<DashboardTopicId, DashboardTopicSnapshot>>;
   codexMultiAgentMode: CodexMultiAgentMode;
   runStateByTopic: Record<DashboardTopicId, DashboardTopicRunState>;
-  onRunDataTopic: (topic: DashboardTopicId) => void;
-  onRunDataCrawlerOnly: (topic: DashboardTopicId) => void;
+  onRunDataTopic: (topic: DashboardTopicId, followupInstruction?: string) => void;
   launchRequest: AgentWorkspaceLaunchRequest | null;
   onOpenDataTab: () => void;
 };

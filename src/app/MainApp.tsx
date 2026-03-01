@@ -588,7 +588,6 @@ function App() {
     snapshotsByTopic: dashboardSnapshotsByTopic,
     refreshSnapshots: refreshDashboardSnapshots,
     runTopic: runDashboardTopic,
-    runCrawlerOnly: runDashboardCrawlerOnly,
   } = useDashboardIntelligenceRunner({
     cwd,
     hasTauriRuntime,
@@ -1997,25 +1996,17 @@ function App() {
     [openAgentWorkspaceForTopic],
   );
   const onRunDashboardTopicFromAgents = useCallback(
-    async (topic: DashboardTopicId) => {
+    async (topic: DashboardTopicId, followupInstruction?: string) => {
       if (!loginCompleted) {
         setError("Codex 로그인이 필요합니다. 설정에서 먼저 로그인해 주세요.");
         setWorkspaceTab("settings");
         return;
       }
       setStatus(`에이전트 실행: ${t(`dashboard.widget.${topic}.title`)} 파이프라인 시작`);
-      await runDashboardTopic(topic);
+      await runDashboardTopic(topic, followupInstruction);
       await refreshDashboardSnapshots();
     },
     [loginCompleted, refreshDashboardSnapshots, runDashboardTopic, setError, setStatus, t],
-  );
-  const onRunDashboardCrawlerOnlyFromAgents = useCallback(
-    async (topic: DashboardTopicId) => {
-      setStatus(`에이전트 실행: ${t(`dashboard.widget.${topic}.title`)} 크롤러 시작`);
-      await runDashboardCrawlerOnly([topic]);
-      await refreshDashboardSnapshots();
-    },
-    [refreshDashboardSnapshots, runDashboardCrawlerOnly, setStatus, t],
   );
   const workspaceTopbarTabs = useMemo(
     () => [
@@ -2297,7 +2288,6 @@ function App() {
             launchRequest={agentLaunchRequest}
             onQuickAction={onAgentQuickAction}
             onOpenDataTab={() => setWorkspaceTab("intelligence")}
-            onRunDataCrawlerOnly={onRunDashboardCrawlerOnlyFromAgents}
             onRunDataTopic={onRunDashboardTopicFromAgents}
             runStateByTopic={dashboardIntelligenceRunStateByTopic}
             topicSnapshots={dashboardSnapshotsByTopic}
