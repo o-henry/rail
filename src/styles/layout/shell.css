@@ -3335,7 +3335,7 @@
 }
 
 .settings-dashboard-topic-request-send.primary-action {
-  background: #1d7cff;
+  background: rgb(139, 143, 149);
   color: #ffffff;
 }
 
@@ -4259,8 +4259,8 @@
   color: #4b5768;
   font-size: 14px;
   border-radius: 4px;
-  background: #ffffff;
-  padding: 8px;
+  background: #e2e2e2;
+  padding: 8px 16px;
 }
 
 .feed-card-input-sources {
@@ -4754,6 +4754,7 @@
   color: #627083;
   font-size: 12px;
   padding-top: 10px;
+  padding-left: 4px;
 }
 
 .feed-share-menu-wrap {

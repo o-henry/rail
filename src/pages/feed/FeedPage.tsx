@@ -103,7 +103,6 @@ export default function FeedPage({ vm }: FeedPageProps) {
     formatRunDateTime,
     formatRelativeFeedTime,
     formatDuration,
-    formatUsage,
     onOpenFeedMarkdownFile,
   } = vm;
   const replyFeedbackMap =
@@ -784,7 +783,6 @@ export default function FeedPage({ vm }: FeedPageProps) {
                                       <span>
                                         {t("feed.time.generated")} {formatDuration((evidence as any).durationMs)}
                                       </span>
-                                      <span>{t("feed.usage")} {formatUsage((evidence as any).usage)}</span>
                                       {pendingRequestCount > 0 && (
                                         <span>{t("feed.pendingRequests", { count: pendingRequestCount })}</span>
                                       )}
