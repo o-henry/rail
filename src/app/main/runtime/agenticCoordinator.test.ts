@@ -27,6 +27,7 @@ describe("agenticCoordinator", () => {
       cwd: "/tmp/workspace",
       topic: "marketSummary",
       sourceTab: "agents",
+      setId: "data-marketSummary",
       queue,
       invokeFn,
       execute: async ({ onProgress }) => {
@@ -46,7 +47,17 @@ describe("agenticCoordinator", () => {
     });
 
     expect(result.envelope.record.status).toBe("done");
+    expect(result.envelope.record.topic).toBe("marketSummary");
+    expect(result.envelope.record.setId).toBe("data-marketSummary");
     expect(result.envelope.artifacts.some((row) => row.kind === "snapshot")).toBe(true);
+    expect(
+      result.events.every(
+        (event) =>
+          event.runId === result.runId &&
+          event.topic === "marketSummary" &&
+          event.setId === "data-marketSummary",
+      ),
+    ).toBe(true);
     expect(result.events.some((event) => event.type === "run_started")).toBe(true);
     expect(result.events.some((event) => event.type === "run_done")).toBe(true);
     expect(invokeFn).toHaveBeenCalledWith(
@@ -108,6 +119,7 @@ describe("agenticCoordinator", () => {
       cwd: "/tmp/workspace",
       sourceTab: "workflow",
       graphId: "default",
+      setId: "graph-default",
       queue,
       invokeFn,
       execute: async () => {
@@ -116,6 +128,8 @@ describe("agenticCoordinator", () => {
     });
 
     expect(result.envelope.record.status).toBe("done");
+    expect(result.envelope.record.setId).toBe("graph-default");
+    expect(result.events.every((event) => event.setId === "graph-default")).toBe(true);
     expect(result.envelope.artifacts.some((row) => row.kind === "graph")).toBe(true);
   });
 });

@@ -84,6 +84,7 @@ export function useDashboardIntelligenceRunner(params: UseDashboardIntelligenceR
       }
       updateRunState(setRunStateByTopic, topic, {
         running: true,
+        runId: options?.runId,
         lastError: undefined,
         progressStage: "init",
         progressText: "실행 준비 중",
@@ -99,6 +100,7 @@ export function useDashboardIntelligenceRunner(params: UseDashboardIntelligenceR
           followupInstruction,
           onProgress: (stage, message) => {
             updateRunState(setRunStateByTopic, topic, {
+              runId: options?.runId,
               progressStage: stage,
               progressText: message,
             });
@@ -112,6 +114,7 @@ export function useDashboardIntelligenceRunner(params: UseDashboardIntelligenceR
         }));
         updateRunState(setRunStateByTopic, topic, {
           running: false,
+          runId: options?.runId,
           lastRunAt: result.snapshot.generatedAt,
           lastError: undefined,
           progressStage: "done",
@@ -122,6 +125,7 @@ export function useDashboardIntelligenceRunner(params: UseDashboardIntelligenceR
       } catch (error) {
         updateRunState(setRunStateByTopic, topic, {
           running: false,
+          runId: options?.runId,
           lastRunAt: new Date().toISOString(),
           lastError: String(error),
           progressStage: "error",
@@ -151,6 +155,7 @@ export function useDashboardIntelligenceRunner(params: UseDashboardIntelligenceR
     for (const topic of selected) {
       updateRunState(setRunStateByTopic, topic, {
         running: true,
+        runId: undefined,
         lastError: undefined,
         progressStage: "crawler",
         progressText: "크롤러 실행 중",
@@ -195,6 +200,7 @@ export function useDashboardIntelligenceRunner(params: UseDashboardIntelligenceR
       for (const topic of selected) {
         updateRunState(setRunStateByTopic, topic, {
           running: false,
+          runId: undefined,
           lastRunAt: now,
           lastError: undefined,
           progressStage: "done",
@@ -206,6 +212,7 @@ export function useDashboardIntelligenceRunner(params: UseDashboardIntelligenceR
       for (const topic of selected) {
         updateRunState(setRunStateByTopic, topic, {
           running: false,
+          runId: undefined,
           lastRunAt: new Date().toISOString(),
           lastError: String(error),
           progressStage: "error",

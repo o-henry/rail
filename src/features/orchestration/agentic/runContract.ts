@@ -50,6 +50,7 @@ export type AgenticRunEvent = {
   runId: string;
   queueKey: string;
   topic?: AgenticTopicId;
+  setId?: string;
   sourceTab: AgenticRunSourceTab;
   type:
     | "run_queued"

@@ -147,10 +147,12 @@ export function useAgenticOrchestrationBridge(params: {
   useEffect(() => {
     return subscribeAction((action) => {
       if (action.type === "run_topic") {
+        const topic = action.payload.topic as DashboardTopicId;
+        const normalizedSetId = String(action.payload.setId ?? "").trim() || `data-${topic}`;
         void runDashboardTopicDirect(
-          action.payload.topic as DashboardTopicId,
+          topic,
           action.payload.followupInstruction,
-          action.payload.setId,
+          normalizedSetId,
         );
         return;
       }

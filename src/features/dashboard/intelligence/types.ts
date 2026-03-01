@@ -55,6 +55,7 @@ export type DashboardTopicSnapshot = {
 
 export type DashboardTopicRunState = {
   running: boolean;
+  runId?: string;
   lastRunAt?: string;
   lastError?: string;
   progressStage?: string;

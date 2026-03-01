@@ -149,6 +149,7 @@ function emitRunEvent(params: {
     queueKey: params.context.envelope.record.queueKey,
     sourceTab: params.context.envelope.record.sourceTab,
     topic: params.context.envelope.record.topic,
+    setId: params.context.envelope.record.setId,
     type: params.type,
     stage: params.stage,
     message: params.message,

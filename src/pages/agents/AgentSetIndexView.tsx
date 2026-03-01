@@ -33,7 +33,8 @@ export function AgentSetIndexView({
     () => allSetOptions.find((item) => item.id === previewSetId) ?? allSetOptions[0] ?? null,
     [allSetOptions, previewSetId],
   );
-  const previewInsights = previewSet ? setStateMap[previewSet.id]?.dashboardInsights ?? [] : [];
+  const previewInsights =
+    previewSet && previewSet.id.startsWith("data-") ? setStateMap[previewSet.id]?.dashboardInsights ?? [] : [];
 
   return (
     <section className="agents-layout agents-set-mode workspace-tab-panel">
