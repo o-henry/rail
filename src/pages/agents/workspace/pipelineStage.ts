@@ -1,8 +1,9 @@
 import type { DashboardTopicId, DashboardTopicRunState } from "../../../features/dashboard/intelligence";
 import type { AgentThread } from "../agentTypes";
 
-export type ProcessStepState = "running" | "pending";
+export type ProcessStepState = "running" | "pending" | "done" | "error";
 export type PipelineStepKey = "crawler" | "rag" | "codex" | "save";
+export type AgentPipelineStatus = "running" | "pending" | "done" | "error";
 
 export type ProcessStep = {
   id: string;
@@ -10,7 +11,27 @@ export type ProcessStep = {
   state: ProcessStepState;
 };
 
-const PIPELINE_STEP_LABELS: PipelineStepKey[] = ["crawler", "rag", "codex", "save"];
+const PIPELINE_STEP_LABELS: Record<PipelineStepKey, string> = {
+  crawler: "crawler 수집",
+  rag: "rag 분석",
+  codex: "codex 생성",
+  save: "snapshot 저장",
+};
+
+function resolveThreadPipelineScopes(thread: AgentThread): PipelineStepKey[] {
+  const id = String(thread.id ?? "").toLowerCase();
+  const name = String(thread.name ?? "").toLowerCase();
+  if (id.endsWith("-crawler") || name.includes("crawler")) {
+    return ["crawler"];
+  }
+  if (id.endsWith("-rag") || name.includes("rag")) {
+    return ["rag"];
+  }
+  if (id.endsWith("-synth") || name.includes("synth")) {
+    return ["codex", "save"];
+  }
+  return ["crawler", "rag", "codex", "save"];
+}
 
 function inferPipelineStageIndexFromText(message: string): number {
   const text = String(message ?? "").toLowerCase();
@@ -69,19 +90,19 @@ export function resolvePipelineStepStates(runState: DashboardTopicRunState | nul
   const stageIndex = resolvePipelineStageIndex(runState);
 
   if (hasDone) {
-    return ["running", "running", "running", "running"];
+    return ["done", "done", "done", "done"];
   }
 
   if (stageIndex >= 0) {
     for (let index = 0; index < stageIndex; index += 1) {
-      states[index] = "running";
+      states[index] = "done";
     }
-    states[stageIndex] = hasError ? "pending" : "running";
+    states[stageIndex] = hasError ? "error" : "running";
     return states;
   }
 
   if (hasError) {
-    states[0] = "pending";
+    states[0] = "error";
     return states;
   }
 
@@ -91,32 +112,82 @@ export function resolvePipelineStepStates(runState: DashboardTopicRunState | nul
   return states;
 }
 
+function aggregateAgentPipelineStatus(states: ProcessStepState[]): AgentPipelineStatus {
+  if (states.some((state) => state === "running")) {
+    return "running";
+  }
+  if (states.some((state) => state === "error")) {
+    return "error";
+  }
+  if (states.length > 0 && states.every((state) => state === "done")) {
+    return "done";
+  }
+  return "pending";
+}
+
+export function resolveAgentPipelineStatus(
+  thread: AgentThread,
+  dataTopicId: DashboardTopicId | null,
+  dataTopicRunState: DashboardTopicRunState | null,
+): AgentPipelineStatus {
+  if (!dataTopicId) {
+    return "pending";
+  }
+  const scopes = resolveThreadPipelineScopes(thread);
+  const pipelineStates = resolvePipelineStepStates(dataTopicRunState);
+  const scopedStates = scopes.map((scope) => {
+    const index = scope === "crawler" ? 0 : scope === "rag" ? 1 : scope === "codex" ? 2 : 3;
+    return pipelineStates[index] ?? "pending";
+  });
+  return aggregateAgentPipelineStatus(scopedStates);
+}
+
 export function buildProcessSteps(
   thread: AgentThread,
-  isActive: boolean,
+  isSelected: boolean,
   dataTopicId: DashboardTopicId | null,
   dataTopicRunState: DashboardTopicRunState | null,
 ): ProcessStep[] {
   if (dataTopicId) {
+    const scopes = resolveThreadPipelineScopes(thread);
     const stepStates = resolvePipelineStepStates(dataTopicRunState);
-    return PIPELINE_STEP_LABELS.map((label, index) => ({
-      id: `${thread.id}-pipeline-${label}`,
-      label,
-      state: stepStates[index] ?? "pending",
-    }));
+    return scopes.map((scope) => {
+      const index = scope === "crawler" ? 0 : scope === "rag" ? 1 : scope === "codex" ? 2 : 3;
+      return {
+        id: `${thread.id}-pipeline-${scope}`,
+        label: PIPELINE_STEP_LABELS[scope],
+        state: stepStates[index] ?? "pending",
+      };
+    });
   }
 
   const fallback = ["요청 해석", "근거 정리", "응답 구성"];
-  const labels =
-    thread.guidance
-      .map((line) => String(line ?? "").trim())
-      .filter((line) => line.length > 0)
-      .slice(0, 3)
-      .map((line) => line.replace(/\.$/, "")) || [];
+  const labels = thread.guidance
+    .map((line) => String(line ?? "").trim())
+    .filter((line) => line.length > 0)
+    .slice(0, 3)
+    .map((line) => line.replace(/\.$/, ""));
   const steps = labels.length > 0 ? labels : fallback;
   return steps.map((label, index) => ({
     id: `${thread.id}-step-${index}`,
     label,
-    state: isActive && index === 0 ? "running" : "pending",
+    state: isSelected && index === 0 ? "running" : "pending",
   }));
+}
+
+export function formatAgentRuntimeText(
+  runState: DashboardTopicRunState | null,
+  agentStatus: AgentPipelineStatus,
+): string {
+  if (agentStatus === "error") {
+    return "실패";
+  }
+  if (agentStatus === "done") {
+    return "완료";
+  }
+  if (agentStatus === "running") {
+    const base = String(runState?.progressText ?? "").trim();
+    return base.length > 0 ? base : "작업중";
+  }
+  return "대기";
 }

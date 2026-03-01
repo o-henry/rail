@@ -6359,9 +6359,14 @@ html[data-locale="ko"] .agents-grid-card :lang(en) {
   letter-spacing: -0.7px;
 }
 
-.agents-grid-card.is-active {
+.agents-grid-card.is-selected {
   border-color: color-mix(in srgb, var(--focus-ring) 82%, var(--panel-border));
   box-shadow: inset 0 0 0 1px var(--focus-ring);
+}
+
+.agents-grid-card.is-running {
+  border-color: color-mix(in srgb, #2cab5a 68%, var(--panel-border));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, #2cab5a 62%, var(--surface));
 }
 
 .agents-grid-card-head {
@@ -6397,9 +6402,19 @@ html[data-locale="ko"] .agents-grid-card :lang(en) {
   color: #1c8d46;
 }
 
+.agents-grid-card-chip.is-done {
+  background: color-mix(in srgb, #2cab5a 14%, var(--surface-soft));
+  color: #1f7a46;
+}
+
 .agents-grid-card-chip.is-pending {
   background: color-mix(in srgb, #8c98aa 14%, var(--surface-soft));
   color: #5b6779;
+}
+
+.agents-grid-card-chip.is-error {
+  background: color-mix(in srgb, #d45f5f 14%, var(--surface-soft));
+  color: #b34b4b;
 }
 
 .agents-grid-card-chip.is-neutral {
@@ -6477,16 +6492,68 @@ html[data-locale="ko"] .agents-grid-card :lang(en) {
   background: #2cab5a;
 }
 
+.agents-grid-card-process-dot.is-done {
+  background: #1f7a46;
+}
+
 .agents-grid-card-process-dot.is-pending {
   background: #a7aeb8;
 }
 
+.agents-grid-card-process-dot.is-error {
+  background: #c45555;
+}
+
 .agents-grid-card-progress-text {
-  display: block;
-  margin-top: 4px;
-  color: var(--text-muted);
+  min-height: 22px;
+  border-radius: 999px;
+  padding: 0 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
   font-size: 11px;
   line-height: 1.3;
+  width: fit-content;
+}
+
+.agents-grid-card-progress-text.is-running {
+  background: color-mix(in srgb, #2cab5a 18%, var(--surface-soft));
+  color: #1c8d46;
+}
+
+.agents-grid-card-progress-text.is-done {
+  background: color-mix(in srgb, #2cab5a 14%, var(--surface-soft));
+  color: #1f7a46;
+}
+
+.agents-grid-card-progress-text.is-pending {
+  background: color-mix(in srgb, #8c98aa 12%, var(--surface-soft));
+  color: #5b6779;
+}
+
+.agents-grid-card-progress-text.is-error {
+  background: color-mix(in srgb, #d45f5f 14%, var(--surface-soft));
+  color: #b34b4b;
+}
+
+.agents-grid-card-progress-dots {
+  display: inline-flex;
+  min-width: 12px;
+  gap: 1px;
+}
+
+.agents-grid-card-progress-dots span {
+  display: inline-block;
+  opacity: 0.25;
+  animation: agents-running-dot 1.2s infinite;
+}
+
+.agents-grid-card-progress-dots span:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.agents-grid-card-progress-dots span:nth-child(3) {
+  animation-delay: 0.4s;
 }
 
 .agents-grid-card-placeholder {
@@ -6522,10 +6589,12 @@ html[data-locale="ko"] .agents-grid-card :lang(en) {
 }
 
 .agents-grid-card-foot {
-  min-height: 22px;
+  min-height: 44px;
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-end;
+  gap: 6px;
   color: var(--text-muted);
   font-size: 12px;
 }
@@ -6545,6 +6614,32 @@ html[data-locale="ko"] .agents-grid-card :lang(en) {
 
 .agents-grid-card-status-dot.is-standby {
   background: #a7aeb8;
+}
+
+.agents-grid-card-status-dot.is-running,
+.agents-grid-card-status-dot.is-done {
+  background: #2cab5a;
+}
+
+.agents-grid-card-status-dot.is-pending {
+  background: #a7aeb8;
+}
+
+.agents-grid-card-status-dot.is-error {
+  background: #c45555;
+}
+
+@keyframes agents-running-dot {
+  0%,
+  80%,
+  100% {
+    opacity: 0.25;
+    transform: translateY(0);
+  }
+  40% {
+    opacity: 1;
+    transform: translateY(-1px);
+  }
 }
 
 .agents-off-button {

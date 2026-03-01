@@ -112,13 +112,13 @@ export function AgentsWorkspaceView({
             aria-label="Agents grid"
           >
             {threads.map((thread) => {
-              const isActive = thread.id === activeThreadId;
+              const isSelected = thread.id === activeThreadId;
               return (
                 <AgentGridCard
                   key={thread.id}
                   t={t}
                   thread={thread}
-                  isActive={isActive}
+                  isSelected={isSelected}
                   onSelect={() => onSetActiveThreadId(thread.id)}
                   onClose={() => onCloseThread(thread.id)}
                   dataTopicId={dataTopicId}

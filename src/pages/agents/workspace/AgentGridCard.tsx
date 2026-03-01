@@ -1,12 +1,12 @@
 import type { DashboardTopicId, DashboardTopicRunState } from "../../../features/dashboard/intelligence";
 import type { AgentThread } from "../agentTypes";
-import { type ProcessStep, buildProcessSteps } from "./pipelineStage";
+import { type ProcessStep, buildProcessSteps, formatAgentRuntimeText, resolveAgentPipelineStatus } from "./pipelineStage";
 import { detectTextLang, toKoreanThreadName } from "./textUtils";
 
 type AgentGridCardProps = {
   t: (key: string) => string;
   thread: AgentThread;
-  isActive: boolean;
+  isSelected: boolean;
   onSelect: () => void;
   onClose: () => void;
   dataTopicId: DashboardTopicId | null;
@@ -16,25 +16,40 @@ type AgentGridCardProps = {
 export function AgentGridCard({
   t,
   thread,
-  isActive,
+  isSelected,
   onSelect,
   onClose,
   dataTopicId,
   dataTopicRunState,
 }: AgentGridCardProps) {
+  const resolvedStatus = resolveAgentPipelineStatus(thread, dataTopicId, dataTopicRunState);
+  const pipelineStatus = dataTopicId ? resolvedStatus : isSelected ? "running" : "pending";
   const displayThreadName = toKoreanThreadName(thread.name);
   const processSteps: ProcessStep[] = buildProcessSteps(
     thread,
-    isActive,
+    isSelected,
     dataTopicId,
     dataTopicRunState,
   );
+  const isRunning = pipelineStatus === "running";
+  const runtimeText = formatAgentRuntimeText(dataTopicRunState, pipelineStatus);
+  const chipText =
+    pipelineStatus === "running"
+      ? "실행 중"
+      : pipelineStatus === "done"
+        ? "완료"
+        : pipelineStatus === "error"
+          ? "실패"
+          : "대기";
   const roleLang = detectTextLang(thread.role);
   const starterPromptLang = detectTextLang(thread.starterPrompt ?? "");
   const nameLang = detectTextLang(displayThreadName);
 
   return (
-    <article className={`panel-card agents-grid-card${isActive ? " is-active" : ""}`} onClick={onSelect}>
+    <article
+      className={`panel-card agents-grid-card${isSelected ? " is-selected" : ""}${isRunning ? " is-running" : ""}`.trim()}
+      onClick={onSelect}
+    >
       <div className="agents-grid-card-head">
         <strong lang={nameLang}>{displayThreadName}</strong>
         <button
@@ -51,8 +66,8 @@ export function AgentGridCard({
         </button>
       </div>
       <div className="agents-grid-card-meta">
-        <span className={`agents-grid-card-chip${isActive ? " is-running" : " is-pending"}`}>
-          {isActive ? "실행 대상" : "대기"}
+        <span className={`agents-grid-card-chip is-${pipelineStatus}`}>
+          {chipText}
         </span>
         <span className="agents-grid-card-chip is-neutral">
           {thread.status === "preset" ? "기본 에이전트" : "사용자 에이전트"}
@@ -74,9 +89,6 @@ export function AgentGridCard({
               </li>
             ))}
           </ol>
-          {isActive && dataTopicRunState?.progressText ? (
-            <small className="agents-grid-card-progress-text">{dataTopicRunState.progressText}</small>
-          ) : null}
         </section>
         {thread.starterPrompt ? (
           <section className="agents-grid-card-log-block">
@@ -86,10 +98,20 @@ export function AgentGridCard({
         ) : null}
       </div>
       <div className="agents-grid-card-foot">
+        <div className={`agents-grid-card-progress-text is-${pipelineStatus}`}>
+          <span>{runtimeText}</span>
+          {isRunning ? (
+            <span aria-hidden="true" className="agents-grid-card-progress-dots">
+              <span>.</span>
+              <span>.</span>
+              <span>.</span>
+            </span>
+          ) : null}
+        </div>
         <span
-          aria-label={isActive ? "활성" : "대기"}
-          className={`agents-grid-card-status-dot${isActive ? " is-active" : " is-standby"}`}
-          title={isActive ? "활성" : "대기"}
+          aria-label={pipelineStatus === "running" ? "실행 중" : pipelineStatus === "done" ? "완료" : pipelineStatus === "error" ? "실패" : "대기"}
+          className={`agents-grid-card-status-dot is-${pipelineStatus}`}
+          title={chipText}
         />
       </div>
     </article>
