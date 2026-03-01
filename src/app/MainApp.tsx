@@ -1937,13 +1937,6 @@ function App() {
     },
     [updateDashboardTopicConfig],
   );
-  const onSetDashboardTopicCadence = useCallback(
-    (topic: DashboardTopicId, cadenceHours: number) => {
-      const normalized = Number.isFinite(cadenceHours) ? Math.max(1, Math.min(168, Math.round(cadenceHours))) : 6;
-      updateDashboardTopicConfig(topic, { cadenceHours: normalized });
-    },
-    [updateDashboardTopicConfig],
-  );
   const onRunDashboardTopic = useCallback(
     async (topic: DashboardTopicId, followupInstruction?: string) => {
       if (!loginCompleted) {
@@ -2303,7 +2296,6 @@ function App() {
               onRunAll={onRunAllDashboardTopics}
               onRunCrawlerOnly={onRunDashboardCrawlerOnly}
               onRunTopic={onRunDashboardTopic}
-              onSetTopicCadence={onSetDashboardTopicCadence}
               onSetTopicModel={onSetDashboardTopicModel}
               runStateByTopic={dashboardIntelligenceRunStateByTopic}
               snapshotsByTopic={dashboardSnapshotsByTopic}

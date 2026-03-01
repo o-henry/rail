@@ -16,7 +16,6 @@ type DashboardIntelligenceSettingsProps = {
   modelOptions: ReadonlyArray<{ value: string; label: string }>;
   disabled?: boolean;
   onSetTopicModel: (topic: DashboardTopicId, model: string) => void;
-  onSetTopicCadence: (topic: DashboardTopicId, cadenceHours: number) => void;
   onRunTopic: (topic: DashboardTopicId, followupInstruction?: string) => void;
   onRunAll: () => void;
   onRunCrawlerOnly: () => void;
@@ -112,7 +111,6 @@ export default function DashboardIntelligenceSettings(props: DashboardIntelligen
         <div className="settings-dashboard-topic-columns" role="presentation">
           <span>TOPIC</span>
           <span>MODEL</span>
-          <span>CADENCE</span>
           <span>RUN</span>
         </div>
         <div className="settings-dashboard-intelligence-list" role="tablist" aria-label="데이터 토픽">
@@ -148,23 +146,6 @@ export default function DashboardIntelligenceSettings(props: DashboardIntelligen
                     value={row.model}
                   />
                 </div>
-
-                <label
-                  className="settings-dashboard-topic-cadence"
-                  onClick={(event) => event.stopPropagation()}
-                  onKeyDown={(event) => event.stopPropagation()}
-                >
-                  <span>{t("settings.dashboardIntelligence.cadence")}</span>
-                  <input
-                    disabled={props.disabled}
-                    min={1}
-                    max={168}
-                    onChange={(event) => props.onSetTopicCadence(topic, Number(event.currentTarget.value))}
-                    type="number"
-                    value={row.cadenceHours}
-                  />
-                  <small>h</small>
-                </label>
 
                 <button
                   disabled={props.disabled || runState?.running}
@@ -216,7 +197,7 @@ export default function DashboardIntelligenceSettings(props: DashboardIntelligen
             <small>{`allowlist ${activeTopicConfig.allowlist.length}개`}</small>
             {activeTopicConfig.allowlist.length > 0 ? (
               <ul className="settings-dashboard-topic-detail-links">
-                {activeTopicConfig.allowlist.slice(0, 6).map((source) => (
+                {activeTopicConfig.allowlist.map((source) => (
                   <li key={source}>{source}</li>
                 ))}
               </ul>

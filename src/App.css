@@ -3084,7 +3084,7 @@ h3 {
 
 .settings-dashboard-topic-columns {
   display: grid;
-  grid-template-columns: minmax(220px, 1.8fr) minmax(190px, 1fr) 98px 88px;
+  grid-template-columns: minmax(220px, 1.8fr) minmax(190px, 1fr) 88px;
   align-items: center;
   gap: 8px;
   box-sizing: border-box;
@@ -3119,7 +3119,7 @@ h3 {
 
 .settings-dashboard-topic-row {
   display: grid;
-  grid-template-columns: minmax(220px, 1.8fr) minmax(190px, 1fr) 98px 88px;
+  grid-template-columns: minmax(220px, 1.8fr) minmax(190px, 1fr) 88px;
   gap: 8px;
   align-items: center;
   border-radius: 6px;
@@ -7412,8 +7412,8 @@ pre {
 .bridge-code-card {
   display: grid;
   gap: 4px;
-  background: #f6f6f6;
-  border-radius: 12px;
+  /* background: #f6f6f6; */
+  /* border-radius: 12px; */
   /* padding: 8px; */
 }
 

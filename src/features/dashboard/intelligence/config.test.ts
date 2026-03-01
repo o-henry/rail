@@ -14,6 +14,9 @@ describe("dashboard intelligence config", () => {
     expect(defaults.eventCalendar.cadenceHours).toBe(12);
     expect(defaults.riskAlertBoard.cadenceHours).toBe(3);
     expect(defaults.devEcosystem.cadenceHours).toBe(24);
+    expect(defaults.devCommunityHotTopics.allowlist).toEqual(
+      expect.arrayContaining(["csdn.net", "juejin.cn", "qiita.com", "zenn.dev", "news.ycombinator.com"]),
+    );
   });
 
   it("normalizes invalid topic config values", () => {
@@ -32,7 +35,7 @@ describe("dashboard intelligence config", () => {
     expect(normalized.maxSources).toBe(1);
     expect(normalized.maxSnippets).toBe(1);
     expect(normalized.maxSnippetChars).toBe(6000);
-    expect(normalized.allowlist).toEqual(["reuters.com"]);
+    expect(normalized.allowlist).toEqual(["reuters.com", "apnews.com", "ft.com", "wsj.com"]);
   });
 
   it("fills missing topics from defaults during map normalization", () => {
@@ -49,7 +52,12 @@ describe("dashboard intelligence config", () => {
       },
     });
     expect(normalized.marketSummary.enabled).toBe(false);
-    expect(normalized.marketSummary.allowlist).toEqual(["example.com"]);
+    expect(normalized.marketSummary.allowlist).toEqual([
+      "example.com",
+      "finance.yahoo.com",
+      "stooq.com",
+      "investing.com",
+    ]);
     expect(normalized.globalHeadlines.model.length).toBeGreaterThan(0);
   });
 });

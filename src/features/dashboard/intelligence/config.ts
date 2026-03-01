@@ -40,6 +40,10 @@ const DEFAULT_ALLOWLIST_BY_TOPIC: Record<DashboardTopicId, string[]> = {
     "dev.to",
     "hashnode.com",
     "lobste.rs",
+    "csdn.net",
+    "juejin.cn",
+    "qiita.com",
+    "zenn.dev",
     "reddit.com",
     "x.com",
     "threads.net",
@@ -101,14 +105,20 @@ function normalizePositiveInt(value: unknown, fallback: number, min: number, max
 }
 
 function normalizeAllowlist(value: unknown, fallback: string[]): string[] {
+  const fallbackNormalized = fallback
+    .map((row) => String(row ?? "").trim().toLowerCase())
+    .filter((row) => row.length > 0);
   if (!Array.isArray(value)) {
-    return [...fallback];
+    return [...fallbackNormalized];
   }
   const normalized = value
     .map((row) => String(row ?? "").trim().toLowerCase())
     .filter((row) => row.length > 0)
     .slice(0, MAX_ALLOWLIST_ITEMS);
-  return normalized.length > 0 ? normalized : [...fallback];
+  if (normalized.length === 0) {
+    return [...fallbackNormalized];
+  }
+  return [...new Set([...normalized, ...fallbackNormalized])].slice(0, MAX_ALLOWLIST_ITEMS);
 }
 
 export function createDefaultDashboardTopicConfig(topic: DashboardTopicId): DashboardTopicAgentConfig {
