@@ -286,14 +286,14 @@ export default function DashboardPage(props: DashboardPageProps) {
   );
   const runFilterSelectOptions = useMemo(
     () => [
-      { value: "all", label: "all" },
-      ...runFilterOptions.map((value) => ({ value, label: value })),
+      { value: "all", label: "ALL" },
+      ...runFilterOptions.map((value) => ({ value, label: String(value).toUpperCase() })),
     ],
     [runFilterOptions],
   );
   const topicFilterSelectOptions = useMemo(
     () => [
-      { value: "all", label: "all" },
+      { value: "all", label: "ALL" },
       ...topicFilterOptions.map((value) => ({ value, label: formatTopicToken(value) })),
     ],
     [topicFilterOptions],
