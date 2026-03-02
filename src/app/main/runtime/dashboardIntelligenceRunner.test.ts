@@ -197,11 +197,33 @@ describe("dashboard intelligence runner", () => {
     expect(invokeMock.mock.calls.some((row) => row[0] === "turn_start")).toBe(false);
   });
 
-  it("does not start crawler when agent preflight fails", async () => {
+  it("continues crawl and saves degraded snapshot when thread preflight fails", async () => {
     const invokeMock = vi.fn(async (command: string, _args?: Record<string, unknown>) => {
       switch (command) {
+        case "dashboard_crawl_run":
+          return { startedAt: "1", finishedAt: "2", totalFetched: 1, totalFiles: 2, topics: [] };
+        case "dashboard_raw_list":
+          return ["/tmp/a.md"];
+        case "knowledge_probe":
+          return [
+            {
+              id: "1",
+              name: "a.md",
+              path: "/tmp/a.md",
+              ext: ".md",
+              enabled: true,
+              status: "ready",
+            },
+          ];
+        case "knowledge_retrieve":
+          return {
+            snippets: [{ fileId: "1", fileName: "a.md", chunkIndex: 1, text: "Snippet", score: 1 }],
+            warnings: [],
+          };
         case "thread_start":
           throw new Error("engine unavailable");
+        case "dashboard_snapshot_save":
+          return "/tmp/snapshot.json";
         default:
           throw new Error(`unexpected command ${command}`);
       }
@@ -211,23 +233,45 @@ describe("dashboard intelligence runner", () => {
       args?: Record<string, unknown>,
     ) => Promise<T>;
 
-    await expect(
-      runDashboardTopicIntelligence({
-        cwd: "/tmp",
-        topic: "marketSummary",
-        config: createDefaultDashboardTopicConfig("marketSummary"),
-        invokeFn: invoke,
-      }),
-    ).rejects.toThrow(/에이전트 실행 준비 실패로 파이프라인을 시작하지 않았습니다/);
+    const result = await runDashboardTopicIntelligence({
+      cwd: "/tmp",
+      topic: "marketSummary",
+      config: createDefaultDashboardTopicConfig("marketSummary"),
+      invokeFn: invoke,
+    });
 
-    expect(invokeMock.mock.calls.some((row) => row[0] === "dashboard_crawl_run")).toBe(false);
+    expect(result.snapshot.status).toBe("degraded");
+    expect(invokeMock.mock.calls.some((row) => row[0] === "dashboard_crawl_run")).toBe(true);
+    expect(invokeMock.mock.calls.some((row) => row[0] === "dashboard_snapshot_save")).toBe(true);
   });
 
-  it("throws explicit error when codex authentication is required", async () => {
+  it("falls back to snippet summary when codex authentication is required", async () => {
     const invokeMock = vi.fn(async (command: string, _args?: Record<string, unknown>) => {
       switch (command) {
+        case "dashboard_crawl_run":
+          return { startedAt: "1", finishedAt: "2", totalFetched: 1, totalFiles: 2, topics: [] };
+        case "dashboard_raw_list":
+          return ["/tmp/a.md"];
+        case "knowledge_probe":
+          return [
+            {
+              id: "1",
+              name: "a.md",
+              path: "/tmp/a.md",
+              ext: ".md",
+              enabled: true,
+              status: "ready",
+            },
+          ];
+        case "knowledge_retrieve":
+          return {
+            snippets: [{ fileId: "1", fileName: "a.md", chunkIndex: 1, text: "Snippet", score: 1 }],
+            warnings: [],
+          };
         case "thread_start":
           throw new Error("login required");
+        case "dashboard_snapshot_save":
+          return "/tmp/snapshot.json";
         default:
           return { snippets: [], warnings: [] };
       }
@@ -237,17 +281,17 @@ describe("dashboard intelligence runner", () => {
       args?: Record<string, unknown>,
     ) => Promise<T>;
 
-    await expect(
-      runDashboardTopicIntelligence({
-        cwd: "/tmp",
-        topic: "marketSummary",
-        config: createDefaultDashboardTopicConfig("marketSummary"),
-        invokeFn: invoke,
-      }),
-    ).rejects.toThrow("Codex 로그인이 필요합니다.");
+    const result = await runDashboardTopicIntelligence({
+      cwd: "/tmp",
+      topic: "marketSummary",
+      config: createDefaultDashboardTopicConfig("marketSummary"),
+      invokeFn: invoke,
+    });
 
-    expect(invokeMock.mock.calls.some((row) => row[0] === "dashboard_snapshot_save")).toBe(false);
-    expect(invokeMock.mock.calls.some((row) => row[0] === "dashboard_crawl_run")).toBe(false);
+    expect(result.snapshot.status).toBe("degraded");
+    expect(result.snapshot.summary).toContain("스니펫 기반");
+    expect(invokeMock.mock.calls.some((row) => row[0] === "dashboard_crawl_run")).toBe(true);
+    expect(invokeMock.mock.calls.some((row) => row[0] === "dashboard_snapshot_save")).toBe(true);
   });
 
   it("injects follow-up instruction into codex prompt", async () => {

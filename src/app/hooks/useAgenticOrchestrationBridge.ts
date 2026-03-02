@@ -61,9 +61,6 @@ export function useAgenticOrchestrationBridge(params: {
     graphRunOverrideIdRef,
     publishAction,
     subscribeAction,
-    loginCompleted,
-    setError,
-    setWorkspaceTab,
     workspaceTab,
     runDashboardTopic,
     refreshDashboardSnapshots,
@@ -114,11 +111,6 @@ export function useAgenticOrchestrationBridge(params: {
 
   const runDashboardTopicDirect = useCallback(
     async (topic: DashboardTopicId, followupInstruction?: string, setId?: string) => {
-      if (!loginCompleted) {
-        setError("Codex 로그인이 필요합니다. 설정에서 먼저 로그인해 주세요.");
-        setWorkspaceTab("settings");
-        return;
-      }
       await runTopicWithCoordinator({
         cwd,
         topic,
@@ -141,7 +133,7 @@ export function useAgenticOrchestrationBridge(params: {
         appendWorkspaceEvent,
       });
     },
-    [appendWorkspaceEvent, cwd, invokeFn, loginCompleted, queue, refreshDashboardSnapshots, runDashboardTopic, setError, setWorkspaceTab, workspaceTab],
+    [appendWorkspaceEvent, cwd, invokeFn, queue, refreshDashboardSnapshots, runDashboardTopic, workspaceTab],
   );
 
   useEffect(() => {

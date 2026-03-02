@@ -54,11 +54,6 @@ export function useDashboardAgentBridge(params: UseDashboardAgentBridgeParams) {
 
   const onRunDashboardTopicFromAgents = useCallback(
     async (topic: DashboardTopicId, followupInstruction?: string) => {
-      if (!params.loginCompleted) {
-        params.setError("Codex 로그인이 필요합니다. 설정에서 먼저 로그인해 주세요.");
-        params.setWorkspaceTab("settings");
-        return;
-      }
       params.setStatus(`에이전트 실행: ${params.t(`dashboard.widget.${topic}.title`)} 파이프라인 시작`);
       if (params.dispatchAction) {
         params.dispatchAction({
@@ -79,11 +74,6 @@ export function useDashboardAgentBridge(params: UseDashboardAgentBridgeParams) {
 
   const onRunDashboardTopicFromData = useCallback(
     async (topic: DashboardTopicId, followupInstruction?: string) => {
-      if (!params.loginCompleted) {
-        params.setError("Codex 로그인이 필요합니다. 설정에서 먼저 로그인해 주세요.");
-        params.setWorkspaceTab("settings");
-        return;
-      }
       params.setStatus(`데이터 실행: ${params.t(`dashboard.widget.${topic}.title`)} 파이프라인 시작`);
       if (params.dispatchAction) {
         params.dispatchAction({

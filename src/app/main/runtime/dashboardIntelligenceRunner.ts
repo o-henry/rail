@@ -83,8 +83,7 @@ function summarizeSnippets(snippets: KnowledgeRetrieveResult["snippets"]): strin
   return snippets
     .slice(0, 6)
     .map((snippet) => snippet.text.replace(/\s+/g, " ").trim())
-    .filter((text) => text.length > 0)
-    .map((text) => (text.length > 220 ? `${text.slice(0, 220)}...` : text));
+    .filter((text) => text.length > 0);
 }
 
 async function runCrawlerForTopic(params: {
@@ -231,7 +230,6 @@ async function startCodexThreadOrThrow(params: RunDashboardTopicParams): Promise
 }
 
 export async function runDashboardTopicIntelligence(params: RunDashboardTopicParams): Promise<RunDashboardTopicResult> {
-  const threadStart = await startCodexThreadOrThrow(params);
   emitProgress(params, "crawler", "크롤러 수집 시작");
   const crawlResult = await runCrawlerForTopic({
     cwd: params.cwd,
@@ -302,6 +300,7 @@ export async function runDashboardTopicIntelligence(params: RunDashboardTopicPar
 
   let snapshot: DashboardTopicSnapshot;
   try {
+    const threadStart = await startCodexThreadOrThrow(params);
     emitProgress(params, "codex_turn", "Codex 응답 생성 중");
     const turnStartResponse = await params.invokeFn<unknown>("turn_start", {
       threadId: threadStart.threadId,
@@ -332,16 +331,22 @@ export async function runDashboardTopicIntelligence(params: RunDashboardTopicPar
     }
   } catch (error) {
     if (isCodexAuthError(error)) {
-      emitProgress(params, "auth_required", "Codex 로그인 필요: 실행 중단");
-      throw new Error("Codex 로그인이 필요합니다. 설정에서 로그인 후 다시 실행해 주세요.");
+      emitProgress(params, "auth_required", "Codex 로그인 필요: 수집 근거 기반으로 대체 요약 생성");
+      snapshot = buildSnapshotWithoutCodex({
+        topic: params.topic,
+        model: params.config.model,
+        snippets: knowledge.retrieve.snippets,
+        warnings: [...warnings, "codex auth required"],
+      });
+    } else {
+      emitProgress(params, "fallback", `Codex 실패: ${String(error)}`);
+      snapshot = buildSnapshotWithoutCodex({
+        topic: params.topic,
+        model: params.config.model,
+        snippets: knowledge.retrieve.snippets,
+        warnings: [...warnings, `codex error: ${String(error)}`],
+      });
     }
-    emitProgress(params, "fallback", `Codex 실패: ${String(error)}`);
-    snapshot = buildSnapshotWithoutCodex({
-      topic: params.topic,
-      model: params.config.model,
-      snippets: knowledge.retrieve.snippets,
-      warnings: [...warnings, `codex error: ${String(error)}`],
-    });
   }
 
   if (knowledge.retrieve.snippets.length === 0) {
