@@ -3,7 +3,8 @@ import type { DashboardTopicId } from "../../features/dashboard/intelligence";
 import type { AgenticAction, AgenticActionSubscriber } from "../../features/orchestration/agentic/actionBus";
 import type { PresetKind } from "../../features/workflow/domain";
 import type { WorkspaceTab } from "../mainAppGraphHelpers";
-import { runGraphWithCoordinator, runRoleWithCoordinator, runTopicWithCoordinator } from "../main/runtime/agenticCoordinator";
+import { runGraphWithCoordinator, runTopicWithCoordinator } from "../main/runtime/agenticCoordinator";
+import { runRoleWithCoordinator } from "../main/runtime/agenticRoleCoordinator";
 import type { AgenticQueue } from "../main/runtime/agenticQueue";
 
 type InvokeFn = <T>(command: string, args?: Record<string, unknown>) => Promise<T>;

@@ -12,3 +12,16 @@ export type KnowledgeEntry = {
   jsonPath?: string;
 };
 
+export type KnowledgeSourcePost = {
+  id: string;
+  runId: string;
+  topic?: string | null;
+  topicLabel?: string | null;
+  summary: string;
+  createdAt: string;
+  agentName: string;
+  attachments: Array<{
+    kind: string;
+    filePath?: string;
+  }>;
+};

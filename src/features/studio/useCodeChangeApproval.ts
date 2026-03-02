@@ -1,9 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
-import {
-  readCodeChangeApprovals,
-  upsertCodeChangeApproval,
-} from "../../features/studio/approvalQueue";
-import type { CodeChangeApproval } from "../../features/studio/approvalTypes";
+import { readCodeChangeApprovals, upsertCodeChangeApproval } from "./approvalQueue";
+import type { CodeChangeApproval } from "./approvalTypes";
 
 export function useCodeChangeApproval() {
   const [items, setItems] = useState<CodeChangeApproval[]>(() => readCodeChangeApprovals());
@@ -38,4 +35,3 @@ export function useCodeChangeApproval() {
     resolveApproval,
   };
 }
-

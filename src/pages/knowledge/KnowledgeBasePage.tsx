@@ -1,21 +1,20 @@
 import { useMemo, useState } from "react";
 import FancySelect from "../../components/FancySelect";
-import type { FeedViewPost } from "../../app/main";
 import {
   persistKnowledgeIndexToWorkspace,
   readKnowledgeEntries,
   upsertKnowledgeEntry,
 } from "../../features/studio/knowledgeIndex";
-import type { KnowledgeEntry } from "../../features/studio/knowledgeTypes";
+import type { KnowledgeEntry, KnowledgeSourcePost } from "../../features/studio/knowledgeTypes";
 import { invoke } from "../../shared/tauri";
 
 type KnowledgeBasePageProps = {
   cwd: string;
-  posts: FeedViewPost[];
+  posts: KnowledgeSourcePost[];
   onInjectContextSources: (sourceIds: string[]) => void;
 };
 
-function toKnowledgeEntry(post: FeedViewPost): KnowledgeEntry {
+function toKnowledgeEntry(post: KnowledgeSourcePost): KnowledgeEntry {
   return {
     id: post.id,
     runId: post.runId,
