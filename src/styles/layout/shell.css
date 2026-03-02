@@ -5332,7 +5332,7 @@
 
 .dashboard-terminal-workspace {
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr);
+  grid-template-rows: auto auto minmax(120px, 0.58fr) minmax(0, 1fr);
 }
 
 .dashboard-terminal-workspace-head {
@@ -5433,6 +5433,11 @@
   grid-template-rows: minmax(0, 1fr);
   border-bottom: 0;
   background: color-mix(in srgb, var(--surface-panel) 88%, var(--surface-elevated));
+}
+
+.dashboard-terminal-workspace-log-list {
+  border-bottom: 0;
+  background: color-mix(in srgb, var(--surface-soft) 34%, var(--surface-elevated));
 }
 
 .dashboard-terminal-filebar {

@@ -332,6 +332,10 @@ export default function DashboardPage(props: DashboardPageProps) {
       }).filter((row) => row.hasState),
     [props.runStateByTopic],
   );
+  const finalStateRows = useMemo(
+    () => topicRunStateRows.filter((row) => row.statusText !== "RUNNING"),
+    [topicRunStateRows],
+  );
   const runningTopicCount = topicRunStateRows.filter((row) => row.running).length;
   const runningTopicLabels = topicRunStateRows.filter((row) => row.running).map((row) => formatTopicToken(row.topic));
   const latestErroredTopic = topicRunStateRows.find((row) => row.statusText === "ERROR");
@@ -394,7 +398,7 @@ export default function DashboardPage(props: DashboardPageProps) {
           </div>
           {topicRunStateRows.length > 0 ? (
             <div className="dashboard-terminal-runstate" role="status">
-              {topicRunStateRows.map((row) => (
+              {(finalStateRows.length > 0 ? finalStateRows : topicRunStateRows).map((row) => (
                 <article className="dashboard-terminal-runstate-row" key={row.id}>
                   <b>{formatTopicToken(row.topic)}</b>
                   <span className={`dashboard-terminal-runstate-state ${row.statusText.toLowerCase()}`}>{row.statusText}</span>
@@ -403,16 +407,6 @@ export default function DashboardPage(props: DashboardPageProps) {
               ))}
             </div>
           ) : null}
-          <ul className="dashboard-terminal-log-list">
-            {resourceLines.map((line) => (
-              <li key={line.id}>
-                <span aria-hidden="true">
-                  {line.kind === "reference" ? "REF" : line.kind === "event" ? "EVT" : line.kind === "highlight" ? "HLT" : line.kind === "log" ? "LOG" : "SUM"}
-                </span>
-                <p>{line.topic === "feed" ? line.text : `${formatTopicToken(line.topic)} · ${line.text}`}</p>
-              </li>
-            ))}
-          </ul>
         </aside>
 
         <section className="panel-card dashboard-terminal-workspace">
@@ -433,6 +427,17 @@ export default function DashboardPage(props: DashboardPageProps) {
           <div className={`dashboard-terminal-runtime-banner ${runtimeBanner.tone}`} role="status">
             <span>{runtimeBanner.text}</span>
           </div>
+
+          <ul className="dashboard-terminal-log-list dashboard-terminal-workspace-log-list">
+            {resourceLines.map((line) => (
+              <li key={line.id}>
+                <span aria-hidden="true">
+                  {line.kind === "reference" ? "REF" : line.kind === "event" ? "EVT" : line.kind === "highlight" ? "HLT" : line.kind === "log" ? "LOG" : "SUM"}
+                </span>
+                <p>{line.topic === "feed" ? line.text : `${formatTopicToken(line.topic)} · ${line.text}`}</p>
+              </li>
+            ))}
+          </ul>
 
           <section className="dashboard-terminal-editor">
             <pre>{terminalLines.map((line, index) => `[${String(index + 1).padStart(2, "0")}] ${line}`).join("\n")}</pre>
