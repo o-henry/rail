@@ -3329,7 +3329,7 @@
 }
 
 .settings-dashboard-topic-request-send {
-  background: color-mix(in srgb, var(--surface-soft) 76%, var(--surface));
+  background: #8b8f95;
   border: 0;
   box-shadow: none;
 }
