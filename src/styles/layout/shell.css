@@ -5315,9 +5315,10 @@
 .dashboard-terminal-log-list li p {
   min-width: 0;
   margin: 0;
+  display: block;
   color: var(--text-main);
   font-size: 12px;
-  line-height: 18px;
+  line-height: 1.55;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   word-break: break-word;
