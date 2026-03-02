@@ -46,6 +46,28 @@ export type RunDashboardTopicResult = {
   snapshotPath: string | null;
 };
 
+async function startDashboardTurn(params: {
+  invokeFn: InvokeFn;
+  threadId: string;
+  text: string;
+}): Promise<unknown> {
+  try {
+    return await params.invokeFn<unknown>("turn_start_blocking", {
+      threadId: params.threadId,
+      text: params.text,
+    });
+  } catch (error) {
+    const message = String(error ?? "").toLowerCase();
+    if (!message.includes("unknown command") && !message.includes("unexpected command")) {
+      throw error;
+    }
+    return params.invokeFn<unknown>("turn_start", {
+      threadId: params.threadId,
+      text: params.text,
+    });
+  }
+}
+
 function emitProgress(params: RunDashboardTopicParams, stage: string, message: string): void {
   params.onProgress?.(stage, message);
 }
@@ -127,7 +149,9 @@ async function collectKnowledgeSnippets(params: {
     .map((path) => String(path ?? "").trim())
     .filter((path) => path.length > 0)
     .slice(0, params.config.maxSources * 6);
-  const probed = await params.invokeFn<KnowledgeFileRef[]>("knowledge_probe", { paths: normalizedPaths });
+  const markdownPaths = normalizedPaths.filter((path) => path.toLowerCase().endsWith(".md"));
+  const probeTargets = markdownPaths.length > 0 ? markdownPaths : normalizedPaths;
+  const probed = await params.invokeFn<KnowledgeFileRef[]>("knowledge_probe", { paths: probeTargets });
   const validFiles = probed.filter((file) => file.enabled && (file.status === "ready" || !file.status));
   if (validFiles.length === 0) {
     return {
@@ -302,7 +326,8 @@ export async function runDashboardTopicIntelligence(params: RunDashboardTopicPar
   try {
     const threadStart = await startCodexThreadOrThrow(params);
     emitProgress(params, "codex_turn", "Codex 응답 생성 중");
-    const turnStartResponse = await params.invokeFn<unknown>("turn_start", {
+    const turnStartResponse = await startDashboardTurn({
+      invokeFn: params.invokeFn,
       threadId: threadStart.threadId,
       text: prompt,
     });
@@ -310,6 +335,12 @@ export async function runDashboardTopicIntelligence(params: RunDashboardTopicPar
       extractStringByPaths(turnStartResponse, [
         "text",
         "output_text",
+        "output.0.content.0.text",
+        "output.0.text",
+        "response.output.0.content.0.text",
+        "response.output.0.text",
+        "completion.output.0.content.0.text",
+        "completion.output.0.text",
         "turn.output_text",
         "turn.response.output_text",
         "turn.response.text",

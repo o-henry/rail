@@ -21,6 +21,7 @@ pub fn run() {
             engine::usage_check,
             engine::thread_start,
             engine::turn_start,
+            engine::turn_start_blocking,
             engine::turn_interrupt,
             engine::approval_respond,
             engine::provider_window_open,

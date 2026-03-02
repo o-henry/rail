@@ -1921,6 +1921,34 @@ pub async fn turn_start(
 }
 
 #[tauri::command]
+pub async fn turn_start_blocking(
+    state: State<'_, EngineManager>,
+    thread_id: String,
+    text: String,
+) -> Result<Value, String> {
+    let runtime = current_runtime(&state).await?;
+    runtime
+        .request(
+            "turn/start",
+            json!({
+              "threadId": thread_id,
+              "text": text,
+              "input": [
+                {
+                  "type": "text",
+                  "text": text
+                }
+              ],
+              "sandboxPolicy": {
+                "type": "readOnly"
+              },
+              "stream": false
+            }),
+        )
+        .await
+}
+
+#[tauri::command]
 pub async fn turn_interrupt(
     state: State<'_, EngineManager>,
     thread_id: String,
