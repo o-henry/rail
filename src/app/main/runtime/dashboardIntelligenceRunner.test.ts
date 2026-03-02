@@ -103,6 +103,100 @@ describe("dashboard intelligence runner", () => {
     expect(result.snapshot.referenceEmpty).toBe(true);
   });
 
+  it("retries retrieval with relaxed query when topic query returns no snippets", async () => {
+    const retrieveCalls: Array<Record<string, unknown>> = [];
+    const invokeMock = vi.fn(async (command: string, args?: Record<string, unknown>) => {
+      switch (command) {
+        case "dashboard_crawl_run":
+          return { startedAt: "1", finishedAt: "2", totalFetched: 1, totalFiles: 2, topics: [] };
+        case "dashboard_raw_list":
+          return ["/tmp/a.md"];
+        case "knowledge_probe":
+          return [
+            {
+              id: "1",
+              name: "a.md",
+              path: "/tmp/a.md",
+              ext: ".md",
+              enabled: true,
+              status: "ready",
+            },
+          ];
+        case "knowledge_retrieve":
+          retrieveCalls.push(args ?? {});
+          if (retrieveCalls.length === 1) {
+            return { snippets: [], warnings: ["no lexical match"] };
+          }
+          return {
+            snippets: [{ fileId: "1", fileName: "a.md", chunkIndex: 1, text: "fallback snippet", score: 0.1 }],
+            warnings: [],
+          };
+        case "thread_start":
+          return { threadId: "t1" };
+        case "turn_start":
+          return { text: "" };
+        case "dashboard_snapshot_save":
+          return "/tmp/snapshot.json";
+        default:
+          throw new Error(`unexpected command ${command}`);
+      }
+    });
+    const invoke = invokeMock as unknown as <T>(
+      command: string,
+      args?: Record<string, unknown>,
+    ) => Promise<T>;
+
+    const result = await runDashboardTopicIntelligence({
+      cwd: "/tmp",
+      topic: "globalHeadlines",
+      config: createDefaultDashboardTopicConfig("globalHeadlines"),
+      invokeFn: invoke,
+    });
+
+    expect(retrieveCalls).toHaveLength(2);
+    expect(retrieveCalls[1]?.query).toBe("");
+    expect(result.snapshot.summary).toContain("스니펫 기반");
+    expect(result.snapshot.highlights.length).toBeGreaterThan(0);
+  });
+
+  it("skips codex generation when crawler fetched nothing and snippets are empty", async () => {
+    const invokeMock = vi.fn(async (command: string, _args?: Record<string, unknown>) => {
+      switch (command) {
+        case "dashboard_crawl_run":
+          return {
+            startedAt: "1",
+            finishedAt: "2",
+            totalFetched: 0,
+            totalFiles: 0,
+            topics: [{ topic: "globalHeadlines", fetchedCount: 0, savedFiles: [], errors: ["https://reuters.com: http status 403"] }],
+          };
+        case "dashboard_raw_list":
+          return [];
+        case "thread_start":
+          return { threadId: "t1" };
+        case "dashboard_snapshot_save":
+          return "/tmp/snapshot.json";
+        default:
+          return { snippets: [], warnings: [] };
+      }
+    });
+    const invoke = invokeMock as unknown as <T>(
+      command: string,
+      args?: Record<string, unknown>,
+    ) => Promise<T>;
+
+    const result = await runDashboardTopicIntelligence({
+      cwd: "/tmp",
+      topic: "globalHeadlines",
+      config: createDefaultDashboardTopicConfig("globalHeadlines"),
+      invokeFn: invoke,
+    });
+
+    expect(result.snapshot.status).toBe("degraded");
+    expect(result.snapshot.summary).toContain("스니펫");
+    expect(invokeMock.mock.calls.some((row) => row[0] === "turn_start")).toBe(false);
+  });
+
   it("does not start crawler when agent preflight fails", async () => {
     const invokeMock = vi.fn(async (command: string, _args?: Record<string, unknown>) => {
       switch (command) {

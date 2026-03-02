@@ -30,7 +30,16 @@ const DEFAULT_ALLOWLIST_BY_TOPIC: Record<DashboardTopicId, string[]> = {
     "bitcoinmagazine.com",
     "finance.naver.com/sise/",
   ],
-  globalHeadlines: ["reuters.com", "apnews.com", "ft.com", "wsj.com"],
+  globalHeadlines: [
+    "feeds.reuters.com/reuters/worldNews",
+    "apnews.com/hub/apf-topnews?output=rss",
+    "feeds.bbci.co.uk/news/world/rss.xml",
+    "rss.nytimes.com/services/xml/rss/nyt/World.xml",
+    "reuters.com",
+    "apnews.com",
+    "ft.com",
+    "wsj.com",
+  ],
   industryTrendRadar: [
     "mckinsey.com",
     "gartner.com",

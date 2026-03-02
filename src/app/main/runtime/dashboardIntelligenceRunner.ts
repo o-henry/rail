@@ -143,7 +143,34 @@ async function collectKnowledgeSnippets(params: {
     topK: params.config.maxSnippets,
     maxChars: params.config.maxSnippetChars,
   });
-  return { rawPaths: normalizedPaths, retrieve };
+  if (retrieve.snippets.length > 0) {
+    return { rawPaths: normalizedPaths, retrieve };
+  }
+
+  const relaxedRetrieve = await params.invokeFn<KnowledgeRetrieveResult>("knowledge_retrieve", {
+    files: validFiles,
+    query: "",
+    topK: params.config.maxSnippets,
+    maxChars: params.config.maxSnippetChars,
+  });
+
+  const warnings = Array.from(
+    new Set([
+      ...retrieve.warnings,
+      ...relaxedRetrieve.warnings,
+      ...(relaxedRetrieve.snippets.length > 0
+        ? ["topic query matched 0 snippets; relaxed retrieval fallback used"]
+        : []),
+    ]),
+  );
+
+  return {
+    rawPaths: normalizedPaths,
+    retrieve: {
+      snippets: relaxedRetrieve.snippets,
+      warnings,
+    },
+  };
 }
 
 function buildSnapshotWithoutCodex(params: {
@@ -218,6 +245,9 @@ export async function runDashboardTopicIntelligence(params: RunDashboardTopicPar
     "crawler_done",
     `크롤링 완료: ${topicCrawlResult?.fetchedCount ?? 0}건 수집 / ${topicCrawlResult?.savedFiles?.length ?? 0}개 저장`,
   );
+  const crawlWarnings = Array.isArray(topicCrawlResult?.errors)
+    ? topicCrawlResult!.errors.map((row) => String(row ?? "").trim()).filter((row) => row.length > 0)
+    : [];
 
   emitProgress(params, "rag", "수집 파일에서 근거 추출 중");
   const knowledge = await collectKnowledgeSnippets({
@@ -226,12 +256,37 @@ export async function runDashboardTopicIntelligence(params: RunDashboardTopicPar
     config: params.config,
     invokeFn: params.invokeFn,
   });
-  const warnings = [...knowledge.retrieve.warnings];
+  const warnings = [...crawlWarnings, ...knowledge.retrieve.warnings];
   emitProgress(
     params,
     "rag_done",
     `근거 추출 완료: raw ${knowledge.rawPaths.length}개 / snippet ${knowledge.retrieve.snippets.length}개`,
   );
+
+  const fetchedCount = Number(topicCrawlResult?.fetchedCount ?? 0);
+  if (knowledge.retrieve.snippets.length === 0 && fetchedCount <= 0) {
+    emitProgress(params, "fallback", "크롤러 수집 결과가 없어 요약 생성을 건너뜀");
+    const snapshot = buildSnapshotWithoutCodex({
+      topic: params.topic,
+      model: params.config.model,
+      snippets: [],
+      warnings: [...warnings, "crawler fetched 0 items"],
+    });
+    emitProgress(params, "save", "스냅샷 저장 중");
+    const snapshotPath = await params.invokeFn<string>("dashboard_snapshot_save", {
+      cwd: params.cwd,
+      topic: params.topic,
+      snapshotJson: snapshot,
+    });
+    emitProgress(params, "done", "완료");
+    return {
+      snapshot,
+      crawlResult,
+      rawPaths: knowledge.rawPaths,
+      warnings,
+      snapshotPath: String(snapshotPath ?? "").trim() || null,
+    };
+  }
 
   emitProgress(params, "prompt", "요약 프롬프트 구성 중");
   const promptBase = buildDashboardTopicPrompt({

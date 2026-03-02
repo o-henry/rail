@@ -61,7 +61,18 @@ describe("dashboard intelligence config", () => {
     expect(normalized.maxSources).toBe(1);
     expect(normalized.maxSnippets).toBe(1);
     expect(normalized.maxSnippetChars).toBe(6000);
-    expect(normalized.allowlist).toEqual(["reuters.com", "apnews.com", "ft.com", "wsj.com"]);
+    expect(normalized.allowlist).toEqual(
+      expect.arrayContaining([
+        "reuters.com",
+        "feeds.reuters.com/reuters/worldnews",
+        "apnews.com/hub/apf-topnews?output=rss",
+        "feeds.bbci.co.uk/news/world/rss.xml",
+        "rss.nytimes.com/services/xml/rss/nyt/world.xml",
+        "apnews.com",
+        "ft.com",
+        "wsj.com",
+      ]),
+    );
   });
 
   it("fills missing topics from defaults during map normalization", () => {
