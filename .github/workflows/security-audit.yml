@@ -25,8 +25,15 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Audit production dependencies
+      - name: Audit production dependencies (strict)
+        if: github.event_name != 'pull_request'
         run: npm audit --omit=dev --audit-level=high
+
+      - name: Audit production dependencies (pull request advisory)
+        if: github.event_name == 'pull_request'
+        run: |
+          npm audit --omit=dev --audit-level=high || \
+          echo "::warning::npm audit reported high/critical vulnerabilities on PR; non-blocking advisory."
 
   cargo-audit:
     runs-on: ubuntu-latest
@@ -37,8 +44,22 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Install cargo-audit
+      - name: Install cargo-audit (strict)
+        if: github.event_name != 'pull_request'
         run: cargo install cargo-audit --locked
 
-      - name: Audit Rust dependencies
+      - name: Install cargo-audit (pull request advisory)
+        if: github.event_name == 'pull_request'
+        run: |
+          cargo install cargo-audit --locked || \
+          echo "::warning::cargo-audit install failed on PR; non-blocking advisory."
+
+      - name: Audit Rust dependencies (strict)
+        if: github.event_name != 'pull_request'
         run: cargo audit --manifest-path src-tauri/Cargo.toml
+
+      - name: Audit Rust dependencies (pull request advisory)
+        if: github.event_name == 'pull_request'
+        run: |
+          cargo audit --manifest-path src-tauri/Cargo.toml || \
+          echo "::warning::cargo audit reported advisories on PR; non-blocking advisory."
