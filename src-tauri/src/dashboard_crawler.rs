@@ -19,10 +19,13 @@ const MAX_BODY_CHARS: usize = 80_000;
 const MAX_SUMMARY_CHARS: usize = 1_200;
 const MAX_RSS_ITEMS: usize = 8;
 const USER_AGENT: &str = "RAIL-Dashboard-Crawler/1.0";
-const PINCHTAB_DEFAULT_BASE_URL: &str = "http://127.0.0.1:8931";
+const PINCHTAB_DEFAULT_BASE_URL: &str = "http://127.0.0.1:9867";
 const ENV_PINCHTAB_BASE_URL: &str = "RAIL_PINCHTAB_URL";
 const ENV_PINCHTAB_BRIDGE_TOKEN: &str = "RAIL_PINCHTAB_BRIDGE_TOKEN";
 const ENV_PINCHTAB_REQUIRED: &str = "RAIL_PINCHTAB_REQUIRED";
+const ENV_PINCHTAB_URL_COMPAT: &str = "PINCHTAB_URL";
+const ENV_PINCHTAB_TOKEN_COMPAT: &str = "PINCHTAB_TOKEN";
+const ENV_PINCHTAB_BRIDGE_TOKEN_COMPAT: &str = "BRIDGE_TOKEN";
 
 const TOPIC_IDS: [&str; 9] = [
     "marketSummary",
@@ -83,7 +86,7 @@ struct ParsedFeedItem {
 #[derive(Debug, Clone)]
 struct PinchtabConfig {
     base_url: String,
-    bridge_token: String,
+    bridge_token: Option<String>,
     required: bool,
 }
 
@@ -340,27 +343,29 @@ fn parse_bool_env(value: &str) -> bool {
     )
 }
 
+fn first_non_empty_env(keys: &[&str]) -> Option<String> {
+    keys.iter()
+        .find_map(|key| std::env::var(key).ok())
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+}
+
 fn pinchtab_config_from_env() -> Result<Option<PinchtabConfig>, String> {
     let required = std::env::var(ENV_PINCHTAB_REQUIRED)
         .ok()
         .map(|value| parse_bool_env(&value))
-        .unwrap_or(false);
-    let bridge_token = std::env::var(ENV_PINCHTAB_BRIDGE_TOKEN)
-        .unwrap_or_default()
-        .trim()
-        .to_string();
-    if bridge_token.is_empty() {
-        if required {
-            return Err(format!(
-                "{ENV_PINCHTAB_BRIDGE_TOKEN} is required when {ENV_PINCHTAB_REQUIRED}=true"
-            ));
-        }
+        .unwrap_or(true);
+    let bridge_token = first_non_empty_env(&[
+        ENV_PINCHTAB_BRIDGE_TOKEN,
+        ENV_PINCHTAB_BRIDGE_TOKEN_COMPAT,
+        ENV_PINCHTAB_TOKEN_COMPAT,
+    ]);
+    let raw_base = first_non_empty_env(&[ENV_PINCHTAB_BASE_URL, ENV_PINCHTAB_URL_COMPAT])
+        .unwrap_or_else(|| PINCHTAB_DEFAULT_BASE_URL.to_string());
+    let base_url = validate_pinchtab_base_url(&raw_base)?;
+    if !required && bridge_token.is_none() {
         return Ok(None);
     }
-
-    let raw_base = std::env::var(ENV_PINCHTAB_BASE_URL)
-        .unwrap_or_else(|_| PINCHTAB_DEFAULT_BASE_URL.to_string());
-    let base_url = validate_pinchtab_base_url(&raw_base)?;
     Ok(Some(PinchtabConfig {
         base_url,
         bridge_token,
@@ -693,11 +698,11 @@ async fn fetch_source_document_with_pinchtab(
     let fetched_at = now_iso8601_like();
     let navigate_url = format!("{}/navigate", config.base_url);
     let text_url = format!("{}/text", config.base_url);
-    let auth_header = format!("Bearer {}", config.bridge_token);
-
-    let navigate_response = client
-        .post(&navigate_url)
-        .header("Authorization", &auth_header)
+    let mut navigate_request = client.post(&navigate_url);
+    if let Some(token) = &config.bridge_token {
+        navigate_request = navigate_request.header("Authorization", format!("Bearer {token}"));
+    }
+    let navigate_response = navigate_request
         .json(&json!({ "url": url }))
         .send()
         .await
@@ -711,10 +716,11 @@ async fn fetch_source_document_with_pinchtab(
         ));
     }
 
-    let text_response = client
-        .post(&text_url)
-        .header("Authorization", &auth_header)
-        .json(&json!({}))
+    let mut text_request = client.get(&text_url);
+    if let Some(token) = &config.bridge_token {
+        text_request = text_request.header("Authorization", format!("Bearer {token}"));
+    }
+    let text_response = text_request
         .send()
         .await
         .map_err(|err| format!("pinchtab text request failed: {err}"))?;
