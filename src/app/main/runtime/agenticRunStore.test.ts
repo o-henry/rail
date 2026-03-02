@@ -8,7 +8,10 @@ import { createAgenticRunEnvelope } from "../../../features/orchestration/agenti
 
 describe("agenticRunStore", () => {
   it("persists studio role runs under .rail/studio_runs", async () => {
-    const invokeFn = vi.fn(async () => "/tmp/.rail/studio_runs/role-1/run.json");
+    const invokeFn = vi.fn(async () => "/tmp/.rail/studio_runs/role-1/run.json") as unknown as <T>(
+      command: string,
+      args?: Record<string, unknown>,
+    ) => Promise<T>;
     const envelope = createAgenticRunEnvelope({
       runId: "role-1",
       runKind: "studio_role",
@@ -29,7 +32,10 @@ describe("agenticRunStore", () => {
   });
 
   it("persists graph events under .rail/runs", async () => {
-    const invokeFn = vi.fn(async () => "/tmp/.rail/runs/graph-1/events.ndjson");
+    const invokeFn = vi.fn(async () => "/tmp/.rail/runs/graph-1/events.ndjson") as unknown as <T>(
+      command: string,
+      args?: Record<string, unknown>,
+    ) => Promise<T>;
     await persistAgenticRunEvents({
       cwd: "/tmp/workspace",
       invokeFn,
@@ -71,4 +77,3 @@ describe("agenticRunStore", () => {
     expect(output.split("\n")).toHaveLength(2);
   });
 });
-

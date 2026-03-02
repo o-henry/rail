@@ -76,6 +76,22 @@ const TEMP_LINE_ALLOWLIST = new Map([
       reason: "Feed page decomposition in progress",
     },
   ],
+  [
+    "src/app/main/runtime/dashboardIntelligenceRunner.ts",
+    {
+      maxLines: 900,
+      expiresOn: "2026-05-31",
+      reason: "Dashboard intelligence runtime split pending (crawler/prompt/quality gate modules)",
+    },
+  ],
+  [
+    "src/app/main/runtime/dashboardIntelligenceRunner.test.ts",
+    {
+      maxLines: 820,
+      expiresOn: "2026-05-31",
+      reason: "Dashboard intelligence test suite split pending",
+    },
+  ],
 ]);
 
 const LEGACY_IMPORT_EXCEPTIONS = new Set([

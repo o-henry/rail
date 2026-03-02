@@ -126,7 +126,7 @@ describe("dashboard intelligence runner", () => {
     ).rejects.toThrow("요약 모델 실행 중 오류가 발생했습니다");
   });
 
-  it("retries retrieval with relaxed query when topic query returns no snippets", async () => {
+  it("fails when codex returns empty response in web-search mode", async () => {
     const retrieveCalls: Array<Record<string, unknown>> = [];
     const invokeMock = vi.fn(async (command: string, args?: Record<string, unknown>) => {
       switch (command) {
@@ -177,11 +177,10 @@ describe("dashboard intelligence runner", () => {
         invokeFn: invoke,
       }),
     ).rejects.toThrow("요약 모델이 빈 응답을 반환했습니다");
-    expect(retrieveCalls).toHaveLength(2);
-    expect(retrieveCalls[1]?.query).toBe("");
+    expect(retrieveCalls).toHaveLength(0);
   });
 
-  it("fails before codex when crawler fetched nothing and snippets are empty", async () => {
+  it("fails when codex stays empty (crawler/rag disabled mode)", async () => {
     const invokeMock = vi.fn(async (command: string, _args?: Record<string, unknown>) => {
       switch (command) {
         case "dashboard_crawl_run":
@@ -214,8 +213,11 @@ describe("dashboard intelligence runner", () => {
         config: createDefaultDashboardTopicConfig("globalHeadlines"),
         invokeFn: invoke,
       }),
-    ).rejects.toThrow("수집 성공 건수가 0건");
-    expect(invokeMock.mock.calls.some((row) => row[0] === "turn_start")).toBe(false);
+    ).rejects.toThrow("요약 모델이 빈 응답을 반환했습니다");
+    expect(
+      invokeMock.mock.calls.some((row) => row[0] === "turn_start") ||
+      invokeMock.mock.calls.some((row) => row[0] === "turn_start_blocking"),
+    ).toBe(true);
   });
 
   it("fails when thread preflight fails", async () => {
@@ -262,7 +264,7 @@ describe("dashboard intelligence runner", () => {
         invokeFn: invoke,
       }),
     ).rejects.toThrow("요약 모델 실행 중 오류가 발생했습니다");
-    expect(invokeMock.mock.calls.some((row) => row[0] === "dashboard_crawl_run")).toBe(true);
+    expect(invokeMock.mock.calls.some((row) => row[0] === "dashboard_crawl_run")).toBe(false);
     expect(invokeMock.mock.calls.some((row) => row[0] === "dashboard_snapshot_save")).toBe(false);
   });
 
@@ -310,7 +312,7 @@ describe("dashboard intelligence runner", () => {
         invokeFn: invoke,
       }),
     ).rejects.toThrow("Codex 로그인이 필요합니다");
-    expect(invokeMock.mock.calls.some((row) => row[0] === "dashboard_crawl_run")).toBe(true);
+    expect(invokeMock.mock.calls.some((row) => row[0] === "dashboard_crawl_run")).toBe(false);
     expect(invokeMock.mock.calls.some((row) => row[0] === "dashboard_snapshot_save")).toBe(false);
   });
 
@@ -444,7 +446,7 @@ describe("dashboard intelligence runner", () => {
     });
 
     expect(stages).toEqual(
-      expect.arrayContaining(["crawler", "crawler_done", "rag", "rag_done", "codex_turn", "save", "done"]),
+      expect.arrayContaining(["crawler", "rag", "prompt", "codex_thread", "codex_turn", "parse", "save", "done"]),
     );
   });
 
