@@ -1,4 +1,4 @@
-import type { PointerEvent as ReactPointerEvent, RefObject } from "react";
+import type { RefObject } from "react";
 
 type WorkflowConversationMessage = {
   id: string;
@@ -12,10 +12,7 @@ type WorkflowAgentConversationPanelProps = {
   agentTitle: string;
   agentMeta: string;
   messages: WorkflowConversationMessage[];
-  dragging: boolean;
-  position: { x: number; y: number };
   panelRef: RefObject<HTMLElement | null>;
-  onDragStart: (event: ReactPointerEvent<HTMLElement>) => void;
   onToggleOpen: () => void;
 };
 
@@ -25,10 +22,7 @@ export default function WorkflowAgentConversationPanel({
   agentTitle,
   agentMeta,
   messages,
-  dragging,
-  position,
   panelRef,
-  onDragStart,
   onToggleOpen,
 }: WorkflowAgentConversationPanelProps) {
   if (!isOpen) {
@@ -44,21 +38,17 @@ export default function WorkflowAgentConversationPanel({
   return (
     <section
       aria-label="선택 에이전트 대화 로그"
-      className={`panel-card workflow-conversation-overlay${dragging ? " is-dragging" : ""}`}
+      className="panel-card workflow-conversation-overlay"
       ref={panelRef}
-      style={{
-        left: `${position.x}px`,
-        top: `${position.y}px`,
-      }}
     >
-      <header className="workflow-conversation-head workflow-conversation-drag-handle" onPointerDown={onDragStart}>
+      <header className="workflow-conversation-head">
         <div className="workflow-conversation-head-text">
           <p className="workflow-conversation-head-date">{hasSelectedAgent ? "SELECTED AGENT" : "READY"}</p>
-          <strong>{hasSelectedAgent ? agentTitle : "Today"}</strong>
+          <strong>{hasSelectedAgent ? agentTitle : "선택 에이전트 대화"}</strong>
           <span>{hasSelectedAgent ? agentMeta : "그래프에서 역할/핸드오프 노드를 선택하면 대화 로그를 이어갈 수 있습니다."}</span>
         </div>
         <button aria-label="대화 로그 닫기" className="mini-action-button workflow-conversation-close" onClick={onToggleOpen} type="button">
-          <span className="mini-action-button-label">≡</span>
+          <span className="mini-action-button-label">닫기</span>
         </button>
       </header>
 
@@ -71,7 +61,7 @@ export default function WorkflowAgentConversationPanel({
           <ul className="workflow-conversation-list">
             {messages.map((row) => (
               <li key={row.id} className={`workflow-conversation-item is-${row.role}`}>
-                <span className="workflow-conversation-role">{row.role === "user" ? "YOU" : "AGENT"}</span>
+                <span className="workflow-conversation-role">{row.role === "user" ? "REQUEST" : "LOG"}</span>
                 <p>{row.text}</p>
               </li>
             ))}

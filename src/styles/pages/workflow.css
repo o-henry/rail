@@ -111,37 +111,35 @@
 }
 
 .workflow-conversation-floating-layer .workflow-conversation-overlay {
-  border: 1px solid #e3e7ee;
+  border: 1px solid #d7dde7;
   border-radius: 4px;
-  padding: 14px;
+  padding: 0;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
-  gap: 10px;
-  background: linear-gradient(180deg, #f7f8fa 0%, #f1f3f6 100%) !important;
-  color: #2b3442;
+  gap: 0;
+  background: #f3f5f8 !important;
+  color: #2f3745;
   position: absolute;
-  z-index: 44;
-  left: 10px !important;
-  right: 10px;
+  z-index: 34;
+  left: 12px !important;
+  right: 12px;
   top: auto !important;
-  bottom: 10px;
+  bottom: 12px;
   width: auto;
   min-width: 0;
   max-width: none;
-  height: clamp(260px, 34vh, 420px);
+  height: clamp(260px, 33vh, 390px);
   min-height: 240px;
-  max-height: calc(100% - 20px);
+  max-height: calc(100% - 24px);
   resize: none;
-  overflow: auto;
-  box-shadow:
-    0 14px 34px rgba(45, 56, 74, 0.16),
-    0 1px 0 rgba(255, 255, 255, 0.9) inset;
+  overflow: hidden;
+  box-shadow: 0 10px 24px rgba(47, 55, 69, 0.12);
 }
 
 .workflow-conversation-floating-layer {
   position: absolute;
   inset: 0;
-  z-index: 24;
+  z-index: 20;
   pointer-events: none;
 }
 
@@ -151,63 +149,58 @@
 
 .workflow-conversation-head {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
-  gap: 10px;
-  padding: 2px 4px 0;
-}
-
-.workflow-conversation-drag-handle {
-  cursor: grab;
-  user-select: none;
-}
-
-.workflow-conversation-floating-layer .workflow-conversation-overlay.is-dragging .workflow-conversation-drag-handle {
-  cursor: grabbing;
+  gap: 12px;
+  padding: 10px 12px;
+  border-bottom: 1px solid #dfe4ec;
+  background: #f3f5f8;
 }
 
 .workflow-conversation-head-text {
   min-width: 0;
   display: grid;
-  gap: 1px;
+  gap: 2px;
 }
 
 .workflow-conversation-head-date {
   margin: 0;
   font-size: 10px;
-  color: #929aa7;
+  color: #667383;
   letter-spacing: 0.02em;
   text-transform: uppercase;
 }
 
 .workflow-conversation-head-text strong {
-  font-size: 34px;
-  line-height: 1.1;
-  color: #2d3543;
-  letter-spacing: -0.6px;
+  font-size: 14px;
+  line-height: 1.3;
+  color: #1f2530;
+  letter-spacing: -0.2px;
   font-weight: 600;
 }
 
 .workflow-conversation-head-text span {
-  font-size: 11px;
-  color: #6c7787;
+  font-size: 12px;
+  color: #5f6b7b;
   line-height: 1.35;
   word-break: break-word;
 }
 
 .workflow-conversation-close {
-  min-height: 34px;
-  width: 34px;
-  height: 34px;
-  padding: 0;
+  min-height: 30px;
+  width: 48px;
+  height: 30px;
+  padding: 0 10px;
   flex-shrink: 0;
-  background: #eceff4;
-  color: #8791a1;
+  background: #e4e9f1;
+  color: #3f4b5c;
   border-radius: 4px;
-  border: 1px solid #dee4ee;
+  border: 1px solid #cfd6e2;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  font-size: 12px;
+  font-weight: 600;
 }
 
 .workflow-conversation-body {
@@ -215,10 +208,10 @@
   max-height: none;
   overflow-y: auto;
   scrollbar-width: thin;
-  border-radius: 4px;
-  padding: 14px;
-  background: #ffffff;
-  border: 1px solid #e5e9f0;
+  border-radius: 0;
+  padding: 10px 12px 12px;
+  background: #f8fafc;
+  border: 0;
   position: relative;
 }
 
@@ -227,76 +220,76 @@
   padding: 0;
   list-style: none;
   display: grid;
-  gap: 6px;
+  gap: 8px;
 }
 
 .workflow-conversation-item {
   border-radius: 4px;
-  padding: 10px 11px;
+  padding: 9px 10px;
   display: grid;
-  gap: 5px;
-  background: #fbfcfe;
-  border: 1px solid #edf1f7;
+  gap: 4px;
+  background: #edf1f6;
+  border: 1px solid #dde4ee;
 }
 
 .workflow-conversation-item.is-user {
-  background: #f5f8fd;
-  border-color: #e3eaf4;
+  background: #ffffff;
+  border-color: #d7deea;
 }
 
 .workflow-conversation-role {
   font-size: 10px;
   font-weight: 700;
-  letter-spacing: 0.02em;
-  color: #76879d;
+  letter-spacing: 0.03em;
+  color: #4e5a6a;
 }
 
 .workflow-conversation-item p {
   margin: 0;
   font-size: 12px;
-  line-height: 1.55;
+  line-height: 1.5;
   white-space: pre-wrap;
   word-break: break-word;
-  color: #283241;
+  color: #212733;
 }
 
 .workflow-conversation-empty {
   margin: 0;
-  min-height: 74px;
+  min-height: 68px;
   border-radius: 4px;
-  background: #f3f5f8;
+  background: #edf1f6;
   color: #4b5563;
   border: 1px solid #d7dde7;
   font-size: 12px;
   line-height: 1.45;
   display: flex;
   align-items: center;
-  padding: 10px 12px;
+  padding: 10px;
 }
 
 .workflow-conversation-toggle-wrap {
   position: absolute;
-  right: 10px;
-  bottom: 10px;
-  z-index: 44;
+  right: 12px;
+  bottom: 12px;
+  z-index: 34;
   display: flex;
   justify-content: flex-end;
 }
 
 .workflow-conversation-toggle {
-  min-height: 44px;
-  height: 44px;
-  padding: 0 16px;
-  border: 1px solid #d8dde6;
+  min-height: 34px;
+  height: 34px;
+  padding: 0 12px;
+  border: 1px solid #d3dae5;
   border-radius: 4px;
-  background: linear-gradient(180deg, #ffffff 0%, #f5f7fb 100%);
-  color: #2a3340;
-  box-shadow: 0 8px 18px rgba(50, 61, 80, 0.16);
+  background: #f3f5f8;
+  color: #2b3442;
+  box-shadow: none;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
 }
 
@@ -307,8 +300,8 @@
 }
 
 .workflow-conversation-toggle:hover {
-  background: linear-gradient(180deg, #ffffff 0%, #f0f4fb 100%);
-  border-color: #cdd5e2;
+  background: #e9edf3;
+  border-color: #c8d0dd;
 }
 
 .workflow-conversation-toggle:active {
@@ -317,20 +310,20 @@
 
 @media (max-width: 1180px) {
   .workflow-conversation-overlay {
-    left: 8px !important;
-    right: 8px;
-    bottom: 8px;
-    height: clamp(230px, 34vh, 360px);
+    left: 10px !important;
+    right: 10px;
+    bottom: 10px;
+    height: clamp(220px, 34vh, 340px);
   }
 }
 
 @media (max-width: 900px) {
   .workflow-conversation-overlay {
-    left: 6px !important;
-    right: 6px;
-    bottom: 6px;
+    left: 8px !important;
+    right: 8px;
+    bottom: 8px;
     min-width: 0;
-    height: clamp(220px, 36vh, 330px);
+    height: clamp(200px, 34vh, 300px);
   }
 
   .workflow-conversation-toggle-wrap {
