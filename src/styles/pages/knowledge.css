@@ -33,7 +33,7 @@
 
 .knowledge-overview-card {
   border: 0;
-  border-radius: 2px;
+  border-radius: 2px !important;
   background: var(--surface);
   padding: 10px;
   display: grid;
@@ -55,7 +55,7 @@
   min-height: 0;
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
-  gap: 4px;
+  gap: 1px;
 }
 
 .knowledge-island {
@@ -71,7 +71,7 @@
   overflow: auto;
   display: grid;
   align-content: start;
-  gap: 6px;
+  /* gap: 6px; */
 }
 
 .knowledge-list-head {
