@@ -102,6 +102,14 @@ function truncateDashboardHighlightText(input: string, maxChars = 110): string {
   return `${normalized.slice(0, Math.max(0, maxChars - 3)).trimEnd()}...`;
 }
 
+function isDashboardNoiseHighlight(input: string): boolean {
+  const normalized = String(input ?? "").trim();
+  if (!normalized) {
+    return true;
+  }
+  return /\bin[\s_-]?progress\b/i.test(normalized);
+}
+
 export default function DashboardPage(props: DashboardPageProps) {
   const { t } = useI18n();
   const [runFilter, setRunFilter] = useState<string>("all");
@@ -225,7 +233,7 @@ export default function DashboardPage(props: DashboardPageProps) {
       });
       snapshot.highlights.slice(0, 1).forEach((highlight, index) => {
         const text = String(highlight ?? "").trim();
-        if (!text) {
+        if (isDashboardNoiseHighlight(text)) {
           return;
         }
         const truncatedText = truncateDashboardHighlightText(text);
