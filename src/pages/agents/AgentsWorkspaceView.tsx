@@ -4,6 +4,7 @@ import type { CodexMultiAgentMode } from "./agentPrompt";
 import type {
   AgentDataSourceItem,
   AgentModelOption,
+  AgentRequestHistoryItem,
   AgentSetOption,
   AgentThread,
   AttachedFile,
@@ -22,6 +23,7 @@ type AgentsWorkspaceViewProps = {
   setMission: string;
   dashboardInsights: string[];
   recentDataSources: AgentDataSourceItem[];
+  requestHistory: AgentRequestHistoryItem[];
   enabledAttachedFileNames: string[];
   enabledDataSourceIds: string[];
   codexMultiAgentMode: CodexMultiAgentMode;
@@ -72,6 +74,7 @@ export function AgentsWorkspaceView({
   setMission,
   dashboardInsights,
   recentDataSources,
+  requestHistory,
   enabledAttachedFileNames,
   enabledDataSourceIds,
   codexMultiAgentMode,
@@ -120,6 +123,7 @@ export function AgentsWorkspaceView({
         t={t}
         activeSetOption={activeSetOption}
         setMission={setMission}
+        requestHistory={requestHistory}
         onRestoreTemplateSet={onRestoreTemplateSet}
         onBackToSetList={onBackToSetList}
         onAddThread={onAddThread}
@@ -162,6 +166,7 @@ export function AgentsWorkspaceView({
           activeThread={activeThread}
           dashboardInsights={dashboardInsights}
           recentDataSources={recentDataSources}
+          requestHistory={requestHistory}
           attachedFiles={attachedFiles}
           enabledAttachedFileNames={enabledAttachedFileNames}
           enabledDataSourceIds={enabledDataSourceIds}

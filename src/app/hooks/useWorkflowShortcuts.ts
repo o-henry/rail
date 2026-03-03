@@ -67,9 +67,8 @@ export function useWorkflowShortcuts(params: UseWorkflowShortcutsParams) {
       "1": "dashboard",
       "2": "agents",
       "3": "workflow",
-      "4": "handoff",
-      "5": "knowledge",
-      "6": "settings",
+      "4": "knowledge",
+      "5": "settings",
     };
     const tabStatusByKey: Record<WorkspaceTab, string> = {
       dashboard: "대시보드 탭으로 이동",
@@ -77,8 +76,8 @@ export function useWorkflowShortcuts(params: UseWorkflowShortcutsParams) {
       agents: "에이전트 탭으로 이동",
       workflow: "워크플로우 탭으로 이동",
       feed: "피드 탭으로 이동",
-      handoff: "핸드오프 탭으로 이동",
-      knowledge: "지식베이스 탭으로 이동",
+      handoff: "그래프 탭으로 이동",
+      knowledge: "데이터베이스 탭으로 이동",
       settings: "설정 탭으로 이동",
       bridge: "설정 탭으로 이동",
     };

@@ -44,6 +44,7 @@ export function createFallbackSetState(): AgentSetState {
     dashboardInsights: [],
     enabledAttachedFileNames: [],
     enabledDataSourceIds: [],
+    requestHistory: [],
   };
 }
 
@@ -68,6 +69,7 @@ export function createStateFromPresetSnapshot(snapshot: AgentSetPresetSnapshot):
     dashboardInsights: [],
     enabledAttachedFileNames: [],
     enabledDataSourceIds: [],
+    requestHistory: [],
   };
 }
 
@@ -81,6 +83,7 @@ export function restoreSetStateFromPreset(
     dashboardInsights: current.dashboardInsights,
     enabledAttachedFileNames: current.enabledAttachedFileNames,
     enabledDataSourceIds: current.enabledDataSourceIds,
+    requestHistory: current.requestHistory,
   };
 }
 

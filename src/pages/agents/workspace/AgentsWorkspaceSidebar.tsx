@@ -1,4 +1,4 @@
-import type { AgentDataSourceItem, AgentSetOption, AgentThread, AttachedFile } from "../agentTypes";
+import type { AgentDataSourceItem, AgentRequestHistoryItem, AgentSetOption, AgentThread, AttachedFile } from "../agentTypes";
 import type { CodeChangeApproval } from "../../../features/studio/approvalTypes";
 import { uppercaseEnglishTokens } from "./textUtils";
 
@@ -11,6 +11,7 @@ type AgentsWorkspaceSidebarProps = {
   activeThread: AgentThread | null;
   dashboardInsights: string[];
   recentDataSources: AgentDataSourceItem[];
+  requestHistory: AgentRequestHistoryItem[];
   attachedFiles: AttachedFile[];
   enabledAttachedFileNames: string[];
   enabledDataSourceIds: string[];
@@ -30,6 +31,7 @@ export function AgentsWorkspaceSidebar({
   activeThread,
   dashboardInsights,
   recentDataSources,
+  requestHistory,
   attachedFiles,
   enabledAttachedFileNames,
   enabledDataSourceIds,
@@ -173,6 +175,25 @@ export function AgentsWorkspaceSidebar({
                     <div className="agents-sidebar-inline-actions">
                       <button type="button" onClick={() => onResolveApproval(approval.id, "approved")}>승인</button>
                       <button type="button" onClick={() => onResolveApproval(approval.id, "rejected")}>반려</button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+          <section className="agents-sidebar-card">
+            <h4>전송한 요구사항</h4>
+            {requestHistory.length === 0 ? (
+              <p>아직 전송한 요구사항이 없습니다.</p>
+            ) : (
+              <ul className="agents-rag-source-list">
+                {requestHistory.slice(0, 6).map((item) => (
+                  <li key={item.id}>
+                    <div className="agents-rag-source-copy">
+                      <span>{item.prompt}</span>
+                      <small className="agents-rag-source-meta">
+                        {`${item.threadName} · ${new Date(item.createdAt).toLocaleString()}`}
+                      </small>
                     </div>
                   </li>
                 ))}

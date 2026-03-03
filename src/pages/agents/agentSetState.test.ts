@@ -18,6 +18,7 @@ describe("restoreSetStateFromPreset", () => {
       dashboardInsights: ["marketSummary: 상승 신호", "riskAlertsBoard: 변동성 확대"],
       enabledAttachedFileNames: ["memo.txt"],
       enabledDataSourceIds: ["marketSummary:run-1"],
+      requestHistory: [],
     };
 
     const preset: AgentSetPresetSnapshot = {
@@ -86,6 +87,7 @@ describe("dashboard insights mapping", () => {
         dashboardInsights: ["MARKET_SUMMARY: 이전 오염 데이터"],
         enabledAttachedFileNames: [],
         enabledDataSourceIds: [],
+        requestHistory: [],
       },
       "data-marketSummary": {
         setMission: "시장 요약",
@@ -96,6 +98,7 @@ describe("dashboard insights mapping", () => {
         dashboardInsights: ["MARKET_SUMMARY: 이전 오염 데이터"],
         enabledAttachedFileNames: [],
         enabledDataSourceIds: [],
+        requestHistory: [],
       },
     };
 

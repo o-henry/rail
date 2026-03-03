@@ -1,11 +1,12 @@
 import type { DashboardTopicId, DashboardTopicRunState } from "../../../features/dashboard/intelligence";
-import type { AgentSetOption } from "../agentTypes";
+import type { AgentRequestHistoryItem, AgentSetOption } from "../agentTypes";
 import { renderMixedLangText } from "./textUtils";
 
 type AgentsWorkspaceTopbarProps = {
   t: (key: string) => string;
   activeSetOption: AgentSetOption | null;
   setMission: string;
+  requestHistory: AgentRequestHistoryItem[];
   onRestoreTemplateSet: () => void;
   onBackToSetList: () => void;
   onAddThread: () => void;
@@ -18,6 +19,7 @@ export function AgentsWorkspaceTopbar({
   t,
   activeSetOption,
   setMission,
+  requestHistory,
   onRestoreTemplateSet,
   onBackToSetList,
   onAddThread,
@@ -38,6 +40,12 @@ export function AgentsWorkspaceTopbar({
       <div className="agents-thread-list agents-thread-brief" aria-label="세트 브리핑">
         <strong lang="ko">{activeSetOption?.label ?? "세트 미선택"}</strong>
         <p lang="ko">{renderMixedLangText(setMission || activeSetOption?.description || "세트 설명이 없습니다.")}</p>
+        {requestHistory[0] ? (
+          <div className="agents-thread-last-request" aria-label="최근 전송 요구사항">
+            <span>최근 전송 요구사항</span>
+            <p lang="ko">{requestHistory[0].prompt}</p>
+          </div>
+        ) : null}
         {dataTopicId ? (
           <section className="agents-data-run-controls" aria-label="데이터 파이프라인 실행">
             <div className="agents-data-run-meta">

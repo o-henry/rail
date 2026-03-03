@@ -67,8 +67,18 @@ export function AgentGridCard({
         </button>
       </div>
       <div className="agents-grid-card-meta">
-        <span className="agents-grid-card-kind">
+        <span className="agents-grid-card-chip agents-grid-card-meta-chip is-neutral agents-grid-card-kind">
           {thread.status === "preset" ? "기본 에이전트" : "사용자 에이전트"}
+        </span>
+        <span className={`agents-grid-card-chip agents-grid-card-meta-chip is-${pipelineStatus}`}>
+          <span>{chipText}</span>
+          {pipelineStatus === "running" ? (
+            <span aria-hidden="true" className="agents-grid-card-running-ellipsis">
+              <span>.</span>
+              <span>.</span>
+              <span>.</span>
+            </span>
+          ) : null}
         </span>
       </div>
       <div className="agents-grid-card-log" aria-label={`${displayThreadName} 로그`}>
@@ -93,23 +103,6 @@ export function AgentGridCard({
             <p className="agents-grid-card-starter" lang={starterPromptLang}>{thread.starterPrompt}</p>
           </section>
         ) : null}
-      </div>
-      <div className="agents-grid-card-foot">
-        <span className={`agents-grid-card-chip agents-grid-card-foot-chip is-${pipelineStatus}`}>
-          <span>{chipText}</span>
-          {pipelineStatus === "running" ? (
-            <span aria-hidden="true" className="agents-grid-card-running-ellipsis">
-              <span>.</span>
-              <span>.</span>
-              <span>.</span>
-            </span>
-          ) : null}
-        </span>
-        <span
-          aria-label={pipelineStatus === "running" ? "실행 중" : pipelineStatus === "done" ? "완료" : pipelineStatus === "error" ? "실패" : "대기"}
-          className={`agents-grid-card-status-dot is-${pipelineStatus}`}
-          title={chipText}
-        />
       </div>
     </article>
   );

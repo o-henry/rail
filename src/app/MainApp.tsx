@@ -11,7 +11,6 @@ import type { AgentQuickActionRequest, AgentWorkspaceLaunchRequest } from "../pa
 import SettingsPage from "../pages/settings/SettingsPage";
 import DashboardIntelligenceSettings from "../pages/settings/DashboardIntelligenceSettings";
 import WorkflowPage from "../pages/workflow/WorkflowPage";
-import HandoffPage from "../pages/handoff/HandoffPage";
 import KnowledgeBasePage from "../pages/knowledge/KnowledgeBasePage";
 import { useFloatingPanel } from "../features/ui/useFloatingPanel";
 import { useExecutionState } from "./hooks/useExecutionState";
@@ -32,6 +31,9 @@ import { useDashboardAgentBridge } from "./hooks/useDashboardAgentBridge";
 import { useAgenticOrchestrationBridge } from "./hooks/useAgenticOrchestrationBridge";
 import { useWorkspaceEventPersistence } from "./hooks/useWorkspaceEventPersistence";
 import { useAgenticActionBus } from "./hooks/useAgenticActionBus";
+import { useWorkflowHandoffPanel } from "./hooks/useWorkflowHandoffPanel";
+import { STUDIO_ROLE_TEMPLATES } from "../features/studio/roleTemplates";
+import type { StudioRoleId } from "../features/studio/handoffTypes";
 import {
   COST_PRESET_DEFAULT_MODEL,
   DEFAULT_TURN_MODEL,
@@ -295,16 +297,23 @@ import {
 import { executeTurnNodeWithContext } from "./main/runtime/executeTurnNode";
 import type { FeedCategory, InternalMemorySnippet, WebProviderRunResult, RunRecord } from "./main";
 
-const HIDDEN_WORKSPACE_TABS = new Set<WorkspaceTab>(["intelligence", "feed"]);
+const HIDDEN_WORKSPACE_TABS = new Set<WorkspaceTab>(["intelligence", "feed", "handoff"]);
 
 const WORKSPACE_TOPBAR_TABS: Array<{ tab: WorkspaceTab; label: string }> = [
-  { tab: "dashboard", label: "대시보드" },
-  { tab: "agents", label: "에이전트" },
-  { tab: "workflow", label: "그래프" },
-  { tab: "handoff", label: "핸드오프" },
-  { tab: "knowledge", label: "지식베이스" },
-  { tab: "settings", label: "설정" },
+  { tab: "dashboard", label: "대시보드" }, { tab: "agents", label: "에이전트" }, { tab: "workflow", label: "그래프" },
+  { tab: "knowledge", label: "데이터베이스" }, { tab: "settings", label: "설정" },
 ];
+
+const STUDIO_ROLE_PROMPTS: Record<StudioRoleId, string> = {
+  pm_planner: "요구사항을 태스크 단위로 분해하고 우선순위를 확정해 인수인계 가능한 계획으로 정리해줘.",
+  client_programmer: "게임플레이/UX 구현 관점에서 즉시 실행 가능한 코드 변경안과 테스트 기준을 제시해줘.",
+  system_programmer: "시스템 구조/데이터 흐름/성능 병목 관점에서 안정화 계획을 제시해줘.",
+  tooling_engineer: "개발 자동화/툴링 스크립트 중심으로 반복 작업을 줄이는 실행안을 제시해줘.",
+  art_pipeline: "리소스 임포트/빌드 최적화/파이프라인 자동화 관점의 실행안을 제시해줘.",
+  qa_engineer: "재현 가능한 테스트 시나리오와 회귀 방지 체크리스트를 우선으로 작성해줘.",
+  build_release: "빌드/릴리즈 검증 항목과 배포 전 점검 체크를 실행 순서로 제시해줘.",
+  technical_writer: "핵심 결정사항과 변경사항을 다음 담당자가 바로 실행할 수 있게 문서화해줘.",
+};
 
 function App() {
   const USER_BG_IMAGE_STORAGE_KEY = "rail.settings.user_bg_image";
@@ -712,6 +721,31 @@ function App() {
   const setError = useCallback((message: string) => {
     setErrorCore(message);
   }, [setErrorCore]);
+
+  const handleConsumeHandoff = useCallback((payload: {
+    handoffId: string;
+    toRole: string;
+    taskId: string;
+    request: string;
+  }) => {
+    publishAction({
+      type: "consume_handoff",
+      payload: { handoffId: payload.handoffId },
+    });
+    agentLaunchRequestSeqRef.current += 1;
+    setAgentLaunchRequest({
+      id: agentLaunchRequestSeqRef.current,
+      setId: `role-${payload.toRole}`,
+      draft: `[핸드오프 ${payload.taskId}] ${payload.request}`,
+    });
+  }, [publishAction]);
+
+  const workflowHandoffPanel = useWorkflowHandoffPanel({
+    cwd,
+    publishAction,
+    setStatus,
+    onConsumeHandoff: handleConsumeHandoff,
+  });
 
   let webTurnRunHandlers: ReturnType<typeof createWebTurnRunHandlers> | null = null;
 
@@ -1757,6 +1791,84 @@ function App() {
     setStatus("그래프에 데이터 노드를 추가했습니다.");
   }, [appendWorkspaceEvent, applyGraphChange, graph.nodes, setNodeSelection, setStatus]);
 
+  const onAddHandoffNodes = useCallback(
+    (fromRole: StudioRoleId, toRole: StudioRoleId) => {
+      const maxX = graph.nodes.reduce((max, node) => Math.max(max, Number(node.position?.x ?? 0)), 40);
+      const maxY = graph.nodes.reduce((max, node) => Math.max(max, Number(node.position?.y ?? 0)), 40);
+      const baseX = maxX + 320;
+      const baseY = Math.max(40, maxY);
+      const fromTemplate = STUDIO_ROLE_TEMPLATES.find((row) => row.id === fromRole);
+      const toTemplate = STUDIO_ROLE_TEMPLATES.find((row) => row.id === toRole);
+      const fromLabel = fromTemplate?.label ?? fromRole;
+      const toLabel = toTemplate?.label ?? toRole;
+      const fromNodeId = makeNodeId("turn");
+      const toNodeId = fromRole === toRole ? "" : makeNodeId("turn");
+      const fromNode: GraphNode = {
+        id: fromNodeId,
+        type: "turn",
+        position: { x: baseX, y: baseY },
+        config: {
+          ...defaultNodeConfig("turn"),
+          role: `${fromLabel} AGENT`,
+          promptTemplate: STUDIO_ROLE_PROMPTS[fromRole],
+          qualityProfile: "design_planning",
+          artifactType: "TaskPlanArtifact",
+          sourceKind: "handoff",
+          handoffRoleId: fromRole,
+          handoffToRoleId: toRole,
+          handoffStage: "analyze",
+        },
+      };
+      const toNode: GraphNode | null = toNodeId
+        ? {
+            id: toNodeId,
+            type: "turn",
+            position: { x: baseX + 320, y: baseY },
+            config: {
+              ...defaultNodeConfig("turn"),
+              role: `${toLabel} AGENT`,
+              promptTemplate: STUDIO_ROLE_PROMPTS[toRole],
+              qualityProfile: "code_implementation",
+              artifactType: "ChangePlanArtifact",
+              sourceKind: "handoff",
+              handoffRoleId: toRole,
+              handoffToRoleId: toRole,
+              handoffStage: "implement",
+            },
+          }
+        : null;
+      const previousNodeId = selectedNodeIds[0] ?? "";
+      applyGraphChange(
+        (prev) => ({
+          ...prev,
+          nodes: toNode ? [...prev.nodes, fromNode, toNode] : [...prev.nodes, fromNode],
+          edges: [
+            ...prev.edges,
+            ...(previousNodeId
+              ? [{ from: { nodeId: previousNodeId, port: "out" as const }, to: { nodeId: fromNodeId, port: "in" as const } }]
+              : []),
+            ...(toNodeId
+              ? [{ from: { nodeId: fromNodeId, port: "out" as const }, to: { nodeId: toNodeId, port: "in" as const } }]
+              : []),
+          ],
+        }),
+        { autoLayout: true },
+      );
+      const nextSelection = toNodeId ? [fromNodeId, toNodeId] : [fromNodeId];
+      setNodeSelection(nextSelection, toNodeId || fromNodeId);
+      appendWorkspaceEvent({
+        source: "workflow",
+        message: toNodeId
+          ? `핸드오프 노드 추가: ${fromLabel} → ${toLabel}`
+          : `핸드오프 노드 추가: ${fromLabel}`,
+        actor: "user",
+        level: "info",
+      });
+      setStatus(toNodeId ? `핸드오프 노드 추가 완료 (${fromLabel} → ${toLabel})` : `핸드오프 노드 추가 완료 (${fromLabel})`);
+    },
+    [appendWorkspaceEvent, applyGraphChange, graph.nodes, selectedNodeIds, setNodeSelection, setStatus],
+  );
+
   const viewportWidth = Math.ceil(canvasLogicalViewport.width);
   const viewportHeight = Math.ceil(canvasLogicalViewport.height);
   const stagePadding = canvasNodes.length > 0 ? STAGE_GROW_MARGIN : 0;
@@ -1798,6 +1910,7 @@ function App() {
     },
     toolsProps: {
       addNode,
+      addHandoffNodes: onAddHandoffNodes,
       addCrawlerNode: onAddCrawlerNode,
       applyCostPreset,
       applyGraphChange,
@@ -1832,6 +1945,21 @@ function App() {
       setGraphRenameDraft,
       setSelectedGraphFileName,
       simpleWorkflowUI: SIMPLE_WORKFLOW_UI,
+      handoffRecords: workflowHandoffPanel.handoffRecords,
+      selectedHandoffId: workflowHandoffPanel.selectedHandoffId,
+      handoffRoleOptions: workflowHandoffPanel.handoffRoleOptions,
+      handoffFromRole: workflowHandoffPanel.handoffFromRole,
+      handoffToRole: workflowHandoffPanel.handoffToRole,
+      handoffTaskId: workflowHandoffPanel.handoffTaskId,
+      handoffRequestText: workflowHandoffPanel.handoffRequestText,
+      setSelectedHandoffId: workflowHandoffPanel.setSelectedHandoffId,
+      setHandoffFromRole: workflowHandoffPanel.setHandoffFromRole,
+      setHandoffToRole: workflowHandoffPanel.setHandoffToRole,
+      setHandoffTaskId: workflowHandoffPanel.setHandoffTaskId,
+      setHandoffRequestText: workflowHandoffPanel.setHandoffRequestText,
+      createHandoff: workflowHandoffPanel.createHandoff,
+      updateHandoffStatus: workflowHandoffPanel.updateHandoffStatus,
+      consumeHandoff: workflowHandoffPanel.consumeHandoff,
     },
   });
   const feedPageVm = buildFeedPageVm({
@@ -2407,38 +2535,33 @@ function App() {
             workspaceEvents={workspaceEvents}
           />
         )}
-
         {workspaceTab === "feed" && (
           <FeedPage vm={feedPageVm} />
-        )}
-        {workspaceTab === "handoff" && (
-          <HandoffPage
-            cwd={cwd}
-            onConsumeHandoff={(payload) => {
-              publishAction({
-                type: "consume_handoff",
-                payload: { handoffId: payload.handoffId },
-              });
-              agentLaunchRequestSeqRef.current += 1;
-              setAgentLaunchRequest({
-                id: agentLaunchRequestSeqRef.current,
-                setId: `role-${payload.toRole}`,
-                draft: `[핸드오프 ${payload.taskId}] ${payload.request}`,
-              });
-            }}
-            onOpenAgents={() => onSelectWorkspaceTab("agents")}
-          />
         )}
         {workspaceTab === "knowledge" && (
           <KnowledgeBasePage
             cwd={cwd}
             posts={feedPosts}
-            onInjectContextSources={(sourceIds) => {
+            onInjectContextSources={(entries) => {
+              const sourceIds = entries.map((entry) => entry.id);
               publishAction({
                 type: "inject_context_sources",
                 payload: { sourceIds },
               });
-              setStatus(`지식베이스 컨텍스트 주입 요청: ${sourceIds.length}건`);
+              if (entries.length > 0) {
+                const summary = String(entries[0].summary ?? "").trim();
+                const sourceLine = entries[0].sourceUrl
+                  ? `\n- 출처: ${entries[0].sourceUrl}`
+                  : "";
+                const detail = summary || entries[0].title || entries[0].taskId;
+                agentLaunchRequestSeqRef.current += 1;
+                setAgentLaunchRequest({
+                  id: agentLaunchRequestSeqRef.current,
+                  setId: `role-${entries[0].roleId}`,
+                  draft: `[데이터베이스 컨텍스트 ${entries[0].taskId}] ${detail}${sourceLine}`,
+                });
+              }
+              setStatus(`데이터베이스 컨텍스트 주입 요청: ${sourceIds.length}건`);
               onSelectWorkspaceTab("agents");
             }}
           />
@@ -2464,7 +2587,6 @@ function App() {
             topicSnapshots={dashboardSnapshotsByTopic}
           />
         )}
-
         {workspaceTab === "settings" && (
           <section className="panel-card settings-view workspace-tab-panel">
             <SettingsPage

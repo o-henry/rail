@@ -36,6 +36,7 @@ export default function AgentsPage(props: AgentsPageProps) {
       codexMultiAgentMode={props.codexMultiAgentMode}
       dashboardInsights={state.dashboardInsights}
       recentDataSources={state.recentDataSources}
+      requestHistory={state.requestHistory}
       enabledAttachedFileNames={state.enabledAttachedFileNames}
       enabledDataSourceIds={state.enabledDataSourceIds}
       draft={state.draft}

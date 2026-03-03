@@ -96,6 +96,21 @@ pub struct DashboardScraplingBridgeHealth {
     pub message: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DashboardScraplingFetchResult {
+    pub topic: String,
+    pub url: String,
+    pub fetched_at: String,
+    pub format: String,
+    pub summary: String,
+    pub content: String,
+    pub markdown_path: String,
+    pub json_path: String,
+    pub bytes: usize,
+    pub http_status: Option<u16>,
+}
+
 #[derive(Debug, Clone)]
 struct SourceDocument {
     markdown: String,
@@ -217,6 +232,83 @@ pub fn dashboard_scrapling_bridge_stop() -> Result<DashboardScraplingBridgeHealt
         token_protected: runtime_bridge_has_token(),
         scrapling_ready: false,
         message: "stopped".to_string(),
+    })
+}
+
+#[tauri::command]
+pub async fn dashboard_scrapling_fetch_url(
+    cwd: String,
+    url: String,
+    topic: Option<String>,
+) -> Result<DashboardScraplingFetchResult, String> {
+    let workspace = normalize_workspace_cwd(&cwd)?;
+    let topic_id = topic
+        .as_deref()
+        .and_then(normalize_topic_id)
+        .unwrap_or("devEcosystem");
+    let source_url = normalize_source_url(&url);
+    validate_source_url(&source_url)?;
+
+    let client = Client::builder()
+        .user_agent(USER_AGENT)
+        .timeout(Duration::from_millis(DEFAULT_TIMEOUT_MS))
+        .build()
+        .map_err(|err| format!("failed to build crawler client: {err}"))?;
+
+    let health = ensure_scrapling_bridge_running(Some(&workspace), &client).await?;
+    if !(health.running && health.scrapling_ready) {
+        return Err("scrapling bridge is not ready".to_string());
+    }
+
+    let scrapling_config = ScraplingConfig {
+        base_url: health.base_url,
+        bridge_token: resolve_runtime_bridge_token(),
+    };
+    let document =
+        fetch_source_document(&client, topic_id, &source_url, Some(&scrapling_config)).await?;
+
+    let stamp = now_epoch_millis();
+    let date = now_date_yyyymmdd();
+    let event_label = sanitize_filename_segment(topic_event_label(topic_id));
+    let source_slug = slugify_source(&source_url);
+    let raw_dir = workspace.join(".rail/studio_index/knowledge/raw");
+    fs::create_dir_all(&raw_dir)
+        .map_err(|err| format!("failed to create knowledge raw directory: {err}"))?;
+    let markdown_path = raw_dir.join(format!("{stamp}_{date}_{event_label}_{source_slug}.md"));
+    let json_path = raw_dir.join(format!("{stamp}_{date}_{event_label}_{source_slug}.json"));
+    let fetched_at = now_iso8601_like();
+
+    fs::write(&markdown_path, &document.markdown)
+        .map_err(|err| format!("failed to write scraped markdown: {err}"))?;
+    let json_payload = serde_json::to_string_pretty(&document.json_payload)
+        .map_err(|err| format!("failed to serialize scraped payload: {err}"))?;
+    fs::write(&json_path, json_payload)
+        .map_err(|err| format!("failed to write scraped payload: {err}"))?;
+
+    let summary = document
+        .json_payload
+        .get("summary")
+        .and_then(Value::as_str)
+        .map(|value| truncate_chars(value, MAX_SUMMARY_CHARS))
+        .unwrap_or_else(|| extract_text_preview(&document.markdown, MAX_SUMMARY_CHARS));
+    let content = document
+        .json_payload
+        .get("content")
+        .and_then(Value::as_str)
+        .map(|value| truncate_chars(value, MAX_CONTENT_CHARS))
+        .unwrap_or_else(|| extract_text_preview(&document.markdown, MAX_CONTENT_CHARS));
+
+    Ok(DashboardScraplingFetchResult {
+        topic: topic_id.to_string(),
+        url: source_url,
+        fetched_at,
+        format: document.format,
+        summary,
+        content,
+        markdown_path: markdown_path.to_string_lossy().to_string(),
+        json_path: json_path.to_string_lossy().to_string(),
+        bytes: document.bytes,
+        http_status: document.http_status,
     })
 }
 

@@ -11,6 +11,12 @@ function normalizeEntry(raw: unknown): KnowledgeEntry | null {
   const runId = String(row.runId ?? "").trim();
   const taskId = String(row.taskId ?? "").trim();
   const roleId = String(row.roleId ?? "").trim();
+  const sourceKindRaw = String(row.sourceKind ?? "artifact").trim().toLowerCase();
+  const sourceKind =
+    sourceKindRaw === "web" || sourceKindRaw === "ai" || sourceKindRaw === "artifact"
+      ? sourceKindRaw
+      : "artifact";
+  const sourceUrl = String(row.sourceUrl ?? "").trim() || undefined;
   const title = String(row.title ?? "").trim();
   if (!id || !runId || !taskId || !roleId || !title) {
     return null;
@@ -20,6 +26,8 @@ function normalizeEntry(raw: unknown): KnowledgeEntry | null {
     runId,
     taskId,
     roleId: roleId as KnowledgeEntry["roleId"],
+    sourceKind,
+    sourceUrl,
     title,
     summary: String(row.summary ?? "").trim(),
     createdAt: String(row.createdAt ?? "").trim() || new Date().toISOString(),
@@ -59,6 +67,17 @@ export function upsertKnowledgeEntry(entry: KnowledgeEntry): KnowledgeEntry[] {
   const next = current.some((row) => row.id === entry.id)
     ? current.map((row) => (row.id === entry.id ? entry : row))
     : [...current, entry];
+  writeKnowledgeEntries(next);
+  return next;
+}
+
+export function removeKnowledgeEntry(entryId: string): KnowledgeEntry[] {
+  const targetId = String(entryId ?? "").trim();
+  if (!targetId) {
+    return readKnowledgeEntries();
+  }
+  const current = readKnowledgeEntries();
+  const next = current.filter((row) => row.id !== targetId);
   writeKnowledgeEntries(next);
   return next;
 }

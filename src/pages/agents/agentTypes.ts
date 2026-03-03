@@ -55,6 +55,7 @@ export type AgentSetState = {
   dashboardInsights: string[];
   enabledAttachedFileNames: string[];
   enabledDataSourceIds: string[];
+  requestHistory: AgentRequestHistoryItem[];
 };
 
 export type AgentSetPresetSnapshot = {
@@ -78,4 +79,12 @@ export type AgentDataSourceItem = {
   topic: DashboardTopicId;
   runId: string;
   snapshotAt: string;
+};
+
+export type AgentRequestHistoryItem = {
+  id: string;
+  threadId: string;
+  threadName: string;
+  prompt: string;
+  createdAt: string;
 };

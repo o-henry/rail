@@ -11,13 +11,32 @@ export default function WorkflowInspectorTools({
   return (
     <section className="inspector-block">
       <div className="tool-dropdown-group">
-        <h4>{tp("에이전트 추가")}</h4>
-        <button className="mini-action-button workflow-add-agent-button" onClick={() => props.addNode("turn")} type="button">
-          <span className="mini-action-button-label">{tp("에이전트 추가")}</span>
-        </button>
-        <button className="mini-action-button workflow-add-agent-button" onClick={props.addCrawlerNode} type="button">
-          <span className="mini-action-button-label">{tp("데이터 추가")}</span>
-        </button>
+        <h4>{tp("핸드오프")}</h4>
+        <div className="workflow-handoff-create-row">
+          <FancySelect
+            ariaLabel={tp("핸드오프 보내는 역할")}
+            className="modern-select workflow-handoff-select"
+            onChange={(next) => props.setHandoffFromRole(next as typeof props.handoffFromRole)}
+            options={props.handoffRoleOptions}
+            value={props.handoffFromRole}
+          />
+          <FancySelect
+            ariaLabel={tp("핸드오프 받는 역할")}
+            className="modern-select workflow-handoff-select"
+            onChange={(next) => props.setHandoffToRole(next as typeof props.handoffToRole)}
+            options={props.handoffRoleOptions}
+            value={props.handoffToRole}
+          />
+        </div>
+        <div className="workflow-handoff-actions">
+          <button
+            className="mini-action-button workflow-handoff-create-button"
+            onClick={() => props.addHandoffNodes(props.handoffFromRole, props.handoffToRole)}
+            type="button"
+          >
+            <span className="mini-action-button-label">{tp("핸드오프 노드 추가")}</span>
+          </button>
+        </div>
       </div>
 
       <div className="tool-dropdown-group">
@@ -103,6 +122,7 @@ export default function WorkflowInspectorTools({
         </label>
         <div className="inspector-empty">{tp("길이를 길게 할수록 근거는 늘고, 응답 속도와 사용량은 증가할 수 있습니다.")}</div>
       </div>
+
     </section>
   );
 }

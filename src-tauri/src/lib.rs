@@ -49,6 +49,7 @@ pub fn run() {
             dashboard_crawler::dashboard_scrapling_bridge_start,
             dashboard_crawler::dashboard_scrapling_bridge_install,
             dashboard_crawler::dashboard_scrapling_bridge_stop,
+            dashboard_crawler::dashboard_scrapling_fetch_url,
             knowledge::knowledge_probe,
             knowledge::knowledge_retrieve,
             quality::quality_run_checks,

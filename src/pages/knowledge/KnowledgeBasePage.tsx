@@ -1,8 +1,8 @@
-import { useMemo, useState } from "react";
-import FancySelect from "../../components/FancySelect";
+import { useEffect, useMemo, useState } from "react";
 import {
   persistKnowledgeIndexToWorkspace,
   readKnowledgeEntries,
+  removeKnowledgeEntry,
   upsertKnowledgeEntry,
 } from "../../features/studio/knowledgeIndex";
 import type { KnowledgeEntry, KnowledgeSourcePost } from "../../features/studio/knowledgeTypes";
@@ -11,15 +11,56 @@ import { invoke } from "../../shared/tauri";
 type KnowledgeBasePageProps = {
   cwd: string;
   posts: KnowledgeSourcePost[];
-  onInjectContextSources: (sourceIds: string[]) => void;
+  onInjectContextSources: (entries: KnowledgeEntry[]) => void;
 };
 
-function toKnowledgeEntry(post: KnowledgeSourcePost): KnowledgeEntry {
+const HIDDEN_MARKET_TOPICS = new Set([
+  "MARKET_SUMMARY",
+  "GLOBAL_HEADLINES",
+  "TREND_RADAR",
+  "COMMUNITY_HOT_TOPICS",
+  "DEV_COMMUNITY_HOT_TOPICS",
+  "EVENT_CALENDAR",
+  "RISK_ALERT_BOARD",
+  "DEV_ECOSYSTEM_UPDATES",
+  "PAPER_TOPICS",
+]);
+
+function toUpperSnakeToken(raw: string): string {
+  const base = String(raw ?? "").trim();
+  if (!base) {
+    return "TASK_UNKNOWN";
+  }
+  const snake = base
+    .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
+    .replace(/[^a-zA-Z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .toUpperCase();
+  return snake || "TASK_UNKNOWN";
+}
+
+function isHiddenKnowledgeEntry(entry: Pick<KnowledgeEntry, "runId" | "taskId">): boolean {
+  const runId = String(entry.runId ?? "").trim();
+  const taskId = toUpperSnakeToken(String(entry.taskId ?? ""));
+  const raw = `${runId} ${taskId}`.toUpperCase();
+  if (runId.startsWith("topic-") || HIDDEN_MARKET_TOPICS.has(taskId)) {
+    return true;
+  }
+  return /GLOBAL_HEADLINES|MARKET_SUMMARY|TREND_RADAR|COMMUNITY_HOT_TOPICS|EVENT_CALENDAR|RISK_ALERT_BOARD|DEV_ECOSYSTEM_UPDATES/.test(raw);
+}
+
+function toKnowledgeEntry(post: KnowledgeSourcePost): KnowledgeEntry | null {
+  const runId = String(post.runId ?? "").trim();
+  const taskId = toUpperSnakeToken(String(post.topicLabel ?? post.topic ?? "TASK_UNKNOWN"));
+  if (isHiddenKnowledgeEntry({ runId, taskId })) {
+    return null;
+  }
   return {
     id: post.id,
-    runId: post.runId,
-    taskId: String(post.topicLabel ?? post.topic ?? "TASK-UNKNOWN"),
+    runId,
+    taskId,
     roleId: "technical_writer",
+    sourceKind: "artifact",
     title: String(post.summary ?? "").slice(0, 72) || post.agentName,
     summary: String(post.summary ?? ""),
     createdAt: post.createdAt,
@@ -28,69 +69,98 @@ function toKnowledgeEntry(post: KnowledgeSourcePost): KnowledgeEntry {
   };
 }
 
+function formatSourceKindLabel(kind: KnowledgeEntry["sourceKind"]): string {
+  if (kind === "artifact") {
+    return "산출물";
+  }
+  if (kind === "ai") {
+    return "AI 자료";
+  }
+  return "WEB 자료";
+}
+
 export default function KnowledgeBasePage({ cwd, posts, onInjectContextSources }: KnowledgeBasePageProps) {
   const [selectedId, setSelectedId] = useState<string>("");
-  const [topicFilter, setTopicFilter] = useState<string>("all");
-  const [roleFilter, setRoleFilter] = useState<string>("all");
-
-  const indexedEntries = useMemo(() => {
-    const fromFeed = posts.map((post) => toKnowledgeEntry(post));
-    let next = readKnowledgeEntries();
-    for (const entry of fromFeed) {
-      next = upsertKnowledgeEntry(entry);
-    }
-    void persistKnowledgeIndexToWorkspace({ cwd, invokeFn: invoke, rows: next });
-    return next;
-  }, [posts]);
-
-  const topicOptions = useMemo(() => {
-    const values = Array.from(new Set(indexedEntries.map((row) => row.taskId))).sort();
-    return [{ value: "all", label: "전체" }, ...values.map((value) => ({ value, label: value }))];
-  }, [indexedEntries]);
-  const roleOptions = useMemo(() => {
-    const values = Array.from(new Set(indexedEntries.map((row) => row.roleId))).sort();
-    return [{ value: "all", label: "전체" }, ...values.map((value) => ({ value, label: value }))];
-  }, [indexedEntries]);
-
-  const filtered = useMemo(
-    () =>
-      indexedEntries.filter((row) => (topicFilter === "all" ? true : row.taskId === topicFilter)).filter((row) => (
-        roleFilter === "all" ? true : row.roleId === roleFilter
-      )),
-    [indexedEntries, roleFilter, topicFilter],
+  const [entries, setEntries] = useState<KnowledgeEntry[]>(() =>
+    readKnowledgeEntries().filter((row) => !isHiddenKnowledgeEntry(row)),
   );
+
+  useEffect(() => {
+    let next = readKnowledgeEntries().filter((row) => !isHiddenKnowledgeEntry(row));
+    for (const post of posts) {
+      const row = toKnowledgeEntry(post);
+      if (!row) {
+        continue;
+      }
+      next = upsertKnowledgeEntry(row).filter((entry) => !isHiddenKnowledgeEntry(entry));
+    }
+    setEntries(next);
+    void persistKnowledgeIndexToWorkspace({ cwd, invokeFn: invoke, rows: next });
+  }, [cwd, posts]);
+
+  const filtered = useMemo(() => [...entries].sort((a, b) => b.createdAt.localeCompare(a.createdAt)), [entries]);
+
   const selected = filtered.find((row) => row.id === selectedId) ?? filtered[0] ?? null;
+  const entryStats = useMemo(
+    () => ({
+      total: entries.length,
+      artifact: entries.filter((row) => row.sourceKind === "artifact").length,
+      web: entries.filter((row) => row.sourceKind === "web").length,
+      ai: entries.filter((row) => row.sourceKind === "ai").length,
+    }),
+    [entries],
+  );
+
+  useEffect(() => {
+    if (!selected && selectedId) {
+      setSelectedId("");
+    }
+  }, [selected, selectedId]);
+
+  const persistRows = (rows: KnowledgeEntry[]) => {
+    setEntries(rows);
+    void persistKnowledgeIndexToWorkspace({ cwd, invokeFn: invoke, rows });
+  };
+
+  const onDeleteSelected = () => {
+    if (!selected) {
+      return;
+    }
+    const next = removeKnowledgeEntry(selected.id);
+    persistRows(next);
+    setSelectedId("");
+  };
 
   return (
     <section className="panel-card knowledge-view workspace-tab-panel">
       <header className="knowledge-head">
-        <h2>지식베이스</h2>
-        <p>산출물(MD/JSON)을 태스크/역할 기준으로 탐색하고 실행 컨텍스트로 재주입합니다.</p>
+        <h2>데이터베이스</h2>
+        <p>역할 실행으로 생성된 산출물(MD/JSON)을 탐색하고 에이전트 컨텍스트로 재주입합니다.</p>
       </header>
-      <section className="knowledge-filters">
-        <div>
-          <label>TASK</label>
-          <FancySelect
-            ariaLabel="task filter"
-            className="knowledge-select"
-            onChange={setTopicFilter}
-            options={topicOptions}
-            value={topicFilter}
-          />
-        </div>
-        <div>
-          <label>ROLE</label>
-          <FancySelect
-            ariaLabel="role filter"
-            className="knowledge-select"
-            onChange={setRoleFilter}
-            options={roleOptions}
-            value={roleFilter}
-          />
-        </div>
+      <section className="knowledge-overview">
+        <article className="knowledge-overview-card panel-card">
+          <strong>전체 문서</strong>
+          <span>{entryStats.total}</span>
+        </article>
+        <article className="knowledge-overview-card panel-card">
+          <strong>산출물</strong>
+          <span>{entryStats.artifact}</span>
+        </article>
+        <article className="knowledge-overview-card panel-card">
+          <strong>WEB 자료</strong>
+          <span>{entryStats.web}</span>
+        </article>
+        <article className="knowledge-overview-card panel-card">
+          <strong>AI 자료</strong>
+          <span>{entryStats.ai}</span>
+        </article>
       </section>
       <section className="knowledge-layout">
-        <section className="knowledge-list panel-card">
+        <section className="knowledge-list panel-card knowledge-island">
+          <header className="knowledge-list-head">
+            <strong>산출물 탐색</strong>
+            <span>{`표시 ${filtered.length}개`}</span>
+          </header>
           {filtered.length === 0 ? (
             <p className="knowledge-empty">표시할 문서가 없습니다.</p>
           ) : (
@@ -102,23 +172,34 @@ export default function KnowledgeBasePage({ cwd, posts, onInjectContextSources }
                 type="button"
               >
                 <strong>{entry.title}</strong>
-                <span>{entry.taskId}</span>
+                <span>{`${toUpperSnakeToken(entry.taskId)} · ${formatSourceKindLabel(entry.sourceKind)}`}</span>
                 <small>{new Date(entry.createdAt).toLocaleString()}</small>
               </button>
             ))
           )}
         </section>
-        <section className="knowledge-detail panel-card">
+        <section className="knowledge-detail panel-card knowledge-island">
           {selected ? (
             <>
               <header className="knowledge-detail-head">
                 <h3>{selected.title}</h3>
-                <button type="button" onClick={() => onInjectContextSources([selected.id])}>
-                  컨텍스트로 사용
-                </button>
+                <div className="knowledge-detail-actions">
+                  <button type="button" onClick={() => onInjectContextSources([selected])}>
+                    컨텍스트로 사용
+                  </button>
+                  <button type="button" className="danger" onClick={onDeleteSelected}>
+                    삭제
+                  </button>
+                </div>
               </header>
               <p>{selected.summary || "요약 없음"}</p>
               <dl className="knowledge-paths">
+                <dt>유형</dt>
+                <dd>{formatSourceKindLabel(selected.sourceKind)}</dd>
+                <dt>SOURCE</dt>
+                <dd>{selected.sourceUrl || "-"}</dd>
+                <dt>TASK</dt>
+                <dd>{toUpperSnakeToken(selected.taskId)}</dd>
                 <dt>MD</dt>
                 <dd>{selected.markdownPath || "-"}</dd>
                 <dt>JSON</dt>

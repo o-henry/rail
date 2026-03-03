@@ -217,16 +217,16 @@ export function useAgenticOrchestrationBridge(params: {
         return;
       }
       if (action.type === "open_handoff") {
-        onSelectWorkspaceTab("handoff");
+        onSelectWorkspaceTab("workflow");
         const handoffId = String(action.payload?.handoffId ?? "").trim();
         if (handoffId) {
-          setStatus(`핸드오프 열기: ${handoffId}`);
+          setStatus(`그래프 핸드오프 열기: ${handoffId}`);
         }
         return;
       }
       if (action.type === "open_knowledge_doc") {
         onSelectWorkspaceTab("knowledge");
-        setStatus(`지식 문서 열기: ${action.payload.entryId}`);
+        setStatus(`데이터베이스 문서 열기: ${action.payload.entryId}`);
         return;
       }
       if (action.type === "inject_context_sources") {
@@ -242,8 +242,8 @@ export function useAgenticOrchestrationBridge(params: {
         return;
       }
       if (action.type === "request_handoff") {
-        onSelectWorkspaceTab("handoff");
-        setStatus(`핸드오프 요청: ${action.payload.handoffId}`);
+        onSelectWorkspaceTab("workflow");
+        setStatus(`그래프 핸드오프 요청: ${action.payload.handoffId}`);
         return;
       }
       if (action.type === "consume_handoff") {

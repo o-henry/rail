@@ -1,5 +1,6 @@
 import type { CostPreset, PresetKind, TurnConfig, TurnExecutor } from "../../features/workflow/domain";
 import type { GateConfig, GraphData, GraphNode, KnowledgeConfig, NodeType, TransformConfig } from "../../features/workflow/types";
+import type { HandoffRecord, StudioRoleId } from "../../features/studio/handoffTypes";
 
 export type SelectOption = {
   value: string;
@@ -9,6 +10,7 @@ export type SelectOption = {
 export type WorkflowInspectorToolsProps = {
   simpleWorkflowUI: boolean;
   addNode: (type: NodeType) => void;
+  addHandoffNodes: (fromRole: StudioRoleId, toRole: StudioRoleId) => void;
   addCrawlerNode: () => void;
   applyPreset: (preset: PresetKind) => void;
   applyCostPreset: (preset: CostPreset) => void;
@@ -42,6 +44,21 @@ export type WorkflowInspectorToolsProps = {
   knowledgeTopKOptions: SelectOption[];
   knowledgeMaxCharsOptions: SelectOption[];
   selectedKnowledgeMaxCharsOption: string;
+  handoffRecords: HandoffRecord[];
+  selectedHandoffId: string;
+  handoffRoleOptions: SelectOption[];
+  handoffFromRole: StudioRoleId;
+  handoffToRole: StudioRoleId;
+  handoffTaskId: string;
+  handoffRequestText: string;
+  setSelectedHandoffId: (id: string) => void;
+  setHandoffFromRole: (value: StudioRoleId) => void;
+  setHandoffToRole: (value: StudioRoleId) => void;
+  setHandoffTaskId: (value: string) => void;
+  setHandoffRequestText: (value: string) => void;
+  createHandoff: () => void;
+  updateHandoffStatus: (status: HandoffRecord["status"], rejectReason?: string) => void;
+  consumeHandoff: () => void;
 };
 
 export type WorkflowInspectorNodeProps = {

@@ -12,7 +12,7 @@ export const EN_MESSAGES: Dictionary = {
     "nav.agents": "Agents",
     "nav.feed": "Feed",
     "nav.handoff": "Handoff",
-    "nav.knowledge": "Knowledge",
+    "nav.knowledge": "Database",
     "nav.settings": "Settings",
     "nav.language": "Language",
     "settings.title": "Settings",

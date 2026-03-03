@@ -1,10 +1,14 @@
 import type { StudioRoleId, StudioTaskId } from "./handoffTypes";
 
+export type KnowledgeSourceKind = "artifact" | "web" | "ai";
+
 export type KnowledgeEntry = {
   id: string;
   runId: string;
   taskId: StudioTaskId;
   roleId: StudioRoleId;
+  sourceKind: KnowledgeSourceKind;
+  sourceUrl?: string;
   title: string;
   summary: string;
   createdAt: string;

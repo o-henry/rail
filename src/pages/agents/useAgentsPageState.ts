@@ -5,6 +5,7 @@ import { useCodeChangeApproval } from "../../features/studio/useCodeChangeApprov
 import { STUDIO_ROLE_TEMPLATES } from "../../features/studio/roleTemplates";
 import { AGENT_MODEL_OPTIONS, AGENT_REASON_LEVEL_OPTIONS } from "./agentOptions";
 import { buildAgentDispatchPayload } from "./agentPrompt";
+import { prependAgentRequest } from "./requestHistory";
 import {
   buildGroupedSetOptions,
   buildPresetSnapshot,
@@ -24,15 +25,8 @@ import type {
   AttachedFile,
 } from "./agentTypes";
 
-type UseAgentsPageStateParams = Pick<
-  AgentsPageProps,
-  | "codexMultiAgentMode"
-  | "launchRequest"
-  | "onQuickAction"
-  | "onRunRole"
-  | "onRunDataTopic"
-  | "runStateByTopic"
-  | "topicSnapshots"
+type UseAgentsPageStateParams = Pick<AgentsPageProps,
+  "codexMultiAgentMode" | "launchRequest" | "onQuickAction" | "onRunRole" | "onRunDataTopic" | "runStateByTopic" | "topicSnapshots"
 > & {
   translate: (key: string) => string;
 };
@@ -58,7 +52,6 @@ export function useAgentsPageState(params: UseAgentsPageStateParams) {
   const groupedSetOptions = useMemo(() => buildGroupedSetOptions(setOptions), [setOptions]);
   const modelOptions = useMemo(() => AGENT_MODEL_OPTIONS, []);
   const reasonLevelOptions = useMemo(() => AGENT_REASON_LEVEL_OPTIONS, []);
-
   const [activeSetId, setActiveSetId] = useState<string | null>(null);
   const [setStateMap, setSetStateMap] = useState<Record<string, AgentSetState>>(() =>
     createInitialSetStateMap(setOptions, setPresetById),
@@ -68,11 +61,9 @@ export function useAgentsPageState(params: UseAgentsPageStateParams) {
   const [selectedModel, setSelectedModel] = useState(DEFAULT_RUNTIME_MODEL_VALUE);
   const [selectedReasonLevel, setSelectedReasonLevel] = useState("보통");
   const { pendingApprovals, requestApproval, resolveApproval } = useCodeChangeApproval();
-
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const modelMenuRef = useRef<HTMLDivElement | null>(null);
   const reasonMenuRef = useRef<HTMLDivElement | null>(null);
-
   useEffect(() => {
     setSetStateMap((prev) => {
       const next = { ...prev };
@@ -123,10 +114,11 @@ export function useAgentsPageState(params: UseAgentsPageStateParams) {
   }, [activeSetId, setStateMap]);
   const activeDataTopicId = useMemo(() => topicFromSetId(activeSetOption?.id ?? null), [activeSetOption?.id]);
   const activeDataRunState = activeDataTopicId ? params.runStateByTopic[activeDataTopicId] : undefined;
-  const activeDataSnapshotRunId = useMemo(
-    () => (activeDataTopicId ? String(params.topicSnapshots[activeDataTopicId]?.runId ?? params.topicSnapshots[activeDataTopicId]?.generatedAt ?? "").trim() || null : null),
-    [activeDataTopicId, params.topicSnapshots],
-  );
+  const activeDataSnapshotRunId = useMemo(() => (
+    activeDataTopicId
+      ? String(params.topicSnapshots[activeDataTopicId]?.runId ?? params.topicSnapshots[activeDataTopicId]?.generatedAt ?? "").trim() || null
+      : null
+  ), [activeDataTopicId, params.topicSnapshots]);
 
   const selectedModelOption = useMemo(
     () => modelOptions.find((option) => option.value === selectedModel) ?? modelOptions[0],
@@ -142,6 +134,7 @@ export function useAgentsPageState(params: UseAgentsPageStateParams) {
   const dashboardInsights = currentSetState?.dashboardInsights ?? [];
   const enabledAttachedFileNames = currentSetState?.enabledAttachedFileNames ?? [];
   const enabledDataSourceIds = currentSetState?.enabledDataSourceIds ?? [];
+  const requestHistory = currentSetState?.requestHistory ?? [];
 
   const recentDataSources = useMemo<AgentDataSourceItem[]>(
     () =>
@@ -180,9 +173,13 @@ export function useAgentsPageState(params: UseAgentsPageStateParams) {
     }
     setSetStateMap((prev) => {
       const current = prev[activeSetId] ?? createFallbackSetState();
+      const nextState = updater(current);
+      if (nextState === current) {
+        return prev;
+      }
       return {
         ...prev,
-        [activeSetId]: updater(current),
+        [activeSetId]: nextState,
       };
     });
   };
@@ -334,6 +331,15 @@ export function useAgentsPageState(params: UseAgentsPageStateParams) {
     if (!text && attachedFiles.length === 0) {
       return;
     }
+    updateActiveSetState((current) => ({
+      ...current,
+      requestHistory: prependAgentRequest(
+        current.requestHistory,
+        text,
+        activeThread?.id ?? (activeDataTopicId ? "data-runner" : "agent"),
+        activeThread?.name ?? (activeDataTopicId ? "data-runner" : "agent"),
+      ),
+    }));
     if (activeDataTopicId) {
       params.onRunDataTopic(activeDataTopicId, text || undefined);
       clearDraftAndAttachments();
@@ -479,6 +485,7 @@ export function useAgentsPageState(params: UseAgentsPageStateParams) {
     reasonLevelOptions,
     reasonMenuRef,
     recentDataSources,
+    requestHistory,
     selectedModel,
     selectedModelOptionLabel: selectedModelOption?.label ?? selectedModel,
     selectedReasonLevel,
