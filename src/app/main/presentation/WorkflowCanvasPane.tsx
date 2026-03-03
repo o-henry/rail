@@ -3,6 +3,7 @@ import { useI18n } from "../../../i18n";
 import type { MarqueeSelection, NodeRunState, PendingWebTurn } from "../types";
 import type { GraphNode, NodeAnchorSide, NodeExecutionStatus } from "../../../features/workflow/types";
 import type { TurnExecutor } from "../../../features/workflow/domain";
+import { useFloatingPanel } from "../../../features/ui/useFloatingPanel";
 import WorkflowCanvasNodesLayer from "./WorkflowCanvasNodesLayer";
 import WorkflowAgentConversationPanel from "./WorkflowAgentConversationPanel";
 import WorkflowQuestionComposer from "./WorkflowQuestionComposer";
@@ -173,6 +174,22 @@ export default function WorkflowCanvasPane({
   const [isConversationPanelOpen, setIsConversationPanelOpen] = useState(true);
   const [conversationByNodeId, setConversationByNodeId] = useState<Record<string, WorkflowConversationMessage[]>>({});
   const nodeLogCursorRef = useRef<Record<string, number>>({});
+  const conversationPanelRef = useRef<HTMLElement | null>(null);
+  const initialConversationPosition = useMemo(
+    () => ({
+      x: typeof window === "undefined" ? 18 : Math.max(18, window.innerWidth - 600),
+      y: typeof window === "undefined" ? 140 : Math.max(60, window.innerHeight - 460),
+    }),
+    [],
+  );
+  const conversationPanel = useFloatingPanel({
+    enabled: isConversationPanelOpen,
+    panelRef: conversationPanelRef,
+    defaultPosition: initialConversationPosition,
+    margin: 8,
+    minVisibleWidth: 240,
+    minVisibleHeight: 120,
+  });
 
   const canvasNodeById = useMemo(() => {
     const next = new Map<string, GraphNode>();
@@ -438,10 +455,14 @@ export default function WorkflowCanvasPane({
           <WorkflowAgentConversationPanel
             agentMeta={conversationAgentMeta}
             agentTitle={conversationAgentTitle}
+            dragging={conversationPanel.dragging}
             hasSelectedAgent={Boolean(selectedConversationNode)}
             isOpen={isConversationPanelOpen}
             messages={selectedConversationMessages}
+            onDragStart={conversationPanel.onDragStart}
             onToggleOpen={() => setIsConversationPanelOpen((prev) => !prev)}
+            panelRef={conversationPanelRef}
+            position={conversationPanel.position}
           />
         </div>
       </div>
