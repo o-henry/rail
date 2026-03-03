@@ -95,4 +95,27 @@ describe("engineBridgeHandlers auth stability", () => {
     expect(getLoginCompleted()).toBe(true);
     expect(params.setLoginCompleted).not.toHaveBeenCalledWith(false);
   });
+
+  it("keeps loginCompleted during transient login_required in onCheckUsage", async () => {
+    const { params, getLoginCompleted } = createBaseParams();
+    (params.invokeFn as ReturnType<typeof vi.fn>).mockImplementation(async (command: string) => {
+      if (command === "usage_check") {
+        return { raw: { account: { id: "acct-1" } } };
+      }
+      if (command === "auth_probe") {
+        return {
+          state: "login_required",
+          authMode: null,
+          raw: null,
+        };
+      }
+      return {};
+    });
+    const handlers = createEngineBridgeHandlers(params);
+
+    await handlers.onCheckUsage();
+
+    expect(getLoginCompleted()).toBe(true);
+    expect(params.setLoginCompleted).not.toHaveBeenCalledWith(false);
+  });
 });

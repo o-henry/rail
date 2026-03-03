@@ -129,8 +129,6 @@ export function createEngineBridgeHandlers(params: any) {
       const probed = await refreshAuthStateFromEngine(true);
       if (probed?.state === "authenticated") {
         params.setLoginCompleted(true);
-      } else if (probed?.state === "login_required") {
-        params.setLoginCompleted(false);
       }
       const inferredLogin = inferLoginStateFromUsage(result.raw);
       if (inferredLogin === false && probed?.state !== "authenticated") {
