@@ -47,6 +47,30 @@ html[data-locale="ko"] .agents-grid-card :lang(en) {
   background: color-mix(in srgb, #2cab5a 9%, #e9edf3);
 }
 
+:root[data-theme="light"] .agents-grid-card {
+  background: #dde4ee;
+}
+
+:root[data-theme="light"] .agents-grid-card.is-selected {
+  background: #ffffff;
+}
+
+:root[data-theme="light"] .agents-grid-card.is-running:not(.is-selected) {
+  background: color-mix(in srgb, #2cab5a 11%, #dde4ee);
+}
+
+:root[data-theme="dark"] .agents-grid-card {
+  background: color-mix(in srgb, var(--surface-panel) 86%, #1e2731);
+}
+
+:root[data-theme="dark"] .agents-grid-card.is-selected {
+  background: color-mix(in srgb, var(--surface) 90%, #313b44);
+}
+
+:root[data-theme="dark"] .agents-grid-card.is-running:not(.is-selected) {
+  background: color-mix(in srgb, #2cab5a 14%, var(--surface-panel));
+}
+
 .agents-grid-card-head {
   display: flex;
   align-items: center;
