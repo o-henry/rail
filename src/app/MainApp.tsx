@@ -299,10 +299,10 @@ import {
 import { executeTurnNodeWithContext } from "./main/runtime/executeTurnNode";
 import type { FeedCategory, InternalMemorySnippet, WebProviderRunResult, RunRecord } from "./main";
 
-const HIDDEN_WORKSPACE_TABS = new Set<WorkspaceTab>(["intelligence", "feed", "handoff"]);
+const HIDDEN_WORKSPACE_TABS = new Set<WorkspaceTab>(["intelligence", "feed", "handoff", "agents"]);
 
 const WORKSPACE_TOPBAR_TABS: Array<{ tab: WorkspaceTab; label: string }> = [
-  { tab: "dashboard", label: "대시보드" }, { tab: "agents", label: "에이전트" }, { tab: "workflow", label: "그래프" },
+  { tab: "dashboard", label: "대시보드" }, { tab: "workflow", label: "그래프" },
   { tab: "knowledge", label: "데이터베이스" }, { tab: "settings", label: "설정" },
 ];
 

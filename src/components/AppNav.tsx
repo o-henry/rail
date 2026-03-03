@@ -27,7 +27,6 @@ type AppNavProps = {
 
 const NAV_ITEMS: NavItem[] = [
   { tab: "dashboard", label: "nav.dashboard", ariaLabel: "nav.dashboard", title: "nav.dashboard" },
-  { tab: "agents", label: "nav.agents", ariaLabel: "nav.agents", title: "nav.agents" },
   { tab: "workflow", label: "nav.workflow.short", ariaLabel: "nav.workflow.title", title: "nav.workflow.title" },
   { tab: "knowledge", label: "nav.knowledge", ariaLabel: "nav.knowledge", title: "nav.knowledge" },
   { tab: "settings", label: "nav.settings", ariaLabel: "nav.settings", title: "nav.settings" },
