@@ -119,15 +119,19 @@
   gap: 10px;
   background: linear-gradient(180deg, #f7f8fa 0%, #f1f3f6 100%) !important;
   color: #2b3442;
-  position: fixed;
+  position: absolute;
   z-index: 44;
-  width: clamp(300px, 21vw, 338px);
-  min-width: 300px;
-  max-width: 350px;
-  height: clamp(560px, 78vh, 860px);
-  min-height: 540px;
-  max-height: calc(100vh - 72px);
-  resize: both;
+  left: 10px !important;
+  right: 10px;
+  top: auto !important;
+  bottom: 10px;
+  width: auto;
+  min-width: 0;
+  max-width: none;
+  height: clamp(260px, 34vh, 420px);
+  min-height: 240px;
+  max-height: calc(100% - 20px);
+  resize: none;
   overflow: auto;
   box-shadow:
     0 14px 34px rgba(45, 56, 74, 0.16),
@@ -313,16 +317,20 @@
 
 @media (max-width: 1180px) {
   .workflow-conversation-overlay {
-    width: clamp(292px, 24vw, 326px);
-    height: clamp(520px, 73vh, 760px);
+    left: 8px !important;
+    right: 8px;
+    bottom: 8px;
+    height: clamp(230px, 34vh, 360px);
   }
 }
 
 @media (max-width: 900px) {
   .workflow-conversation-overlay {
-    width: clamp(280px, 42vw, 312px);
-    min-width: 280px;
-    height: clamp(470px, 68vh, 700px);
+    left: 6px !important;
+    right: 6px;
+    bottom: 6px;
+    min-width: 0;
+    height: clamp(220px, 36vh, 330px);
   }
 
   .workflow-conversation-toggle-wrap {
