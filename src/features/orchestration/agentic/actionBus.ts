@@ -48,6 +48,20 @@ export type AgenticAction =
         taskId: string;
         prompt?: string;
         sourceTab?: "agents" | "workflow";
+        handoffToRole?: string;
+        handoffRequest?: string;
+      };
+    }
+  | {
+      type: "handoff_create";
+      payload: {
+        handoffId: string;
+      };
+    }
+  | {
+      type: "handoff_consume";
+      payload: {
+        handoffId: string;
       };
     }
   | {

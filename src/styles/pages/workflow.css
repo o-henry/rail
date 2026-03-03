@@ -247,21 +247,32 @@
 .workflow-right-stack {
   min-height: 0;
   height: 100%;
-  display: grid;
-  grid-template-rows: auto auto;
-  align-content: start;
+  display: flex;
+  flex-direction: column;
   gap: 10px;
   width: 320px;
   min-width: 320px;
   max-width: 320px;
   overflow-y: auto;
   overflow-x: hidden;
-  padding-right: 2px;
+  padding: 0 2px 8px 0;
+}
+
+.workflow-right-stack > .panel-card {
+  flex: 0 0 auto;
 }
 
 .workflow-right-stack .inspector-pane {
   min-height: auto;
   height: auto;
+  overflow: visible;
+  grid-template-rows: auto auto;
+}
+
+.workflow-right-stack .inspector-content {
+  min-height: auto;
+  overflow: visible;
+  padding-bottom: 10px;
 }
 
 .workflow-role-dock {
@@ -291,8 +302,8 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 6px;
-  max-height: 176px;
-  overflow: auto;
+  max-height: none;
+  overflow: visible;
 }
 
 .workflow-role-card {
@@ -318,6 +329,47 @@
   color: var(--text-muted);
 }
 
+.workflow-role-card-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.workflow-role-card-meta code {
+  font-size: 10px;
+  color: var(--text-muted);
+  background: transparent;
+}
+
+.workflow-role-status-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 18px;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  letter-spacing: 0.2px;
+  background: color-mix(in srgb, var(--surface-panel) 72%, var(--surface-strong));
+  color: var(--text-muted);
+}
+
+.workflow-role-status-chip.is-running {
+  background: #dff4e8;
+  color: #1f6744;
+}
+
+.workflow-role-status-chip.is-verify {
+  background: #fff0d8;
+  color: #8f5724;
+}
+
+.workflow-role-status-chip.is-done {
+  background: #e8f0ff;
+  color: #1f5ec6;
+}
+
 .workflow-role-card.is-selected {
   background: #ffffff;
 }
@@ -327,8 +379,7 @@
   gap: 8px;
 }
 
-.workflow-role-form label,
-.workflow-role-handoff {
+.workflow-role-form label {
   display: grid;
   gap: 6px;
   font-size: 11px;
@@ -340,31 +391,79 @@
   background: color-mix(in srgb, var(--surface-panel) 84%, var(--surface));
 }
 
-.workflow-role-run-button,
-.workflow-role-handoff .workflow-handoff-create-button {
+.workflow-role-run-button {
   min-height: 30px;
   height: 30px;
 }
 
+.workflow-role-summary {
+  display: grid;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.workflow-role-summary strong {
+  color: var(--text-main);
+}
+
+.workflow-role-summary-empty {
+  margin: 0;
+  min-height: 20px;
+}
+
+.workflow-role-summary-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 4px;
+}
+
+.workflow-role-summary-list li {
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--surface-panel) 84%, var(--surface));
+  padding: 6px 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.workflow-role-summary-list li span {
+  font-size: 11px;
+  color: var(--text-main);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workflow-role-summary-list li code {
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.workflow-role-summary-path {
+  margin: 0;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--surface-panel) 84%, var(--surface));
+  min-height: 28px;
+  padding: 7px 8px;
+  font-size: 11px;
+  color: var(--text-main);
+  word-break: break-all;
+}
+
 @media (max-width: 1180px) {
   .workflow-layout {
-    grid-template-columns: minmax(560px, 1fr) 320px;
-    overflow-x: auto;
-    overflow-y: hidden;
-  }
-
-  .workflow-layout .canvas-pane {
-    min-width: 560px;
+    grid-template-columns: minmax(0, 1fr) 320px;
   }
 }
 
 @media (max-width: 900px) {
   .workflow-layout {
-    grid-template-columns: minmax(520px, 1fr) 300px;
-  }
-
-  .workflow-layout .canvas-pane {
-    min-width: 520px;
+    grid-template-columns: minmax(0, 1fr) 300px;
   }
 
   .workflow-right-stack {
@@ -375,5 +474,11 @@
 
   .workflow-role-cards {
     grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (min-width: 1181px) {
+  .workflow-layout {
+    grid-template-columns: minmax(0, 1fr) 320px;
   }
 }

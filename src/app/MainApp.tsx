@@ -12,6 +12,7 @@ import SettingsPage from "../pages/settings/SettingsPage";
 import DashboardIntelligenceSettings from "../pages/settings/DashboardIntelligenceSettings";
 import WorkflowPage from "../pages/workflow/WorkflowPage";
 import WorkflowRoleDock from "../pages/workflow/WorkflowRoleDock";
+import { buildRoleDockStatusByRole, type RoleDockRuntimeState } from "../pages/workflow/roleDockState";
 import KnowledgeBasePage from "../pages/knowledge/KnowledgeBasePage";
 import { useFloatingPanel } from "../features/ui/useFloatingPanel";
 import { useExecutionState } from "./hooks/useExecutionState";
@@ -316,6 +317,23 @@ const STUDIO_ROLE_PROMPTS: Record<StudioRoleId, string> = {
   technical_writer: "핵심 결정사항과 변경사항을 다음 담당자가 바로 실행할 수 있게 문서화해줘.",
 };
 
+function toStudioRoleId(value: string): StudioRoleId | null {
+  const normalized = String(value ?? "").trim();
+  if (
+    normalized === "pm_planner" ||
+    normalized === "client_programmer" ||
+    normalized === "system_programmer" ||
+    normalized === "tooling_engineer" ||
+    normalized === "art_pipeline" ||
+    normalized === "qa_engineer" ||
+    normalized === "build_release" ||
+    normalized === "technical_writer"
+  ) {
+    return normalized;
+  }
+  return null;
+}
+
 function App() {
   const USER_BG_IMAGE_STORAGE_KEY = "rail.settings.user_bg_image";
   const USER_BG_OPACITY_STORAGE_KEY = "rail.settings.user_bg_opacity";
@@ -328,6 +346,9 @@ function App() {
   const [workflowRoleId, setWorkflowRoleId] = useState<StudioRoleId>("pm_planner");
   const [workflowRoleTaskId, setWorkflowRoleTaskId] = useState("TASK-001");
   const [workflowRolePrompt, setWorkflowRolePrompt] = useState("");
+  const [workflowRoleRuntimeStateByRole, setWorkflowRoleRuntimeStateByRole] = useState<
+    Partial<Record<StudioRoleId, RoleDockRuntimeState>>
+  >({});
   const [dashboardDetailTopic, setDashboardDetailTopic] = useState<DashboardDetailTopic | null>(null);
   const [agentLaunchRequest, setAgentLaunchRequest] = useState<AgentWorkspaceLaunchRequest | null>(null);
   const agentLaunchRequestSeqRef = useRef(0);
@@ -733,7 +754,7 @@ function App() {
     request: string;
   }) => {
     publishAction({
-      type: "consume_handoff",
+      type: "handoff_consume",
       payload: { handoffId: payload.handoffId },
     });
     agentLaunchRequestSeqRef.current += 1;
@@ -750,6 +771,29 @@ function App() {
     setStatus,
     onConsumeHandoff: handleConsumeHandoff,
   });
+  const workflowRoleStatusByRole = useMemo(() => {
+    return buildRoleDockStatusByRole({
+      roles: STUDIO_ROLE_TEMPLATES,
+      runtimeByRole: workflowRoleRuntimeStateByRole,
+      handoffRecords: workflowHandoffPanel.handoffRecords,
+    });
+  }, [workflowHandoffPanel.handoffRecords, workflowRoleRuntimeStateByRole]);
+  const workflowSelectedRoleHandoffs = useMemo(
+    () =>
+      workflowHandoffPanel.handoffRecords
+        .filter((row) => row.fromRole === workflowRoleId || row.toRole === workflowRoleId)
+        .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
+        .slice(0, 4),
+    [workflowHandoffPanel.handoffRecords, workflowRoleId],
+  );
+  const workflowSelectedRoleBlockers = useMemo(
+    () =>
+      workflowHandoffPanel.handoffRecords
+        .filter((row) => (row.fromRole === workflowRoleId || row.toRole === workflowRoleId) && row.status === "rejected")
+        .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
+        .slice(0, 3),
+    [workflowHandoffPanel.handoffRecords, workflowRoleId],
+  );
 
   let webTurnRunHandlers: ReturnType<typeof createWebTurnRunHandlers> | null = null;
 
@@ -2305,6 +2349,34 @@ function App() {
     setNodeSelection,
     setStatus,
     applyPreset,
+    onRoleRunCompleted: (payload) => {
+      const roleId = toStudioRoleId(payload.roleId);
+      if (roleId) {
+        setWorkflowRoleRuntimeStateByRole((prev) => ({
+          ...prev,
+          [roleId]: {
+            status: payload.runStatus === "done" ? "DONE" : "VERIFY",
+            taskId: payload.taskId,
+            runId: payload.runId,
+            message: payload.runStatus === "done" ? "RUN_DONE" : "RUN_ERROR",
+          },
+        }));
+      }
+      const targetRole = toStudioRoleId(payload.handoffToRole ?? "");
+      const requestText =
+        String(payload.handoffRequest ?? payload.prompt ?? "").trim() ||
+        (roleId ? STUDIO_ROLE_PROMPTS[roleId] : "");
+      if (payload.runStatus === "done" && payload.sourceTab === "workflow" && roleId && targetRole && requestText) {
+        workflowHandoffPanel.createAutoHandoff({
+          runId: payload.runId,
+          fromRole: roleId,
+          toRole: targetRole,
+          taskId: payload.taskId,
+          request: requestText,
+          artifactPaths: payload.artifactPaths,
+        });
+      }
+    },
   });
   const { onRunDashboardTopicFromAgents, onRunDashboardTopicFromData } = useDashboardAgentBridge({
     setAgentLaunchRequest,
@@ -2524,10 +2596,6 @@ function App() {
                   toolsProps={workflowInspectorPaneProps.toolsProps}
                 />
                 <WorkflowRoleDock
-                  handoffFromRole={workflowHandoffPanel.handoffFromRole}
-                  handoffRoleOptions={workflowHandoffPanel.handoffRoleOptions}
-                  handoffToRole={workflowHandoffPanel.handoffToRole}
-                  onAddHandoffNodes={onAddHandoffNodes}
                   onChangePrompt={setWorkflowRolePrompt}
                   onChangeTaskId={setWorkflowRoleTaskId}
                   onRunRole={() => {
@@ -2536,19 +2604,41 @@ function App() {
                       setStatus("TASK ID를 입력해 주세요.");
                       return;
                     }
+                    const latestIncomingHandoff = workflowHandoffPanel.handoffRecords
+                      .filter(
+                        (row) =>
+                          row.toRole === workflowRoleId &&
+                          (row.status === "requested" || row.status === "accepted"),
+                      )
+                      .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))[0];
+                    const basePrompt = workflowRolePrompt.trim();
+                    const handoffInjectedPrompt = latestIncomingHandoff
+                      ? `[HANDOFF_CONTEXT ${latestIncomingHandoff.taskId}] ${latestIncomingHandoff.request}\n\n${basePrompt}`.trim()
+                      : basePrompt;
+                    setWorkflowRoleRuntimeStateByRole((prev) => ({
+                      ...prev,
+                      [workflowRoleId]: {
+                        status: "RUNNING",
+                        taskId,
+                        message: "RUN_PENDING",
+                      },
+                    }));
                     publishAction({
                       type: "run_role",
                       payload: {
                         roleId: workflowRoleId,
                         taskId,
-                        prompt: workflowRolePrompt.trim() || undefined,
+                        prompt: handoffInjectedPrompt || undefined,
                         sourceTab: "workflow",
+                        handoffToRole: workflowHandoffPanel.handoffToRole,
+                        handoffRequest: basePrompt || undefined,
                       },
                     });
                   }}
-                  onSelectHandoffFromRole={workflowHandoffPanel.setHandoffFromRole}
-                  onSelectHandoffToRole={workflowHandoffPanel.setHandoffToRole}
                   onSelectRoleId={setWorkflowRoleId}
+                  roleStatusById={workflowRoleStatusByRole}
+                  selectedRoleBlockers={workflowSelectedRoleBlockers}
+                  selectedRoleHandoffs={workflowSelectedRoleHandoffs}
                   prompt={workflowRolePrompt}
                   roleId={workflowRoleId}
                   runDisabled={isWorkflowBusy}

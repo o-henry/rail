@@ -69,6 +69,17 @@ export function useAgenticOrchestrationBridge(params: {
   setNodeSelection: (nodeIds: string[], selectedNodeId?: string) => void;
   setStatus: (message: string) => void;
   applyPreset: (presetKind: PresetKind) => void;
+  onRoleRunCompleted?: (payload: {
+    runId: string;
+    roleId: string;
+    taskId: string;
+    prompt?: string;
+    handoffToRole?: string;
+    handoffRequest?: string;
+    sourceTab: "agents" | "workflow";
+    artifactPaths: string[];
+    runStatus: "done" | "error";
+  }) => void;
 }) {
   const {
     cwd,
@@ -89,6 +100,7 @@ export function useAgenticOrchestrationBridge(params: {
     setNodeSelection,
     setStatus,
     applyPreset,
+    onRoleRunCompleted,
   } = params;
 
   const runGraphWithAgenticCoordinator = useCallback(
@@ -158,9 +170,16 @@ export function useAgenticOrchestrationBridge(params: {
   );
 
   const runRoleDirect = useCallback(
-    async (params: { roleId: string; taskId: string; prompt?: string; sourceTab?: "agents" | "workflow" }) => {
+    async (params: {
+      roleId: string;
+      taskId: string;
+      prompt?: string;
+      sourceTab?: "agents" | "workflow";
+      handoffToRole?: string;
+      handoffRequest?: string;
+    }) => {
       const sourceTab = params.sourceTab === "workflow" ? "workflow" : "agents";
-      await runRoleWithCoordinator({
+      const result = await runRoleWithCoordinator({
         cwd,
         sourceTab,
         roleId: params.roleId,
@@ -176,8 +195,24 @@ export function useAgenticOrchestrationBridge(params: {
         },
         appendWorkspaceEvent,
       });
+      const artifactPaths = [
+        ...result.envelope.artifacts.map((row) => String(row.path ?? "").trim()).filter(Boolean),
+        `.rail/studio_runs/${result.runId}/run.json`,
+      ];
+      const dedupedArtifactPaths = [...new Set(artifactPaths)];
+      onRoleRunCompleted?.({
+        runId: result.runId,
+        roleId: params.roleId,
+        taskId: params.taskId,
+        prompt: params.prompt,
+        handoffToRole: params.handoffToRole,
+        handoffRequest: params.handoffRequest,
+        sourceTab,
+        artifactPaths: dedupedArtifactPaths,
+        runStatus: result.envelope.record.status === "done" ? "done" : "error",
+      });
     },
-    [appendWorkspaceEvent, cwd, invokeFn, queue, runGraphWithAgenticCoordinator, setStatus],
+    [appendWorkspaceEvent, cwd, invokeFn, onRoleRunCompleted, queue, runGraphWithAgenticCoordinator, setStatus],
   );
 
   useEffect(() => {
@@ -251,12 +286,12 @@ export function useAgenticOrchestrationBridge(params: {
         void runRoleDirect({ ...action.payload, sourceTab });
         return;
       }
-      if (action.type === "request_handoff") {
+      if (action.type === "handoff_create" || action.type === "request_handoff") {
         onSelectWorkspaceTab("workflow");
         setStatus(`그래프 핸드오프 요청: ${action.payload.handoffId}`);
         return;
       }
-      if (action.type === "consume_handoff") {
+      if (action.type === "handoff_consume" || action.type === "consume_handoff") {
         onSelectWorkspaceTab("agents");
         setStatus(`핸드오프 컨텍스트 적용: ${action.payload.handoffId}`);
         return;

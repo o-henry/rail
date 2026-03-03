@@ -70,10 +70,46 @@ export function useWorkflowHandoffPanel(params: UseWorkflowHandoffPanelParams) {
     setSelectedHandoffId(id);
     setHandoffRequestText("");
     params.publishAction({
-      type: "request_handoff",
+      type: "handoff_create",
       payload: { handoffId: id },
     });
     params.setStatus(`핸드오프 등록: ${taskId}`);
+  };
+
+  const createAutoHandoff = (input: {
+    runId: string;
+    fromRole: StudioRoleId;
+    toRole: StudioRoleId;
+    taskId: string;
+    request: string;
+    artifactPaths?: string[];
+  }) => {
+    const taskId = String(input.taskId ?? "").trim();
+    const request = String(input.request ?? "").trim();
+    const runId = String(input.runId ?? "").trim();
+    if (!taskId || !request || !runId) {
+      return;
+    }
+    const id = createHandoffId();
+    const next = upsertHandoffRecord({
+      id,
+      runId,
+      fromRole: input.fromRole,
+      toRole: input.toRole,
+      taskId,
+      request,
+      artifactPaths: Array.isArray(input.artifactPaths)
+        ? input.artifactPaths.map((value) => String(value ?? "").trim()).filter(Boolean)
+        : [],
+      status: "requested",
+    });
+    saveRows(next);
+    setSelectedHandoffId(id);
+    params.publishAction({
+      type: "handoff_create",
+      payload: { handoffId: id },
+    });
+    params.setStatus(`핸드오프 자동 생성: ${taskId} (${input.fromRole} → ${input.toRole})`);
   };
 
   const updateHandoffStatus = (status: HandoffRecord["status"], rejectReason?: string) => {
@@ -103,6 +139,7 @@ export function useWorkflowHandoffPanel(params: UseWorkflowHandoffPanelParams) {
   };
 
   return {
+    createAutoHandoff,
     createHandoff,
     consumeHandoff,
     handoffFromRole,

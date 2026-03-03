@@ -1,7 +1,7 @@
-import type { StudioRoleId } from "../../features/studio/handoffTypes";
-import type { SelectOption } from "../../app/main/workflowInspectorTypes";
+import type { HandoffRecord, StudioRoleId } from "../../features/studio/handoffTypes";
 import { STUDIO_ROLE_TEMPLATES } from "../../features/studio/roleTemplates";
-import FancySelect from "../../components/FancySelect";
+
+type RoleDockStatus = "IDLE" | "RUNNING" | "VERIFY" | "DONE";
 
 type WorkflowRoleDockProps = {
   roleId: StudioRoleId;
@@ -12,25 +12,27 @@ type WorkflowRoleDockProps = {
   onChangePrompt: (value: string) => void;
   onRunRole: () => void;
   runDisabled: boolean;
-  handoffRoleOptions: SelectOption[];
-  handoffFromRole: StudioRoleId;
-  handoffToRole: StudioRoleId;
-  onSelectHandoffFromRole: (value: StudioRoleId) => void;
-  onSelectHandoffToRole: (value: StudioRoleId) => void;
-  onAddHandoffNodes: (fromRole: StudioRoleId, toRole: StudioRoleId) => void;
+  roleStatusById: Partial<Record<StudioRoleId, { status: RoleDockStatus; taskId?: string }>>;
+  selectedRoleHandoffs: HandoffRecord[];
+  selectedRoleBlockers: HandoffRecord[];
 };
 
 export default function WorkflowRoleDock(props: WorkflowRoleDockProps) {
+  const latestArtifactPath = props.selectedRoleHandoffs
+    .flatMap((row) => row.artifactPaths.map((path) => String(path ?? "").trim()).filter(Boolean))[0];
+
   return (
     <aside className="panel-card workflow-role-dock" aria-label="역할 워크스페이스">
       <header className="workflow-role-dock-head">
         <strong>역할 워크스페이스</strong>
-        <span>그래프 + 에이전트 결합</span>
+        <span>그래프 단일 실행 보드</span>
       </header>
 
       <section className="workflow-role-cards" aria-label="역할 카드">
         {STUDIO_ROLE_TEMPLATES.map((role) => {
           const selected = role.id === props.roleId;
+          const roleState = props.roleStatusById[role.id]?.status ?? "IDLE";
+          const roleTaskId = props.roleStatusById[role.id]?.taskId ?? "";
           return (
             <button
               key={role.id}
@@ -40,6 +42,10 @@ export default function WorkflowRoleDock(props: WorkflowRoleDockProps) {
             >
               <strong>{role.label}</strong>
               <span>{role.goal}</span>
+              <div className="workflow-role-card-meta">
+                <span className={`workflow-role-status-chip is-${roleState.toLowerCase()}`}>{roleState}</span>
+                {roleTaskId ? <code>{roleTaskId}</code> : null}
+              </div>
             </button>
           );
         })}
@@ -74,33 +80,44 @@ export default function WorkflowRoleDock(props: WorkflowRoleDockProps) {
         </button>
       </section>
 
-      <section className="workflow-role-handoff">
-        <strong>핸드오프 노드 추가</strong>
-        <div className="workflow-handoff-create-row">
-          <FancySelect
-            ariaLabel="핸드오프 보내는 역할"
-            className="modern-select workflow-handoff-select"
-            onChange={(next) => props.onSelectHandoffFromRole(next as StudioRoleId)}
-            options={props.handoffRoleOptions}
-            value={props.handoffFromRole}
-          />
-          <FancySelect
-            ariaLabel="핸드오프 받는 역할"
-            className="modern-select workflow-handoff-select"
-            onChange={(next) => props.onSelectHandoffToRole(next as StudioRoleId)}
-            options={props.handoffRoleOptions}
-            value={props.handoffToRole}
-          />
-        </div>
-        <button
-          className="mini-action-button workflow-handoff-create-button"
-          onClick={() => props.onAddHandoffNodes(props.handoffFromRole, props.handoffToRole)}
-          type="button"
-        >
-          <span className="mini-action-button-label">핸드오프 노드 추가</span>
-        </button>
+      <section className="workflow-role-summary">
+        <strong>최근 인수인계</strong>
+        {props.selectedRoleHandoffs.length === 0 ? (
+          <p className="workflow-role-summary-empty">HANDOFF 없음</p>
+        ) : (
+          <ul className="workflow-role-summary-list">
+            {props.selectedRoleHandoffs.map((row) => (
+              <li key={row.id}>
+                <span>{row.taskId}</span>
+                <code>{row.status.toUpperCase()}</code>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section className="workflow-role-summary">
+        <strong>최근 산출물</strong>
+        <p className="workflow-role-summary-path">
+          {latestArtifactPath || "산출물 없음"}
+        </p>
+      </section>
+
+      <section className="workflow-role-summary">
+        <strong>차단 이슈</strong>
+        {props.selectedRoleBlockers.length === 0 ? (
+          <p className="workflow-role-summary-empty">BLOCKER 없음</p>
+        ) : (
+          <ul className="workflow-role-summary-list">
+            {props.selectedRoleBlockers.map((row) => (
+              <li key={row.id}>
+                <span>{row.taskId}</span>
+                <code>{String(row.rejectReason ?? "REJECTED").trim() || "REJECTED"}</code>
+              </li>
+            ))}
+          </ul>
+        )}
       </section>
     </aside>
   );
 }
-
