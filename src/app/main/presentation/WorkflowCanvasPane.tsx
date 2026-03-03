@@ -433,17 +433,20 @@ export default function WorkflowCanvasPane({
             </button>
           </div>
         </div>
+
+        <div className="workflow-conversation-floating-layer">
+          <WorkflowAgentConversationPanel
+            agentMeta={conversationAgentMeta}
+            agentTitle={conversationAgentTitle}
+            hasSelectedAgent={Boolean(selectedConversationNode)}
+            isOpen={isConversationPanelOpen}
+            messages={selectedConversationMessages}
+            onToggleOpen={() => setIsConversationPanelOpen((prev) => !prev)}
+          />
+        </div>
       </div>
 
       <div className="canvas-topbar">
-        <WorkflowAgentConversationPanel
-          agentMeta={conversationAgentMeta}
-          agentTitle={conversationAgentTitle}
-          hasSelectedAgent={Boolean(selectedConversationNode)}
-          isOpen={isConversationPanelOpen}
-          messages={selectedConversationMessages}
-          onToggleOpen={() => setIsConversationPanelOpen((prev) => !prev)}
-        />
         <WorkflowQuestionComposer
           canRunGraphNow={canRunGraphNow}
           isWorkflowBusy={isWorkflowBusy}

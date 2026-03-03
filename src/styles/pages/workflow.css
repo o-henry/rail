@@ -121,6 +121,19 @@
   z-index: 34;
 }
 
+.workflow-conversation-floating-layer {
+  position: absolute;
+  left: 10px;
+  bottom: 10px;
+  width: min(56%, 620px);
+  z-index: 24;
+  pointer-events: none;
+}
+
+.workflow-conversation-floating-layer > * {
+  pointer-events: auto;
+}
+
 .workflow-conversation-head {
   display: flex;
   align-items: flex-start;
@@ -212,13 +225,28 @@
   position: relative;
   z-index: 34;
   display: flex;
-  justify-content: flex-end;
+  justify-content: flex-start;
 }
 
 .workflow-conversation-toggle {
   min-height: 30px;
   height: 30px;
   padding: 4px 10px;
+}
+
+@media (max-width: 1180px) {
+  .workflow-conversation-floating-layer {
+    width: min(62%, 560px);
+  }
+}
+
+@media (max-width: 900px) {
+  .workflow-conversation-floating-layer {
+    left: 8px;
+    right: 8px;
+    bottom: 8px;
+    width: auto;
+  }
 }
 
 .inspector-block {
