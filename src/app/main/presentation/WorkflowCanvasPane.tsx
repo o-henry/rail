@@ -1,9 +1,10 @@
-import type { Dispatch, KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent, RefObject, SetStateAction, WheelEvent as ReactWheelEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type RefObject, type SetStateAction, type WheelEvent as ReactWheelEvent } from "react";
 import { useI18n } from "../../../i18n";
 import type { MarqueeSelection, NodeRunState, PendingWebTurn } from "../types";
 import type { GraphNode, NodeAnchorSide, NodeExecutionStatus } from "../../../features/workflow/types";
 import type { TurnExecutor } from "../../../features/workflow/domain";
 import WorkflowCanvasNodesLayer from "./WorkflowCanvasNodesLayer";
+import WorkflowAgentConversationPanel from "./WorkflowAgentConversationPanel";
 import WorkflowQuestionComposer from "./WorkflowQuestionComposer";
 
 type EdgeLine = {
@@ -94,6 +95,12 @@ type WorkflowCanvasPaneProps = {
   questionInputRef: RefObject<HTMLTextAreaElement | null>;
 };
 
+type WorkflowConversationMessage = {
+  id: string;
+  role: "user" | "agent";
+  text: string;
+};
+
 export default function WorkflowCanvasPane({
   panMode,
   onCanvasKeyDown,
@@ -163,6 +170,98 @@ export default function WorkflowCanvasPane({
   questionInputRef,
 }: WorkflowCanvasPaneProps) {
   const { t } = useI18n();
+  const [isConversationPanelOpen, setIsConversationPanelOpen] = useState(true);
+  const [conversationByNodeId, setConversationByNodeId] = useState<Record<string, WorkflowConversationMessage[]>>({});
+  const nodeLogCursorRef = useRef<Record<string, number>>({});
+
+  const canvasNodeById = useMemo(() => {
+    const next = new Map<string, GraphNode>();
+    canvasNodes.forEach((node) => next.set(node.id, node));
+    return next;
+  }, [canvasNodes]);
+
+  const selectedConversationNode = useMemo(() => {
+    for (const nodeId of selectedNodeIds) {
+      const node = canvasNodeById.get(nodeId);
+      if (node?.type === "turn") {
+        return node;
+      }
+    }
+    return null;
+  }, [canvasNodeById, selectedNodeIds]);
+
+  const selectedConversationNodeId = selectedConversationNode?.id ?? "";
+
+  useEffect(() => {
+    setConversationByNodeId((prev) => {
+      let changed = false;
+      let next = prev;
+      for (const [nodeId, nodeState] of Object.entries(nodeStates)) {
+        const logs = nodeState.logs ?? [];
+        const previousCursor = nodeLogCursorRef.current[nodeId] ?? 0;
+        const normalizedCursor = logs.length < previousCursor ? 0 : previousCursor;
+        if (logs.length <= normalizedCursor) {
+          nodeLogCursorRef.current[nodeId] = logs.length;
+          continue;
+        }
+        const appended: WorkflowConversationMessage[] = logs
+          .slice(normalizedCursor)
+          .map((log, index) => ({
+            id: `${nodeId}-agent-${normalizedCursor + index}-${Date.now()}`,
+            role: "agent" as const,
+            text: String(log ?? "").replace(/\s+/g, " ").trim(),
+          }))
+          .filter((item) => item.text.length > 0);
+        nodeLogCursorRef.current[nodeId] = logs.length;
+        if (appended.length === 0) {
+          continue;
+        }
+        if (next === prev) {
+          next = { ...prev };
+        }
+        const existing = next[nodeId] ?? [];
+        next[nodeId] = [...existing, ...appended].slice(-120);
+        changed = true;
+      }
+      return changed ? next : prev;
+    });
+  }, [nodeStates]);
+
+  const selectedConversationMessages = useMemo(
+    () => (selectedConversationNodeId ? conversationByNodeId[selectedConversationNodeId] ?? [] : []),
+    [conversationByNodeId, selectedConversationNodeId],
+  );
+
+  const conversationAgentTitle = selectedConversationNode
+    ? `${turnRoleLabel(selectedConversationNode)} · ${nodeTypeLabel(selectedConversationNode.type)}`
+    : "";
+  const conversationAgentMeta = selectedConversationNode
+    ? `${turnModelLabel(selectedConversationNode)} · ${selectedConversationNode.id}`
+    : "";
+
+  const onSubmitConversationMessage = useCallback(
+    (message: string) => {
+      const trimmed = String(message ?? "").trim();
+      if (!trimmed || !selectedConversationNodeId) {
+        return;
+      }
+      setConversationByNodeId((prev) => {
+        const next = { ...prev };
+        const existing = next[selectedConversationNodeId] ?? [];
+        const nextMessage: WorkflowConversationMessage = {
+          id: `${selectedConversationNodeId}-user-${Date.now()}`,
+          role: "user",
+          text: trimmed,
+        };
+        next[selectedConversationNodeId] = [
+          ...existing,
+          nextMessage,
+        ].slice(-120);
+        return next;
+      });
+    },
+    [selectedConversationNodeId],
+  );
 
   return (
     <section className="canvas-pane">
@@ -337,11 +436,20 @@ export default function WorkflowCanvasPane({
       </div>
 
       <div className="canvas-topbar">
+        <WorkflowAgentConversationPanel
+          agentMeta={conversationAgentMeta}
+          agentTitle={conversationAgentTitle}
+          hasSelectedAgent={Boolean(selectedConversationNode)}
+          isOpen={isConversationPanelOpen}
+          messages={selectedConversationMessages}
+          onToggleOpen={() => setIsConversationPanelOpen((prev) => !prev)}
+        />
         <WorkflowQuestionComposer
           canRunGraphNow={canRunGraphNow}
           isWorkflowBusy={isWorkflowBusy}
           onApplyModelSelection={onApplyModelSelection}
           onRunGraph={onRunGraph}
+          onSubmitMessage={onSubmitConversationMessage}
           questionInputRef={questionInputRef}
           setWorkflowQuestion={setWorkflowQuestion}
           workflowQuestion={workflowQuestion}

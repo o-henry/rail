@@ -25,6 +25,7 @@ type WorkflowQuestionComposerProps = {
   questionInputRef: RefObject<HTMLTextAreaElement | null>;
   setWorkflowQuestion: (value: string) => void;
   workflowQuestion: string;
+  onSubmitMessage?: (message: string) => void;
 };
 
 export default function WorkflowQuestionComposer({
@@ -35,6 +36,7 @@ export default function WorkflowQuestionComposer({
   questionInputRef,
   setWorkflowQuestion,
   workflowQuestion,
+  onSubmitMessage,
 }: WorkflowQuestionComposerProps) {
   const { t } = useI18n();
   const [attachedFiles, setAttachedFiles] = useState<WorkflowAttachedFile[]>([]);
@@ -111,6 +113,7 @@ export default function WorkflowQuestionComposer({
     if (attachedFiles.length > 0) {
       const attachmentHeader = `files: ${attachedFiles.map((file) => file.name).join(", ")}`;
       const prefixed = text ? `${attachmentHeader}\n${text}` : attachmentHeader;
+      onSubmitMessage?.(prefixed);
       const reasonTag = isReasonLevelSelectable ? selectedReasonLevel : "N/A";
       const withConfig = `[model=${selectedModelOption.value}, reason=${reasonTag}] ${prefixed}`;
       setWorkflowQuestion(withConfig);
@@ -123,6 +126,7 @@ export default function WorkflowQuestionComposer({
       }
       return;
     }
+    onSubmitMessage?.(text);
     const reasonTag = isReasonLevelSelectable ? selectedReasonLevel : "N/A";
     setWorkflowQuestion(`[model=${selectedModelOption.value}, reason=${reasonTag}] ${text}`);
     window.setTimeout(() => {
