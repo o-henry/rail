@@ -47,6 +47,7 @@ export type AgenticAction =
         roleId: string;
         taskId: string;
         prompt?: string;
+        sourceTab?: "agents" | "workflow";
       };
     }
   | {

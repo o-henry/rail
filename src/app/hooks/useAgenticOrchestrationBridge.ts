@@ -158,10 +158,11 @@ export function useAgenticOrchestrationBridge(params: {
   );
 
   const runRoleDirect = useCallback(
-    async (params: { roleId: string; taskId: string; prompt?: string }) => {
+    async (params: { roleId: string; taskId: string; prompt?: string; sourceTab?: "agents" | "workflow" }) => {
+      const sourceTab = params.sourceTab === "workflow" ? "workflow" : "agents";
       await runRoleWithCoordinator({
         cwd,
-        sourceTab: "agents",
+        sourceTab,
         roleId: params.roleId,
         taskId: params.taskId,
         prompt: params.prompt,
@@ -235,10 +236,19 @@ export function useAgenticOrchestrationBridge(params: {
         return;
       }
       if (action.type === "run_role") {
-        onSelectWorkspaceTab("agents");
-        setStatus(`역할 실행 요청: ${action.payload.roleId} (${action.payload.taskId})`);
+        const sourceTab = action.payload.sourceTab === "workflow" ? "workflow" : "agents";
+        if (sourceTab === "agents") {
+          onSelectWorkspaceTab("agents");
+        } else if (workspaceTab !== "workflow") {
+          onSelectWorkspaceTab("workflow");
+        }
+        setStatus(
+          sourceTab === "workflow"
+            ? `그래프 역할 실행 요청: ${action.payload.roleId} (${action.payload.taskId})`
+            : `역할 실행 요청: ${action.payload.roleId} (${action.payload.taskId})`,
+        );
         applyPreset(presetForRole(action.payload.roleId));
-        void runRoleDirect(action.payload);
+        void runRoleDirect({ ...action.payload, sourceTab });
         return;
       }
       if (action.type === "request_handoff") {
@@ -263,7 +273,7 @@ export function useAgenticOrchestrationBridge(params: {
         applyPreset(action.payload.presetKind as PresetKind);
       }
     });
-  }, [applyPreset, onSelectWorkspaceTab, runDashboardTopicDirect, runGraphWithAgenticCoordinator, runRoleDirect, setNodeSelection, setStatus, subscribeAction]);
+  }, [applyPreset, onSelectWorkspaceTab, runDashboardTopicDirect, runGraphWithAgenticCoordinator, runRoleDirect, setNodeSelection, setStatus, subscribeAction, workspaceTab]);
 
   return {
     onRunGraph,

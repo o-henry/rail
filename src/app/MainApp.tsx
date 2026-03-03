@@ -11,6 +11,7 @@ import type { AgentQuickActionRequest, AgentWorkspaceLaunchRequest } from "../pa
 import SettingsPage from "../pages/settings/SettingsPage";
 import DashboardIntelligenceSettings from "../pages/settings/DashboardIntelligenceSettings";
 import WorkflowPage from "../pages/workflow/WorkflowPage";
+import WorkflowRoleDock from "../pages/workflow/WorkflowRoleDock";
 import KnowledgeBasePage from "../pages/knowledge/KnowledgeBasePage";
 import { useFloatingPanel } from "../features/ui/useFloatingPanel";
 import { useExecutionState } from "./hooks/useExecutionState";
@@ -324,6 +325,9 @@ function App() {
   const defaultAuthMode = useMemo(() => loadPersistedAuthMode(), []);
   const defaultCodexMultiAgentMode = useMemo(() => loadPersistedCodexMultiAgentMode(), []);
   const [workspaceTab, setWorkspaceTab] = useState<WorkspaceTab>("dashboard");
+  const [workflowRoleId, setWorkflowRoleId] = useState<StudioRoleId>("pm_planner");
+  const [workflowRoleTaskId, setWorkflowRoleTaskId] = useState("TASK-001");
+  const [workflowRolePrompt, setWorkflowRolePrompt] = useState("");
   const [dashboardDetailTopic, setDashboardDetailTopic] = useState<DashboardDetailTopic | null>(null);
   const [agentLaunchRequest, setAgentLaunchRequest] = useState<AgentWorkspaceLaunchRequest | null>(null);
   const agentLaunchRequestSeqRef = useRef(0);
@@ -2512,11 +2516,46 @@ function App() {
               workflowQuestion={workflowQuestion}
             />
 
-            <WorkflowInspectorPane
-              canvasFullscreen={canvasFullscreen}
-              nodeProps={workflowInspectorPaneProps.nodeProps}
-              toolsProps={workflowInspectorPaneProps.toolsProps}
-            />
+            {!canvasFullscreen && (
+              <div className="workflow-right-stack">
+                <WorkflowInspectorPane
+                  canvasFullscreen={canvasFullscreen}
+                  nodeProps={workflowInspectorPaneProps.nodeProps}
+                  toolsProps={workflowInspectorPaneProps.toolsProps}
+                />
+                <WorkflowRoleDock
+                  handoffFromRole={workflowHandoffPanel.handoffFromRole}
+                  handoffRoleOptions={workflowHandoffPanel.handoffRoleOptions}
+                  handoffToRole={workflowHandoffPanel.handoffToRole}
+                  onAddHandoffNodes={onAddHandoffNodes}
+                  onChangePrompt={setWorkflowRolePrompt}
+                  onChangeTaskId={setWorkflowRoleTaskId}
+                  onRunRole={() => {
+                    const taskId = workflowRoleTaskId.trim();
+                    if (!taskId) {
+                      setStatus("TASK ID를 입력해 주세요.");
+                      return;
+                    }
+                    publishAction({
+                      type: "run_role",
+                      payload: {
+                        roleId: workflowRoleId,
+                        taskId,
+                        prompt: workflowRolePrompt.trim() || undefined,
+                        sourceTab: "workflow",
+                      },
+                    });
+                  }}
+                  onSelectHandoffFromRole={workflowHandoffPanel.setHandoffFromRole}
+                  onSelectHandoffToRole={workflowHandoffPanel.setHandoffToRole}
+                  onSelectRoleId={setWorkflowRoleId}
+                  prompt={workflowRolePrompt}
+                  roleId={workflowRoleId}
+                  runDisabled={isWorkflowBusy}
+                  taskId={workflowRoleTaskId}
+                />
+              </div>
+            )}
           </WorkflowPage>
         )}
         {workspaceTab === "dashboard" && (
@@ -2578,6 +2617,7 @@ function App() {
                   roleId,
                   taskId,
                   prompt,
+                  sourceTab: "agents",
                 },
               });
             }}
