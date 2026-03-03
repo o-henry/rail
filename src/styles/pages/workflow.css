@@ -253,6 +253,7 @@
   width: 320px;
   min-width: 320px;
   max-width: 320px;
+  border-radius: 10px;
   overflow-y: auto;
   overflow-x: hidden;
   padding: 0 2px 0 0;
@@ -267,6 +268,7 @@
   height: auto;
   overflow: visible;
   grid-template-rows: auto auto;
+  border-radius: 10px;
 }
 
 .workflow-right-stack .inspector-content {
