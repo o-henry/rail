@@ -23,7 +23,7 @@ type WorkflowRoleDockProps = {
 export default function WorkflowRoleDock(props: WorkflowRoleDockProps) {
   const latestArtifactPath = props.selectedRoleHandoffs
     .flatMap((row) => row.artifactPaths.map((path) => String(path ?? "").trim()).filter(Boolean))
-    .find((path) => path.toLowerCase().endsWith(".md"))
+    .find((path) => path.toLowerCase().endsWith(".json"))
     ?? props.selectedRoleHandoffs
       .flatMap((row) => row.artifactPaths.map((path) => String(path ?? "").trim()).filter(Boolean))[0];
   const latestArtifactName = latestArtifactPath

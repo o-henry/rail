@@ -118,34 +118,25 @@ function toCompactTimestamp(date = new Date()): string {
   return `${yyyy}${mm}${dd}_${hh}${mi}${ss}`;
 }
 
-function buildRoleArtifactMarkdown(params: {
+function buildRoleArtifactJson(params: {
   runId: string;
   roleId: string;
   taskId: string;
   prompt?: string;
   artifactPaths: string[];
 }): string {
-  const lines: string[] = [
-    `# ${params.roleId} 실행 산출물`,
-    `- RUN_ID: ${params.runId}`,
-    `- ROLE: ${params.roleId}`,
-    `- TASK_ID: ${params.taskId}`,
-    `- CREATED_AT: ${new Date().toISOString()}`,
-    "",
-    "## 요청",
-    String(params.prompt ?? "").trim() || "(요청 없음)",
-    "",
-    "## 산출물 경로",
-  ];
-  if (params.artifactPaths.length === 0) {
-    lines.push("- (없음)");
-  } else {
-    for (const path of params.artifactPaths) {
-      lines.push(`- ${path}`);
-    }
-  }
-  lines.push("");
-  return `${lines.join("\n")}\n`;
+  return `${JSON.stringify(
+    {
+      runId: String(params.runId ?? "").trim(),
+      roleId: String(params.roleId ?? "").trim(),
+      taskId: String(params.taskId ?? "").trim(),
+      createdAt: new Date().toISOString(),
+      prompt: String(params.prompt ?? "").trim(),
+      artifactPaths: params.artifactPaths,
+    },
+    null,
+    2,
+  )}\n`;
 }
 
 export function useAgenticOrchestrationBridge(params: {
@@ -351,11 +342,11 @@ export function useAgenticOrchestrationBridge(params: {
       try {
         const artifactDir = `${String(cwd ?? "").trim().replace(/[\\/]+$/, "")}/.rail/studio_runs/${result.runId}/artifacts`;
         const roleToken = toRoleShortToken(params.roleId);
-        const fileName = `${toCompactTimestamp()}_${roleToken}.md`;
+        const fileName = `${toCompactTimestamp()}_${roleToken}.json`;
         roleSummaryArtifactPath = await invokeFn<string>("workspace_write_text", {
           cwd: artifactDir,
           name: fileName,
-          content: buildRoleArtifactMarkdown({
+          content: buildRoleArtifactJson({
             runId: result.runId,
             roleId: params.roleId,
             taskId: params.taskId,

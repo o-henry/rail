@@ -970,6 +970,7 @@ function App() {
     setWebBridgeConnectCode,
   });
   const autoEngineStartRequestedRef = useRef(false);
+  const scraplingAutoPrepareCwdRef = useRef("");
 
   useEffect(() => {
     if (!hasTauriRuntime || engineStarted) {
@@ -991,6 +992,35 @@ function App() {
         setError(toErrorText(error));
       });
   }, [cwd, engineStarted, ensureEngineStarted, hasTauriRuntime, refreshAuthStateFromEngine, setError, setStatus]);
+
+  useEffect(() => {
+    if (!hasTauriRuntime) {
+      return;
+    }
+    const resolvedCwd = String(cwd ?? "").trim();
+    if (!resolvedCwd || resolvedCwd === ".") {
+      return;
+    }
+    if (scraplingAutoPrepareCwdRef.current === resolvedCwd) {
+      return;
+    }
+    scraplingAutoPrepareCwdRef.current = resolvedCwd;
+    void (async () => {
+      try {
+        const health = await invoke<{ running?: boolean; scrapling_ready?: boolean; scraplingReady?: boolean }>(
+          "dashboard_scrapling_bridge_start",
+          { cwd: resolvedCwd },
+        );
+        const ready = Boolean(health?.running) && Boolean(health?.scrapling_ready ?? health?.scraplingReady);
+        if (!ready) {
+          await invoke("dashboard_scrapling_bridge_install", { cwd: resolvedCwd });
+          await invoke("dashboard_scrapling_bridge_start", { cwd: resolvedCwd });
+        }
+      } catch {
+        // ignore: manual run path will retry and surface detailed errors per source
+      }
+    })();
+  }, [cwd, hasTauriRuntime]);
 
   const batchScheduler = useBatchScheduler({
     enabled: hasTauriRuntime,
@@ -2463,7 +2493,7 @@ function App() {
           title: `${roleLabel} · ${normalizedTaskId} · ${fileName}`,
           summary: promptSummary || `${roleLabel} 역할 실행 산출물`,
           createdAt: new Date().toISOString(),
-          markdownPath: /\.md$/i.test(artifactPath) ? artifactPath : undefined,
+          markdownPath: undefined,
           jsonPath: /\.json$/i.test(artifactPath) ? artifactPath : undefined,
         });
       }
@@ -2652,12 +2682,8 @@ function App() {
               onNodeAnchorDrop={onNodeAnchorDrop}
               onNodeDragStart={onNodeDragStart}
               onOpenFeedFromNode={(nodeId) => {
-                setWorkspaceTab("feed");
-                setFeedCategory("all_posts");
-                setFeedStatusFilter("all");
-                setFeedTopicFilter("all");
-                setFeedKeyword("");
-                setStatus(`피드에서 ${nodeId} 노드 결과를 확인하세요.`);
+                setWorkspaceTab("knowledge");
+                setStatus(`데이터베이스에서 ${nodeId} 노드 결과를 확인하세요.`);
               }}
               onOpenWebInputForNode={onOpenWebInputForNode}
               onClearGraph={onClearGraphCanvas}

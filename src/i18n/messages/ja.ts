@@ -402,7 +402,7 @@ export const JA_MESSAGES: Dictionary = {
     "workflow.nodeSettings.help": "現在のサービスで提供: エージェント追加、実行器/モデル/役割/プロンプト設定、参照添付、品質/出力スキーマ設定、Web連携半自動。",
     "workflow.node.completion": "完了状態",
     "workflow.node.elapsed": "生成時間",
-    "workflow.node.outputInFeed": "出力/ログはフィードで確認",
+    "workflow.node.outputInFeed": "出力ログはデータベースで確認",
     "workflow.node.inputDirect": "質問を直接入力",
     "workflow.node.manualWebInput": "手動入力",
     "workflow.node.connection": "接続",

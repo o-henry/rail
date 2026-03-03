@@ -19,6 +19,13 @@ type ScraplingFetchResult = {
   json_path?: string;
 };
 
+type ScraplingBridgeHealth = {
+  running?: boolean;
+  scrapling_ready?: boolean;
+  scraplingReady?: boolean;
+  message?: string;
+};
+
 type RoleKnowledgeBootstrapInput = {
   cwd: string;
   invokeFn: InvokeFn;
@@ -61,6 +68,8 @@ type RoleKnowledgeInjectResult = {
 };
 
 const ROLE_KB_TOPIC = "devEcosystem";
+const SCRAPLING_BRIDGE_NOT_READY = "SCRAPLING_BRIDGE_NOT_READY";
+const bridgeReadyPromiseByCwd = new Map<string, Promise<void>>();
 
 const ROLE_KB_ALLOWLIST: Record<StudioRoleId, string[]> = {
   pm_planner: [
@@ -118,6 +127,62 @@ function resolveRoleTemplate(roleId: StudioRoleId) {
 
 function cleanLine(input: unknown): string {
   return String(input ?? "").replace(/\s+/g, " ").trim();
+}
+
+function isBridgeReady(health: ScraplingBridgeHealth | null | undefined): boolean {
+  if (!health) {
+    return false;
+  }
+  return Boolean(health.running) && Boolean(health.scrapling_ready ?? health.scraplingReady);
+}
+
+async function ensureScraplingBridgeReady(params: { cwd: string; invokeFn: InvokeFn }): Promise<void> {
+  const normalizedCwd = cleanLine(params.cwd);
+  if (!normalizedCwd) {
+    throw new Error("cwd is required");
+  }
+  const cacheKey = normalizedCwd;
+  const existing = bridgeReadyPromiseByCwd.get(cacheKey);
+  if (existing) {
+    return existing;
+  }
+  const task = (async () => {
+    let health: ScraplingBridgeHealth | null = null;
+    try {
+      health = await params.invokeFn<ScraplingBridgeHealth>("dashboard_scrapling_bridge_start", {
+        cwd: normalizedCwd,
+      });
+    } catch {
+      health = null;
+    }
+    if (isBridgeReady(health)) {
+      return;
+    }
+
+    await params.invokeFn("dashboard_scrapling_bridge_install", {
+      cwd: normalizedCwd,
+    });
+
+    health = await params.invokeFn<ScraplingBridgeHealth>("dashboard_scrapling_bridge_start", {
+      cwd: normalizedCwd,
+    });
+    if (!isBridgeReady(health)) {
+      const reason = cleanLine(health?.message);
+      throw new Error(
+        reason
+          ? `${SCRAPLING_BRIDGE_NOT_READY}: ${reason}`
+          : SCRAPLING_BRIDGE_NOT_READY,
+      );
+    }
+  })();
+
+  bridgeReadyPromiseByCwd.set(cacheKey, task);
+  try {
+    await task;
+  } catch (error) {
+    bridgeReadyPromiseByCwd.delete(cacheKey);
+    throw error;
+  }
 }
 
 function sanitizeToken(raw: string): string {
@@ -215,6 +280,10 @@ async function fetchRoleKnowledgeSource(params: {
   url: string;
 }): Promise<RoleKnowledgeSource> {
   try {
+    await ensureScraplingBridgeReady({
+      cwd: params.cwd,
+      invokeFn: params.invokeFn,
+    });
     const result = await params.invokeFn<ScraplingFetchResult>("dashboard_scrapling_fetch_url", {
       cwd: params.cwd,
       url: params.url,
@@ -226,55 +295,49 @@ async function fetchRoleKnowledgeSource(params: {
       fetchedAt: cleanLine(result.fetched_at) || new Date().toISOString(),
       summary: truncateText(result.summary, 320),
       content: truncateText(result.content, 480),
-      markdownPath: cleanLine(result.markdown_path) || undefined,
+      markdownPath: undefined,
       jsonPath: cleanLine(result.json_path) || undefined,
     };
   } catch (error) {
+    const errorText = truncateText(error, 320);
+    const shouldRetry =
+      errorText.includes("scrapling bridge is not ready") ||
+      errorText.includes(SCRAPLING_BRIDGE_NOT_READY);
+    if (shouldRetry) {
+      try {
+        bridgeReadyPromiseByCwd.delete(cleanLine(params.cwd));
+        await ensureScraplingBridgeReady({
+          cwd: params.cwd,
+          invokeFn: params.invokeFn,
+        });
+        const retried = await params.invokeFn<ScraplingFetchResult>("dashboard_scrapling_fetch_url", {
+          cwd: params.cwd,
+          url: params.url,
+          topic: ROLE_KB_TOPIC,
+        });
+        return {
+          url: cleanLine(retried.url) || params.url,
+          status: "ok",
+          fetchedAt: cleanLine(retried.fetched_at) || new Date().toISOString(),
+          summary: truncateText(retried.summary, 320),
+          content: truncateText(retried.content, 480),
+          markdownPath: undefined,
+          jsonPath: cleanLine(retried.json_path) || undefined,
+        };
+      } catch (retryError) {
+        return {
+          url: params.url,
+          status: "error",
+          error: truncateText(retryError, 320),
+        };
+      }
+    }
     return {
       url: params.url,
       status: "error",
-      error: truncateText(error, 320),
+      error: errorText,
     };
   }
-}
-
-function toProfileMarkdown(profile: RoleKnowledgeProfile): string {
-  const lines: string[] = [
-    `# ROLE_KB · ${profile.roleLabel}`,
-    `- ROLE_ID: ${profile.roleId}`,
-    `- TASK_ID: ${profile.taskId}`,
-    `- RUN_ID: ${profile.runId}`,
-    `- UPDATED_AT: ${profile.updatedAt}`,
-    "",
-    "## SUMMARY",
-    profile.summary,
-    "",
-    "## KEY_POINTS",
-    ...profile.keyPoints.map((row) => `- ${row}`),
-    "",
-    "## SOURCES",
-  ];
-  if (profile.sources.length === 0) {
-    lines.push("- (none)");
-  } else {
-    for (const source of profile.sources) {
-      lines.push(`- [${source.status.toUpperCase()}] ${source.url}`);
-      if (source.summary) {
-        lines.push(`  - SUMMARY: ${source.summary}`);
-      }
-      if (source.error) {
-        lines.push(`  - ERROR: ${source.error}`);
-      }
-      if (source.markdownPath) {
-        lines.push(`  - MD: ${source.markdownPath}`);
-      }
-      if (source.jsonPath) {
-        lines.push(`  - JSON: ${source.jsonPath}`);
-      }
-    }
-  }
-  lines.push("");
-  return `${lines.join("\n")}\n`;
 }
 
 export async function bootstrapRoleKnowledgeProfile(input: RoleKnowledgeBootstrapInput): Promise<RoleKnowledgeBootstrapResult> {
@@ -321,7 +384,7 @@ export async function bootstrapRoleKnowledgeProfile(input: RoleKnowledgeBootstra
   };
 
   const artifactPaths = sourceResults
-    .flatMap((row) => [row.markdownPath, row.jsonPath])
+    .flatMap((row) => [row.jsonPath])
     .map((row) => cleanLine(row))
     .filter(Boolean);
 
@@ -339,14 +402,8 @@ export async function storeRoleKnowledgeProfile(input: RoleKnowledgeStoreInput):
   const roleDir = `${baseCwd}/.rail/studio_index/role_kb`;
   const roleToken = toRoleShortToken(input.profile.roleId);
   const timestamp = toCompactTimestamp(input.profile.updatedAt);
-  const markdownName = `role_kb_${timestamp}_${roleToken}.md`;
   const jsonName = `role_kb_${timestamp}_${roleToken}.json`;
 
-  const markdownPath = await input.invokeFn<string>("workspace_write_text", {
-    cwd: roleDir,
-    name: markdownName,
-    content: toProfileMarkdown(input.profile),
-  });
   const jsonPath = await input.invokeFn<string>("workspace_write_text", {
     cwd: roleDir,
     name: jsonName,
@@ -355,7 +412,7 @@ export async function storeRoleKnowledgeProfile(input: RoleKnowledgeStoreInput):
 
   const profileWithPaths: RoleKnowledgeProfile = {
     ...input.profile,
-    markdownPath: cleanLine(markdownPath) || undefined,
+    markdownPath: undefined,
     jsonPath: cleanLine(jsonPath) || undefined,
   };
   const rows = upsertRoleKnowledgeProfile(profileWithPaths);
@@ -365,7 +422,7 @@ export async function storeRoleKnowledgeProfile(input: RoleKnowledgeStoreInput):
     rows,
   });
 
-  const artifactPaths = [markdownPath, jsonPath, indexPath ?? ""].map((row) => cleanLine(row)).filter(Boolean);
+  const artifactPaths = [jsonPath, indexPath ?? ""].map((row) => cleanLine(row)).filter(Boolean);
   return {
     profile: profileWithPaths,
     artifactPaths,

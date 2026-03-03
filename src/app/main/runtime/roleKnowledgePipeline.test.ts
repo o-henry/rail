@@ -28,6 +28,28 @@ describe("roleKnowledgePipeline", () => {
 
   it("stores and injects role knowledge block into prompt", async () => {
     const invokeFn = vi.fn(async (command: string, args?: Record<string, unknown>) => {
+      if (command === "dashboard_scrapling_bridge_start") {
+        return {
+          running: true,
+          scrapling_ready: true,
+          message: "ready",
+        };
+      }
+      if (command === "dashboard_scrapling_bridge_install") {
+        return {
+          installed: true,
+        };
+      }
+      if (command === "dashboard_scrapling_fetch_url") {
+        return {
+          url: "https://docs.unity3d.com/Manual/index.html",
+          fetched_at: "2026-03-04T00:00:00Z",
+          summary: "Unity manual summary",
+          content: "content",
+          markdown_path: "/tmp/raw.md",
+          json_path: "/tmp/raw.json",
+        };
+      }
       if (command === "workspace_write_text") {
         return `/tmp/${String(args?.name ?? "unknown")}`;
       }
@@ -36,14 +58,7 @@ describe("roleKnowledgePipeline", () => {
 
     const bootstrapped = await bootstrapRoleKnowledgeProfile({
       cwd: "/tmp/workspace",
-      invokeFn: vi.fn(async () => ({
-        url: "https://docs.unity3d.com/Manual/index.html",
-        fetched_at: "2026-03-04T00:00:00Z",
-        summary: "Unity manual summary",
-        content: "content",
-        markdown_path: "/tmp/raw.md",
-        json_path: "/tmp/raw.json",
-      })) as unknown as <T>(command: string, args?: Record<string, unknown>) => Promise<T>,
+      invokeFn,
       roleId: "client_programmer",
       taskId: "TASK-002",
       runId: "role-2",
@@ -61,10 +76,11 @@ describe("roleKnowledgePipeline", () => {
       profile: stored.profile,
     });
 
-    expect(stored.artifactPaths.some((path) => path.endsWith(".md"))).toBe(true);
+    expect(stored.artifactPaths.some((path) => path.endsWith(".json"))).toBe(true);
+    expect(stored.profile.markdownPath).toBeUndefined();
+    expect(bootstrapped.sourceSuccessCount).toBeGreaterThan(0);
     expect(injected.usedProfile).toBe(true);
     expect(injected.prompt).toContain("[ROLE_KB_INJECT]");
     expect(injected.prompt).toContain("이동 시스템을 구현해줘");
   });
 });
-

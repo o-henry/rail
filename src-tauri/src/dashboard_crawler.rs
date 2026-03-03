@@ -274,12 +274,9 @@ pub async fn dashboard_scrapling_fetch_url(
     let raw_dir = workspace.join(".rail/studio_index/knowledge/raw");
     fs::create_dir_all(&raw_dir)
         .map_err(|err| format!("failed to create knowledge raw directory: {err}"))?;
-    let markdown_path = raw_dir.join(format!("{stamp}_{date}_{event_label}_{source_slug}.md"));
     let json_path = raw_dir.join(format!("{stamp}_{date}_{event_label}_{source_slug}.json"));
     let fetched_at = now_iso8601_like();
 
-    fs::write(&markdown_path, &document.markdown)
-        .map_err(|err| format!("failed to write scraped markdown: {err}"))?;
     let json_payload = serde_json::to_string_pretty(&document.json_payload)
         .map_err(|err| format!("failed to serialize scraped payload: {err}"))?;
     fs::write(&json_path, json_payload)
@@ -305,7 +302,7 @@ pub async fn dashboard_scrapling_fetch_url(
         format: document.format,
         summary,
         content,
-        markdown_path: markdown_path.to_string_lossy().to_string(),
+        markdown_path: String::new(),
         json_path: json_path.to_string_lossy().to_string(),
         bytes: document.bytes,
         http_status: document.http_status,

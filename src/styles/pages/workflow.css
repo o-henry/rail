@@ -136,6 +136,18 @@
   box-shadow: 0 10px 24px rgba(47, 55, 69, 0.12);
 }
 
+.panel-card.workflow-conversation-overlay {
+  overflow: hidden;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.panel-card.workflow-conversation-overlay::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}
+
 .workflow-conversation-floating-layer {
   position: absolute;
   inset: 0;
@@ -207,12 +219,19 @@
   min-height: 0;
   max-height: none;
   overflow-y: auto;
-  scrollbar-width: thin;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
   border-radius: 0;
   padding: 10px 12px 12px;
   background: #f8fafc;
   border: 0;
   position: relative;
+}
+
+.workflow-conversation-body::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
 }
 
 .workflow-conversation-list {
@@ -476,13 +495,19 @@
   min-width: 320px;
   max-width: 320px;
   border-radius: 10px;
+  background: var(--surface);
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 0 2px 0 0;
+  padding: 0 2px 14px 0;
 }
 
 .workflow-right-stack > .panel-card {
   flex: 0 0 auto;
+}
+
+.workflow-right-stack > .panel-card:last-child {
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .workflow-right-stack .inspector-pane {
@@ -496,15 +521,16 @@
 .workflow-right-stack .inspector-content {
   min-height: auto;
   overflow: visible;
-  padding-bottom: 10px;
+  padding-bottom: 16px;
 }
 
 .workflow-role-dock {
   display: grid;
+  align-content: start;
   gap: 10px;
   border-radius: 5px;
   background: var(--surface);
-  padding: 10px;
+  padding: 10px 10px 16px;
 }
 
 .workflow-role-dock-head {

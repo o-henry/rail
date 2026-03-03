@@ -402,7 +402,7 @@ export const EN_MESSAGES: Dictionary = {
     "workflow.nodeSettings.help": "Available in current service: add agents, configure executor/model/role/prompt, attach references, set quality/output schema, and use web-assist mode.",
     "workflow.node.completion": "Completion",
     "workflow.node.elapsed": "Elapsed",
-    "workflow.node.outputInFeed": "View output/logs in Feed",
+    "workflow.node.outputInFeed": "View output logs in Database",
     "workflow.node.inputDirect": "Direct question input",
     "workflow.node.manualWebInput": "Manual Input",
     "workflow.node.connection": "Connection",

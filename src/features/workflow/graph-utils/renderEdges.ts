@@ -297,16 +297,44 @@ export function buildCanvasEdgeLines(params: BuildCanvasEdgeLinesParams): Canvas
         ]);
         path = buildOrthogonalPolylinePath(points);
       } else {
-        path = buildRoundedEdgePath(
-          fromPoint.x,
-          fromPoint.y,
-          toPoint.x,
-          toPoint.y,
-          true,
-          resolvedFromSide,
-          resolvedToSide,
-          0,
-        );
+        const isOppositeHorizontal =
+          (routeFromSide === "left" && routeToSide === "right") ||
+          (routeFromSide === "right" && routeToSide === "left");
+        const isOppositeVertical =
+          (routeFromSide === "top" && routeToSide === "bottom") ||
+          (routeFromSide === "bottom" && routeToSide === "top");
+        const shouldUseSimpleSingleRoute =
+          !hasManualControl &&
+          !hasBundledRouting &&
+          (isOppositeHorizontal || isOppositeVertical);
+
+        if (shouldUseSimpleSingleRoute) {
+          const points = isOppositeHorizontal
+            ? compressCollinear([
+                fromPoint,
+                { x: Math.round((fromPoint.x + toPoint.x) / 2), y: fromPoint.y },
+                { x: Math.round((fromPoint.x + toPoint.x) / 2), y: toPoint.y },
+                toPoint,
+              ])
+            : compressCollinear([
+                fromPoint,
+                { x: fromPoint.x, y: Math.round((fromPoint.y + toPoint.y) / 2) },
+                { x: toPoint.x, y: Math.round((fromPoint.y + toPoint.y) / 2) },
+                toPoint,
+              ]);
+          path = buildOrthogonalPolylinePath(points);
+        } else {
+          path = buildRoundedEdgePath(
+            fromPoint.x,
+            fromPoint.y,
+            toPoint.x,
+            toPoint.y,
+            true,
+            resolvedFromSide,
+            resolvedToSide,
+            0,
+          );
+        }
       }
 
       return {

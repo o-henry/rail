@@ -1,6 +1,4 @@
 import { useEffect, useMemo, useState } from "react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
 import {
   persistKnowledgeIndexToWorkspace,
   readKnowledgeEntries,
@@ -71,7 +69,7 @@ function toKnowledgeEntry(post: KnowledgeSourcePost): KnowledgeEntry | null {
     title: String(post.summary ?? "").slice(0, 72) || post.agentName,
     summary: String(post.summary ?? ""),
     createdAt: post.createdAt,
-    markdownPath: post.attachments.find((row) => row.kind === "markdown")?.filePath,
+    markdownPath: undefined,
     jsonPath: post.attachments.find((row) => row.kind === "json")?.filePath,
   };
 }
@@ -154,7 +152,6 @@ export default function KnowledgeBasePage({ cwd, posts, onInjectContextSources }
     readKnowledgeEntries().filter((row) => !isHiddenKnowledgeEntry(row)),
   );
   const [collapsedByGroup, setCollapsedByGroup] = useState<Record<string, boolean>>({});
-  const [markdownContent, setMarkdownContent] = useState("");
   const [jsonContent, setJsonContent] = useState("");
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState("");
@@ -220,10 +217,8 @@ export default function KnowledgeBasePage({ cwd, posts, onInjectContextSources }
 
   useEffect(() => {
     let cancelled = false;
-    const selectedMarkdownPath = String(selected?.markdownPath ?? "").trim();
     const selectedJsonPath = String(selected?.jsonPath ?? "").trim();
-    if (!selected || (!selectedMarkdownPath && !selectedJsonPath)) {
-      setMarkdownContent("");
+    if (!selected || !selectedJsonPath) {
       setJsonContent("");
       setDetailError("");
       setDetailLoading(false);
@@ -235,29 +230,18 @@ export default function KnowledgeBasePage({ cwd, posts, onInjectContextSources }
     setDetailError("");
     void (async () => {
       try {
-        const [markdownText, jsonText] = await Promise.all([
-          selectedMarkdownPath
-            ? invoke<string>("workspace_read_text", {
-                path: selectedMarkdownPath,
-              })
-            : Promise.resolve(""),
-          selectedJsonPath
-            ? invoke<string>("workspace_read_text", {
-                path: selectedJsonPath,
-              })
-            : Promise.resolve(""),
-        ]);
+        const jsonText = await invoke<string>("workspace_read_text", {
+          path: selectedJsonPath,
+        });
         if (cancelled) {
           return;
         }
-        setMarkdownContent(String(markdownText ?? ""));
         setJsonContent(String(jsonText ?? ""));
       } catch (error) {
         if (cancelled) {
           return;
         }
         setDetailError(`문서 읽기 실패: ${String(error)}`);
-        setMarkdownContent("");
         setJsonContent("");
       } finally {
         if (!cancelled) {
@@ -268,7 +252,7 @@ export default function KnowledgeBasePage({ cwd, posts, onInjectContextSources }
     return () => {
       cancelled = true;
     };
-  }, [selected?.id, selected?.markdownPath, selected?.jsonPath]);
+  }, [selected?.id, selected?.jsonPath]);
 
   const persistRows = (rows: KnowledgeEntry[]) => {
     setEntries(rows);
@@ -302,7 +286,7 @@ export default function KnowledgeBasePage({ cwd, posts, onInjectContextSources }
     <section className="panel-card knowledge-view workspace-tab-panel">
       <header className="knowledge-head">
         <h2>데이터베이스</h2>
-        <p>역할 실행으로 생성된 산출물(MD/JSON)을 탐색하고 에이전트 컨텍스트로 재주입합니다.</p>
+        <p>역할 실행으로 생성된 산출물(JSON)을 탐색하고 에이전트 컨텍스트로 재주입합니다.</p>
       </header>
       <section className="knowledge-overview">
         <article className="knowledge-overview-card panel-card">
@@ -358,7 +342,7 @@ export default function KnowledgeBasePage({ cwd, posts, onInjectContextSources }
                           type="button"
                         >
                           <strong>{entry.title}</strong>
-                          <span>{`${formatSourceKindLabel(entry.sourceKind)} · ${toFileName(entry.markdownPath || entry.jsonPath || "")}`}</span>
+                          <span>{`${formatSourceKindLabel(entry.sourceKind)} · ${toFileName(entry.jsonPath || "")}`}</span>
                           <small>{new Date(entry.createdAt).toLocaleString()}</small>
                         </button>
                       ))}
@@ -391,39 +375,20 @@ export default function KnowledgeBasePage({ cwd, posts, onInjectContextSources }
                 <dd>{selected.sourceUrl || "-"}</dd>
                 <dt>TASK</dt>
                 <dd>{toUpperSnakeToken(selected.taskId)}</dd>
-                <dt>MD</dt>
-                <dd>{toFileName(selected.markdownPath ?? "")}</dd>
                 <dt>JSON</dt>
                 <dd>{toFileName(selected.jsonPath ?? "")}</dd>
               </dl>
               <div className="knowledge-artifact-actions">
                 <button
-                  disabled={!selected.markdownPath}
-                  onClick={() => void onRevealPath(String(selected.markdownPath ?? ""))}
-                  type="button"
-                >
-                  MD 파일 열기
-                </button>
-                <button
                   disabled={!selected.jsonPath}
                   onClick={() => void onRevealPath(String(selected.jsonPath ?? ""))}
                   type="button"
                 >
-                  JSON 파일 열기
+                  파일 열기
                 </button>
               </div>
               {detailError ? <p className="knowledge-detail-error">{detailError}</p> : null}
               {detailLoading ? <p className="knowledge-empty">문서를 불러오는 중...</p> : null}
-              {!detailLoading && markdownContent ? (
-                <section className="knowledge-doc-block">
-                  <header className="knowledge-doc-head">
-                    <strong>산출물 문서 (MD)</strong>
-                  </header>
-                  <div className="knowledge-doc-markdown">
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{markdownContent}</ReactMarkdown>
-                  </div>
-                </section>
-              ) : null}
               {!detailLoading && jsonContent ? (
                 <section className="knowledge-doc-block">
                   <header className="knowledge-doc-head">
