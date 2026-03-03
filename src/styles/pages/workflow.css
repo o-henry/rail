@@ -112,7 +112,7 @@
 
 .workflow-conversation-floating-layer .workflow-conversation-overlay {
   border: 1px solid #e3e7ee;
-  border-radius: 28px;
+  border-radius: 4px;
   padding: 14px;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
@@ -203,7 +203,7 @@
   flex-shrink: 0;
   background: #eceff4;
   color: #8791a1;
-  border-radius: 12px;
+  border-radius: 4px;
   border: 1px solid #dee4ee;
   display: inline-flex;
   align-items: center;
@@ -215,7 +215,7 @@
   max-height: none;
   overflow-y: auto;
   scrollbar-width: thin;
-  border-radius: 18px;
+  border-radius: 4px;
   padding: 14px;
   background: #ffffff;
   border: 1px solid #e5e9f0;
@@ -231,7 +231,7 @@
 }
 
 .workflow-conversation-item {
-  border-radius: 12px;
+  border-radius: 4px;
   padding: 10px 11px;
   display: grid;
   gap: 5px;
@@ -263,10 +263,10 @@
 .workflow-conversation-empty {
   margin: 0;
   min-height: 74px;
-  border-radius: 12px;
-  background: #f8fafd;
-  color: #6b7b91;
-  border: 1px solid #e5ebf4;
+  border-radius: 4px;
+  background: #f3f5f8;
+  color: #4b5563;
+  border: 1px solid #d7dde7;
   font-size: 12px;
   line-height: 1.45;
   display: flex;
@@ -288,7 +288,7 @@
   height: 44px;
   padding: 0 16px;
   border: 1px solid #d8dde6;
-  border-radius: 14px;
+  border-radius: 4px;
   background: linear-gradient(180deg, #ffffff 0%, #f5f7fb 100%);
   color: #2a3340;
   box-shadow: 0 8px 18px rgba(50, 61, 80, 0.16);
