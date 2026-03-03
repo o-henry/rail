@@ -177,8 +177,8 @@ export default function WorkflowCanvasPane({
   const conversationPanelRef = useRef<HTMLElement | null>(null);
   const initialConversationPosition = useMemo(
     () => ({
-      x: typeof window === "undefined" ? 18 : Math.max(18, window.innerWidth - 600),
-      y: typeof window === "undefined" ? 140 : Math.max(60, window.innerHeight - 460),
+      x: typeof window === "undefined" ? 18 : Math.max(18, window.innerWidth - 360),
+      y: typeof window === "undefined" ? 92 : Math.max(72, Math.min(120, window.innerHeight - 620)),
     }),
     [],
   );

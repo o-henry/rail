@@ -111,27 +111,27 @@
 }
 
 .workflow-conversation-floating-layer .workflow-conversation-overlay {
-  border: 1px solid #e2e6ed;
-  border-radius: 18px;
-  padding: 14px;
+  border: 1px solid #dce2eb;
+  border-radius: 24px;
+  padding: 16px;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
-  gap: 10px;
+  gap: 12px;
   background: linear-gradient(180deg, #ffffff 0%, #f6f8fc 100%) !important;
   color: #2b3442;
   position: fixed;
   z-index: 44;
-  width: clamp(290px, 26vw, 360px);
-  min-width: 290px;
-  max-width: 380px;
-  height: clamp(360px, 62vh, 700px);
-  min-height: 340px;
-  max-height: calc(100vh - 110px);
+  width: clamp(280px, 20vw, 320px);
+  min-width: 280px;
+  max-width: 340px;
+  height: clamp(500px, 72vh, 780px);
+  min-height: 460px;
+  max-height: calc(100vh - 72px);
   resize: both;
   overflow: auto;
   box-shadow:
-    0 12px 30px rgba(35, 45, 60, 0.2),
-    0 2px 0 rgba(255, 255, 255, 0.7) inset;
+    0 18px 40px rgba(30, 41, 56, 0.2),
+    0 1px 0 rgba(255, 255, 255, 0.85) inset;
 }
 
 .workflow-conversation-floating-layer {
@@ -168,9 +168,10 @@
 }
 
 .workflow-conversation-head-text strong {
-  font-size: 14px;
+  font-size: 16px;
   line-height: 1.32;
   color: #1e2733;
+  letter-spacing: -0.2px;
 }
 
 .workflow-conversation-head-text span {
@@ -196,6 +197,10 @@
   max-height: none;
   overflow-y: auto;
   scrollbar-width: thin;
+  border-radius: 16px;
+  padding: 12px;
+  background: #f3f6fb;
+  border: 1px solid #dde5f0;
 }
 
 .workflow-conversation-list {
@@ -207,17 +212,17 @@
 }
 
 .workflow-conversation-item {
-  border-radius: 12px;
+  border-radius: 10px;
   padding: 10px 12px;
   display: grid;
   gap: 5px;
-  background: #eef3fa;
-  border: 1px solid #e0e7f1;
+  background: #ffffff;
+  border: 1px solid #e3e8f2;
 }
 
 .workflow-conversation-item.is-user {
-  background: #ffffff;
-  border-color: #dbe3ef;
+  background: #f8fbff;
+  border-color: #d8e2f0;
 }
 
 .workflow-conversation-role {
@@ -238,11 +243,11 @@
 
 .workflow-conversation-empty {
   margin: 0;
-  min-height: 56px;
-  border-radius: 12px;
-  background: #edf2f9;
+  min-height: 64px;
+  border-radius: 10px;
+  background: #ffffff;
   color: #6b7b91;
-  border: 1px solid #dee5f0;
+  border: 1px solid #e2e8f2;
   font-size: 12px;
   line-height: 1.45;
   display: flex;
@@ -293,15 +298,16 @@
 
 @media (max-width: 1180px) {
   .workflow-conversation-overlay {
-    width: clamp(280px, 32vw, 350px);
+    width: clamp(270px, 24vw, 310px);
+    height: clamp(460px, 66vh, 720px);
   }
 }
 
 @media (max-width: 900px) {
   .workflow-conversation-overlay {
-    width: clamp(270px, 46vw, 340px);
-    min-width: 280px;
-    height: clamp(340px, 58vh, 620px);
+    width: clamp(260px, 40vw, 300px);
+    min-width: 260px;
+    height: clamp(420px, 62vh, 640px);
   }
 
   .workflow-conversation-toggle-wrap {
