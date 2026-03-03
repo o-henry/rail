@@ -115,7 +115,7 @@
   border-radius: 5px;
   padding-top: 10px;
   display: grid;
-  gap: 12px;
+  gap: 16px;
 }
 
 .inspector-block > h3 {
