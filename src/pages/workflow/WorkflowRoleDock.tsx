@@ -6,6 +6,7 @@ type RoleDockStatus = "IDLE" | "RUNNING" | "VERIFY" | "DONE";
 type WorkflowRoleDockProps = {
   roleId: StudioRoleId;
   onSelectRoleId: (roleId: StudioRoleId) => void;
+  roleSelectionLockedTo?: StudioRoleId | null;
   taskId: string;
   onChangeTaskId: (value: string) => void;
   prompt: string;
@@ -20,6 +21,7 @@ type WorkflowRoleDockProps = {
 export default function WorkflowRoleDock(props: WorkflowRoleDockProps) {
   const latestArtifactPath = props.selectedRoleHandoffs
     .flatMap((row) => row.artifactPaths.map((path) => String(path ?? "").trim()).filter(Boolean))[0];
+  const lockedRoleId = props.roleSelectionLockedTo ?? null;
 
   return (
     <aside className="panel-card workflow-role-dock" aria-label="역할 워크스페이스">
@@ -31,12 +33,14 @@ export default function WorkflowRoleDock(props: WorkflowRoleDockProps) {
       <section className="workflow-role-cards" aria-label="역할 카드">
         {STUDIO_ROLE_TEMPLATES.map((role) => {
           const selected = role.id === props.roleId;
+          const lockedOut = Boolean(lockedRoleId) && role.id !== lockedRoleId;
           const roleState = props.roleStatusById[role.id]?.status ?? "IDLE";
           const roleTaskId = props.roleStatusById[role.id]?.taskId ?? "";
           return (
             <button
               key={role.id}
-              className={`workflow-role-card${selected ? " is-selected" : ""}`}
+              className={`workflow-role-card${selected ? " is-selected" : ""}${lockedOut ? " is-locked-out" : ""}`}
+              disabled={lockedOut}
               onClick={() => props.onSelectRoleId(role.id)}
               type="button"
             >

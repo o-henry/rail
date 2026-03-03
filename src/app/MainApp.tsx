@@ -1671,6 +1671,17 @@ function App() {
 
   const selectedTurnConfig: TurnConfig | null =
     selectedNode?.type === "turn" ? (selectedNode.config as TurnConfig) : null;
+  const selectedNodeRoleLockId = useMemo<StudioRoleId | null>(() => {
+    if (!selectedNode || selectedNode.type !== "turn") {
+      return null;
+    }
+    const config = selectedNode.config as Record<string, unknown>;
+    const sourceKind = String(config.sourceKind ?? "").trim().toLowerCase();
+    if (sourceKind !== "handoff") {
+      return null;
+    }
+    return toStudioRoleId(String(config.handoffRoleId ?? ""));
+  }, [selectedNode]);
   const selectedTurnExecutor: TurnExecutor =
     selectedTurnConfig ? getTurnExecutor(selectedTurnConfig) : "codex";
   const selectedQualityProfile: QualityProfileId =
@@ -1710,6 +1721,13 @@ function App() {
   });
   const canResumeGraph = isGraphRunning && isGraphPaused;
   const isWorkflowBusy = (isGraphRunning && !isGraphPaused) || isRunStarting;
+
+  useEffect(() => {
+    if (!selectedNodeRoleLockId || workflowRoleId === selectedNodeRoleLockId) {
+      return;
+    }
+    setWorkflowRoleId(selectedNodeRoleLockId);
+  }, [selectedNodeRoleLockId, workflowRoleId]);
   const canClearGraph = !isWorkflowBusy && (graph.nodes.length > 0 || graph.edges.length > 0);
   const isWorkspaceCwdConfigured = String(cwd ?? "").trim().length > 0 && String(cwd ?? "").trim() !== ".";
   const canRunGraphNow =
@@ -2055,6 +2073,7 @@ function App() {
         });
       }}
       onSelectRoleId={setWorkflowRoleId}
+      roleSelectionLockedTo={selectedNodeRoleLockId}
       roleStatusById={workflowRoleStatusByRole}
       selectedRoleBlockers={workflowSelectedRoleBlockers}
       selectedRoleHandoffs={workflowSelectedRoleHandoffs}

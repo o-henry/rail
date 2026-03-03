@@ -325,6 +325,10 @@
   cursor: pointer;
 }
 
+.workflow-role-card:disabled {
+  cursor: not-allowed;
+}
+
 .workflow-role-card strong {
   font-size: 12px;
   line-height: 1.3;
@@ -379,6 +383,10 @@
 
 .workflow-role-card.is-selected {
   background: #ffffff;
+}
+
+.workflow-role-card.is-locked-out {
+  opacity: 0.6;
 }
 
 .workflow-role-form {
