@@ -503,6 +503,7 @@
 
 .workflow-right-stack > .panel-card {
   flex: 0 0 auto;
+  overflow: visible;
 }
 
 .workflow-right-stack > .panel-card:last-child {
@@ -531,6 +532,7 @@
   border-radius: 5px;
   background: var(--surface);
   padding: 10px 10px 16px;
+  overflow: visible;
 }
 
 .workflow-role-dock-head {

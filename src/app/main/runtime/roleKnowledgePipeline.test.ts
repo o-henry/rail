@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  ROLE_KB_ALLOWLIST,
   bootstrapRoleKnowledgeProfile,
   injectRoleKnowledgePrompt,
   storeRoleKnowledgeProfile,
@@ -82,5 +83,21 @@ describe("roleKnowledgePipeline", () => {
     expect(injected.usedProfile).toBe(true);
     expect(injected.prompt).toContain("[ROLE_KB_INJECT]");
     expect(injected.prompt).toContain("이동 시스템을 구현해줘");
+  });
+
+  it("keeps role allowlist sources relevant and secure", () => {
+    for (const [roleId, urls] of Object.entries(ROLE_KB_ALLOWLIST)) {
+      expect(urls.length).toBeGreaterThanOrEqual(3);
+      const unique = new Set(urls);
+      expect(unique.size).toBe(urls.length);
+      for (const url of urls) {
+        expect(url.startsWith("https://")).toBe(true);
+        expect(url.includes("notion.so/help")).toBe(false);
+      }
+      if (roleId === "pm_planner") {
+        expect(urls.some((url) => url.includes("gamedeveloper.com/design"))).toBe(true);
+        expect(urls.some((url) => url.includes("gdcvault.com/free"))).toBe(true);
+      }
+    }
   });
 });

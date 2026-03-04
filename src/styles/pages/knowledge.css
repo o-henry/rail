@@ -163,12 +163,12 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
-  padding-bottom: 28px;
-  background: #f6f6f6 !important;
+  /* padding-bottom: 28px; */
+  background: var(--surface);
 }
 
 .knowledge-detail.knowledge-island {
-  background: #f6f6f6 !important;
+  background: var(--surface);
 }
 
 .knowledge-detail::after {
@@ -270,15 +270,15 @@
 
 .knowledge-doc-block {
   border: 0;
-  border-radius: 4px;
-  background: #f6f6f6 !important;
-  padding: 10px;
+  border-radius: 10px;
+  background: #f6f6f6;
+  padding: 10px 10px 24px;
   display: flex;
   flex-direction: column;
   gap: 6px;
   flex: 1 1 auto;
-  min-height: 160px;
-  margin-bottom: 12px;
+  /* min-height: 160px; */
+  margin-bottom: 0;
 }
 
 .knowledge-doc-head {
@@ -295,15 +295,16 @@
   margin: 0;
   border: 0;
   border-radius: 4px;
-  background: #f6f6f6 !important;
+  background: transparent;
   color: var(--text-main);
-  padding: 8px 8px 18px;
+  padding: 8px 8px 0;
   font-size: 11px;
   line-height: 1.45;
   white-space: pre-wrap;
   word-break: break-word;
   min-height: 120px;
-  overflow: auto;
+  max-height: none;
+  overflow: visible !important;
 }
 
 .knowledge-doc-markdown {

@@ -71,11 +71,11 @@ const ROLE_KB_TOPIC = "devEcosystem";
 const SCRAPLING_BRIDGE_NOT_READY = "SCRAPLING_BRIDGE_NOT_READY";
 const bridgeReadyPromiseByCwd = new Map<string, Promise<void>>();
 
-const ROLE_KB_ALLOWLIST: Record<StudioRoleId, string[]> = {
+export const ROLE_KB_ALLOWLIST: Record<StudioRoleId, string[]> = {
   pm_planner: [
     "https://www.gamedeveloper.com/design",
     "https://www.gdcvault.com/free",
-    "https://www.notion.so/help",
+    "https://www.gamedeveloper.com/business",
   ],
   client_programmer: [
     "https://docs.unity3d.com/Manual/index.html",
