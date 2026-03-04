@@ -330,7 +330,15 @@ export default function KnowledgeBasePage({ cwd, posts, onInjectContextSources }
                     type="button"
                   >
                     <strong>{group.taskId}</strong>
-                    <span>{`${collapsed ? "▶" : "▼"} ${group.entries.length}개`}</span>
+                    <span className="knowledge-group-count">
+                      <img
+                        alt=""
+                        aria-hidden="true"
+                        className={`knowledge-group-arrow${collapsed ? " is-collapsed" : ""}`}
+                        src="/down-arrow2.svg"
+                      />
+                      <span>{`${group.entries.length}개`}</span>
+                    </span>
                   </button>
                   {!collapsed ? (
                     <div className="knowledge-group-items">

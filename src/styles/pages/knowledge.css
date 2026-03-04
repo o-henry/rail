@@ -138,6 +138,24 @@
   color: var(--text-muted);
 }
 
+.knowledge-group-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.knowledge-group-arrow {
+  width: 10px;
+  height: 10px;
+  object-fit: contain;
+  transform: rotate(0deg);
+  transition: transform 120ms ease;
+}
+
+.knowledge-group-arrow.is-collapsed {
+  transform: rotate(-90deg);
+}
+
 .knowledge-group-items {
   display: grid;
   gap: 4px;
