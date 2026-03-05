@@ -596,6 +596,13 @@
   align-items: center;
 }
 
+.workflow-rag-template-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
 .workflow-rag-mode-toggle {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
@@ -611,6 +618,7 @@
 .workflow-rag-node-list {
   display: grid;
   gap: 8px;
+  padding-top: 12px;
 }
 
 .workflow-rag-node-list-head {
@@ -665,20 +673,20 @@
   padding: 0;
 }
 
-.workflow-rag-node-list label {
+.workflow-rag-flow-binding {
   display: grid;
   gap: 4px;
   font-size: 11px;
   color: var(--text-muted);
 }
 
-.workflow-rag-node-list input {
+.workflow-rag-flow-binding code {
+  font-size: 11px;
+  color: var(--text-main);
   border: 0;
   border-radius: 4px;
   background: color-mix(in srgb, var(--surface-panel) 84%, var(--surface));
-  color: var(--text-main);
-  padding: 8px 10px;
-  font-size: 12px;
+  padding: 6px 8px;
 }
 
 .workflow-rag-empty {

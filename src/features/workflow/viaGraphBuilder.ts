@@ -129,3 +129,37 @@ export function connectViaDefaultEdges(params: {
 
   return nextEdges;
 }
+
+export function insertMissingViaTemplateNodes(params: {
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+  templateNodeTypes: ViaNodeType[];
+  createNode: (nodeType: ViaNodeType, sameTypeCount: number) => GraphNode;
+}): { nodes: GraphNode[]; edges: GraphEdge[]; insertedNodeIds: string[] } {
+  const insertedNodeIds: string[] = [];
+  let nextNodes = [...params.nodes];
+  let nextEdges = [...params.edges];
+
+  for (const viaNodeType of params.templateNodeTypes) {
+    if (countViaNodesByType(nextNodes, viaNodeType) > 0) {
+      continue;
+    }
+    const sameTypeCount = countViaNodesByType(nextNodes, viaNodeType);
+    const nextNode = params.createNode(viaNodeType, sameTypeCount);
+    const nodeId = nextNode.id;
+    nextNodes = [...nextNodes, nextNode];
+    nextEdges = connectViaDefaultEdges({
+      nodes: nextNodes,
+      edges: nextEdges,
+      insertedNodeId: nodeId,
+      insertedNodeType: viaNodeType,
+    });
+    insertedNodeIds.push(nodeId);
+  }
+
+  return {
+    nodes: nextNodes,
+    edges: nextEdges,
+    insertedNodeIds,
+  };
+}

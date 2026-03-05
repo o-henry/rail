@@ -1,3 +1,20 @@
+function isViaOnlyGraph(graph: any): boolean {
+  const nodes = Array.isArray(graph?.nodes) ? graph.nodes : [];
+  if (nodes.length === 0) {
+    return false;
+  }
+  return nodes.every((node: any) => {
+    if (!node || typeof node !== "object") {
+      return false;
+    }
+    if (node.type !== "turn") {
+      return false;
+    }
+    const config = node.config && typeof node.config === "object" ? node.config : {};
+    return String((config as Record<string, unknown>).executor ?? "").trim() === "via_flow";
+  });
+}
+
 export function createRunGraphControlHandlers(params: any) {
   async function prepareRunGraphStart(skipWebConnectPreflight: boolean): Promise<any | null> {
     const resolvedCwd = String(params.cwd ?? "").trim();
@@ -38,13 +55,15 @@ export function createRunGraphControlHandlers(params: any) {
     }
 
     const runGroup = params.inferRunGroupMeta(params.graph, params.lastAppliedPresetRef.current, params.locale);
-    const directInputNodeIds = params.findDirectInputNodeIds(params.graph);
-    if (directInputNodeIds.length !== 1) {
-      params.setError(
-        `질문 직접 입력 노드는 1개여야 합니다. 현재 ${directInputNodeIds.length}개입니다. 노드 연결을 정리하세요.`,
-      );
-      params.setStatus("그래프 실행 대기");
-      return null;
+    if (!isViaOnlyGraph(params.graph)) {
+      const directInputNodeIds = params.findDirectInputNodeIds(params.graph);
+      if (directInputNodeIds.length !== 1) {
+        params.setError(
+          `질문 직접 입력 노드는 1개여야 합니다. 현재 ${directInputNodeIds.length}개입니다. 노드 연결을 정리하세요.`,
+        );
+        params.setStatus("그래프 실행 대기");
+        return null;
+      }
     }
     return runGroup;
   }

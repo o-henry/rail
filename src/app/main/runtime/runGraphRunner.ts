@@ -1,6 +1,23 @@
 import { createRunGraphProcessNode } from "./runGraphProcessNode";
 import { finalizeRunGraphExecution } from "./runGraphFinalize";
 
+function isViaOnlyGraph(graph: any): boolean {
+  const nodes = Array.isArray(graph?.nodes) ? graph.nodes : [];
+  if (nodes.length === 0) {
+    return false;
+  }
+  return nodes.every((node: any) => {
+    if (!node || typeof node !== "object") {
+      return false;
+    }
+    if (node.type !== "turn") {
+      return false;
+    }
+    const config = node.config && typeof node.config === "object" ? node.config : {};
+    return String((config as Record<string, unknown>).executor ?? "").trim() === "via_flow";
+  });
+}
+
 export function createRunGraphRunner(params: any) {
   return async function onRunGraph(skipWebConnectPreflight = false, questionOverride?: string) {
     if (params.isGraphRunning && params.isGraphPaused) {
@@ -19,10 +36,13 @@ export function createRunGraphRunner(params: any) {
       return;
     }
 
-    const unifiedInputResult = params.validateUnifiedRunInput(
-      typeof questionOverride === "string" ? questionOverride : params.workflowQuestion,
-      params.locale,
-    );
+    const viaOnlyGraph = isViaOnlyGraph(params.graph);
+    const requestedQuestion = typeof questionOverride === "string" ? questionOverride : params.workflowQuestion;
+    const seededQuestion =
+      viaOnlyGraph && String(requestedQuestion ?? "").trim().length === 0
+        ? "RAG 파이프라인 자동 실행"
+        : requestedQuestion;
+    const unifiedInputResult = params.validateUnifiedRunInput(seededQuestion, params.locale);
     if (!unifiedInputResult.ok) {
       params.setError(unifiedInputResult.errors.join("\n"));
       params.setStatus("그래프 실행 대기");

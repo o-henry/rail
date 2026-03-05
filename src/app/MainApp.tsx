@@ -77,8 +77,10 @@ import {
 import {
   connectViaDefaultEdges,
   countViaNodesByType,
+  insertMissingViaTemplateNodes,
   VIA_NODE_BASE_POSITION_BY_TYPE,
 } from "../features/workflow/viaGraphBuilder";
+import { RAG_TEMPLATE_NODE_TYPES, RAG_TEMPLATE_OPTIONS, type RagTemplateId } from "../features/workflow/ragTemplates";
 import {
   isViaNodeType,
   VIA_NODE_OPTIONS,
@@ -338,7 +340,6 @@ const STUDIO_ROLE_PROMPTS: Record<StudioRoleId, string> = {
   build_release: "빌드/릴리즈 검증 항목과 배포 전 점검 체크를 실행 순서로 제시해줘.",
   technical_writer: "핵심 결정사항과 변경사항을 다음 담당자가 바로 실행할 수 있게 문서화해줘.",
 };
-
 function toStudioRoleId(value: string): StudioRoleId | null {
   const normalized = String(value ?? "").trim();
   if (
@@ -1812,9 +1813,13 @@ function App() {
   }, [selectedNodeRoleLockId, workflowRoleId]);
   const canClearGraph = !isWorkflowBusy && (graph.nodes.length > 0 || graph.edges.length > 0);
   const isWorkspaceCwdConfigured = String(cwd ?? "").trim().length > 0 && String(cwd ?? "").trim() !== ".";
+  const canRunWithoutQuestion = workflowGraphViewMode === "rag";
   const canRunGraphNow =
     canResumeGraph ||
-    (isWorkspaceCwdConfigured && !isWorkflowBusy && graphForCanvas.nodes.length > 0 && workflowQuestion.trim().length > 0);
+    (isWorkspaceCwdConfigured &&
+      !isWorkflowBusy &&
+      graphForCanvas.nodes.length > 0 &&
+      (canRunWithoutQuestion || workflowQuestion.trim().length > 0));
   const {
     currentFeedPosts,
     feedCategoryPosts,
@@ -1940,11 +1945,9 @@ function App() {
     setStatus("그래프에 데이터 조사 노드를 추가했습니다.");
   }, [appendWorkspaceEvent, applyGraphChange, graph.nodes, setNodeSelection, setStatus]);
 
-  const onAddViaFlowNode = useCallback((viaNodeType: ViaNodeType) => {
-    const nodeId = makeNodeId("turn");
-    const sameTypeCount = countViaNodesByType(graph.nodes, viaNodeType);
+  const buildViaFlowNode = useCallback((nodeId: string, viaNodeType: ViaNodeType, sameTypeCount: number): GraphNode => {
     const basePosition = VIA_NODE_BASE_POSITION_BY_TYPE[viaNodeType] ?? { x: 300, y: 120 };
-    const nextNode: GraphNode = {
+    return {
       id: nodeId,
       type: "turn",
       position: {
@@ -1964,8 +1967,13 @@ function App() {
         viaNodeLabel: viaNodeLabel(viaNodeType),
       },
     };
+  }, []);
 
+  const onAddViaFlowNode = useCallback((viaNodeType: ViaNodeType) => {
+    const nodeId = makeNodeId("turn");
     applyGraphChange((prev) => {
+      const sameTypeCount = countViaNodesByType(prev.nodes, viaNodeType);
+      const nextNode = buildViaFlowNode(nodeId, viaNodeType, sameTypeCount);
       const nextNodes = [...prev.nodes, nextNode];
       const nextEdges = connectViaDefaultEdges({
         nodes: nextNodes,
@@ -1973,14 +1981,12 @@ function App() {
         insertedNodeId: nodeId,
         insertedNodeType: viaNodeType,
       });
-
       return {
         ...prev,
         nodes: nextNodes,
         edges: nextEdges,
       };
     });
-
     setNodeSelection([nodeId], nodeId);
     appendWorkspaceEvent({
       source: "workflow",
@@ -1989,7 +1995,36 @@ function App() {
       level: "info",
     });
     setStatus(`RAG 그래프에 ${viaNodeLabel(viaNodeType)} 노드를 추가했습니다.`);
-  }, [appendWorkspaceEvent, applyGraphChange, graph.nodes, setNodeSelection, setStatus]);
+  }, [appendWorkspaceEvent, applyGraphChange, buildViaFlowNode, setNodeSelection, setStatus]);
+
+  const onApplyRagTemplate = useCallback((templateIdRaw: string) => {
+    const templateId = String(templateIdRaw ?? "").trim() as RagTemplateId;
+    const templateNodeTypes = RAG_TEMPLATE_NODE_TYPES[templateId];
+    if (!templateNodeTypes) {
+      return;
+    }
+    const insertedNodeIds: string[] = [];
+    applyGraphChange((prev) => {
+      const inserted = insertMissingViaTemplateNodes({
+        nodes: prev.nodes,
+        edges: prev.edges,
+        templateNodeTypes,
+        createNode: (nodeType, sameTypeCount) => buildViaFlowNode(makeNodeId("turn"), nodeType, sameTypeCount),
+      });
+      insertedNodeIds.push(...inserted.insertedNodeIds);
+      return { ...prev, nodes: inserted.nodes, edges: inserted.edges };
+    });
+
+    if (insertedNodeIds.length > 0) {
+      const focusNodeId = insertedNodeIds[insertedNodeIds.length - 1];
+      setNodeSelection([focusNodeId], focusNodeId);
+      appendWorkspaceEvent({ source: "workflow", message: `RAG 템플릿 적용: ${templateId}`, actor: "user", level: "info" });
+      setStatus(`RAG 템플릿을 적용했습니다. 노드 ${insertedNodeIds.length}개를 추가했습니다.`);
+      return;
+    }
+
+    setStatus("선택한 템플릿의 노드는 이미 모두 추가되어 있습니다.");
+  }, [appendWorkspaceEvent, applyGraphChange, buildViaFlowNode, setNodeSelection, setStatus]);
 
   const onSelectRagModeNode = useCallback((nodeId: string) => {
     const normalizedNodeId = String(nodeId ?? "").trim();
@@ -2871,9 +2906,11 @@ function App() {
                 {workflowGraphViewMode === "rag" ? (
                   <WorkflowRagModeDock
                     onAddRagNode={onAddViaFlowNode}
+                    onApplyTemplate={onApplyRagTemplate}
                     onSelectNode={onSelectRagModeNode}
                     onUpdateFlowId={onUpdateRagModeFlowId}
                     ragNodes={ragModeNodes}
+                    ragTemplateOptions={RAG_TEMPLATE_OPTIONS}
                     selectedNodeId={selectedNodeId}
                     viaNodeOptions={VIA_NODE_OPTIONS.map((row) => ({
                       value: row.value,
