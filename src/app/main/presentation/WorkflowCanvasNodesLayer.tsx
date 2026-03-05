@@ -3,7 +3,7 @@ import { useI18n } from "../../../i18n";
 import type { GraphNode, NodeAnchorSide, NodeExecutionStatus } from "../../../features/workflow/types";
 import type { MarqueeSelection, NodeRunState } from "../types";
 import type { WorkflowGraphViewMode } from "../../../features/workflow/viaGraph";
-import { viaNodeIconText, viaNodeLabel } from "../../../features/workflow/viaCatalog";
+import { viaNodeIconSrc, viaNodeIconText, viaNodeLabel } from "../../../features/workflow/viaCatalog";
 
 type WorkflowCanvasNodesLayerProps = {
   canvasNodes: GraphNode[];
@@ -82,7 +82,9 @@ export default function WorkflowCanvasNodesLayer({
         const sourceKind = String((node.config as Record<string, unknown>)?.sourceKind ?? "").trim().toLowerCase();
         const viaNodeType = String((node.config as Record<string, unknown>)?.viaNodeType ?? "").trim();
         const ragNodeLabel = viaNodeLabel(viaNodeType);
+        const ragNodeTypeLabel = ragNodeLabel.replace(/\s*\(미\/일\/중\/한\)\s*/g, "").trim();
         const ragNodeIconText = viaNodeIconText(viaNodeType);
+        const ragNodeIconSrc = viaNodeIconSrc(viaNodeType);
         const handoffRoleId = String((node.config as Record<string, unknown>)?.handoffRoleId ?? "")
           .trim()
           .toLowerCase();
@@ -122,20 +124,18 @@ export default function WorkflowCanvasNodesLayer({
             }}
           >
             {isRagModeNode ? (
-              <div className="rag-node-shell">
-                <button
-                  aria-label={t("common.delete")}
-                  className="rag-node-delete-button"
-                  onClick={() => deleteNode(node.id)}
-                  type="button"
-                >
-                  ×
-                </button>
-                <div className="rag-node-icon">{ragNodeIconText}</div>
-                <strong className="rag-node-label">{ragNodeLabel}</strong>
-                <span className="rag-node-type">{viaNodeType || turnRoleLabel(node)}</span>
-                <span className={`status-pill status-${nodeStatus}`}>{nodeStatusLabel(nodeStatus)}</span>
-              </div>
+              <>
+                <div className="rag-node-shell">
+                  <div className="rag-node-icon">
+                    {ragNodeIconSrc ? (
+                      <img alt="" aria-hidden="true" src={ragNodeIconSrc} />
+                    ) : (
+                      ragNodeIconText
+                    )}
+                  </div>
+                </div>
+                <span className="rag-node-type">{ragNodeTypeLabel || viaNodeType || turnRoleLabel(node)}</span>
+              </>
             ) : (
               <>
                 <div className="node-head">

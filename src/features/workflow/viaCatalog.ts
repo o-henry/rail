@@ -51,6 +51,24 @@ export const VIA_NODE_ICON_TEXT_BY_TYPE: Record<ViaNodeType, string> = Object.fr
   [...VIA_NODE_OPTIONS, ...LEGACY_VIA_NODE_OPTIONS].map((row) => [row.value, row.iconText]),
 ) as Record<ViaNodeType, string>;
 
+export const VIA_NODE_ICON_SRC_BY_TYPE: Record<ViaNodeType, string> = {
+  "trigger.manual": "/rag-node-icons/trend.svg",
+  "source.news": "/rag-node-icons/news.svg",
+  "source.sns": "/rag-node-icons/sns.svg",
+  "source.community": "/rag-node-icons/trend.svg",
+  "source.dev": "/rag-node-icons/trend.svg",
+  "source.market": "/rag-node-icons/stock.svg",
+  "transform.normalize": "/rag-node-icons/normalize.svg",
+  "transform.verify": "/rag-node-icons/verification.svg",
+  "transform.rank": "/rag-node-icons/priority.svg",
+  "agent.codex": "/rag-node-icons/summary.svg",
+  "export.rag": "/rag-node-icons/export.svg",
+  "source.x": "/rag-node-icons/sns.svg",
+  "source.threads": "/rag-node-icons/sns.svg",
+  "source.reddit": "/rag-node-icons/trend.svg",
+  "source.hn": "/rag-node-icons/trend.svg",
+};
+
 export function isViaNodeType(value: string): value is ViaNodeType {
   return [...VIA_NODE_OPTIONS, ...LEGACY_VIA_NODE_OPTIONS].some((row) => row.value === value);
 }
@@ -67,4 +85,11 @@ export function viaNodeIconText(value: string): string {
     return VIA_NODE_ICON_TEXT_BY_TYPE[value];
   }
   return "NODE";
+}
+
+export function viaNodeIconSrc(value: string): string {
+  if (isViaNodeType(value)) {
+    return VIA_NODE_ICON_SRC_BY_TYPE[value];
+  }
+  return "";
 }
