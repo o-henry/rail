@@ -1835,11 +1835,31 @@
   min-width: var(--runbar-btn-size);
   height: var(--runbar-btn-size);
   min-height: var(--runbar-btn-size);
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0.03em;
   color: var(--text-muted);
   border-radius: 999px;
+}
+
+.canvas-runbar .canvas-mode-chip .canvas-mode-chip-icon {
+  width: 14px;
+  height: 14px;
+  display: block;
+  background-color: currentColor;
+  -webkit-mask-position: center;
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-size: contain;
+  mask-position: center;
+  mask-repeat: no-repeat;
+  mask-size: contain;
+}
+
+.canvas-runbar .canvas-mode-chip.mode-dag .canvas-mode-chip-icon {
+  -webkit-mask-image: url("/canvas-mode-dag.svg");
+  mask-image: url("/canvas-mode-dag.svg");
+}
+
+.canvas-runbar .canvas-mode-chip.mode-rag .canvas-mode-chip-icon {
+  -webkit-mask-image: url("/canvas-mode-rag.svg");
+  mask-image: url("/canvas-mode-rag.svg");
 }
 
 .canvas-runbar .canvas-mode-chip.mode-dag.is-active {
