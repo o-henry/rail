@@ -233,12 +233,20 @@ function buildViaTextSummary(params: {
       if (!record) {
         continue;
       }
-      const title = String(record.title ?? "").trim() || "(no title)";
+      const title = String(record.title_ko ?? record.title ?? "").trim() || "(no title)";
       const source = String(record.source_name ?? record.sourceName ?? "").trim();
       const sourceType = String(record.source_type ?? record.sourceType ?? "").trim();
       const country = String(record.country ?? "").trim();
       const url = String(record.url ?? "").trim();
-      const summary = normalizeWhitespace(String(record.content_excerpt ?? record.summary ?? ""));
+      const summary = normalizeWhitespace(
+        String(
+          record.content_excerpt_ko
+            ?? record.summary_ko
+            ?? record.content_excerpt
+            ?? record.summary
+            ?? "",
+        ),
+      );
       const header = [
         country ? `[${country}]` : "",
         source ? source : toSourceTypeLabel(sourceType),

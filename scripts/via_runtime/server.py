@@ -58,6 +58,7 @@ PINCHTAB_BLOCK_MEDIA_ENV = "RAIL_VIA_PINCHTAB_BLOCK_MEDIA"
 PINCHTAB_STARTUP_DELAY_ENV = "RAIL_VIA_PINCHTAB_STARTUP_DELAY_SEC"
 PINCHTAB_TARGET_DELAY_ENV = "RAIL_VIA_PINCHTAB_TARGET_DELAY_SEC"
 PINCHTAB_TAB_READ_DELAY_ENV = "RAIL_VIA_PINCHTAB_TAB_READ_DELAY_SEC"
+TRANSLATE_TO_KO_ENV = "RAIL_VIA_TRANSLATE_TO_KO"
 DEFAULT_PINCHTAB_BASE_URL = "http://127.0.0.1:9867"
 PINCHTAB_DEFAULT_MODE = "headless"
 PINCHTAB_STARTUP_DELAY_SECONDS = 1.1
@@ -375,6 +376,63 @@ def env_int(env_name: str, default: int, *, min_value: int, max_value: int) -> i
     except Exception:
         return default
     return max(min_value, min(max_value, value))
+
+
+TRANSLATION_CACHE: dict[str, str] = {}
+
+
+def contains_korean(text: str) -> bool:
+    return bool(re.search(r"[가-힣]", text or ""))
+
+
+def translate_to_korean(text: str, max_len: int = 280) -> str:
+    normalized = trim_text(text or "", 1200)
+    if not normalized:
+        return ""
+    if contains_korean(normalized):
+        return trim_text(normalized, max_len)
+    if not env_flag_enabled(TRANSLATE_TO_KO_ENV, default=True):
+        return trim_text(normalized, max_len)
+
+    cached = TRANSLATION_CACHE.get(normalized)
+    if cached:
+        return trim_text(cached, max_len)
+
+    try:
+        qs = urlencode(
+            {
+                "client": "gtx",
+                "sl": "auto",
+                "tl": "ko",
+                "dt": "t",
+                "q": normalized,
+            }
+        )
+        request = Request(
+            f"https://translate.googleapis.com/translate_a/single?{qs}",
+            headers={
+                "User-Agent": USER_AGENT,
+                "Accept": "application/json, text/plain, */*",
+            },
+            method="GET",
+        )
+        with urlopen(request, timeout=4) as response:
+            payload = response.read().decode("utf-8", errors="ignore")
+        parsed = json.loads(payload)
+        segments = parsed[0] if isinstance(parsed, list) and parsed else []
+        translated = ""
+        if isinstance(segments, list):
+            translated = "".join(
+                str(segment[0] or "")
+                for segment in segments
+                if isinstance(segment, list) and len(segment) > 0
+            ).strip()
+        if translated:
+            TRANSLATION_CACHE[normalized] = translated
+            return trim_text(translated, max_len)
+    except Exception:
+        pass
+    return trim_text(normalized, max_len)
 
 
 def is_local_hostname(hostname: str | None) -> bool:
@@ -1656,8 +1714,9 @@ def summarize_ranked_items(items: list[dict[str, Any]], max_lines: int = 8) -> l
         country = str(row.get("country") or "GLOBAL")
         source = str(row.get("source_name") or display_source_type(str(row.get("source_type") or "")) or "source")
         status = str(row.get("verification_status") or "warning")
-        title = trim_text(row.get("title") or "", 180)
+        title = translate_to_korean(str(row.get("title_ko") or row.get("title") or ""), 180)
         excerpt = trim_text(row.get("content_excerpt") or row.get("summary") or "", 140)
+        excerpt = translate_to_korean(str(row.get("content_excerpt_ko") or row.get("summary_ko") or excerpt), 160)
         if excerpt:
             lines.append(f"[{country}] ({status}) {source}: {title} - {excerpt}")
         else:
@@ -1665,6 +1724,24 @@ def summarize_ranked_items(items: list[dict[str, Any]], max_lines: int = 8) -> l
         if len(lines) >= max_lines:
             break
     return lines
+
+
+def localize_ranked_items_for_ko(items: list[dict[str, Any]], max_items: int = 24) -> list[dict[str, Any]]:
+    localized: list[dict[str, Any]] = []
+    for index, row in enumerate(items):
+        next_row = dict(row)
+        if index < max_items:
+            title = trim_text(next_row.get("title") or "", 220)
+            if title:
+                next_row["title_ko"] = translate_to_korean(title, 220)
+            summary = trim_text(next_row.get("summary") or "", 380)
+            if summary:
+                next_row["summary_ko"] = translate_to_korean(summary, 380)
+            excerpt = trim_text(next_row.get("content_excerpt") or "", 380)
+            if excerpt:
+                next_row["content_excerpt_ko"] = translate_to_korean(excerpt, 380)
+        localized.append(next_row)
+    return localized
 
 
 def build_source_coverage(items: list[dict[str, Any]]) -> dict[str, Any]:
@@ -1740,9 +1817,9 @@ def build_markdown(
         lines.append(f"### {display_source_type(source_type)}")
         for row in rows[:4]:
             country = str(row.get("country") or "GLOBAL")
-            title = trim_text(row.get("title") or "", 180)
+            title = trim_text(row.get("title_ko") or row.get("title") or "", 180)
             status = str(row.get("verification_status") or "warning")
-            excerpt = trim_text(row.get("content_excerpt") or row.get("summary") or "", 220)
+            excerpt = trim_text(row.get("content_excerpt_ko") or row.get("summary_ko") or row.get("content_excerpt") or row.get("summary") or "", 220)
             lines.append(f"- [{country}] {title} ({status})")
             if excerpt:
                 lines.append(f"  - 요약: {excerpt}")
@@ -1759,8 +1836,8 @@ def build_markdown(
             country = str(row.get("country") or "GLOBAL")
             source = str(row.get("source_name") or display_source_type(str(row.get("source_type") or "")) or "source")
             status = str(row.get("verification_status") or "warning")
-            title = trim_text(row.get("title") or "", 180)
-            excerpt = trim_text(row.get("content_excerpt") or row.get("summary") or "", 320)
+            title = trim_text(row.get("title_ko") or row.get("title") or "", 180)
+            excerpt = trim_text(row.get("content_excerpt_ko") or row.get("summary_ko") or row.get("content_excerpt") or row.get("summary") or "", 320)
             lines.append(f"{index}. [{country}] {source} · {title} ({status})")
             if excerpt:
                 lines.append(f"   - 발췌: {excerpt}")
@@ -2283,6 +2360,7 @@ class ViaStore:
 
                 if node_type == "agent.codex":
                     source_items = ranked_items if ranked_items else rank_items(verify_items(normalize_items(raw_items)))
+                    source_items = localize_ranked_items_for_ko(source_items)
                     highlights = summarize_ranked_items(source_items)
                     self._append_step(
                         steps=steps,
@@ -2299,6 +2377,7 @@ class ViaStore:
                 if node_type == "export.rag":
                     verified_source = verified_items if verified_items else verify_items(normalize_items(raw_items))
                     ranked_source = ranked_items if ranked_items else rank_items(verified_source)
+                    ranked_source = localize_ranked_items_for_ko(ranked_source)
                     coverage = build_source_coverage(verified_source)
                     crawl_depth = build_crawl_depth_stats(verified_source)
                     finished_at = now_iso()
@@ -2355,6 +2434,7 @@ class ViaStore:
         if not artifacts:
             verified_source = verified_items if verified_items else verify_items(normalize_items(raw_items))
             ranked_source = ranked_items if ranked_items else rank_items(verified_source)
+            ranked_source = localize_ranked_items_for_ko(ranked_source)
             coverage = build_source_coverage(verified_source)
             crawl_depth = build_crawl_depth_stats(verified_source)
             finished_at = now_iso()
