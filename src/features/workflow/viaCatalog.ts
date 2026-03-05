@@ -31,7 +31,7 @@ export const VIA_NODE_OPTIONS: ViaNodeOption[] = [
   { value: "source.market", label: "주식/시장 수집", iconText: "MKT", group: "source" },
   { value: "transform.normalize", label: "정규화", iconText: "NORM", group: "transform" },
   { value: "transform.verify", label: "검증", iconText: "VER", group: "transform" },
-  { value: "transform.rank", label: "우선순위", iconText: "RANK", group: "transform" },
+  { value: "transform.rank", label: "우선순위", iconText: "LV", group: "transform" },
   { value: "agent.codex", label: "핵심 요약 생성", iconText: "AI", group: "agent" },
   { value: "export.rag", label: "문서 내보내기", iconText: "OUT", group: "export" },
 ];
@@ -60,7 +60,7 @@ export const VIA_NODE_ICON_SRC_BY_TYPE: Record<ViaNodeType, string> = {
   "source.market": "/rag-node-icons/stock.svg",
   "transform.normalize": "/rag-node-icons/normalize.svg",
   "transform.verify": "/rag-node-icons/verification.svg",
-  "transform.rank": "/rag-node-icons/priority.svg",
+  "transform.rank": "",
   "agent.codex": "/rag-node-icons/summary.svg",
   "export.rag": "/rag-node-icons/export.svg",
   "source.x": "/rag-node-icons/sns.svg",
