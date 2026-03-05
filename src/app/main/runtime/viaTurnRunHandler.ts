@@ -40,6 +40,96 @@ function isTerminalStatus(status: string): boolean {
   );
 }
 
+function toRecord(input: unknown): Record<string, unknown> | null {
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    return null;
+  }
+  return input as Record<string, unknown>;
+}
+
+function toStringArray(input: unknown): string[] {
+  if (!Array.isArray(input)) {
+    return [];
+  }
+  return input
+    .map((row) => String(row ?? "").trim())
+    .filter((row) => row.length > 0);
+}
+
+function formatViaStepLog(stepInput: unknown): string {
+  const step = toRecord(stepInput);
+  if (!step) {
+    return "";
+  }
+  const nodeId = String(step.node_id ?? step.nodeId ?? "node").trim() || "node";
+  const status = String(step.status ?? "").trim() || "unknown";
+  const outputSummary = String(step.output_summary ?? step.outputSummary ?? "").trim();
+  const error = String(step.error ?? "").trim();
+  const message = [`[VIA:${nodeId}]`, status];
+  if (outputSummary) {
+    message.push(`· ${outputSummary}`);
+  }
+  if (error) {
+    message.push(`· ${error}`);
+  }
+  return message.join(" ");
+}
+
+function buildViaTextSummary(params: {
+  flowId: number;
+  runId: string;
+  status: string;
+  warnings: string[];
+  detail: unknown;
+  artifacts: ViaArtifact[];
+}): string {
+  const detailRecord = toRecord(params.detail);
+  const payload = toRecord(detailRecord?.payload);
+  const steps = Array.isArray(detailRecord?.steps) ? detailRecord?.steps : [];
+  const highlights = toStringArray(payload?.highlights).slice(0, 8);
+  const itemsAllCountRaw = payload?.items_all_count;
+  const itemsAllCount =
+    typeof itemsAllCountRaw === "number"
+      ? itemsAllCountRaw
+      : Number.isFinite(Number(itemsAllCountRaw))
+        ? Number(itemsAllCountRaw)
+        : undefined;
+  const coverage = toRecord(payload?.coverage);
+  const coverageCount = coverage ? Object.keys(coverage).length : 0;
+  const crawlDepth = toRecord(detailRecord?.crawl_depth);
+  const enriched = Number(crawlDepth?.items_with_content ?? 0);
+  const totalItems = Number(crawlDepth?.items_total ?? 0);
+  const lines = [
+    `VIA flow ${params.flowId} run ${params.runId} status ${params.status}`,
+    `artifacts=${params.artifacts.length}`,
+  ];
+  if (typeof itemsAllCount === "number" && Number.isFinite(itemsAllCount)) {
+    lines.push(`items_all_count=${itemsAllCount}`);
+  }
+  if (coverageCount > 0) {
+    lines.push(`coverage_sources=${coverageCount}`);
+  }
+  if (totalItems > 0) {
+    lines.push(`content_enriched=${enriched}/${totalItems}`);
+  }
+  if (highlights.length > 0) {
+    lines.push("highlights:");
+    for (const line of highlights) {
+      lines.push(`- ${line}`);
+    }
+  }
+  if (params.warnings.length > 0) {
+    lines.push("warnings:");
+    for (const warning of params.warnings.slice(0, 8)) {
+      lines.push(`- ${warning}`);
+    }
+  }
+  if (steps.length > 0) {
+    lines.push(`steps=${steps.length}`);
+  }
+  return lines.join("\n");
+}
+
 function buildViaOutput(params: {
   flowId: number;
   runId: string;
@@ -52,7 +142,7 @@ function buildViaOutput(params: {
   return {
     provider: "via",
     timestamp,
-    text: `VIA flow ${params.flowId} run ${params.runId} status ${params.status}`,
+    text: buildViaTextSummary(params),
     artifacts: params.artifacts,
     via: {
       flowId: params.flowId,
@@ -143,6 +233,36 @@ export async function runViaFlowTurn(params: {
     let warnings = Array.isArray(initial.warnings) ? initial.warnings : [];
     let detail = initial.detail;
     let artifacts = Array.isArray(initial.artifacts) ? initial.artifacts : [];
+    const seenStepLogs = new Set<string>();
+    const seenWarnings = new Set<string>();
+    let lastLoggedStatus = "";
+
+    const appendViaProgressLogs = () => {
+      if (status && status !== lastLoggedStatus) {
+        params.addNodeLog(params.node.id, `[VIA] 상태=${status}`);
+        lastLoggedStatus = status;
+      }
+      for (const warning of warnings) {
+        const normalized = String(warning ?? "").trim();
+        if (!normalized || seenWarnings.has(normalized)) {
+          continue;
+        }
+        seenWarnings.add(normalized);
+        params.addNodeLog(params.node.id, `[VIA][경고] ${normalized}`);
+      }
+      const detailRecord = toRecord(detail);
+      const steps = Array.isArray(detailRecord?.steps) ? detailRecord?.steps : [];
+      for (const step of steps) {
+        const line = formatViaStepLog(step);
+        if (!line || seenStepLogs.has(line)) {
+          continue;
+        }
+        seenStepLogs.add(line);
+        params.addNodeLog(params.node.id, line);
+      }
+    };
+
+    appendViaProgressLogs();
 
     const deadline = Date.now() + timeoutMs;
     while (Date.now() < deadline) {
@@ -181,6 +301,7 @@ export async function runViaFlowTurn(params: {
       if (Array.isArray(run.warnings) && run.warnings.length > 0) {
         warnings = run.warnings;
       }
+      appendViaProgressLogs();
 
       const listed = await viaListArtifacts({
         invokeFn: params.invokeFn,

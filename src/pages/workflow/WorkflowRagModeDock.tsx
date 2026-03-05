@@ -115,7 +115,7 @@ export default function WorkflowRagModeDock(props: WorkflowRagModeDockProps) {
                     {row.recentLogs.length > 0 ? (
                       <ul className="workflow-rag-progress-log-lines">
                         {row.recentLogs
-                          .slice(-(row.id === props.selectedNodeId ? 4 : 2))
+                          .slice(-(row.id === props.selectedNodeId ? 10 : 5))
                           .map((line, index) => (
                             <li key={`${row.id}-${index}`}>{line}</li>
                           ))}

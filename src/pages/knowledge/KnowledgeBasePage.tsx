@@ -439,7 +439,7 @@ export default function KnowledgeBasePage({ cwd, posts, onInjectContextSources }
                   onClick={() => void onRevealPath(String(selected.markdownPath ?? ""))}
                   type="button"
                 >
-                  Markdown 열기
+                  MARKDOWN 열기
                 </button>
                 <button
                   disabled={!selected.jsonPath}

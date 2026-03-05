@@ -606,7 +606,7 @@ function App() {
           viaNodeLabel: node.viaNodeLabel,
           status,
           statusLabel: nodeStatusLabel(status),
-          recentLogs: (state?.logs ?? []).slice(-2),
+          recentLogs: (state?.logs ?? []).slice(-12),
         };
       }),
     [nodeStates, nodeStatusLabel, ragModeNodes],
