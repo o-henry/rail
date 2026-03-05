@@ -52,11 +52,11 @@ export const VIA_NODE_ICON_TEXT_BY_TYPE: Record<ViaNodeType, string> = Object.fr
 ) as Record<ViaNodeType, string>;
 
 export const VIA_NODE_ICON_SRC_BY_TYPE: Record<ViaNodeType, string> = {
-  "trigger.manual": "/rag-node-icons/trend.svg",
+  "trigger.manual": "/rag-node-icons/on.svg",
   "source.news": "/rag-node-icons/news.svg",
   "source.sns": "/rag-node-icons/sns.svg",
-  "source.community": "/rag-node-icons/trend.svg",
-  "source.dev": "/rag-node-icons/trend.svg",
+  "source.community": "/rag-node-icons/community.svg",
+  "source.dev": "/rag-node-icons/git.svg",
   "source.market": "/rag-node-icons/stock.svg",
   "transform.normalize": "/rag-node-icons/normalize.svg",
   "transform.verify": "/rag-node-icons/verification.svg",
@@ -65,8 +65,8 @@ export const VIA_NODE_ICON_SRC_BY_TYPE: Record<ViaNodeType, string> = {
   "export.rag": "/rag-node-icons/export.svg",
   "source.x": "/rag-node-icons/sns.svg",
   "source.threads": "/rag-node-icons/sns.svg",
-  "source.reddit": "/rag-node-icons/trend.svg",
-  "source.hn": "/rag-node-icons/trend.svg",
+  "source.reddit": "/rag-node-icons/community.svg",
+  "source.hn": "/rag-node-icons/git.svg",
 };
 
 export function isViaNodeType(value: string): value is ViaNodeType {
