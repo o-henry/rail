@@ -1835,17 +1835,11 @@
   min-width: var(--runbar-btn-size);
   height: var(--runbar-btn-size);
   min-height: var(--runbar-btn-size);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0;
   color: var(--text-muted);
   border-radius: 999px;
-}
-
-.canvas-runbar .canvas-mode-chip .canvas-mode-chip-image {
-  width: 14px;
-  height: 14px;
-  display: block;
-  object-fit: contain;
-  filter: var(--canvas-control-icon-filter);
-  opacity: var(--canvas-control-icon-opacity);
 }
 
 .canvas-runbar .canvas-mode-chip.mode-dag.is-active {
@@ -1858,11 +1852,6 @@
   background: color-mix(in srgb, #159a69 82%, var(--canvas-control-bg));
   border-color: color-mix(in srgb, #159a69 78%, var(--canvas-control-border));
   color: #f2fff8;
-}
-
-.canvas-runbar .canvas-mode-chip.is-active .canvas-mode-chip-image {
-  filter: brightness(0) invert(1);
-  opacity: 0.96;
 }
 
 .canvas-runbar .canvas-icon-image {
