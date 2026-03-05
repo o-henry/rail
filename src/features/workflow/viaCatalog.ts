@@ -24,9 +24,9 @@ export type ViaNodeOption = {
 
 export const VIA_NODE_OPTIONS: ViaNodeOption[] = [
   { value: "trigger.manual", label: "수동 시작", iconText: "TRG", group: "trigger" },
-  { value: "source.news", label: "뉴스 수집 (미/일/중/한)", iconText: "NEWS", group: "source" },
+  { value: "source.news", label: "뉴스 수집", iconText: "NEWS", group: "source" },
   { value: "source.sns", label: "SNS 수집 (X+Threads)", iconText: "SNS", group: "source" },
-  { value: "source.community", label: "커뮤니티 수집 (미/일/중/한)", iconText: "COMM", group: "source" },
+  { value: "source.community", label: "커뮤니티 수집", iconText: "COMM", group: "source" },
   { value: "source.dev", label: "개발 커뮤니티 수집", iconText: "DEV", group: "source" },
   { value: "source.market", label: "주식/시장 수집", iconText: "MKT", group: "source" },
   { value: "transform.normalize", label: "정규화", iconText: "NORM", group: "transform" },
@@ -39,7 +39,7 @@ export const VIA_NODE_OPTIONS: ViaNodeOption[] = [
 const LEGACY_VIA_NODE_OPTIONS: ViaNodeOption[] = [
   { value: "source.x", label: "SNS 수집 (X+Threads)", iconText: "SNS", group: "source" },
   { value: "source.threads", label: "SNS 수집 (X+Threads)", iconText: "SNS", group: "source" },
-  { value: "source.reddit", label: "커뮤니티 수집 (미/일/중/한)", iconText: "COMM", group: "source" },
+  { value: "source.reddit", label: "커뮤니티 수집", iconText: "COMM", group: "source" },
   { value: "source.hn", label: "개발 커뮤니티 수집", iconText: "DEV", group: "source" },
 ];
 

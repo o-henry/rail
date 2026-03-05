@@ -33,7 +33,7 @@ describe("viaCatalog", () => {
   });
 
   it("maps labels and icon placeholders", () => {
-    expect(viaNodeLabel("source.news")).toBe("뉴스 수집 (미/일/중/한)");
+    expect(viaNodeLabel("source.news")).toBe("뉴스 수집");
     expect(viaNodeIconText("source.news")).toBe("NEWS");
     expect(viaNodeLabel("source.threads")).toBe("SNS 수집 (X+Threads)");
     expect(viaNodeLabel("unknown.type")).toBe("unknown.type");
