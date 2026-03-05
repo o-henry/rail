@@ -29,7 +29,6 @@ type BuildCanvasEdgeLinesParams = {
   entries: CanvasEdgeEntry[];
   nodeMap: Map<string, GraphNode>;
   getNodeVisualSize: (nodeId: string) => NodeVisualSize;
-  preferCurvedPaths?: boolean;
 };
 
 const SIDE_EDGE_PADDING = 8;
@@ -74,7 +73,7 @@ function compressCollinear(points: LogicalPoint[]): LogicalPoint[] {
 }
 
 export function buildCanvasEdgeLines(params: BuildCanvasEdgeLinesParams): CanvasEdgeLine[] {
-  const { entries, nodeMap, getNodeVisualSize, preferCurvedPaths = false } = params;
+  const { entries, nodeMap, getNodeVisualSize } = params;
 
   const groupedFrom = new Map<string, CanvasEdgeEntry[]>();
   const groupedTo = new Map<string, CanvasEdgeEntry[]>();
@@ -257,18 +256,7 @@ export function buildCanvasEdgeLines(params: BuildCanvasEdgeLinesParams): Canvas
       const hasBundledRouting = !hasManualControl && Boolean(bundledFromSide || bundledToSide);
 
       let path: string;
-      if (preferCurvedPaths) {
-        path = buildRoundedEdgePath(
-          fromPoint.x,
-          fromPoint.y,
-          toPoint.x,
-          toPoint.y,
-          true,
-          routeFromSide,
-          routeToSide,
-          0,
-        );
-      } else if (hasBundledRouting && toHorizontal) {
+      if (hasBundledRouting && toHorizontal) {
         const fromCenterX = fromNode.position.x + fromSize.width / 2;
         const virtualFromSide: NodeAnchorSide = toPoint.x >= fromCenterX ? "right" : "left";
         const virtualFromPoint = fromHorizontal

@@ -1740,7 +1740,6 @@ function App() {
     entries: canvasDisplayEdges,
     nodeMap: canvasNodeMap,
     getNodeVisualSize,
-    preferCurvedPaths: workflowGraphViewMode === "rag",
   });
   const connectPreviewLine = buildConnectPreviewLine({
     connectFromNodeId,
@@ -2903,7 +2902,7 @@ function App() {
             />
 
             {!canvasFullscreen && workflowSidePanelsVisible && (
-              <div className={`workflow-right-stack${workflowGraphViewMode === "rag" ? " is-hidden-in-rag" : ""}`}>
+              <div className="workflow-right-stack">
                 {workflowGraphViewMode === "rag" ? (
                   <WorkflowRagModeDock
                     onAddRagNode={onAddViaFlowNode}
