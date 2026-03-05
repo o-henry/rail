@@ -78,34 +78,6 @@ export default function WorkflowRagModeDock(props: WorkflowRagModeDockProps) {
         </button>
       </section>
 
-      <section className="workflow-rag-node-list" aria-label="RAG 노드 목록">
-        <div className="workflow-rag-node-list-head">
-          <strong>노드</strong>
-          <code>{props.ragNodes.length}개</code>
-        </div>
-        {props.ragNodes.length === 0 ? (
-          <p className="workflow-rag-empty">노드가 없습니다. 소스/변환 노드를 추가해 워크플로우를 구성하세요.</p>
-        ) : (
-          <ul>
-            {props.ragNodes.map((node) => {
-              const selected = node.id === props.selectedNodeId;
-              const flowId = String(node.flowId ?? "").trim() || "1";
-              return (
-                <li className={selected ? "is-selected" : ""} key={node.id}>
-                  <button className="workflow-rag-node-select" onClick={() => props.onSelectNode(node.id)} type="button">
-                    <strong>{node.viaNodeLabel}</strong>
-                    <code>{node.viaNodeType}</code>
-                  </button>
-                  <div className="workflow-rag-flow-binding">
-                    <span>연결 워크플로우</span>
-                    <code>기본 내장 플로우 (자동: {flowId})</code>
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </section>
     </aside>
   );
 }

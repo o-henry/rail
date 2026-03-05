@@ -321,7 +321,6 @@
   white-space: pre-wrap;
   word-break: break-word;
   min-height: 120px;
-  max-height: none;
   overflow: visible !important;
 }
 
