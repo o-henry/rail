@@ -419,7 +419,7 @@ export default function WorkflowCanvasPane({
                 title="DAG 모드"
                 type="button"
               >
-                <span aria-hidden="true" className="canvas-mode-chip-icon" />
+                <img alt="" aria-hidden="true" className="canvas-mode-chip-image" src="/canvas-mode-dag.svg" />
               </button>
               <button
                 aria-label="RAG 모드"
@@ -428,7 +428,7 @@ export default function WorkflowCanvasPane({
                 title="RAG 모드"
                 type="button"
               >
-                <span aria-hidden="true" className="canvas-mode-chip-icon" />
+                <img alt="" aria-hidden="true" className="canvas-mode-chip-image" src="/canvas-mode-rag.svg" />
               </button>
             </div>
             <button aria-label={t("workflow.canvas.run")} className={`canvas-icon-btn play ${canRunGraphNow ? "is-ready" : "is-disabled"}`} disabled={!canRunGraphNow} onClick={() => void onRunGraph()} title={t("workflow.canvas.run")} type="button">

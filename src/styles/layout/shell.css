@@ -1839,27 +1839,13 @@
   border-radius: 999px;
 }
 
-.canvas-runbar .canvas-mode-chip .canvas-mode-chip-icon {
+.canvas-runbar .canvas-mode-chip .canvas-mode-chip-image {
   width: 14px;
   height: 14px;
   display: block;
-  background-color: currentColor;
-  -webkit-mask-position: center;
-  -webkit-mask-repeat: no-repeat;
-  -webkit-mask-size: contain;
-  mask-position: center;
-  mask-repeat: no-repeat;
-  mask-size: contain;
-}
-
-.canvas-runbar .canvas-mode-chip.mode-dag .canvas-mode-chip-icon {
-  -webkit-mask-image: url("/canvas-mode-dag.svg");
-  mask-image: url("/canvas-mode-dag.svg");
-}
-
-.canvas-runbar .canvas-mode-chip.mode-rag .canvas-mode-chip-icon {
-  -webkit-mask-image: url("/canvas-mode-rag.svg");
-  mask-image: url("/canvas-mode-rag.svg");
+  object-fit: contain;
+  filter: var(--canvas-control-icon-filter);
+  opacity: var(--canvas-control-icon-opacity);
 }
 
 .canvas-runbar .canvas-mode-chip.mode-dag.is-active {
@@ -1872,6 +1858,11 @@
   background: color-mix(in srgb, #159a69 82%, var(--canvas-control-bg));
   border-color: color-mix(in srgb, #159a69 78%, var(--canvas-control-border));
   color: #f2fff8;
+}
+
+.canvas-runbar .canvas-mode-chip.is-active .canvas-mode-chip-image {
+  filter: brightness(0) invert(1);
+  opacity: 0.96;
 }
 
 .canvas-runbar .canvas-icon-image {
