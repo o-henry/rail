@@ -59,6 +59,7 @@ export type TurnConfig = {
   artifactType?: ArtifactType;
   viaFlowId?: string;
   viaSourceTypeHint?: string;
+  viaTemplateLabel?: string;
 };
 
 export const TURN_EXECUTOR_OPTIONS = [

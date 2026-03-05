@@ -705,6 +705,15 @@ export function buildFeedPost(input: any): {
   rawAttachments: Record<"markdown" | "json", string>;
 } {
   const config = input.node.config as TurnConfig;
+  const executor = input.node.type === "turn" ? getTurnExecutor(config) : undefined;
+  const viaTemplateLabel =
+    executor === "via_flow" ? String((config as Record<string, unknown>).viaTemplateLabel ?? "").trim() : "";
+  const topicLabelFromInput =
+    typeof input.topicLabel === "string" ? String(input.topicLabel).trim() : "";
+  const groupNameFromInput =
+    typeof input.groupName === "string" ? String(input.groupName).trim() : "";
+  const resolvedTopicLabel = topicLabelFromInput || viaTemplateLabel || undefined;
+  const resolvedGroupName = groupNameFromInput || viaTemplateLabel || undefined;
   const inferredRoleLabel = input.node.type === "turn" ? turnRoleLabel(input.node) : nodeTypeLabel(input.node.type);
   const roleLabel = String(input.roleLabel ?? "").trim() || inferredRoleLabel;
   const inferredAgentName =
@@ -806,10 +815,10 @@ export function buildFeedPost(input: any): {
     nodeId: input.node.id,
     nodeType: input.node.type,
     topic: typeof input.topic === "string" ? input.topic : undefined,
-    topicLabel: typeof input.topicLabel === "string" ? input.topicLabel : undefined,
-    groupName: typeof input.groupName === "string" ? input.groupName : undefined,
+    topicLabel: resolvedTopicLabel,
+    groupName: resolvedGroupName,
     isFinalDocument: Boolean(input.isFinalDocument),
-    executor: input.node.type === "turn" ? getTurnExecutor(config) : undefined,
+    executor,
     agentName,
     roleLabel,
     status: input.status,

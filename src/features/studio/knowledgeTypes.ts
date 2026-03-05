@@ -21,6 +21,7 @@ export type KnowledgeSourcePost = {
   runId: string;
   topic?: string | null;
   topicLabel?: string | null;
+  groupName?: string | null;
   summary: string;
   createdAt: string;
   agentName: string;

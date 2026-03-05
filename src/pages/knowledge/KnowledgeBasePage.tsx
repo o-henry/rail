@@ -15,6 +15,8 @@ type KnowledgeBasePageProps = {
 };
 
 type KnowledgeGroup = {
+  id: string;
+  runId: string;
   taskId: string;
   entries: KnowledgeEntry[];
 };
@@ -37,8 +39,9 @@ function toUpperSnakeToken(raw: string): string {
     return "TASK_UNKNOWN";
   }
   const snake = base
+    .normalize("NFKC")
     .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
-    .replace(/[^a-zA-Z0-9]+/g, "_")
+    .replace(/[^\p{L}\p{N}]+/gu, "_")
     .replace(/^_+|_+$/g, "")
     .toUpperCase();
   return snake || "TASK_UNKNOWN";
@@ -73,18 +76,21 @@ function formatArtifactFileNames(entry: Pick<KnowledgeEntry, "markdownPath" | "j
 
 export function toKnowledgeEntry(post: KnowledgeSourcePost): KnowledgeEntry | null {
   const runId = String(post.runId ?? "").trim();
-  const taskId = toUpperSnakeToken(String(post.topicLabel ?? post.topic ?? "TASK_UNKNOWN"));
+  const taskBase = String(post.topicLabel ?? post.groupName ?? post.topic ?? runId ?? "TASK_UNKNOWN").trim();
+  const taskId = toUpperSnakeToken(taskBase);
   if (isHiddenKnowledgeEntry({ runId, taskId })) {
     return null;
   }
+  const summary = String(post.summary ?? "").trim();
+  const displayTitle = summary.slice(0, 72) || String(post.topicLabel ?? post.groupName ?? "").trim() || post.agentName;
   return {
     id: post.id,
     runId,
     taskId,
     roleId: "technical_writer",
     sourceKind: "artifact",
-    title: String(post.summary ?? "").slice(0, 72) || post.agentName,
-    summary: String(post.summary ?? ""),
+    title: displayTitle,
+    summary,
     createdAt: post.createdAt,
     markdownPath: findAttachmentPath(post, "markdown"),
     jsonPath: findAttachmentPath(post, "json"),
@@ -189,17 +195,31 @@ export default function KnowledgeBasePage({ cwd, posts, onInjectContextSources }
 
   const filtered = useMemo(() => [...entries].sort((a, b) => b.createdAt.localeCompare(a.createdAt)), [entries]);
   const grouped = useMemo<KnowledgeGroup[]>(() => {
-    const byTask = new Map<string, KnowledgeEntry[]>();
+    const byRun = new Map<string, KnowledgeEntry[]>();
     for (const entry of filtered) {
-      const task = toUpperSnakeToken(String(entry.taskId ?? ""));
-      const bucket = byTask.get(task) ?? [];
+      const runKey = String(entry.runId ?? "").trim() || "run-unknown";
+      const bucket = byRun.get(runKey) ?? [];
       bucket.push(entry);
-      byTask.set(task, bucket);
+      byRun.set(runKey, bucket);
     }
-    return [...byTask.entries()].map(([taskId, rows]) => ({
-      taskId,
-      entries: rows,
-    }));
+    return [...byRun.entries()]
+      .map(([runId, rows]) => {
+        const taskId =
+          rows
+            .map((row) => toUpperSnakeToken(String(row.taskId ?? "")))
+            .find((value) => value && value !== "TASK_UNKNOWN") ?? "TASK_UNKNOWN";
+        return {
+          id: `${runId}:${taskId}`,
+          runId,
+          taskId,
+          entries: rows,
+        };
+      })
+      .sort((a, b) => {
+        const at = new Date(String(a.entries[0]?.createdAt ?? 0)).getTime();
+        const bt = new Date(String(b.entries[0]?.createdAt ?? 0)).getTime();
+        return bt - at;
+      });
   }, [filtered]);
 
   const selected = filtered.find((row) => row.id === selectedId) ?? filtered[0] ?? null;
@@ -227,7 +247,7 @@ export default function KnowledgeBasePage({ cwd, posts, onInjectContextSources }
     setCollapsedByGroup((prev) => {
       const next: Record<string, boolean> = {};
       for (const group of grouped) {
-        next[group.taskId] = prev[group.taskId] ?? false;
+        next[group.id] = prev[group.id] ?? false;
       }
       return next;
     });
@@ -361,20 +381,20 @@ export default function KnowledgeBasePage({ cwd, posts, onInjectContextSources }
             <p className="knowledge-empty">표시할 문서가 없습니다.</p>
           ) : (
             grouped.map((group) => {
-              const collapsed = collapsedByGroup[group.taskId] === true;
+              const collapsed = collapsedByGroup[group.id] === true;
               return (
-                <section key={group.taskId} className="knowledge-group">
+                <section key={group.id} className="knowledge-group">
                   <button
                     className="knowledge-group-trigger"
                     onClick={() =>
                       setCollapsedByGroup((prev) => ({
                         ...prev,
-                        [group.taskId]: !collapsed,
+                        [group.id]: !collapsed,
                       }))
                     }
                     type="button"
                   >
-                    <strong>{group.taskId}</strong>
+                    <strong>{`${group.taskId} · ${group.runId}`}</strong>
                     <span className="knowledge-group-count">
                       <img
                         alt=""

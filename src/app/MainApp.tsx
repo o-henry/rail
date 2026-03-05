@@ -601,12 +601,14 @@ function App() {
       ragModeNodes.map((node) => {
         const state = nodeStates[node.id];
         const status = state?.status ?? "idle";
+        const logs = state?.logs ?? [];
+        const recentLogs = logs.length <= 2 ? logs : [logs[0], logs[logs.length - 1]];
         return {
           id: node.id,
           viaNodeLabel: node.viaNodeLabel,
           status,
           statusLabel: nodeStatusLabel(status),
-          recentLogs: (state?.logs ?? []).slice(-12),
+          recentLogs,
         };
       }),
     [nodeStates, nodeStatusLabel, ragModeNodes],
@@ -1966,6 +1968,7 @@ function App() {
     sameTypeCount: number,
     layoutMode: "default" | "compact" = "default",
     sourceTypeHint = "",
+    templateLabel = "",
   ): GraphNode => {
     const basePosition = VIA_NODE_BASE_POSITION_BY_TYPE[viaNodeType] ?? { x: 300, y: 120 };
     const position =
@@ -1994,6 +1997,7 @@ function App() {
         viaNodeType,
         viaNodeLabel: viaNodeLabel(viaNodeType),
         viaSourceTypeHint: sourceTypeHint,
+        viaTemplateLabel: templateLabel || undefined,
       },
     };
   }, []);
@@ -2033,6 +2037,8 @@ function App() {
     if (!templateNodeTypes) {
       return;
     }
+    const templateLabel =
+      RAG_TEMPLATE_OPTIONS.find((option) => option.value === templateId)?.label ?? templateId;
     const templateSourceTypeHint = templateNodeTypes.find((type) => type.startsWith("source.")) ?? "";
     const insertedNodeIds: string[] = [];
     applyGraphChange((prev) => {
@@ -2041,7 +2047,14 @@ function App() {
         edges: prev.edges,
         templateNodeTypes,
         createNode: (nodeType, sameTypeCount) =>
-          buildViaFlowNode(makeNodeId("turn"), nodeType, sameTypeCount, "compact", templateSourceTypeHint),
+          buildViaFlowNode(
+            makeNodeId("turn"),
+            nodeType,
+            sameTypeCount,
+            "compact",
+            templateSourceTypeHint,
+            templateLabel,
+          ),
       });
       insertedNodeIds.push(...inserted.insertedNodeIds);
       return { ...prev, nodes: inserted.nodes, edges: inserted.edges };

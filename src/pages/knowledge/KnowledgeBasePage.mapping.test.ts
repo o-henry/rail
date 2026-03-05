@@ -51,4 +51,18 @@ describe("KnowledgeBasePage toKnowledgeEntry", () => {
 
     expect(toKnowledgeEntry(post)).toBeNull();
   });
+
+  it("uses template/group label when topic labels are missing", () => {
+    const post = makePost({
+      topic: undefined,
+      topicLabel: undefined,
+      groupName: "주식/마켓",
+      summary: "",
+      agentName: "RAG",
+    });
+    const entry = toKnowledgeEntry(post);
+    expect(entry).not.toBeNull();
+    expect(entry?.taskId).toContain("주식");
+    expect(entry?.title).toBe("주식/마켓");
+  });
 });

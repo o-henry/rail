@@ -41,5 +41,27 @@ describe("buildFeedPost dashboard snapshot output", () => {
     expect(markdown).toContain("## 참고 링크");
     expect(markdown).not.toContain("(출력 없음)");
   });
-});
 
+  it("uses via template label as topic/group fallback for via_flow nodes", () => {
+    const built = buildFeedPost({
+      runId: "run-rag-1",
+      node: {
+        id: "turn-rag-news",
+        type: "turn",
+        config: {
+          executor: "via_flow",
+          viaTemplateLabel: "뉴스",
+        },
+      },
+      status: "done",
+      createdAt: "2026-03-05T10:00:00.000Z",
+      summary: "RAG 실행 완료",
+      logs: ["[VIA] flow_id=1 실행 요청", "[VIA] 완료 run_id=via-1, artifacts=2"],
+      output: { via: { flowId: 1, runId: "via-1", status: "done", artifacts: [] } },
+    });
+
+    expect(built.post.topicLabel).toBe("뉴스");
+    expect(built.post.groupName).toBe("뉴스");
+    expect(built.post.executor).toBe("via_flow");
+  });
+});
