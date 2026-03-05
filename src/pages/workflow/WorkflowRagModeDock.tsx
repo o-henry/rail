@@ -22,7 +22,7 @@ type WorkflowRagModeDockProps = {
 
 export default function WorkflowRagModeDock(props: WorkflowRagModeDockProps) {
   const [nextNodeType, setNextNodeType] = useState<ViaNodeType>(props.viaNodeOptions[0]?.value ?? "source.news");
-  const [nextTemplateId, setNextTemplateId] = useState<string>(props.ragTemplateOptions[0]?.value ?? "rag.full");
+  const [nextTemplateId, setNextTemplateId] = useState<string>(props.ragTemplateOptions[0]?.value ?? "rag.market");
 
   useEffect(() => {
     props.ragNodes.forEach((node) => {
