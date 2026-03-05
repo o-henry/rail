@@ -596,6 +596,95 @@
   align-items: center;
 }
 
+.workflow-rag-progress-island {
+  display: grid;
+  gap: 8px;
+  padding: 8px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--surface-panel) 88%, var(--surface));
+}
+
+.workflow-rag-progress-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.workflow-rag-progress-head strong {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.workflow-rag-progress-head span {
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.workflow-rag-progress-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 6px;
+}
+
+.workflow-rag-progress-item {
+  display: grid;
+  gap: 4px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--surface) 86%, var(--surface-panel));
+  border: 1px solid color-mix(in srgb, var(--surface-border, #d9dee7) 56%, transparent);
+}
+
+.workflow-rag-progress-item.status-running {
+  border-color: color-mix(in srgb, #159a69 60%, transparent);
+  background: color-mix(in srgb, #159a69 10%, var(--surface));
+}
+
+.workflow-rag-progress-item-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.workflow-rag-progress-item-head strong {
+  min-width: 0;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-main);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.workflow-rag-progress-item-head span {
+  flex: 0 0 auto;
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.workflow-rag-progress-log-lines {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 3px;
+}
+
+.workflow-rag-progress-log-lines li,
+.workflow-rag-progress-log-empty,
+.workflow-rag-progress-empty {
+  margin: 0;
+  font-size: 10px;
+  line-height: 1.35;
+  color: var(--text-muted);
+  word-break: break-word;
+}
+
 .workflow-rag-template-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;

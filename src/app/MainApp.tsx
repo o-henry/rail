@@ -596,6 +596,21 @@ function App() {
         }),
     [graph.nodes],
   );
+  const ragNodeProgress = useMemo(
+    () =>
+      ragModeNodes.map((node) => {
+        const state = nodeStates[node.id];
+        const status = state?.status ?? "idle";
+        return {
+          id: node.id,
+          viaNodeLabel: node.viaNodeLabel,
+          status,
+          statusLabel: nodeStatusLabel(status),
+          recentLogs: (state?.logs ?? []).slice(-2),
+        };
+      }),
+    [nodeStates, nodeStatusLabel, ragModeNodes],
+  );
   const {
     feedPosts,
     setFeedPosts,
@@ -2918,10 +2933,12 @@ function App() {
               <div className="workflow-right-stack">
                 {workflowGraphViewMode === "rag" ? (
                   <WorkflowRagModeDock
+                    isGraphRunning={isGraphRunning}
                     onAddRagNode={onAddViaFlowNode}
                     onApplyTemplate={onApplyRagTemplate}
                     onSelectNode={onSelectRagModeNode}
                     onUpdateFlowId={onUpdateRagModeFlowId}
+                    ragNodeProgress={ragNodeProgress}
                     ragNodes={ragModeNodes}
                     ragTemplateOptions={RAG_TEMPLATE_OPTIONS}
                     selectedNodeId={selectedNodeId}

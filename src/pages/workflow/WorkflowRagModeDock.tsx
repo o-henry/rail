@@ -11,6 +11,14 @@ type RagNodeSummary = {
 
 type WorkflowRagModeDockProps = {
   ragNodes: RagNodeSummary[];
+  ragNodeProgress: Array<{
+    id: string;
+    viaNodeLabel: string;
+    status: string;
+    statusLabel: string;
+    recentLogs: string[];
+  }>;
+  isGraphRunning: boolean;
   selectedNodeId: string;
   onSelectNode: (nodeId: string) => void;
   onUpdateFlowId: (nodeId: string, nextFlowId: string) => void;
@@ -23,6 +31,9 @@ type WorkflowRagModeDockProps = {
 export default function WorkflowRagModeDock(props: WorkflowRagModeDockProps) {
   const [nextNodeType, setNextNodeType] = useState<ViaNodeType>(props.viaNodeOptions[0]?.value ?? "source.news");
   const [nextTemplateId, setNextTemplateId] = useState<string>(props.ragTemplateOptions[0]?.value ?? "rag.market");
+  const showProgressIsland =
+    props.isGraphRunning ||
+    props.ragNodeProgress.some((row) => row.recentLogs.length > 0 || row.status !== "idle");
 
   useEffect(() => {
     props.ragNodes.forEach((node) => {
@@ -77,6 +88,41 @@ export default function WorkflowRagModeDock(props: WorkflowRagModeDockProps) {
           <span className="mini-action-button-label">추가</span>
         </button>
       </section>
+
+      {showProgressIsland && (
+        <section className="workflow-rag-progress-island" aria-label="RAG 실행 진행">
+          <header className="workflow-rag-progress-head">
+            <strong>실행 진행</strong>
+            <span>{props.isGraphRunning ? "RUNNING" : "RECENT"}</span>
+          </header>
+          <ul className="workflow-rag-progress-list">
+            {props.ragNodeProgress.length === 0 ? (
+              <li className="workflow-rag-progress-empty">실행 로그가 아직 없습니다.</li>
+            ) : (
+              props.ragNodeProgress.map((row) => (
+                <li
+                  className={`workflow-rag-progress-item status-${row.status.replace(/[^a-z0-9_-]+/gi, "-")}`}
+                  key={row.id}
+                >
+                  <div className="workflow-rag-progress-item-head">
+                    <strong>{row.viaNodeLabel}</strong>
+                    <span>{row.statusLabel}</span>
+                  </div>
+                  {row.recentLogs.length > 0 ? (
+                    <ul className="workflow-rag-progress-log-lines">
+                      {row.recentLogs.map((line, index) => (
+                        <li key={`${row.id}-${index}`}>{line}</li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="workflow-rag-progress-log-empty">대기 중</p>
+                  )}
+                </li>
+              ))
+            )}
+          </ul>
+        </section>
+      )}
 
     </aside>
   );
