@@ -176,7 +176,7 @@ export default function WorkflowCanvasPane({
   questionInputRef,
 }: WorkflowCanvasPaneProps) {
   const { t } = useI18n();
-  const [conversationByNodeId, setConversationByNodeId] = useState<Record<string, WorkflowConversationMessage[]>>({});
+  const [, setConversationByNodeId] = useState<Record<string, WorkflowConversationMessage[]>>({});
   const nodeLogCursorRef = useRef<Record<string, number>>({});
 
   const canvasNodeById = useMemo(() => {
@@ -391,9 +391,6 @@ export default function WorkflowCanvasPane({
                 turnModelLabel={turnModelLabel}
                 turnRoleLabel={turnRoleLabel}
                 deleteNode={deleteNode}
-                conversationMessagesByNodeId={conversationByNodeId}
-                onSubmitConversationMessage={onSubmitConversationMessage}
-                selectedConversationNodeId={selectedConversationNodeId}
               />
             </div>
           </div>
