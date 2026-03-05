@@ -1235,53 +1235,52 @@
 
 .rag-node-shell {
   position: relative;
+  width: 80px;
   min-height: 80px;
   height: 80px;
-  width: 80px;
-  display: block;
-  gap: 0;
+  display: grid;
+  place-items: center;
 }
 
 .rag-node-icon {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  width: 48px;
-  height: 48px;
+  width: 56px;
+  height: 56px;
   border-radius: 12px;
   background: transparent;
   color: #f4f8ff;
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.08em;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+  line-height: 1;
+  display: grid;
+  place-items: center;
   text-transform: uppercase;
 }
 
 .rag-node-icon img {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
   width: 32px;
   height: 32px;
+  transform: none;
+  transform-origin: center;
   object-fit: contain;
+  object-position: center;
   display: block;
 }
 
 .rag-node-icon.is-loading {
+  animation: none;
+}
+
+.rag-node-icon.is-loading img {
   animation: rag-node-loader-spin 900ms linear infinite;
 }
 
 @keyframes rag-node-loader-spin {
   from {
-    transform: translate(-50%, -50%) rotate(0deg);
+    transform: rotate(0deg);
   }
   to {
-    transform: translate(-50%, -50%) rotate(360deg);
+    transform: rotate(360deg);
   }
 }
 
