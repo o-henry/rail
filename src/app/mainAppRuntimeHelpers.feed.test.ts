@@ -68,6 +68,7 @@ describe("buildFeedPost dashboard snapshot output", () => {
   it("builds via markdown without input snapshot/sources/logs and uses content summary", () => {
     const built = buildFeedPost({
       runId: "run-rag-2",
+      isFinalDocument: true,
       node: {
         id: "turn-rag-community",
         type: "turn",
@@ -106,5 +107,46 @@ describe("buildFeedPost dashboard snapshot output", () => {
     expect(markdown).not.toContain("## 전달 입력 스냅샷");
     expect(markdown).not.toContain("## 노드 로그");
     expect(markdown).not.toContain("턴 실행 완료");
+  });
+
+  it("keeps input/source/log sections for non-final via documents", () => {
+    const built = buildFeedPost({
+      runId: "run-rag-3",
+      isFinalDocument: false,
+      node: {
+        id: "turn-rag-community-2",
+        type: "turn",
+        config: {
+          executor: "via_flow",
+          viaTemplateLabel: "커뮤니티",
+        },
+      },
+      status: "done",
+      createdAt: "2026-03-05T11:30:00.000Z",
+      summary: "턴 실행 완료",
+      logs: ["[VIA] flow_id=1 실행 요청", "[VIA] 완료 run_id=via-3, artifacts=2"],
+      inputSources: [{ kind: "node", agentName: "RAG", roleLabel: "source", summary: "x" }],
+      inputData: { text: "snapshot" },
+      output: {
+        via: {
+          flowId: 1,
+          runId: "via-3",
+          status: "done",
+          detail: {
+            payload: {
+              highlights: ["테스트 하이라이트"],
+              items: [],
+            },
+          },
+        },
+      },
+    });
+
+    const markdown = String(
+      built.post.attachments.find((attachment: { kind: string }) => attachment.kind === "markdown")?.content ?? "",
+    );
+    expect(markdown).toContain("## 입력 출처");
+    expect(markdown).toContain("## 전달 입력 스냅샷");
+    expect(markdown).toContain("## 노드 로그");
   });
 });
