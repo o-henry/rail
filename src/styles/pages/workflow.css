@@ -599,9 +599,9 @@
 .workflow-rag-progress-island {
   display: grid;
   gap: 8px;
-  padding: 8px;
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--surface-panel) 88%, var(--surface));
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
 }
 
 .workflow-rag-progress-head {
@@ -609,6 +609,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+  padding: 0 2px;
 }
 
 .workflow-rag-progress-head strong {
@@ -636,12 +637,18 @@
   padding: 6px 8px;
   border-radius: 6px;
   background: color-mix(in srgb, var(--surface) 86%, var(--surface-panel));
-  border: 1px solid color-mix(in srgb, var(--surface-border, #d9dee7) 56%, transparent);
+  border: 0;
 }
 
 .workflow-rag-progress-item.status-running {
-  border-color: color-mix(in srgb, #159a69 60%, transparent);
   background: color-mix(in srgb, #159a69 10%, var(--surface));
+}
+
+.workflow-rag-progress-item.is-selected {
+  padding: 9px 10px;
+  gap: 6px;
+  background: color-mix(in srgb, #2c7be5 12%, var(--surface));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, #2c7be5 44%, transparent);
 }
 
 .workflow-rag-progress-item-head {

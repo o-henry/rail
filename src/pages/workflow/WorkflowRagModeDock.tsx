@@ -101,7 +101,7 @@ export default function WorkflowRagModeDock(props: WorkflowRagModeDockProps) {
             ) : (
               props.ragNodeProgress.map((row) => (
                 <li
-                  className={`workflow-rag-progress-item status-${row.status.replace(/[^a-z0-9_-]+/gi, "-")}`}
+                  className={`workflow-rag-progress-item ${row.id === props.selectedNodeId ? "is-selected" : ""} status-${row.status.replace(/[^a-z0-9_-]+/gi, "-")}`}
                   key={row.id}
                 >
                   <div className="workflow-rag-progress-item-head">
@@ -110,7 +110,9 @@ export default function WorkflowRagModeDock(props: WorkflowRagModeDockProps) {
                   </div>
                   {row.recentLogs.length > 0 ? (
                     <ul className="workflow-rag-progress-log-lines">
-                      {row.recentLogs.map((line, index) => (
+                      {row.recentLogs
+                        .slice(-(row.id === props.selectedNodeId ? 4 : 2))
+                        .map((line, index) => (
                         <li key={`${row.id}-${index}`}>{line}</li>
                       ))}
                     </ul>
