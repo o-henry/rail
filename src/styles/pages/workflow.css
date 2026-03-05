@@ -584,6 +584,19 @@
   box-sizing: border-box;
 }
 
+.workflow-rag-progress-dock {
+  display: grid;
+  align-content: start;
+  gap: 0;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 10px 10px;
+  overflow: visible;
+  min-height: 0;
+  height: auto;
+  box-sizing: border-box;
+}
+
 .workflow-rag-dock-head {
   display: grid;
   gap: 2px;
@@ -599,7 +612,7 @@
 .workflow-rag-progress-island {
   display: grid;
   gap: 8px;
-  padding: 0;
+  padding: 1rem 0 0;
   border-radius: 0;
   background: transparent;
 }
@@ -648,7 +661,7 @@
   padding: 9px 10px;
   gap: 6px;
   background: color-mix(in srgb, #2c7be5 12%, var(--surface));
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, #2c7be5 44%, transparent);
+  box-shadow: none;
 }
 
 .workflow-rag-progress-item-head {
