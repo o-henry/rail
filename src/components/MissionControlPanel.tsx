@@ -1,4 +1,6 @@
-import type { MissionControlState } from "../features/orchestration/agentic/missionControl";
+import { useMemo } from "react";
+
+import { createMissionControlPreviewState, type MissionControlState } from "../features/orchestration/agentic/missionControl";
 import type { CompanionEventType } from "../features/orchestration/types";
 
 type MissionControlPanelProps = {
@@ -48,35 +50,34 @@ function eventButtonLabel(type: Exclude<CompanionEventType, "unity_verification_
 }
 
 export default function MissionControlPanel(props: MissionControlPanelProps) {
-  const rootClassName = `panel-card agents-mission-panel${props.mission ? "" : " is-empty"}${props.className ? ` ${props.className}` : ""}`;
+  const previewMission = useMemo(() => createMissionControlPreviewState(), []);
+  const mission = props.mission ?? previewMission;
+  const isPreview = !props.mission;
+  const rootClassName = `panel-card agents-mission-panel${isPreview ? " is-preview" : ""}${props.className ? ` ${props.className}` : ""}`;
   const title = "미션 컨트롤";
-  if (!props.mission) {
-    return (
-      <section className={rootClassName} aria-label="Mission control">
-        <div className="agents-mission-empty-copy">
-          <strong>{title}</strong>
-          <p>{props.emptyCopy ?? "역할 실행을 시작하면 Planner, Implementer, Reviewer 흐름이 여기에 정리됩니다."}</p>
-        </div>
-      </section>
-    );
-  }
-
-  const { mission } = props;
   const nextAction = mission.parentEnvelope.record.nextAction;
   const activeSurface = mission.parentEnvelope.record.surface;
   const latestResult = mission.terminalResults[0] ?? null;
-  const terminalBusy = mission.terminalSession.status === "running";
+  const terminalBusy = !isPreview && mission.terminalSession.status === "running";
 
   return (
     <section className={rootClassName} aria-label="Mission control">
       <header className="agents-mission-head">
         <div>
           <strong>{title}</strong>
-          <p>{mission.title}</p>
+          <p>
+            {isPreview
+              ? props.emptyCopy ?? "실행 전 미리보기입니다. 역할 실행을 시작하면 실제 미션 상태가 여기에 이어집니다."
+              : mission.title}
+          </p>
         </div>
-        <button className="agents-mission-clear-button" onClick={props.onClearMission} type="button">
-          CLEAR
-        </button>
+        {isPreview ? (
+          <span className="agents-mission-preview-chip">PREVIEW</span>
+        ) : (
+          <button className="agents-mission-clear-button" onClick={props.onClearMission} type="button">
+            CLEAR
+          </button>
+        )}
       </header>
 
       <section className={`agents-mission-banner is-${activeSurface ?? "rail"}`}>
@@ -117,7 +118,7 @@ export default function MissionControlPanel(props: MissionControlPanelProps) {
           <p className="agents-mission-contract-path">{mission.bridgePaths.companionContractPath}</p>
           <div className="agents-mission-button-row">
             {(["task_received", "patch_ready", "approval_requested"] as const).map((type) => (
-              <button key={type} onClick={() => props.onRecordCompanionEvent(type)} type="button">
+              <button disabled={isPreview} key={type} onClick={() => props.onRecordCompanionEvent(type)} type="button">
                 {eventButtonLabel(type)}
               </button>
             ))}
@@ -147,7 +148,7 @@ export default function MissionControlPanel(props: MissionControlPanelProps) {
               <button
                 key={command}
                 className="agents-mission-command-button"
-                disabled={terminalBusy}
+                disabled={terminalBusy || isPreview}
                 onClick={() => props.onExecuteTaskCommand(command)}
                 type="button"
               >
@@ -178,12 +179,14 @@ export default function MissionControlPanel(props: MissionControlPanelProps) {
           <p className="agents-mission-contract-path">{mission.bridgePaths.unityContractPath}</p>
           <div className="agents-mission-button-row">
             <button
+              disabled={isPreview}
               onClick={() => props.onRecordUnityVerification(true, "Unity 검증 완료: 플레이/에셋 등록 성공")}
               type="button"
             >
               VERIFY PASS
             </button>
             <button
+              disabled={isPreview}
               onClick={() => props.onRecordUnityVerification(false, "Unity 검증 실패: 플레이 모드 또는 에셋 등록 이슈")}
               type="button"
             >

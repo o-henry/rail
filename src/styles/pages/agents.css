@@ -310,14 +310,26 @@ html[data-locale="ko"] .agents-grid-card :lang(en) {
   border: 1px solid color-mix(in srgb, var(--surface-strong) 62%, transparent);
 }
 
-.agents-mission-panel.is-empty {
-  min-height: 128px;
-  align-items: center;
+.agents-mission-panel.is-preview {
+  min-height: 0;
 }
 
 .agents-mission-empty-copy {
   display: grid;
   gap: 6px;
+}
+
+.agents-mission-preview-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, #d8f1ff 76%, #ffffff);
+  color: color-mix(in srgb, #2254d1 76%, #14306c);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
 }
 
 .agents-mission-empty-copy strong,

@@ -3,6 +3,7 @@ import {
   applyImplementerRunResult,
   applyTaskTerminalResult,
   applyUnityVerification,
+  createMissionControlPreviewState,
   createMissionControlState,
 } from "./missionControl";
 import { isAllowedTaskTerminalCommand } from "./missionControlUtils";
@@ -84,5 +85,14 @@ describe("missionControl", () => {
     expect(next.parentEnvelope.record.verificationStatus).toBe("failed");
     expect(next.parentEnvelope.record.status).toBe("running");
     expect(next.parentEnvelope.record.nextAction?.surface).toBe("vscode");
+  });
+
+  it("builds a preview mission with active cards populated", () => {
+    const preview = createMissionControlPreviewState();
+
+    expect(preview.childEnvelopes).toHaveLength(3);
+    expect(preview.bridgeEvents[0]?.type).toBe("test_passed");
+    expect(preview.terminalResults[0]?.exitCode).toBe(0);
+    expect(preview.parentEnvelope.record.nextAction?.surface).toBe("unity");
   });
 });

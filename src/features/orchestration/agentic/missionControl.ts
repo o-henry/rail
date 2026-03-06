@@ -177,6 +177,39 @@ export function createMissionControlState(input: MissionControlLaunchInput): Mis
   };
 }
 
+export function createMissionControlPreviewState(): MissionControlState {
+  const seeded = createMissionControlState({
+    cwd: "/workspace",
+    sourceTab: "workflow",
+    roleId: "client_programmer",
+    roleLabel: "클라이언트",
+    taskId: "PLAYER-JUMP",
+    prompt: "플레이어 점프 동작을 구현하고 Unity에서 확인할 준비를 합니다.",
+    allowedCommands: ["dotnet build", "npm run test"],
+  });
+  const implementerRunId =
+    seeded.childEnvelopes.find((row) => row.record.agentRole === "implementer")?.record.runId ?? "";
+  const afterImplementer = applyImplementerRunResult(seeded, {
+    runId: implementerRunId,
+    status: "done",
+    artifactPaths: ["/workspace/.rail/studio_runs/PLAYER-JUMP/PlayerController.diff"],
+    summary: "플레이어 이동/점프 로직 변경안 준비",
+  });
+  return applyTaskTerminalResult(afterImplementer, {
+    id: "terminal-preview",
+    at: missionNowIso(),
+    runId: afterImplementer.parentEnvelope.record.runId,
+    taskId: afterImplementer.terminalSession.taskId,
+    command: afterImplementer.terminalSession.allowedCommands[0] ?? "dotnet build",
+    exitCode: 0,
+    stdoutTail: "Build succeeded.\n0 Warning(s)\n0 Error(s)",
+    stderrTail: "",
+    timedOut: false,
+    durationMs: 1480,
+    artifacts: ["/workspace/.rail/studio_runs/PLAYER-JUMP/terminal-preview.json"],
+  });
+}
+
 export function applyImplementerRunResult(
   state: MissionControlState,
   params: {
