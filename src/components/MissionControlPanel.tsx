@@ -107,6 +107,7 @@ export default function MissionControlPanel(props: MissionControlPanelProps) {
   const activeSurface = mission.parentEnvelope.record.surface;
   const latestResult = mission.terminalResults[0] ?? null;
   const terminalBusy = !isPreview && mission.terminalSession.status === "running";
+  const latestBridgeEvent = mission.bridgeEvents[0] ?? null;
 
   return (
     <section className={rootClassName} aria-label="Mission control">
@@ -145,7 +146,6 @@ export default function MissionControlPanel(props: MissionControlPanelProps) {
         <div className="agents-mission-next-action">
           <span>다음 행동</span>
           <b>{nextAction?.detail ?? "새 작업을 시작하세요."}</b>
-          {nextAction?.cta ? <small>{nextAction.cta}</small> : null}
         </div>
       </section>
 
@@ -164,7 +164,6 @@ export default function MissionControlPanel(props: MissionControlPanelProps) {
             <p>{row.record.summary || row.record.nextAction?.title || "요약 없음"}</p>
             <div className="agents-mission-role-meta">
               <span>{surfaceLabel(row.record.surface)}</span>
-              <span>{row.record.taskId}</span>
             </div>
           </article>
         ))}
@@ -175,7 +174,7 @@ export default function MissionControlPanel(props: MissionControlPanelProps) {
         <article className="agents-mission-card">
           <div className="agents-mission-card-head">
             <strong>코드 작업 연동</strong>
-            <small>{mission.bridgePaths.companionContractPath.split(/[\\/]/).pop()}</small>
+            <small>{latestBridgeEvent ? "최근 상태 있음" : "대기 중"}</small>
           </div>
           <p className="agents-mission-card-copy">VS Code 쪽 작업 상태를 이 미션에 기록합니다.</p>
           <div className="agents-mission-button-row">
@@ -185,18 +184,10 @@ export default function MissionControlPanel(props: MissionControlPanelProps) {
               </button>
             ))}
           </div>
-          <ul className="agents-mission-event-list">
-            {mission.bridgeEvents.length === 0 ? (
-              <li>브리지 이벤트 없음</li>
-            ) : (
-              mission.bridgeEvents.slice(0, 4).map((event) => (
-                <li key={event.id}>
-                  <span>{eventTypeLabel(event.type)}</span>
-                  <p>{event.message}</p>
-                </li>
-              ))
-            )}
-          </ul>
+          <div className="agents-mission-status-note">
+            <span>최근 상태</span>
+            <p>{latestBridgeEvent ? `${eventTypeLabel(latestBridgeEvent.type)} · ${latestBridgeEvent.message}` : "아직 기록된 작업 상태가 없습니다."}</p>
+          </div>
         </article>
 
         <article className="agents-mission-card agents-mission-card-terminal">
@@ -226,7 +217,10 @@ export default function MissionControlPanel(props: MissionControlPanelProps) {
                   {latestResult.timedOut ? "시간 초과" : latestResult.exitCode === 0 ? "성공" : `실패 (${latestResult.exitCode})`}
                 </b>
               </div>
-              <pre>{latestResult.stderrTail || latestResult.stdoutTail || "출력 없음"}</pre>
+              <details className="agents-mission-terminal-details">
+                <summary>최근 출력 보기</summary>
+                <pre>{latestResult.stderrTail || latestResult.stdoutTail || "출력 없음"}</pre>
+              </details>
             </div>
           ) : (
             <p className="agents-mission-muted">아직 실행 결과가 없습니다.</p>
