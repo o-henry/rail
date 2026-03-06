@@ -121,15 +121,6 @@ export default function DashboardPage(props: DashboardPageProps) {
     props.webBridgeRunning,
   ]);
 
-  const recentEvents = useMemo(
-    () =>
-      [...props.workspaceEvents]
-        .filter((entry) => entry.actor !== "user")
-        .sort((left, right) => new Date(right.at).getTime() - new Date(left.at).getTime())
-        .slice(0, 8),
-    [props.workspaceEvents],
-  );
-
   const roleSummaries = useMemo(
     () =>
       props.mission?.childEnvelopes.map((row) => ({
@@ -231,25 +222,6 @@ export default function DashboardPage(props: DashboardPageProps) {
               </ul>
             ) : (
               <p className="dashboard-ops-empty">아직 기록된 feature memory가 없습니다.</p>
-            )}
-          </section>
-
-          <section className="panel-card dashboard-ops-panel">
-            <div className="dashboard-ops-panel-head">
-              <strong>최근 이벤트</strong>
-              <small>{recentEvents.length} entries</small>
-            </div>
-            {recentEvents.length > 0 ? (
-              <ul className="dashboard-ops-event-list">
-                {recentEvents.map((entry) => (
-                  <li key={entry.id}>
-                    <span>{entry.source}</span>
-                    <p>{entry.message}</p>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="dashboard-ops-empty">최근 이벤트가 없습니다.</p>
             )}
           </section>
         </aside>
