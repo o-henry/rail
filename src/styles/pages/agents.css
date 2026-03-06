@@ -367,6 +367,23 @@ html[data-locale="ko"] .agents-grid-card :lang(en) {
   margin-top: 4px;
 }
 
+.agents-mission-section-head {
+  display: grid;
+  gap: 4px;
+}
+
+.agents-mission-section-head strong {
+  font-family: "Galmuri11", "DialogNanumBody1984", "Noto Sans KR", sans-serif;
+  font-size: 13px;
+}
+
+.agents-mission-section-head p {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
 .agents-mission-clear-button,
 .agents-mission-button-row button,
 .agents-mission-command-button {
@@ -438,6 +455,11 @@ html[data-locale="ko"] .agents-grid-card :lang(en) {
   gap: 10px;
 }
 
+.agents-mission-role-section {
+  display: grid;
+  gap: 8px;
+}
+
 .agents-mission-role-card,
 .agents-mission-card {
   display: grid;
@@ -475,6 +497,11 @@ html[data-locale="ko"] .agents-grid-card :lang(en) {
 .agents-mission-status-chip.is-running {
   background: color-mix(in srgb, #2c84e8 18%, var(--surface-soft));
   color: #2c84e8;
+}
+
+.agents-mission-status-chip.is-blocked {
+  background: color-mix(in srgb, #f2b94b 18%, var(--surface-soft));
+  color: #946100;
 }
 
 .agents-mission-status-chip.is-error {

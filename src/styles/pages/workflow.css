@@ -629,6 +629,31 @@
   padding: 14px;
 }
 
+.workflow-right-stack > .panel-card.workflow-mission-island .agents-mission-banner,
+.workflow-right-stack > .panel-card.workflow-mission-island .agents-mission-role-board,
+.workflow-right-stack > .panel-card.workflow-mission-island .agents-mission-grid {
+  grid-template-columns: 1fr;
+}
+
+.workflow-right-stack > .panel-card.workflow-mission-island .agents-mission-role-card,
+.workflow-right-stack > .panel-card.workflow-mission-island .agents-mission-card {
+  gap: 8px;
+}
+
+.workflow-right-stack > .panel-card.workflow-mission-island .agents-mission-button-row button,
+.workflow-right-stack > .panel-card.workflow-mission-island .agents-mission-command-button {
+  min-height: 28px;
+  font-size: 11px;
+}
+
+.workflow-right-stack > .panel-card.workflow-mission-island .agents-mission-contract-path,
+.workflow-right-stack > .panel-card.workflow-mission-island .agents-mission-card-copy,
+.workflow-right-stack > .panel-card.workflow-mission-island .agents-mission-event-list span,
+.workflow-right-stack > .panel-card.workflow-mission-island .agents-mission-terminal-meta span,
+.workflow-right-stack > .panel-card.workflow-mission-island .agents-mission-role-meta {
+  font-size: 10px;
+}
+
 .workflow-right-stack > .panel-card.workflow-mission-island .agents-mission-empty-copy strong,
 .workflow-right-stack > .panel-card.workflow-mission-island .agents-mission-head strong {
   font-size: 15px;

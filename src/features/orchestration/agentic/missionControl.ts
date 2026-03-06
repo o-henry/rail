@@ -50,14 +50,14 @@ export function createMissionControlState(input: MissionControlLaunchInput): Mis
     nextAction: {
       surface: "rail",
       title: "요구사항 분해 완료",
-      detail: "Implementer와 Reviewer를 위한 작업 계약을 생성했습니다.",
+      detail: "구현 담당과 검토 담당을 위한 작업 계약을 생성했습니다.",
       status: "done",
     },
     summary: `${input.roleLabel} 작업 분해`,
   });
-  plannerEnvelope = patchRunStage(plannerEnvelope, "codex", "done", "Planner 분해 완료");
+  plannerEnvelope = patchRunStage(plannerEnvelope, "codex", "done", "기획 정리 완료");
   plannerEnvelope = patchRunStatus(plannerEnvelope, "done");
-  plannerEnvelope = withMissionRunSummary(plannerEnvelope, "Planner 분해 완료", plannerBriefPath);
+  plannerEnvelope = withMissionRunSummary(plannerEnvelope, "기획 정리 완료", plannerBriefPath);
 
   let implementerEnvelope = createAgenticRunEnvelope({
     runId: implementerRunId,
@@ -73,8 +73,8 @@ export function createMissionControlState(input: MissionControlLaunchInput): Mis
     nextAction: {
       surface: "vscode",
       title: "VS Code에서 구현 진행",
-      detail: "Companion contract와 작업 지시를 확인하세요.",
-      cta: "Open companion contract",
+      detail: "연동 계약과 작업 지시를 확인하세요.",
+      cta: "연동 계약 열기",
       status: "ready",
     },
     summary: `${input.roleLabel} 구현 대기`,
@@ -93,11 +93,11 @@ export function createMissionControlState(input: MissionControlLaunchInput): Mis
     verificationStatus: "pending",
     nextAction: {
       surface: "rail",
-      title: "Implementer 산출물 대기",
+      title: "구현 산출물 대기",
       detail: "터미널/Unity 결과가 들어오면 검토를 진행합니다.",
       status: "blocked",
     },
-    summary: "Reviewer 대기",
+    summary: "검토 대기",
   });
 
   const children = [plannerEnvelope, implementerEnvelope, reviewerEnvelope];
@@ -114,8 +114,8 @@ export function createMissionControlState(input: MissionControlLaunchInput): Mis
     nextAction: {
       surface: "vscode",
       title: "VS Code에서 구현을 시작하세요",
-      detail: allowedCommands[0] ? `다음 검증 명령: ${allowedCommands[0]}` : "Companion contract를 확인하세요.",
-      cta: "Start implementer run",
+      detail: allowedCommands[0] ? `다음 검증 명령: ${allowedCommands[0]}` : "연동 계약을 확인하세요.",
+      cta: "구현 시작",
       status: "ready",
     },
     summary: title,
@@ -165,7 +165,7 @@ export function createMissionControlState(input: MissionControlLaunchInput): Mis
       prompt: input.prompt,
       artifactPaths: [],
       verificationStatus: "pending",
-      openRisks: ["Unity verification pending"],
+      openRisks: ["Unity 검증 대기"],
     }),
     bridgePaths: {
       plannerBriefPath,
@@ -243,12 +243,12 @@ export function applyImplementerRunResult(
               surface: "vscode",
               title: "작업용 터미널에서 검증 명령 실행",
               detail: state.terminalSession.allowedCommands[0] ?? "허용된 명령을 실행하세요.",
-              cta: "Run command",
+              cta: "명령 실행",
               status: "ready",
             }
           : {
               surface: "vscode",
-              title: "Implementer 실패 검토",
+              title: "구현 실패 검토",
               detail: params.summary ?? "실패한 요청을 확인하고 다시 실행하세요.",
               status: "blocked",
             },
@@ -268,18 +268,18 @@ export function applyImplementerRunResult(
     nextAction:
       params.status === "done"
         ? {
-            surface: "vscode",
-            title: "작업용 터미널에서 검증 명령 실행",
-            detail: state.terminalSession.allowedCommands[0] ?? "허용된 명령을 실행하세요.",
-            cta: "Run command",
-            status: "ready",
-          }
-        : {
-            surface: "rail",
-            title: "Implementer 오류를 검토하세요",
-            detail: params.summary ?? "역할 실행이 실패했습니다.",
-            status: "blocked",
-          },
+          surface: "vscode",
+          title: "작업용 터미널에서 검증 명령 실행",
+          detail: state.terminalSession.allowedCommands[0] ?? "허용된 명령을 실행하세요.",
+          cta: "명령 실행",
+          status: "ready",
+        }
+      : {
+          surface: "rail",
+          title: "구현 오류를 검토하세요",
+          detail: params.summary ?? "역할 실행이 실패했습니다.",
+          status: "blocked",
+        },
   });
   return {
     ...state,
@@ -299,7 +299,7 @@ export function applyImplementerRunResult(
       prompt: state.prompt,
       artifactPaths: artifacts,
       verificationStatus: state.parentEnvelope.record.verificationStatus ?? "pending",
-      openRisks: params.status === "done" ? ["Terminal verification pending"] : ["Implementer run failed"],
+      openRisks: params.status === "done" ? ["터미널 검증 대기"] : ["구현 실행 실패"],
     }),
   };
 }
@@ -323,7 +323,7 @@ export function applyCompanionEvent(
             surface: "vscode",
             title: "작업용 터미널에서 테스트를 실행하세요",
             detail: state.terminalSession.allowedCommands[0] ?? "허용된 명령을 실행하세요.",
-            cta: "Run command",
+            cta: "명령 실행",
             status: "ready",
           }
         : state.parentEnvelope.record.nextAction,
@@ -355,8 +355,8 @@ export function applyTaskTerminalResult(
         ? {
             surface: "unity",
             title: "Unity에서 플레이/에셋 검증",
-            detail: "검증 결과를 Mission Control에 기록하세요.",
-            cta: "Record Unity verification",
+            detail: "검증 결과를 미션 컨트롤에 기록하세요.",
+            cta: "Unity 검증 기록",
             status: "ready",
           }
         : {
@@ -382,7 +382,7 @@ export function applyTaskTerminalResult(
           surface: "unity",
           title: "Unity에서 플레이/에셋 검증",
           detail: "플레이 모드 확인 또는 에셋 등록 결과를 기록하세요.",
-          cta: "Record Unity verification",
+          cta: "Unity 검증 기록",
           status: "ready",
         }
       : {
@@ -432,7 +432,7 @@ export function applyTaskTerminalResult(
         ...result.artifacts,
       ],
       verificationStatus: state.parentEnvelope.record.verificationStatus ?? "pending",
-      openRisks: ok ? ["Unity verification pending"] : ["Terminal command failed"],
+      openRisks: ok ? ["Unity 검증 대기"] : ["터미널 명령 실패"],
     }),
   };
 }
