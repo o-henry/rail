@@ -25,12 +25,12 @@ function surfaceLabel(surface: string | undefined): string {
 
 function roleLabel(role: string | undefined, primaryRoleLabel: string): string {
   if (role === "planner") {
-    return "기획 정리";
+    return "1단계 · 계획 정리";
   }
   if (role === "reviewer") {
-    return "검토 확인";
+    return "3단계 · 검토 확인";
   }
-  return `구현 진행 · ${primaryRoleLabel}`;
+  return `2단계 · ${primaryRoleLabel} 구현`;
 }
 
 function eventButtonLabel(type: Exclude<CompanionEventType, "unity_verification_completed">): string {
@@ -128,6 +128,14 @@ export default function MissionControlPanel(props: MissionControlPanelProps) {
         )}
       </header>
 
+      <section className="agents-mission-focus-card" aria-label="Mission focus">
+        <div className="agents-mission-focus-copy">
+          <span className="agents-mission-banner-kicker">현재 담당 역할</span>
+          <strong>{mission.primaryRoleLabel}</strong>
+          <p>이 역할이 실제 작업 담당입니다. 아래 3개 카드는 이 역할을 처리하기 위한 내부 실행 단계입니다.</p>
+        </div>
+      </section>
+
       <section className={`agents-mission-banner is-${activeSurface ?? "rail"}`}>
         <div className="agents-mission-banner-copy">
           <span className="agents-mission-banner-kicker">현재 작업 위치</span>
@@ -143,8 +151,8 @@ export default function MissionControlPanel(props: MissionControlPanelProps) {
 
       <section className="agents-mission-role-section" aria-label="Mission roles">
         <div className="agents-mission-section-head">
-          <strong>멀티에이전트 역할</strong>
-          <p>기획 정리, 구현 진행, 검토 확인의 3개 역할이 한 미션 안에서 이어집니다.</p>
+          <strong>내부 실행 단계</strong>
+          <p>이건 새 멀티에이전트가 아니라, 현재 역할을 처리하기 위한 3단계 흐름입니다.</p>
         </div>
         <div className="agents-mission-role-board">
         {mission.childEnvelopes.map((row) => (
