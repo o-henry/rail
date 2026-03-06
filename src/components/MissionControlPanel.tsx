@@ -108,6 +108,12 @@ export default function MissionControlPanel(props: MissionControlPanelProps) {
   const latestResult = mission.terminalResults[0] ?? null;
   const terminalBusy = !isPreview && mission.terminalSession.status === "running";
   const latestBridgeEvent = mission.bridgeEvents[0] ?? null;
+  const verificationLabel =
+    mission.parentEnvelope.record.verificationStatus === "verified"
+      ? "완료"
+      : mission.parentEnvelope.record.verificationStatus === "failed"
+        ? "실패"
+        : "대기";
 
   return (
     <section className={rootClassName} aria-label="Mission control">
@@ -129,132 +135,134 @@ export default function MissionControlPanel(props: MissionControlPanelProps) {
         )}
       </header>
 
-      <section className="agents-mission-focus-card" aria-label="Mission focus">
-        <div className="agents-mission-focus-copy">
+      <section className="agents-mission-summary" aria-label="Mission summary">
+        <article className="agents-mission-summary-card">
           <span className="agents-mission-banner-kicker">현재 담당 역할</span>
           <strong>{mission.primaryRoleLabel}</strong>
-          <p>이 역할이 실제 작업 담당입니다. 아래 3개 카드는 이 역할을 처리하기 위한 내부 실행 단계입니다.</p>
-        </div>
-      </section>
-
-      <section className={`agents-mission-banner is-${activeSurface ?? "rail"}`}>
-        <div className="agents-mission-banner-copy">
+          <p>{isPreview ? "역할 실행 전 미리보기 상태입니다." : "현재 선택한 역할의 실행 상태입니다."}</p>
+        </article>
+        <article className="agents-mission-summary-card">
           <span className="agents-mission-banner-kicker">현재 작업 위치</span>
           <strong>{surfaceLabel(activeSurface)}</strong>
           <p>{nextAction?.title ?? "다음 행동 없음"}</p>
-        </div>
-        <div className="agents-mission-next-action">
-          <span>다음 행동</span>
-          <b>{nextAction?.detail ?? "새 작업을 시작하세요."}</b>
-        </div>
+        </article>
+        <article className="agents-mission-summary-card agents-mission-summary-card-wide">
+          <span className="agents-mission-banner-kicker">다음 행동</span>
+          <strong>{nextAction?.detail ?? "새 작업을 시작하세요."}</strong>
+          <p>검증 상태: {verificationLabel}</p>
+        </article>
       </section>
 
-      <section className="agents-mission-role-section" aria-label="Mission roles">
-        <div className="agents-mission-section-head">
-          <strong>내부 실행 단계</strong>
-          <p>이건 새 멀티에이전트가 아니라, 현재 역할을 처리하기 위한 3단계 흐름입니다.</p>
-        </div>
-        <div className="agents-mission-role-board">
-        {mission.childEnvelopes.map((row) => (
-          <article className="agents-mission-role-card" key={row.record.runId}>
-            <div className="agents-mission-role-head">
-              <strong>{roleLabel(row.record.agentRole, mission.primaryRoleLabel)}</strong>
-              <span className={`agents-mission-status-chip is-${row.record.status}`}>{statusLabel(row.record.status)}</span>
+      <details className="agents-mission-details">
+        <summary>세부 보기</summary>
+
+        <section className="agents-mission-role-section" aria-label="Mission roles">
+          <div className="agents-mission-section-head">
+            <strong>내부 실행 단계</strong>
+            <p>이건 새 멀티에이전트가 아니라, 현재 역할을 처리하기 위한 3단계 흐름입니다.</p>
+          </div>
+          <div className="agents-mission-role-board">
+            {mission.childEnvelopes.map((row) => (
+              <article className="agents-mission-role-card" key={row.record.runId}>
+                <div className="agents-mission-role-head">
+                  <strong>{roleLabel(row.record.agentRole, mission.primaryRoleLabel)}</strong>
+                  <span className={`agents-mission-status-chip is-${row.record.status}`}>{statusLabel(row.record.status)}</span>
+                </div>
+                <p>{row.record.summary || row.record.nextAction?.title || "요약 없음"}</p>
+                <div className="agents-mission-role-meta">
+                  <span>{surfaceLabel(row.record.surface)}</span>
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
+
+        <section className="agents-mission-grid">
+          <article className="agents-mission-card">
+            <div className="agents-mission-card-head">
+              <strong>코드 작업 연동</strong>
+              <small>{latestBridgeEvent ? "최근 상태 있음" : "대기 중"}</small>
             </div>
-            <p>{row.record.summary || row.record.nextAction?.title || "요약 없음"}</p>
-            <div className="agents-mission-role-meta">
-              <span>{surfaceLabel(row.record.surface)}</span>
+            <p className="agents-mission-card-copy">VS Code 쪽 작업 상태를 이 미션에 기록합니다.</p>
+            <div className="agents-mission-button-row">
+              {(["task_received", "patch_ready", "approval_requested"] as const).map((type) => (
+                <button disabled={isPreview} key={type} onClick={() => props.onRecordCompanionEvent(type)} type="button">
+                  {eventButtonLabel(type)}
+                </button>
+              ))}
+            </div>
+            <div className="agents-mission-status-note">
+              <span>최근 상태</span>
+              <p>{latestBridgeEvent ? `${eventTypeLabel(latestBridgeEvent.type)} · ${latestBridgeEvent.message}` : "아직 기록된 작업 상태가 없습니다."}</p>
             </div>
           </article>
-        ))}
-        </div>
-      </section>
 
-      <section className="agents-mission-grid">
-        <article className="agents-mission-card">
-          <div className="agents-mission-card-head">
-            <strong>코드 작업 연동</strong>
-            <small>{latestBridgeEvent ? "최근 상태 있음" : "대기 중"}</small>
-          </div>
-          <p className="agents-mission-card-copy">VS Code 쪽 작업 상태를 이 미션에 기록합니다.</p>
-          <div className="agents-mission-button-row">
-            {(["task_received", "patch_ready", "approval_requested"] as const).map((type) => (
-              <button disabled={isPreview} key={type} onClick={() => props.onRecordCompanionEvent(type)} type="button">
-                {eventButtonLabel(type)}
-              </button>
-            ))}
-          </div>
-          <div className="agents-mission-status-note">
-            <span>최근 상태</span>
-            <p>{latestBridgeEvent ? `${eventTypeLabel(latestBridgeEvent.type)} · ${latestBridgeEvent.message}` : "아직 기록된 작업 상태가 없습니다."}</p>
-          </div>
-        </article>
+          <article className="agents-mission-card agents-mission-card-terminal">
+            <div className="agents-mission-card-head">
+              <strong>작업용 터미널</strong>
+              <small>{terminalStatusLabel(mission.terminalSession.status, terminalBusy)}</small>
+            </div>
+            <p className="agents-mission-card-copy">현재 미션에 허용된 검증 명령만 여기서 실행합니다.</p>
+            <div className="agents-mission-command-list">
+              {mission.terminalSession.allowedCommands.map((command) => (
+                <button
+                  key={command}
+                  className="agents-mission-command-button"
+                  disabled={terminalBusy || isPreview}
+                  onClick={() => props.onExecuteTaskCommand(command)}
+                  type="button"
+                >
+                  <code>{command}</code>
+                </button>
+              ))}
+            </div>
+            {latestResult ? (
+              <div className="agents-mission-terminal-result">
+                <div className="agents-mission-terminal-meta">
+                  <span>{latestResult.command}</span>
+                  <b className={latestResult.exitCode === 0 && !latestResult.timedOut ? "is-ok" : "is-error"}>
+                    {latestResult.timedOut ? "시간 초과" : latestResult.exitCode === 0 ? "성공" : `실패 (${latestResult.exitCode})`}
+                  </b>
+                </div>
+                <details className="agents-mission-terminal-details">
+                  <summary>최근 출력 보기</summary>
+                  <pre>{latestResult.stderrTail || latestResult.stdoutTail || "출력 없음"}</pre>
+                </details>
+              </div>
+            ) : (
+              <p className="agents-mission-muted">아직 실행 결과가 없습니다.</p>
+            )}
+          </article>
 
-        <article className="agents-mission-card agents-mission-card-terminal">
-          <div className="agents-mission-card-head">
-            <strong>작업용 터미널</strong>
-            <small>{terminalStatusLabel(mission.terminalSession.status, terminalBusy)}</small>
-          </div>
-          <p className="agents-mission-card-copy">현재 미션에 허용된 검증 명령만 여기서 실행합니다.</p>
-          <div className="agents-mission-command-list">
-            {mission.terminalSession.allowedCommands.map((command) => (
+          <article className="agents-mission-card">
+            <div className="agents-mission-card-head">
+              <strong>Unity 검증</strong>
+              <small>{verificationLabel}</small>
+            </div>
+            <p className="agents-mission-card-copy">플레이 모드 확인이나 에셋 등록 결과를 마지막에 남깁니다.</p>
+            <div className="agents-mission-button-row">
               <button
-                key={command}
-                className="agents-mission-command-button"
-                disabled={terminalBusy || isPreview}
-                onClick={() => props.onExecuteTaskCommand(command)}
+                disabled={isPreview}
+                onClick={() => props.onRecordUnityVerification(true, "Unity 검증 완료: 플레이/에셋 등록 성공")}
                 type="button"
               >
-                <code>{command}</code>
+                검증 완료
               </button>
-            ))}
-          </div>
-          {latestResult ? (
-            <div className="agents-mission-terminal-result">
-              <div className="agents-mission-terminal-meta">
-                <span>{latestResult.command}</span>
-                <b className={latestResult.exitCode === 0 && !latestResult.timedOut ? "is-ok" : "is-error"}>
-                  {latestResult.timedOut ? "시간 초과" : latestResult.exitCode === 0 ? "성공" : `실패 (${latestResult.exitCode})`}
-                </b>
-              </div>
-              <details className="agents-mission-terminal-details">
-                <summary>최근 출력 보기</summary>
-                <pre>{latestResult.stderrTail || latestResult.stdoutTail || "출력 없음"}</pre>
-              </details>
+              <button
+                disabled={isPreview}
+                onClick={() => props.onRecordUnityVerification(false, "Unity 검증 실패: 플레이 모드 또는 에셋 등록 이슈")}
+                type="button"
+              >
+                검증 실패
+              </button>
             </div>
-          ) : (
-            <p className="agents-mission-muted">아직 실행 결과가 없습니다.</p>
-          )}
-        </article>
-
-        <article className="agents-mission-card">
-          <div className="agents-mission-card-head">
-            <strong>Unity 검증</strong>
-            <small>{mission.parentEnvelope.record.verificationStatus === "verified" ? "완료" : mission.parentEnvelope.record.verificationStatus === "failed" ? "실패" : "대기"}</small>
-          </div>
-          <p className="agents-mission-card-copy">플레이 모드 확인이나 에셋 등록 결과를 마지막에 남깁니다.</p>
-          <div className="agents-mission-button-row">
-            <button
-              disabled={isPreview}
-              onClick={() => props.onRecordUnityVerification(true, "Unity 검증 완료: 플레이/에셋 등록 성공")}
-              type="button"
-            >
-              검증 완료
-            </button>
-            <button
-              disabled={isPreview}
-              onClick={() => props.onRecordUnityVerification(false, "Unity 검증 실패: 플레이 모드 또는 에셋 등록 이슈")}
-              type="button"
-            >
-              검증 실패
-            </button>
-          </div>
-          <div className="agents-mission-memory">
-            <span>기능 메모</span>
-            <p>{mission.featureMemory.summary}</p>
-          </div>
-        </article>
-      </section>
+            <div className="agents-mission-memory">
+              <span>기능 메모</span>
+              <p>{mission.featureMemory.summary}</p>
+            </div>
+          </article>
+        </section>
+      </details>
     </section>
   );
 }
