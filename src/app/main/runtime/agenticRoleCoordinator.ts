@@ -1,6 +1,7 @@
 import {
   createAgenticRunEnvelope,
   createAgenticRunId,
+  normalizeAgenticRunId,
   patchRunStage,
   patchRunStatus,
   queueKeyForRole,
@@ -171,7 +172,7 @@ function appendArtifactsFromPaths(params: {
 }
 
 export async function runRoleWithCoordinator(input: AgenticRunRoleInput): Promise<AgenticCoordinatorRunResult> {
-  const runId = String(input.runId ?? "").trim() || createAgenticRunId("role");
+  const runId = normalizeAgenticRunId(input.runId) || createAgenticRunId("role");
   const queueKey = queueKeyForRole(input.roleId);
   const context: MutableRunContext = {
     envelope: createAgenticRunEnvelope({

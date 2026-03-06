@@ -423,9 +423,7 @@ export function useAgenticOrchestrationBridge(params: {
       }
       if (action.type === "run_role") {
         const sourceTab = action.payload.sourceTab === "workflow" ? "workflow" : "agents";
-        if (sourceTab === "agents") {
-          onSelectWorkspaceTab("agents");
-        } else if (workspaceTab !== "workflow") {
+        if (workspaceTab !== "workflow") {
           onSelectWorkspaceTab("workflow");
         }
         setStatus(
@@ -445,7 +443,7 @@ export function useAgenticOrchestrationBridge(params: {
         return;
       }
       if (action.type === "handoff_consume" || action.type === "consume_handoff") {
-        onSelectWorkspaceTab("agents");
+        onSelectWorkspaceTab("workflow");
         setStatus(`핸드오프 컨텍스트 적용: ${action.payload.handoffId}`);
         return;
       }

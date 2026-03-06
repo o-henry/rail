@@ -17,6 +17,13 @@ export const RUNTIME_MODEL_OPTIONS: ReadonlyArray<RuntimeModelOption> = [
     turnModel: "GPT-5.3-Codex",
   },
   {
+    value: "5.4",
+    label: "5.4",
+    allowsReasonLevel: true,
+    executor: "codex",
+    turnModel: "GPT-5.4",
+  },
+  {
     value: "5.3-Codex-Spark",
     label: "5.3-Codex-Spark",
     allowsReasonLevel: true,

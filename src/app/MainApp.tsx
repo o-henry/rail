@@ -255,6 +255,7 @@ import { createCanvasDragZoomHandlers } from "./main/canvas/canvasDragZoomHandle
 import { createCanvasConnectionHandlers } from "./main/canvas/canvasConnectionHandlers";
 import { createCoreStateHandlers } from "./main/runtime/coreStateHandlers";
 import { createFeedKnowledgeHandlers } from "./main/runtime/feedKnowledgeHandlers";
+import { buildConsumedHandoffHandler, buildKnowledgeInjectionHandler } from "./main/runtime/workflowMissionBridge";
 import { useMainAppStateEffects } from "./main/canvas/useMainAppStateEffects";
 import { useEngineEventListeners } from "./main/runtime/useEngineEventListeners";
 import { useMainAppRuntimeEffects } from "./main/runtime/useMainAppRuntimeEffects";
@@ -794,23 +795,13 @@ function App() {
     setErrorCore(message);
   }, [setErrorCore]);
 
-  const handleConsumeHandoff = useCallback((payload: {
-    handoffId: string;
-    toRole: string;
-    taskId: string;
-    request: string;
-  }) => {
-    publishAction({
-      type: "handoff_consume",
-      payload: { handoffId: payload.handoffId },
-    });
-    agentLaunchRequestSeqRef.current += 1;
-    setAgentLaunchRequest({
-      id: agentLaunchRequestSeqRef.current,
-      setId: `role-${payload.toRole}`,
-      draft: `[핸드오프 ${payload.taskId}] ${payload.request}`,
-    });
-  }, [publishAction]);
+  const handleInjectKnowledgeToWorkflow = useMemo(() => buildKnowledgeInjectionHandler({
+    setStatus, setWorkflowQuestion, setWorkflowRoleId, setWorkflowRolePrompt, setWorkflowRoleTaskId, setWorkspaceTab, toStudioRoleId,
+  }), [setStatus]);
+
+  const handleConsumeHandoff = useMemo(() => buildConsumedHandoffHandler({
+    publishAction, setWorkflowQuestion, setWorkflowRoleId, setWorkflowRolePrompt, setWorkflowRoleTaskId, setWorkspaceTab, toStudioRoleId,
+  }), [publishAction]);
 
   const workflowHandoffPanel = useWorkflowHandoffPanel({
     cwd,
@@ -2284,7 +2275,12 @@ function App() {
   const workflowInspectorPaneElement = (
     <WorkflowInspectorPane
       canvasFullscreen={canvasFullscreen}
+      mission={missionControl.activeMission}
       nodeProps={workflowInspectorPaneProps.nodeProps}
+      onClearMission={missionControl.clearMission}
+      onExecuteTaskCommand={missionControl.executeTaskCommand}
+      onRecordCompanionEvent={missionControl.recordCompanionEvent}
+      onRecordUnityVerification={missionControl.recordUnityVerification}
       toolsProps={workflowInspectorPaneProps.toolsProps}
     />
   );
@@ -2313,12 +2309,20 @@ function App() {
             message: "RUN_PENDING",
           },
         }));
+        const missionHandle = missionControl.launchMission({
+          sourceTab: "workflow",
+          roleId: workflowRoleId,
+          roleLabel: STUDIO_ROLE_TEMPLATES.find((role) => role.id === workflowRoleId)?.label ?? workflowRoleId,
+          taskId,
+          prompt: handoffInjectedPrompt || basePrompt || taskId,
+        });
         publishAction({
           type: "run_role",
           payload: {
             roleId: workflowRoleId,
             taskId,
             prompt: handoffInjectedPrompt || undefined,
+            runId: missionHandle.implementerRunId,
             sourceTab: "workflow",
             handoffToRole: workflowHandoffPanel.handoffToRole,
             handoffRequest: basePrompt || undefined,
@@ -3009,6 +3013,7 @@ function App() {
           loginCompleted={loginCompleted}
           missionControl={missionControl}
           normalizeCodexMultiAgentMode={normalizeCodexMultiAgentMode}
+          onInjectKnowledgeToWorkflow={handleInjectKnowledgeToWorkflow}
           onAgentQuickAction={onAgentQuickAction}
           onCopyWebBridgeConnectCode={onCopyWebBridgeConnectCode}
           onLoginCodex={onLoginCodex}

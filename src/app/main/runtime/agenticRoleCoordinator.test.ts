@@ -30,4 +30,30 @@ describe("agenticRoleCoordinator", () => {
       }),
     );
   });
+
+  it("sanitizes a caller-provided run id before persistence", async () => {
+    const queue = createAgenticQueue();
+    const invokeFn = (vi.fn(async () => "/tmp/write") as unknown) as InvokeFn;
+
+    const result = await runRoleWithCoordinator({
+      runId: "../unsafe/run-id",
+      cwd: "/tmp/workspace",
+      sourceTab: "workflow",
+      roleId: "client_programmer",
+      taskId: "CLIENT-002",
+      queue,
+      invokeFn,
+      execute: async () => undefined,
+    });
+
+    expect(result.runId).toBe("unsafe-run-id");
+    expect(result.envelope.record.runId).toBe("unsafe-run-id");
+    expect(invokeFn).toHaveBeenCalledWith(
+      "workspace_write_text",
+      expect.objectContaining({
+        cwd: "/tmp/workspace/.rail/studio_runs/unsafe-run-id",
+        name: "run.json",
+      }),
+    );
+  });
 });

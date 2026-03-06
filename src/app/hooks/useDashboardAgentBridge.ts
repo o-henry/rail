@@ -6,7 +6,7 @@ import type { AgentWorkspaceLaunchRequest } from "../../pages/agents/agentTypes"
 type UseDashboardAgentBridgeParams = {
   setAgentLaunchRequest: (next: AgentWorkspaceLaunchRequest | null) => void;
   agentLaunchRequestSeqRef: MutableRefObject<number>;
-  setWorkspaceTab: (next: "agents" | "settings") => void;
+  setWorkspaceTab: (next: "workflow" | "settings") => void;
   appendWorkspaceEvent: (params: {
     source: string;
     message: string;
@@ -33,14 +33,14 @@ export function useDashboardAgentBridge(params: UseDashboardAgentBridgeParams) {
         setId: `data-${topic}`,
         draft,
       });
-      params.setWorkspaceTab("agents");
+      params.setWorkspaceTab("workflow");
       params.appendWorkspaceEvent({
         source: "data",
         message: `에이전트 실행 요청: ${topic}`,
         actor: "user",
         level: "info",
       });
-      params.setStatus(`${params.t(`dashboard.widget.${topic}.title`)} 실행 요청을 에이전트 탭으로 전달했습니다.`);
+      params.setStatus(`${params.t(`dashboard.widget.${topic}.title`)} 실행 요청을 그래프 탭으로 전달했습니다.`);
     },
     [params],
   );

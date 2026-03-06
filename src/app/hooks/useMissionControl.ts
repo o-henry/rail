@@ -173,7 +173,9 @@ export function useMissionControl(params: {
           runId: payload.runId,
           status: payload.runStatus,
           artifactPaths: payload.artifactPaths,
-          summary: payload.prompt,
+          summary:
+            payload.envelope?.record.summary ??
+            (payload.runStatus === "done" ? "Implementer 실행 완료" : "Implementer 실행 실패"),
           baseEnvelope: payload.envelope,
         });
       });
@@ -300,7 +302,14 @@ export function useMissionControl(params: {
         artifacts: [taskTerminalResultArtifactPath(current, resultId)],
       };
 
-      setActiveMission((prev) => (prev ? applyTaskTerminalResult(prev, result) : prev));
+      const latestMission = activeMissionRef.current;
+      if (!latestMission || latestMission.parentEnvelope.record.runId !== current.parentEnvelope.record.runId) {
+        return;
+      }
+
+      setActiveMission((prev) => (
+        prev && prev.parentEnvelope.record.runId === result.runId ? applyTaskTerminalResult(prev, result) : prev
+      ));
       params.appendWorkspaceEvent({
         source: "mission",
         message:

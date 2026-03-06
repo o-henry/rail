@@ -104,6 +104,13 @@ export function createAgenticRunId(prefix = "run"): string {
   return `${prefix}-${stamp}-${random}`;
 }
 
+export function normalizeAgenticRunId(value: unknown): string {
+  return String(value ?? "")
+    .trim()
+    .replace(/[^a-zA-Z0-9_-]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
 export function queueKeyForTopic(topic: AgenticTopicId): string {
   return `topic:${topic}`;
 }
@@ -142,9 +149,10 @@ export function createAgenticRunEnvelope(params: {
   summary?: string;
 }): AgenticRunEnvelope {
   const now = nowIso();
+  const normalizedRunId = normalizeAgenticRunId(params.runId);
   return {
     record: {
-      runId: params.runId ?? createAgenticRunId(params.sourceTab),
+      runId: normalizedRunId || createAgenticRunId(params.sourceTab),
       runKind: params.runKind ?? (params.topic ? "market_topic" : params.queueKey.startsWith("graph:") ? "graph" : "studio_role"),
       sourceTab: params.sourceTab,
       topic: params.topic,

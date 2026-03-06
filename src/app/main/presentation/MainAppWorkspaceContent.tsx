@@ -13,19 +13,9 @@ export function MainAppWorkspaceContent(props: any) {
       type: "inject_context_sources",
       payload: { sourceIds },
     });
-    if (entries.length > 0) {
-      const summary = String(entries[0].summary ?? "").trim();
-      const sourceLine = entries[0].sourceUrl ? `\n- 출처: ${entries[0].sourceUrl}` : "";
-      const detail = summary || entries[0].title || entries[0].taskId;
-      props.agentLaunchRequestSeqRef.current += 1;
-      props.setAgentLaunchRequest({
-        id: props.agentLaunchRequestSeqRef.current,
-        setId: `role-${entries[0].roleId}`,
-        draft: `[데이터베이스 컨텍스트 ${entries[0].taskId}] ${detail}${sourceLine}`,
-      });
-    }
+    props.onInjectKnowledgeToWorkflow?.(entries);
     props.setStatus(`데이터베이스 컨텍스트 주입 요청: ${sourceIds.length}건`);
-    props.onSelectWorkspaceTab("agents");
+    props.onSelectWorkspaceTab("workflow");
   };
 
   return (
@@ -36,7 +26,12 @@ export function MainAppWorkspaceContent(props: any) {
           enabledScheduleCount={props.enabledScheduleCount}
           focusTopic={props.dashboardDetailTopic}
           isGraphRunning={props.isGraphRunning}
+          mission={props.missionControl.activeMission}
+          onClearMission={props.missionControl.clearMission}
+          onExecuteTaskCommand={props.missionControl.executeTaskCommand}
           onFocusTopic={props.setDashboardDetailTopic}
+          onRecordCompanionEvent={props.missionControl.recordCompanionEvent}
+          onRecordUnityVerification={props.missionControl.recordUnityVerification}
           pendingApprovalsCount={props.pendingApprovalsCount}
           runStateByTopic={props.dashboardIntelligenceRunStateByTopic}
           scheduleCount={props.scheduleCount}

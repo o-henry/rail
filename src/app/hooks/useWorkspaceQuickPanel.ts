@@ -72,14 +72,14 @@ export function useWorkspaceQuickPanel(params: UseWorkspaceQuickPanelParams) {
   };
 
   const onOpenQuickPanelAgents = () => {
-    params.setWorkspaceTab("agents");
+    params.setWorkspaceTab("workflow");
     setQuickPanelOpen(false);
   };
 
   const onSubmitQuickPanelQuery = () => {
     const next = quickPanelQuery.trim();
     if (!next) {
-      params.setWorkspaceTab("agents");
+      params.setWorkspaceTab("workflow");
       setQuickPanelOpen(false);
       return;
     }
