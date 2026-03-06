@@ -476,6 +476,23 @@ html[data-locale="ko"] .agents-grid-card :lang(en) {
   gap: 10px;
 }
 
+.agents-mission-card-terminal {
+  grid-column: 1 / -1;
+  gap: 12px;
+  background:
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, #d8f3df 44%, var(--surface-elevated)) 0%,
+      color-mix(in srgb, var(--surface-elevated) 88%, var(--surface-panel)) 100%
+    );
+  border: 1px solid color-mix(in srgb, #2cab5a 18%, var(--surface-strong));
+}
+
+.agents-mission-card-copy {
+  font-size: 12px;
+  color: var(--text-main);
+}
+
 .agents-mission-card-head small,
 .agents-mission-contract-path,
 .agents-mission-muted,

@@ -626,6 +626,7 @@
 
 .workflow-right-stack > .panel-card.workflow-mission-island.agents-mission-panel {
   margin-bottom: 0;
+  padding: 14px;
 }
 
 .workflow-right-stack > .panel-card.workflow-mission-island .agents-mission-empty-copy strong,

@@ -37,9 +37,7 @@ export function useWorkspaceNavigation(params: UseWorkspaceNavigationParams) {
         });
       }
       params.setWorkspaceTab(nextTab);
-      if (nextTab !== "dashboard") {
-        params.setDashboardDetailTopic(null);
-      }
+      params.setDashboardDetailTopic(null);
     },
     [params],
   );
@@ -60,10 +58,6 @@ export function useWorkspaceNavigation(params: UseWorkspaceNavigationParams) {
   }, [params.workspaceTab]);
 
   const onNavigateWorkspaceBack = useCallback(() => {
-    if (params.dashboardDetailTopic) {
-      params.setDashboardDetailTopic(null);
-      return;
-    }
     const forwardStack = workspaceForwardStackRef.current;
     const stack = workspaceBackStackRef.current;
     if (stack.length <= 1) {

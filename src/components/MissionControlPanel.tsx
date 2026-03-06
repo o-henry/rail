@@ -136,11 +136,12 @@ export default function MissionControlPanel(props: MissionControlPanelProps) {
           </ul>
         </article>
 
-        <article className="agents-mission-card">
+        <article className="agents-mission-card agents-mission-card-terminal">
           <div className="agents-mission-card-head">
             <strong>Task Terminal</strong>
             <small>{terminalBusy ? "RUNNING" : mission.terminalSession.status.toUpperCase()}</small>
           </div>
+          <p className="agents-mission-card-copy">현재 미션에 허용된 검증 명령만 여기서 실행합니다.</p>
           <div className="agents-mission-command-list">
             {mission.terminalSession.allowedCommands.map((command) => (
               <button

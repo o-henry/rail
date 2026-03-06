@@ -399,7 +399,7 @@ export function useAgenticOrchestrationBridge(params: {
         return;
       }
       if (action.type === "open_run") {
-        onSelectWorkspaceTab("dashboard");
+        onSelectWorkspaceTab("workflow");
         setStatus(`run 열기: ${action.payload.runId}`);
         return;
       }

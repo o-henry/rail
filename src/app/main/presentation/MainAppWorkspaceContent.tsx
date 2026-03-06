@@ -1,6 +1,5 @@
 import AgentsPage from "../../../pages/agents/AgentsPage";
 import BridgePage from "../../../pages/bridge/BridgePage";
-import DashboardPage from "../../../pages/dashboard/DashboardPage";
 import FeedPage from "../../../pages/feed/FeedPage";
 import KnowledgeBasePage from "../../../pages/knowledge/KnowledgeBasePage";
 import DashboardIntelligenceSettings from "../../../pages/settings/DashboardIntelligenceSettings";
@@ -20,27 +19,6 @@ export function MainAppWorkspaceContent(props: any) {
 
   return (
     <>
-      {props.workspaceTab === "dashboard" && (
-        <DashboardPage
-          connectedProviderCount={props.connectedProviderCount}
-          enabledScheduleCount={props.enabledScheduleCount}
-          focusTopic={props.dashboardDetailTopic}
-          isGraphRunning={props.isGraphRunning}
-          mission={props.missionControl.activeMission}
-          onClearMission={props.missionControl.clearMission}
-          onExecuteTaskCommand={props.missionControl.executeTaskCommand}
-          onFocusTopic={props.setDashboardDetailTopic}
-          onRecordCompanionEvent={props.missionControl.recordCompanionEvent}
-          onRecordUnityVerification={props.missionControl.recordUnityVerification}
-          pendingApprovalsCount={props.pendingApprovalsCount}
-          runStateByTopic={props.dashboardIntelligenceRunStateByTopic}
-          scheduleCount={props.scheduleCount}
-          stockDocumentPosts={props.feedPosts}
-          topicSnapshots={props.dashboardSnapshotsByTopic}
-          webBridgeRunning={props.webBridgeRunning}
-          workspaceEvents={props.workspaceEvents}
-        />
-      )}
       {props.workspaceTab === "feed" && <FeedPage vm={props.feedPageVm} />}
       {props.workspaceTab === "knowledge" && (
         <KnowledgeBasePage

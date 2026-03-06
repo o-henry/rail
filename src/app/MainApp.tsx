@@ -321,10 +321,10 @@ import {
 import { executeTurnNodeWithContext } from "./main/runtime/executeTurnNode";
 import type { FeedCategory, InternalMemorySnippet, WebProviderRunResult, RunRecord } from "./main";
 
-const HIDDEN_WORKSPACE_TABS = new Set<WorkspaceTab>(["intelligence", "feed", "handoff", "agents"]);
+const HIDDEN_WORKSPACE_TABS = new Set<WorkspaceTab>(["dashboard", "intelligence", "feed", "handoff", "agents"]);
 
 const WORKSPACE_TOPBAR_TABS: Array<{ tab: WorkspaceTab; label: string }> = [
-  { tab: "dashboard", label: "홈" }, { tab: "workflow", label: "그래프" },
+  { tab: "workflow", label: "그래프" },
   { tab: "knowledge", label: "데이터베이스" }, { tab: "settings", label: "설정" },
 ];
 
@@ -336,7 +336,7 @@ function App() {
   const defaultLoginCompleted = useMemo(() => loadPersistedLoginCompleted(), []);
   const defaultAuthMode = useMemo(() => loadPersistedAuthMode(), []);
   const defaultCodexMultiAgentMode = useMemo(() => loadPersistedCodexMultiAgentMode(), []);
-  const [workspaceTab, setWorkspaceTab] = useState<WorkspaceTab>("dashboard");
+  const [workspaceTab, setWorkspaceTab] = useState<WorkspaceTab>("workflow");
   const [workflowRoleId, setWorkflowRoleId] = useState<StudioRoleId>("pm_planner");
   const [workflowRoleTaskId, setWorkflowRoleTaskId] = useState("TASK-001");
   const [workflowRolePrompt, setWorkflowRolePrompt] = useState("");
@@ -645,7 +645,7 @@ function App() {
 
   useEffect(() => {
     if (HIDDEN_WORKSPACE_TABS.has(workspaceTab)) {
-      setWorkspaceTab("dashboard");
+      setWorkspaceTab("workflow");
     }
   }, [workspaceTab]);
   useEffect(() => {
