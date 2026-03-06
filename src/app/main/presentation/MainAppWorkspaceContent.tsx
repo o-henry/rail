@@ -1,0 +1,133 @@
+import AgentsPage from "../../../pages/agents/AgentsPage";
+import BridgePage from "../../../pages/bridge/BridgePage";
+import DashboardPage from "../../../pages/dashboard/DashboardPage";
+import FeedPage from "../../../pages/feed/FeedPage";
+import KnowledgeBasePage from "../../../pages/knowledge/KnowledgeBasePage";
+import DashboardIntelligenceSettings from "../../../pages/settings/DashboardIntelligenceSettings";
+import SettingsPage from "../../../pages/settings/SettingsPage";
+
+export function MainAppWorkspaceContent(props: any) {
+  const handleInjectContextSources = (entries: any[]) => {
+    const sourceIds = entries.map((entry) => entry.id);
+    props.publishAction({
+      type: "inject_context_sources",
+      payload: { sourceIds },
+    });
+    if (entries.length > 0) {
+      const summary = String(entries[0].summary ?? "").trim();
+      const sourceLine = entries[0].sourceUrl ? `\n- 출처: ${entries[0].sourceUrl}` : "";
+      const detail = summary || entries[0].title || entries[0].taskId;
+      props.agentLaunchRequestSeqRef.current += 1;
+      props.setAgentLaunchRequest({
+        id: props.agentLaunchRequestSeqRef.current,
+        setId: `role-${entries[0].roleId}`,
+        draft: `[데이터베이스 컨텍스트 ${entries[0].taskId}] ${detail}${sourceLine}`,
+      });
+    }
+    props.setStatus(`데이터베이스 컨텍스트 주입 요청: ${sourceIds.length}건`);
+    props.onSelectWorkspaceTab("agents");
+  };
+
+  return (
+    <>
+      {props.workspaceTab === "dashboard" && (
+        <DashboardPage
+          connectedProviderCount={props.connectedProviderCount}
+          enabledScheduleCount={props.enabledScheduleCount}
+          focusTopic={props.dashboardDetailTopic}
+          isGraphRunning={props.isGraphRunning}
+          onFocusTopic={props.setDashboardDetailTopic}
+          pendingApprovalsCount={props.pendingApprovalsCount}
+          runStateByTopic={props.dashboardIntelligenceRunStateByTopic}
+          scheduleCount={props.scheduleCount}
+          stockDocumentPosts={props.feedPosts}
+          topicSnapshots={props.dashboardSnapshotsByTopic}
+          webBridgeRunning={props.webBridgeRunning}
+          workspaceEvents={props.workspaceEvents}
+        />
+      )}
+      {props.workspaceTab === "feed" && <FeedPage vm={props.feedPageVm} />}
+      {props.workspaceTab === "knowledge" && (
+        <KnowledgeBasePage
+          cwd={props.cwd}
+          posts={props.feedPosts}
+          onInjectContextSources={handleInjectContextSources}
+        />
+      )}
+      {props.workspaceTab === "agents" && (
+        <AgentsPage
+          codexMultiAgentMode={props.codexMultiAgentMode}
+          launchRequest={props.agentLaunchRequest}
+          onQuickAction={props.onAgentQuickAction}
+          onRunRole={({ roleId, taskId, prompt }) => {
+            props.publishAction({
+              type: "run_role",
+              payload: {
+                roleId,
+                taskId,
+                prompt,
+                sourceTab: "agents",
+              },
+            });
+          }}
+          onOpenDataTab={() => props.onSelectWorkspaceTab("intelligence")}
+          onRunDataTopic={props.onRunDashboardTopicFromAgents}
+          runStateByTopic={props.dashboardIntelligenceRunStateByTopic}
+          topicSnapshots={props.dashboardSnapshotsByTopic}
+        />
+      )}
+      {props.workspaceTab === "settings" && (
+        <section className="panel-card settings-view workspace-tab-panel">
+          <SettingsPage
+            authModeText={props.authModeText}
+            codexAuthBusy={props.codexAuthBusy}
+            compact={false}
+            cwd={props.cwd}
+            engineStarted={props.engineStarted}
+            isGraphRunning={props.isGraphRunning}
+            loginCompleted={props.loginCompleted}
+            codexMultiAgentMode={props.codexMultiAgentMode}
+            codexMultiAgentModeOptions={[...props.codexMultiAgentModeOptions]}
+            userBackgroundImage={props.userBackgroundImage}
+            userBackgroundOpacity={props.userBackgroundOpacity}
+            onCloseUsageResult={() => props.setUsageResultClosed(true)}
+            onOpenRunsFolder={() => void props.onOpenRunsFolder()}
+            onSelectCwdDirectory={() => void props.onSelectCwdDirectory()}
+            onSetCodexMultiAgentMode={(next) => props.setCodexMultiAgentMode(props.normalizeCodexMultiAgentMode(next))}
+            onSetUserBackgroundImage={props.setUserBackgroundImage}
+            onSetUserBackgroundOpacity={(next) =>
+              props.setUserBackgroundOpacity(Number.isFinite(next) ? Math.min(1, Math.max(0, next)) : 0)
+            }
+            onToggleCodexLogin={() => void props.onLoginCodex()}
+            running={props.running}
+            status={props.status}
+            usageInfoText={props.usageInfoText}
+            usageResultClosed={props.usageResultClosed}
+          />
+          <BridgePage
+            busy={props.webWorkerBusy}
+            connectCode={props.webBridgeConnectCode}
+            embedded
+            onCopyConnectCode={() => void props.onCopyWebBridgeConnectCode()}
+            onRefreshStatus={() => void props.refreshWebBridgeStatus()}
+            onRestartBridge={() => void props.onRestartWebBridge()}
+            status={props.webBridgeStatus}
+          />
+        </section>
+      )}
+      {props.workspaceTab === "intelligence" && (
+        <section className="panel-card settings-view data-intelligence-view workspace-tab-panel">
+          <DashboardIntelligenceSettings
+            briefingDocuments={props.briefingDocuments}
+            config={props.dashboardIntelligenceConfig}
+            disabled={props.running || props.isGraphRunning}
+            onOpenBriefingDocument={props.onOpenBriefingDocumentFromData}
+            onRunTopic={props.onRunDashboardTopicFromData}
+            runStateByTopic={props.dashboardIntelligenceRunStateByTopic}
+            snapshotsByTopic={props.dashboardSnapshotsByTopic}
+          />
+        </section>
+      )}
+    </>
+  );
+}

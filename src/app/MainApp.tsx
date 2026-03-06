@@ -2,19 +2,12 @@ import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState }
 import "../App.css";
 import { invoke, listen, openUrl } from "../shared/tauri";
 import AppNav from "../components/AppNav";
-import BridgePage from "../pages/bridge/BridgePage";
-import FeedPage from "../pages/feed/FeedPage";
-import DashboardPage from "../pages/dashboard/DashboardPage";
 import { type DashboardDetailTopic } from "../pages/dashboard/DashboardDetailPage";
-import AgentsPage from "../pages/agents/AgentsPage";
 import type { AgentQuickActionRequest, AgentWorkspaceLaunchRequest } from "../pages/agents/agentTypes";
-import SettingsPage from "../pages/settings/SettingsPage";
-import DashboardIntelligenceSettings from "../pages/settings/DashboardIntelligenceSettings";
 import WorkflowPage from "../pages/workflow/WorkflowPage";
 import WorkflowRoleDock from "../pages/workflow/WorkflowRoleDock";
 import WorkflowRagModeDock from "../pages/workflow/WorkflowRagModeDock";
 import { buildRoleDockStatusByRole, type RoleDockRuntimeState } from "../pages/workflow/roleDockState";
-import KnowledgeBasePage from "../pages/knowledge/KnowledgeBasePage";
 import { useFloatingPanel } from "../features/ui/useFloatingPanel";
 import { useExecutionState } from "./hooks/useExecutionState";
 import { useFeedRunActions } from "./hooks/useFeedRunActions";
@@ -272,6 +265,7 @@ import { createWorkspaceEventEntry, type WorkspaceEventEntry } from "./main/runt
 import { useBatchScheduler } from "./main/runtime/useBatchScheduler";
 import { useCanvasGraphDerivedState } from "./main/canvas/useCanvasGraphDerivedState";
 import { MainAppModals } from "./main/presentation/MainAppModals";
+import { MainAppWorkspaceContent } from "./main/presentation/MainAppWorkspaceContent";
 import { WorkspaceQuickPanel } from "./main/presentation/WorkspaceQuickPanel";
 import {
   buildRailCompatibleDagSnapshot,
@@ -408,9 +402,7 @@ function App() {
     return Math.min(1, Math.max(0, parsed));
   });
   const [costPreset, setCostPreset] = useState<CostPreset>("balanced");
-  const [workflowQuestion, setWorkflowQuestion] = useState(
-    "",
-  );
+  const [workflowQuestion, setWorkflowQuestion] = useState("");
   const [workflowGraphViewMode, setWorkflowGraphViewMode] = useState<WorkflowGraphViewMode>("graph");
   const [workflowSidePanelsVisible, setWorkflowSidePanelsVisible] = useState(true);
 
@@ -1792,9 +1784,7 @@ function App() {
     selectedNode?.type === "turn" && selectedTurnConfig
       ? inferQualityProfile(selectedNode, selectedTurnConfig)
       : "generic";
-  const selectedQualityThresholdOption = String(
-    normalizeQualityThreshold(selectedTurnConfig?.qualityThreshold ?? QUALITY_DEFAULT_THRESHOLD),
-  );
+  const selectedQualityThresholdOption = String(normalizeQualityThreshold(selectedTurnConfig?.qualityThreshold ?? QUALITY_DEFAULT_THRESHOLD));
   const selectedArtifactType: ArtifactType = toArtifactType(selectedTurnConfig?.artifactType);
   const qualityProfileOptions = useMemo(() => getQualityProfileOptions(locale), [locale]);
   const qualityThresholdOptions = useMemo(() => getQualityThresholdOptions(locale), [locale]);
@@ -1802,14 +1792,8 @@ function App() {
   const costPresetOptions = useMemo(() => getCostPresetOptions(locale), [locale]);
   const codexMultiAgentModeOptions = useMemo(() => getCodexMultiAgentModeOptions(locale), [locale]);
   const presetTemplateOptions = useMemo(() => getPresetTemplateOptions(locale), [locale]);
-  const knowledgeTopKOptions = useMemo(
-    () => KNOWLEDGE_TOP_K_OPTIONS.map((option) => ({ ...option, label: tp(option.label) })),
-    [locale],
-  );
-  const knowledgeMaxCharsOptions = useMemo(
-    () => KNOWLEDGE_MAX_CHARS_OPTIONS.map((option) => ({ ...option, label: tp(option.label) })),
-    [locale],
-  );
+  const knowledgeTopKOptions = useMemo(() => KNOWLEDGE_TOP_K_OPTIONS.map((option) => ({ ...option, label: tp(option.label) })), [locale]);
+  const knowledgeMaxCharsOptions = useMemo(() => KNOWLEDGE_MAX_CHARS_OPTIONS.map((option) => ({ ...option, label: tp(option.label) })), [locale]);
   const outgoingFromSelected = selectedNode
     ? graph.edges
         .filter((edge) => edge.from.nodeId === selectedNode.id)
@@ -2841,7 +2825,6 @@ function App() {
         onSelectTab={onSelectWorkspaceTab}
         renderIcon={(tab, active) => <NavIcon active={active} tab={tab} />}
       />
-
       <section
         className={`workspace ${canvasFullscreen ? "canvas-fullscreen-active" : ""} ${error ? "workspace-has-error" : ""}`.trim()}
       >
@@ -3010,139 +2993,73 @@ function App() {
             )}
           </WorkflowPage>
         )}
-        {workspaceTab === "dashboard" && (
-          <DashboardPage
-            connectedProviderCount={webBridgeStatus.connectedProviders.length}
-            enabledScheduleCount={batchScheduler.schedules.filter((item) => item.status === "enabled").length}
-            focusTopic={dashboardDetailTopic}
-            isGraphRunning={isGraphRunning}
-            onFocusTopic={(topic) => setDashboardDetailTopic(topic)}
-            pendingApprovalsCount={pendingApprovals.length}
-            runStateByTopic={dashboardIntelligenceRunStateByTopic}
-            scheduleCount={batchScheduler.schedules.length}
-            stockDocumentPosts={feedPosts}
-            topicSnapshots={dashboardSnapshotsByTopic}
-            webBridgeRunning={webBridgeStatus.running}
-            workspaceEvents={workspaceEvents}
-          />
-        )}
-        {workspaceTab === "feed" && (
-          <FeedPage vm={feedPageVm} />
-        )}
-        {workspaceTab === "knowledge" && (
-          <KnowledgeBasePage
-            cwd={cwd}
-            posts={feedPosts}
-            onInjectContextSources={(entries) => {
-              const sourceIds = entries.map((entry) => entry.id);
-              publishAction({
-                type: "inject_context_sources",
-                payload: { sourceIds },
-              });
-              if (entries.length > 0) {
-                const summary = String(entries[0].summary ?? "").trim();
-                const sourceLine = entries[0].sourceUrl
-                  ? `\n- 출처: ${entries[0].sourceUrl}`
-                  : "";
-                const detail = summary || entries[0].title || entries[0].taskId;
-                agentLaunchRequestSeqRef.current += 1;
-                setAgentLaunchRequest({
-                  id: agentLaunchRequestSeqRef.current,
-                  setId: `role-${entries[0].roleId}`,
-                  draft: `[데이터베이스 컨텍스트 ${entries[0].taskId}] ${detail}${sourceLine}`,
-                });
-              }
-              setStatus(`데이터베이스 컨텍스트 주입 요청: ${sourceIds.length}건`);
-              onSelectWorkspaceTab("agents");
-            }}
-          />
-        )}
-        {workspaceTab === "agents" && (
-          <AgentsPage
-            codexMultiAgentMode={codexMultiAgentMode}
-            launchRequest={agentLaunchRequest}
-            onQuickAction={onAgentQuickAction}
-            onRunRole={({ roleId, taskId, prompt }) => {
-              publishAction({
-                type: "run_role",
-                payload: {
-                  roleId,
-                  taskId,
-                  prompt,
-                  sourceTab: "agents",
-                },
-              });
-            }}
-            onOpenDataTab={() => onSelectWorkspaceTab("intelligence")}
-            onRunDataTopic={onRunDashboardTopicFromAgents}
-            runStateByTopic={dashboardIntelligenceRunStateByTopic}
-            topicSnapshots={dashboardSnapshotsByTopic}
-          />
-        )}
-        {workspaceTab === "settings" && (
-          <section className="panel-card settings-view workspace-tab-panel">
-            <SettingsPage
-              authModeText={authModeLabel(authMode)}
-              codexAuthBusy={codexAuthBusy}
-              compact={false}
-              cwd={cwd}
-              engineStarted={engineStarted}
-              isGraphRunning={isGraphRunning}
-              loginCompleted={loginCompleted}
-              codexMultiAgentMode={codexMultiAgentMode}
-              codexMultiAgentModeOptions={[...codexMultiAgentModeOptions]}
-              userBackgroundImage={userBackgroundImage}
-              userBackgroundOpacity={userBackgroundOpacity}
-              onCloseUsageResult={() => setUsageResultClosed(true)}
-              onOpenRunsFolder={() => void onOpenRunsFolder()}
-              onSelectCwdDirectory={() => void onSelectCwdDirectory()}
-              onSetCodexMultiAgentMode={(next) => setCodexMultiAgentMode(normalizeCodexMultiAgentMode(next))}
-              onSetUserBackgroundImage={setUserBackgroundImage}
-              onSetUserBackgroundOpacity={(next) =>
-                setUserBackgroundOpacity(Number.isFinite(next) ? Math.min(1, Math.max(0, next)) : 0)
-              }
-              onToggleCodexLogin={() => void onLoginCodex()}
-              running={running}
-              status={status}
-              usageInfoText={usageInfoText}
-              usageResultClosed={usageResultClosed}
-            />
-            <BridgePage
-              busy={webWorkerBusy}
-              connectCode={webBridgeConnectCode}
-              embedded
-              onCopyConnectCode={() => void onCopyWebBridgeConnectCode()}
-              onRefreshStatus={() => void refreshWebBridgeStatus()}
-              onRestartBridge={() => void onRestartWebBridge()}
-              status={webBridgeStatus}
-            />
-            {/* {lastSavedRunFile && <div>최근 실행 파일: {formatRunFileLabel(lastSavedRunFile)}</div>} */}
-          </section>
-        )}
-        {workspaceTab === "intelligence" && (
-          <section className="panel-card settings-view data-intelligence-view workspace-tab-panel">
-            <DashboardIntelligenceSettings
-              briefingDocuments={feedPosts
-                .filter((post) => post.status === "done" || post.status === "low_quality")
-                .map((post) => ({
-                  id: post.id,
-                  runId: post.runId,
-                  summary: post.summary,
-                  sourceFile: post.sourceFile,
-                  agentName: post.agentName,
-                  createdAt: post.createdAt,
-                  isFinalDocument: post.isFinalDocument,
-                  status: post.status,
-                }))}
-              config={dashboardIntelligenceConfig}
-              disabled={running || isGraphRunning}
-              onOpenBriefingDocument={onOpenBriefingDocumentFromData}
-              onRunTopic={onRunDashboardTopicFromData}
-              runStateByTopic={dashboardIntelligenceRunStateByTopic}
-              snapshotsByTopic={dashboardSnapshotsByTopic}
-            />
-          </section>
-        )}
+        <MainAppWorkspaceContent
+          agentLaunchRequest={agentLaunchRequest}
+          agentLaunchRequestSeqRef={agentLaunchRequestSeqRef}
+          authModeText={authModeLabel(authMode)}
+          briefingDocuments={feedPosts
+            .filter((post) => post.status === "done" || post.status === "low_quality")
+            .map((post) => ({
+              id: post.id,
+              runId: post.runId,
+              summary: post.summary,
+              sourceFile: post.sourceFile,
+              agentName: post.agentName,
+              createdAt: post.createdAt,
+              isFinalDocument: post.isFinalDocument,
+              status: post.status,
+            }))}
+          codexAuthBusy={codexAuthBusy}
+          codexMultiAgentMode={codexMultiAgentMode}
+          codexMultiAgentModeOptions={codexMultiAgentModeOptions}
+          connectedProviderCount={webBridgeStatus.connectedProviders.length}
+          cwd={cwd}
+          dashboardDetailTopic={dashboardDetailTopic}
+          dashboardIntelligenceConfig={dashboardIntelligenceConfig}
+          dashboardIntelligenceRunStateByTopic={dashboardIntelligenceRunStateByTopic}
+          dashboardSnapshotsByTopic={dashboardSnapshotsByTopic}
+          enabledScheduleCount={batchScheduler.schedules.filter((item) => item.status === "enabled").length}
+          engineStarted={engineStarted}
+          feedPageVm={feedPageVm}
+          feedPosts={feedPosts}
+          isGraphRunning={isGraphRunning}
+          launchRequest={agentLaunchRequest}
+          loginCompleted={loginCompleted}
+          normalizeCodexMultiAgentMode={normalizeCodexMultiAgentMode}
+          onAgentQuickAction={onAgentQuickAction}
+          onCopyWebBridgeConnectCode={onCopyWebBridgeConnectCode}
+          onLoginCodex={onLoginCodex}
+          onOpenBriefingDocumentFromData={onOpenBriefingDocumentFromData}
+          onOpenRunsFolder={onOpenRunsFolder}
+          onRestartWebBridge={onRestartWebBridge}
+          onRunDashboardTopicFromAgents={onRunDashboardTopicFromAgents}
+          onRunDashboardTopicFromData={onRunDashboardTopicFromData}
+          onSelectCwdDirectory={onSelectCwdDirectory}
+          onSelectWorkspaceTab={onSelectWorkspaceTab}
+          pendingApprovalsCount={pendingApprovals.length}
+          publishAction={publishAction}
+          refreshWebBridgeStatus={refreshWebBridgeStatus}
+          running={running}
+          scheduleCount={batchScheduler.schedules.length}
+          setAgentLaunchRequest={setAgentLaunchRequest}
+          setCodexMultiAgentMode={setCodexMultiAgentMode}
+          setDashboardDetailTopic={setDashboardDetailTopic}
+          setStatus={setStatus}
+          setUsageResultClosed={setUsageResultClosed}
+          setUserBackgroundImage={setUserBackgroundImage}
+          setUserBackgroundOpacity={setUserBackgroundOpacity}
+          status={status}
+          usageInfoText={usageInfoText}
+          usageResultClosed={usageResultClosed}
+          userBackgroundImage={userBackgroundImage}
+          userBackgroundOpacity={userBackgroundOpacity}
+          webBridgeConnectCode={webBridgeConnectCode}
+          webBridgeRunning={webBridgeStatus.running}
+          webBridgeStatus={webBridgeStatus}
+          webWorkerBusy={webWorkerBusy}
+          workspaceEvents={workspaceEvents}
+          workspaceTab={workspaceTab}
+        />
 
       </section>
       <MainAppModals

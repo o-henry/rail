@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { KnowledgeSourcePost } from "../../features/studio/knowledgeTypes";
-import { toKnowledgeEntry } from "./KnowledgeBasePage";
+import { toKnowledgeEntry } from "./knowledgeEntryMapping";
 
 function makePost(overrides: Partial<KnowledgeSourcePost> = {}): KnowledgeSourcePost {
   return {
