@@ -622,22 +622,18 @@
   display: grid;
   background: #ffffff;
   margin-bottom: 0;
+  border-radius: 8px;
 }
 
 .workflow-right-stack > .panel-card.workflow-mission-island.agents-mission-panel {
   margin-bottom: 0;
-  padding: 14px;
+  padding: 10px 10px 14px;
 }
 
 .workflow-right-stack > .panel-card.workflow-mission-island .agents-mission-banner,
 .workflow-right-stack > .panel-card.workflow-mission-island .agents-mission-role-board,
 .workflow-right-stack > .panel-card.workflow-mission-island .agents-mission-grid {
   grid-template-columns: 1fr;
-}
-
-.workflow-right-stack > .panel-card.workflow-mission-island .agents-mission-role-card,
-.workflow-right-stack > .panel-card.workflow-mission-island .agents-mission-card {
-  gap: 8px;
 }
 
 .workflow-right-stack > .panel-card.workflow-mission-island .agents-mission-button-row button,
