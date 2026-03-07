@@ -1,13 +1,7 @@
-import { openPath } from "../../shared/tauri";
-import type { WorkSession, WorkSessionStatus } from "../../features/orchestration/workbench/types";
 import type { GraphNode } from "../../features/workflow/types";
-import { buildControlRoomOverview, buildGraphMonitorRows } from "./controlRoomState";
-import { WorkbenchGlobalBar } from "./WorkbenchGlobalBar";
-import { WorkbenchGraphMonitor } from "./WorkbenchGraphMonitor";
-import { WorkbenchQuickActions } from "./WorkbenchQuickActions";
-import { WorkbenchRuntimeConsole } from "./WorkbenchRuntimeConsole";
-import { WorkbenchSessionBoard } from "./WorkbenchSessionBoard";
-import { WorkbenchSessionDetail } from "./WorkbenchSessionDetail";
+import { WorkspaceGraphPane } from "./WorkspaceGraphPane";
+import { WorkspaceTerminalPane } from "./WorkspaceTerminalPane";
+import { useWorkspaceTerminalGrid } from "./useWorkspaceTerminalGrid";
 import type { WorkbenchNodeState, WorkbenchWorkspaceEvent } from "./workbenchRuntimeTypes";
 
 type WorkbenchPageProps = {
@@ -16,100 +10,48 @@ type WorkbenchPageProps = {
   graphNodes: GraphNode[];
   nodeStates: Record<string, WorkbenchNodeState>;
   workspaceEvents: WorkbenchWorkspaceEvent[];
-  pendingApprovalsCount: number;
-  connectedProviderCount: number;
-  isGraphRunning: boolean;
-  sessions: WorkSession[];
-  selectedSession: WorkSession | null;
-  selectedSessionId: string | null;
-  onOpenWorkflow: () => void;
-  onCreateRoleSession: (input: {
-    roleId: string;
-    roleLabel: string;
-    taskId: string;
-    prompt: string;
-  }) => void;
-  onCreateManualSession: (input: {
-    title: string;
-    taskId: string;
-    prompt?: string;
-    commands?: string[];
-  }) => void;
-  onSelectSession: (sessionId: string) => void;
-  onArchiveSession: (sessionId: string) => void;
-  onAddNote: (sessionId: string, note: string) => void;
-  onAttachArtifact: (sessionId: string, path: string) => void;
-  onSetManualStatus: (sessionId: string, status: WorkSessionStatus) => void;
-  onSetReviewState: (sessionId: string, next: "approved" | "rejected") => void;
-  onRecordCompanionEvent: (sessionId: string, type: "task_received" | "patch_ready" | "test_passed" | "test_failed" | "approval_requested", message?: string) => void;
-  onRecordUnityVerification: (sessionId: string, success: boolean, message: string) => void;
-  onExecuteCommand: (sessionId: string, command: string) => void;
 };
 
-function resolveArtifactPath(cwd: string, path: string): string {
-  const normalized = String(path ?? "").trim();
-  if (!normalized) {
-    return normalized;
-  }
-  if (normalized.startsWith("/") || /^[A-Za-z]:[\\/]/.test(normalized)) {
-    return normalized;
-  }
-  const base = String(cwd ?? "").trim().replace(/[\\/]+$/, "");
-  if (!base) {
-    return normalized;
-  }
-  return `${base}/${normalized.replace(/^[./\\]+/, "")}`;
-}
-
 export default function WorkbenchPage(props: WorkbenchPageProps) {
-  const overview = buildControlRoomOverview({
-    sessions: props.sessions,
-    nodeStates: props.nodeStates,
-    workspaceEvents: props.workspaceEvents,
-    pendingApprovals: props.pendingApprovalsCount,
-    connectedProviders: props.connectedProviderCount,
-    graphRunning: props.isGraphRunning,
-  });
-  const graphRows = buildGraphMonitorRows({
+  const terminal = useWorkspaceTerminalGrid({
+    cwd: props.cwd,
+    graphFileName: props.graphFileName,
     graphNodes: props.graphNodes,
     nodeStates: props.nodeStates,
+    workspaceEvents: props.workspaceEvents,
   });
 
   return (
-    <section className="workbench-control-room workspace-tab-panel">
-      <WorkbenchGlobalBar overview={overview} />
-      <div className="workbench-left-stack">
-        <WorkbenchQuickActions
-          onCreateManualSession={props.onCreateManualSession}
-          onCreateRoleSession={props.onCreateRoleSession}
+    <section className="workspace-terminal-grid workspace-tab-panel">
+      <header className="workspace-terminal-toolbar panel-card">
+        <div className="workspace-terminal-toolbar-copy">
+          <strong>워크스페이스</strong>
+          <p>Codex CLI 세션과 그래프 실행 로그를 같은 멀티 터미널 화면에서 추적합니다.</p>
+        </div>
+        <div className="workspace-terminal-toolbar-actions">
+          <button className="mini-action-button" onClick={terminal.startAllPanes} type="button">
+            <span className="mini-action-button-label">모든 Codex 시작</span>
+          </button>
+          <button className="mini-action-button" onClick={terminal.stopAllPanes} type="button">
+            <span className="mini-action-button-label">모든 세션 중지</span>
+          </button>
+        </div>
+      </header>
+
+      {terminal.panes.map((pane) => (
+        <WorkspaceTerminalPane
+          key={pane.id}
+          onChangeInput={(value) => terminal.setPaneInput(pane.id, value)}
+          onClear={() => terminal.clearPane(pane.id)}
+          onSend={() => terminal.sendPaneInput(pane.id)}
+          onStart={() => terminal.startPane(pane.id)}
+          onStop={() => terminal.stopPane(pane.id)}
+          pane={pane}
+          statusLabel={terminal.statusMessage(pane.status, pane.exitCode)}
         />
-        <WorkbenchSessionBoard
-          onSelectSession={props.onSelectSession}
-          selectedSessionId={props.selectedSessionId}
-          sessions={props.sessions}
-        />
-      </div>
-      <WorkbenchGraphMonitor
-        graphName={props.graphFileName}
-        onOpenWorkflow={props.onOpenWorkflow}
-        rows={graphRows}
-      />
-      <WorkbenchSessionDetail
-        onAddNote={props.onAddNote}
-        onArchiveSession={props.onArchiveSession}
-        onAttachArtifact={props.onAttachArtifact}
-        onOpenArtifact={(path) => void openPath(resolveArtifactPath(props.cwd, path))}
-        onSetManualStatus={props.onSetManualStatus}
-        session={props.selectedSession}
-      />
-      <WorkbenchRuntimeConsole
-        onExecuteCommand={props.onExecuteCommand}
-        onRecordCompanionEvent={props.onRecordCompanionEvent}
-        onRecordUnityVerification={props.onRecordUnityVerification}
-        onSetReviewState={props.onSetReviewState}
-        session={props.selectedSession}
-        workspaceEvents={props.workspaceEvents}
-      />
+      ))}
+
+      <WorkspaceGraphPane body={terminal.graphObserverText} graphName={props.graphFileName} />
     </section>
   );
 }

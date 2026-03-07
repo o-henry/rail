@@ -13,6 +13,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .manage(engine::EngineManager::default())
+        .manage(system::WorkspaceTerminalManager::default())
         .invoke_handler(tauri::generate_handler![
             engine::engine_start,
             engine::engine_stop,
@@ -76,6 +77,9 @@ pub fn run() {
             storage::dialog_pick_directory,
             storage::dialog_pick_knowledge_files,
             system::task_terminal_exec,
+            system::workspace_terminal_start,
+            system::workspace_terminal_input,
+            system::workspace_terminal_stop,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application");
@@ -91,8 +95,10 @@ pub fn run() {
         }
         tauri::RunEvent::ExitRequested { .. } | tauri::RunEvent::Exit => {
             let state = app_handle.state::<engine::EngineManager>();
+            let workspace_terminal_state = app_handle.state::<system::WorkspaceTerminalManager>();
             tauri::async_runtime::block_on(async {
                 let _ = engine::shutdown_all_runtimes(state.inner()).await;
+                system::shutdown_workspace_terminal_sessions(workspace_terminal_state.inner()).await;
             });
             dashboard_crawler::shutdown_scrapling_bridge_runtime();
             via_bridge::shutdown_via_runtime();
