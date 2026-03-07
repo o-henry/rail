@@ -1,14 +1,28 @@
 import { openPath } from "../../shared/tauri";
 import type { WorkSession, WorkSessionStatus } from "../../features/orchestration/workbench/types";
+import type { GraphNode } from "../../features/workflow/types";
+import { buildControlRoomOverview, buildGraphMonitorRows } from "./controlRoomState";
+import { WorkbenchGlobalBar } from "./WorkbenchGlobalBar";
+import { WorkbenchGraphMonitor } from "./WorkbenchGraphMonitor";
 import { WorkbenchQuickActions } from "./WorkbenchQuickActions";
+import { WorkbenchRuntimeConsole } from "./WorkbenchRuntimeConsole";
 import { WorkbenchSessionBoard } from "./WorkbenchSessionBoard";
 import { WorkbenchSessionDetail } from "./WorkbenchSessionDetail";
+import type { WorkbenchNodeState, WorkbenchWorkspaceEvent } from "./workbenchRuntimeTypes";
 
 type WorkbenchPageProps = {
   cwd: string;
+  graphFileName: string;
+  graphNodes: GraphNode[];
+  nodeStates: Record<string, WorkbenchNodeState>;
+  workspaceEvents: WorkbenchWorkspaceEvent[];
+  pendingApprovalsCount: number;
+  connectedProviderCount: number;
+  isGraphRunning: boolean;
   sessions: WorkSession[];
   selectedSession: WorkSession | null;
   selectedSessionId: string | null;
+  onOpenWorkflow: () => void;
   onCreateRoleSession: (input: {
     roleId: string;
     roleLabel: string;
@@ -48,33 +62,54 @@ function resolveArtifactPath(cwd: string, path: string): string {
 }
 
 export default function WorkbenchPage(props: WorkbenchPageProps) {
-  return (
-    <section className="workbench-layout workspace-tab-panel">
-      <WorkbenchSessionBoard
-        onSelectSession={props.onSelectSession}
-        selectedSessionId={props.selectedSessionId}
-        sessions={props.sessions}
-      />
+  const overview = buildControlRoomOverview({
+    sessions: props.sessions,
+    nodeStates: props.nodeStates,
+    workspaceEvents: props.workspaceEvents,
+    pendingApprovals: props.pendingApprovalsCount,
+    connectedProviders: props.connectedProviderCount,
+    graphRunning: props.isGraphRunning,
+  });
+  const graphRows = buildGraphMonitorRows({
+    graphNodes: props.graphNodes,
+    nodeStates: props.nodeStates,
+  });
 
-      <div className="workbench-sidebar-stack">
+  return (
+    <section className="workbench-control-room workspace-tab-panel">
+      <WorkbenchGlobalBar overview={overview} />
+      <div className="workbench-left-stack">
         <WorkbenchQuickActions
-          selectedSession={props.selectedSession}
           onCreateManualSession={props.onCreateManualSession}
           onCreateRoleSession={props.onCreateRoleSession}
-          onExecuteCommand={props.onExecuteCommand}
-          onRecordCompanionEvent={props.onRecordCompanionEvent}
-          onRecordUnityVerification={props.onRecordUnityVerification}
-          onSetReviewState={props.onSetReviewState}
         />
-        <WorkbenchSessionDetail
-          onAddNote={props.onAddNote}
-          onArchiveSession={props.onArchiveSession}
-          onAttachArtifact={props.onAttachArtifact}
-          onOpenArtifact={(path) => void openPath(resolveArtifactPath(props.cwd, path))}
-          onSetManualStatus={props.onSetManualStatus}
-          session={props.selectedSession}
+        <WorkbenchSessionBoard
+          onSelectSession={props.onSelectSession}
+          selectedSessionId={props.selectedSessionId}
+          sessions={props.sessions}
         />
       </div>
+      <WorkbenchGraphMonitor
+        graphName={props.graphFileName}
+        onOpenWorkflow={props.onOpenWorkflow}
+        rows={graphRows}
+      />
+      <WorkbenchSessionDetail
+        onAddNote={props.onAddNote}
+        onArchiveSession={props.onArchiveSession}
+        onAttachArtifact={props.onAttachArtifact}
+        onOpenArtifact={(path) => void openPath(resolveArtifactPath(props.cwd, path))}
+        onSetManualStatus={props.onSetManualStatus}
+        session={props.selectedSession}
+      />
+      <WorkbenchRuntimeConsole
+        onExecuteCommand={props.onExecuteCommand}
+        onRecordCompanionEvent={props.onRecordCompanionEvent}
+        onRecordUnityVerification={props.onRecordUnityVerification}
+        onSetReviewState={props.onSetReviewState}
+        session={props.selectedSession}
+        workspaceEvents={props.workspaceEvents}
+      />
     </section>
   );
 }

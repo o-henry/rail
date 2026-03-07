@@ -63,7 +63,7 @@ export function buildWorkbenchProps(params: Record<string, any> & {
           sourceTab: "workbench",
         },
       });
-      params.setStatus(`작업 보드 역할 실행 요청: ${roleLabel} (${taskId})`);
+      params.setStatus(`상황실 역할 실행 요청: ${roleLabel} (${taskId})`);
     },
     createManualSession: params.createManualSession,
     openSession: params.openSession,

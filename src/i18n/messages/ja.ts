@@ -7,7 +7,7 @@ export const JA_MESSAGES: Dictionary = {
     "lang.zh": "中国語",
     "nav.workflow.short": "フロー",
     "nav.workflow.title": "ワークフロー",
-    "nav.workbench": "作業ボード",
+    "nav.workbench": "管制室",
     "nav.dashboard": "ホーム",
     "nav.intelligence": "インテリジェンス",
     "nav.agents": "エージェント",

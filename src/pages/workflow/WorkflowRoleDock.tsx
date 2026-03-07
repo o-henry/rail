@@ -26,9 +26,9 @@ export default function WorkflowRoleDock(props: WorkflowRoleDockProps) {
   const lockedRoleId = props.roleSelectionLockedTo ?? null;
 
   return (
-    <aside className="panel-card workflow-role-dock" aria-label="작업 보드 안내">
+    <aside className="panel-card workflow-role-dock" aria-label="상황실 안내">
       <header className="workflow-role-dock-head">
-        <strong>작업 시작은 작업 보드에서</strong>
+        <strong>작업 시작은 상황실에서</strong>
         <span>그래프 탭은 캔버스 편집과 실행 확인에 집중합니다.</span>
       </header>
 
@@ -58,9 +58,9 @@ export default function WorkflowRoleDock(props: WorkflowRoleDockProps) {
       <section className="workflow-role-summary">
         <strong>현재 선택 역할</strong>
         <p className="workflow-role-summary-path">{selectedRole?.label ?? props.roleId}</p>
-        <p className="workflow-role-summary-empty">새 역할 실행과 일반 작업 카드는 좌측 `작업 보드` 탭에서 시작하세요.</p>
+        <p className="workflow-role-summary-empty">새 역할 실행과 일반 작업 카드는 좌측 `상황실` 탭에서 시작하세요.</p>
         <button className="mini-action-button workflow-role-run-button" onClick={props.onOpenWorkbench} type="button">
-          <span className="mini-action-button-label">작업 보드 열기</span>
+          <span className="mini-action-button-label">상황실 열기</span>
         </button>
       </section>
 

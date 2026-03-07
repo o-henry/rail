@@ -435,7 +435,7 @@ export function useAgenticOrchestrationBridge(params: {
           sourceTab === "workflow"
             ? `그래프 역할 실행 요청: ${action.payload.roleId} (${action.payload.taskId})`
             : sourceTab === "workbench"
-              ? `작업 보드 역할 실행 요청: ${action.payload.roleId} (${action.payload.taskId})`
+              ? `상황실 역할 실행 요청: ${action.payload.roleId} (${action.payload.taskId})`
               : `역할 실행 요청: ${action.payload.roleId} (${action.payload.taskId})`,
         );
         if (sourceTab === "agents" || sourceTab === "workbench") {

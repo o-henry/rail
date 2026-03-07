@@ -22,8 +22,13 @@ export function MainAppWorkspaceContent(props: any) {
     <>
       {props.workspaceTab === "workbench" && (
         <WorkbenchPage
+          connectedProviderCount={props.connectedProviderCount}
           cwd={props.cwd}
+          graphFileName={props.graphFileName}
+          graphNodes={props.graphNodes}
+          isGraphRunning={props.isGraphRunning}
           onAddNote={props.workbench.addNote}
+          onOpenWorkflow={() => props.onSelectWorkspaceTab("workflow")}
           onArchiveSession={props.workbench.archiveSession}
           onAttachArtifact={props.workbench.attachArtifactPath}
           onCreateManualSession={props.workbench.createManualSession}
@@ -34,9 +39,12 @@ export function MainAppWorkspaceContent(props: any) {
           onSelectSession={props.workbench.openSession}
           onSetManualStatus={props.workbench.setManualSessionStatus}
           onSetReviewState={props.workbench.setSessionReviewState}
+          pendingApprovalsCount={props.pendingApprovalsCount}
           selectedSession={props.workbench.selectedSession}
           selectedSessionId={props.workbench.selectedSessionId}
           sessions={props.workbench.sessions}
+          nodeStates={props.nodeStates}
+          workspaceEvents={props.workspaceEvents}
         />
       )}
       {props.workspaceTab === "feed" && <FeedPage vm={props.feedPageVm} />}

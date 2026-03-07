@@ -1,7 +1,5 @@
-import type { WorkSession, WorkSessionStatus } from "../../features/orchestration/workbench/types";
-import { workbenchStatusLabel, workbenchSurfaceLabel, workbenchVerificationLabel } from "./workbenchLabels";
-
-const BOARD_COLUMNS: WorkSessionStatus[] = ["waiting", "active", "review", "unity", "done"];
+import type { WorkSession } from "../../features/orchestration/workbench/types";
+import { workbenchStatusLabel, workbenchSurfaceLabel } from "./workbenchLabels";
 
 type WorkbenchSessionBoardProps = {
   sessions: WorkSession[];
@@ -15,50 +13,38 @@ export function WorkbenchSessionBoard({
   onSelectSession,
 }: WorkbenchSessionBoardProps) {
   return (
-    <section className="panel-card workbench-board" aria-label="작업 세션 보드">
+    <section className="panel-card workbench-session-rail" aria-label="세션 레일">
       <header className="workbench-panel-head">
         <div>
-          <strong>세션 보드</strong>
-          <p>역할 실행 세션과 일반 작업 카드를 같은 흐름에서 관리합니다.</p>
+          <strong>세션 레일</strong>
+          <p>역할별 에이전트 세션과 일반 작업을 실시간으로 추적합니다.</p>
         </div>
       </header>
-      <div className="workbench-board-columns">
-        {BOARD_COLUMNS.map((column) => {
-          const columnSessions = sessions.filter((session) => session.status === column);
-          return (
-            <section className="workbench-column" key={column}>
-              <header className="workbench-column-head">
-                <strong>{workbenchStatusLabel(column)}</strong>
-                <span>{columnSessions.length}</span>
-              </header>
-              <div className="workbench-column-body">
-                {columnSessions.length === 0 ? (
-                  <p className="workbench-column-empty">세션 없음</p>
-                ) : (
-                  columnSessions.map((session) => (
-                    <button
-                      className={`workbench-session-card${selectedSessionId === session.id ? " is-selected" : ""}`}
-                      key={session.id}
-                      onClick={() => onSelectSession(session.id)}
-                      type="button"
-                    >
-                      <div className="workbench-session-card-head">
-                        <strong>{session.title}</strong>
-                        <span>{session.kind === "role_run" ? "역할" : "일반"}</span>
-                      </div>
-                      <p className="workbench-session-task">{session.taskId}</p>
-                      <p className="workbench-session-action">{session.nextAction.title}</p>
-                      <div className="workbench-session-meta">
-                        <span>{workbenchSurfaceLabel(session.surface)}</span>
-                        <span>{workbenchVerificationLabel(session.verificationStatus)}</span>
-                      </div>
-                    </button>
-                  ))
-                )}
+
+      <div className="workbench-session-rail-list">
+        {sessions.length === 0 ? (
+          <p className="workbench-inline-empty">아직 시작된 세션이 없습니다.</p>
+        ) : (
+          sessions.map((session) => (
+            <button
+              className={`workbench-rail-card${selectedSessionId === session.id ? " is-selected" : ""}`}
+              key={session.id}
+              onClick={() => onSelectSession(session.id)}
+              type="button"
+            >
+              <div className="workbench-rail-card-head">
+                <strong>{session.roleLabel ?? session.title}</strong>
+                <span>{workbenchStatusLabel(session.status)}</span>
               </div>
-            </section>
-          );
-        })}
+              <p className="workbench-rail-card-title">{session.title}</p>
+              <div className="workbench-session-meta">
+                <span>{session.taskId}</span>
+                <span>{workbenchSurfaceLabel(session.surface)}</span>
+              </div>
+              <p className="workbench-session-action">{session.nextAction.title}</p>
+            </button>
+          ))
+        )}
       </div>
     </section>
   );

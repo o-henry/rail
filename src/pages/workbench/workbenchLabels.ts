@@ -49,3 +49,28 @@ export function workbenchReviewLabel(state: WorkSessionReviewState): string {
   }
   return "검토 없음";
 }
+
+export function workbenchRuntimeStatusLabel(status: string): string {
+  if (status === "running") {
+    return "실행 중";
+  }
+  if (status === "queued") {
+    return "대기열";
+  }
+  if (status === "waiting_user") {
+    return "사용자 응답 대기";
+  }
+  if (status === "done") {
+    return "완료";
+  }
+  if (status === "error") {
+    return "오류";
+  }
+  if (status === "paused") {
+    return "일시중지";
+  }
+  if (status === "idle") {
+    return "유휴";
+  }
+  return status || "알 수 없음";
+}

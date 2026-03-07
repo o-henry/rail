@@ -7,7 +7,7 @@ export const EN_MESSAGES: Dictionary = {
     "lang.zh": "Chinese",
     "nav.workflow.short": "Flow",
     "nav.workflow.title": "Workflow",
-    "nav.workbench": "Workbench",
+    "nav.workbench": "Control Room",
     "nav.dashboard": "Home",
     "nav.intelligence": "Intelligence",
     "nav.agents": "Agents",
