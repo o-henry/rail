@@ -29,7 +29,7 @@ export function useWorkspaceQuickPanel(params: UseWorkspaceQuickPanelParams) {
 
   const quickPanelWorkspaceLabel = useMemo(() => {
     const byTab: Record<WorkspaceTab, string> = {
-      workbench: "상황실",
+      workbench: "워크스페이스",
       dashboard: "작업 홈",
       intelligence: "대시보드 인텔리전스",
       agents: "에이전트 채팅",

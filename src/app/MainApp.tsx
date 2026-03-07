@@ -323,7 +323,7 @@ import type { FeedCategory, InternalMemorySnippet, WebProviderRunResult, RunReco
 
 const HIDDEN_WORKSPACE_TABS = new Set<WorkspaceTab>(["dashboard", "intelligence", "feed", "handoff", "agents"]);
 
-const WORKSPACE_TOPBAR_TABS: Array<{ tab: WorkspaceTab; label: string }> = [{ tab: "workbench", label: "상황실" }, { tab: "workflow", label: "그래프" }, { tab: "knowledge", label: "데이터베이스" }, { tab: "settings", label: "설정" }];
+const WORKSPACE_TOPBAR_TABS: Array<{ tab: WorkspaceTab; label: string }> = [{ tab: "workbench", label: "워크스페이스" }, { tab: "workflow", label: "그래프" }, { tab: "knowledge", label: "데이터베이스" }, { tab: "settings", label: "설정" }];
 
 function App() {
   const USER_BG_IMAGE_STORAGE_KEY = "rail.settings.user_bg_image";

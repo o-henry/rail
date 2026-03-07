@@ -15,9 +15,9 @@ const ITEMS: Array<{ key: keyof ControlRoomOverview; label: string }> = [
 
 export function WorkbenchGlobalBar({ overview }: WorkbenchGlobalBarProps) {
   return (
-    <section className="panel-card workbench-global-bar" aria-label="상황실 요약">
+    <section className="panel-card workbench-global-bar" aria-label="워크스페이스 요약">
       <div className="workbench-global-copy">
-        <strong>상황실</strong>
+        <strong>워크스페이스</strong>
         <p>에이전트 세션, 그래프 런타임, VS Code / Unity 확인 상태를 한 화면에서 추적합니다.</p>
       </div>
       <div className="workbench-global-metrics">
