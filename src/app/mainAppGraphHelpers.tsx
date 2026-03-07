@@ -28,6 +28,7 @@ import {
 import { useI18n } from "../i18n";
 
 export type WorkspaceTab =
+  | "workbench"
   | "dashboard"
   | "intelligence"
   | "workflow"
@@ -191,6 +192,9 @@ export function toWebBridgeStatus(raw: unknown): WebBridgeStatus {
 }
 
 export function NavIcon({ tab, active = false }: { tab: WorkspaceTab; active?: boolean }) {
+  if (tab === "workbench") {
+    return <img alt="" aria-hidden="true" className="nav-workflow-image" src="/workflow.svg" />;
+  }
   if (tab === "dashboard") {
     return <img alt="" aria-hidden="true" className="nav-workflow-image" src="/home.svg" />;
   }

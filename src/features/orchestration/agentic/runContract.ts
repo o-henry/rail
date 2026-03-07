@@ -6,6 +6,7 @@ import type {
 } from "../types";
 
 export type AgenticRunSourceTab =
+  | "workbench"
   | "agents"
   | "workflow"
   | "intelligence"

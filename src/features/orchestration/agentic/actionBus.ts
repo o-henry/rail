@@ -48,9 +48,37 @@ export type AgenticAction =
         taskId: string;
         prompt?: string;
         runId?: string;
-        sourceTab?: "agents" | "workflow";
+        sourceTab?: "agents" | "workflow" | "workbench";
         handoffToRole?: string;
         handoffRequest?: string;
+      };
+    }
+  | {
+      type: "create_manual_session";
+      payload: {
+        title: string;
+        taskId: string;
+        prompt?: string;
+        commands?: string[];
+      };
+    }
+  | {
+      type: "open_session";
+      payload: {
+        sessionId: string;
+      };
+    }
+  | {
+      type: "archive_session";
+      payload: {
+        sessionId: string;
+      };
+    }
+  | {
+      type: "attach_session_note";
+      payload: {
+        sessionId: string;
+        note: string;
       };
     }
   | {

@@ -152,7 +152,7 @@ export function useAgenticOrchestrationBridge(params: {
     prompt?: string;
     handoffToRole?: string;
     handoffRequest?: string;
-    sourceTab: "agents" | "workflow";
+    sourceTab: "agents" | "workflow" | "workbench";
     artifactPaths: string[];
     runStatus: "done" | "error";
     envelope?: AgenticRunEnvelope;
@@ -252,11 +252,11 @@ export function useAgenticOrchestrationBridge(params: {
       roleId: string;
       taskId: string;
       prompt?: string;
-      sourceTab?: "agents" | "workflow";
+      sourceTab?: "agents" | "workflow" | "workbench";
       handoffToRole?: string;
       handoffRequest?: string;
     }) => {
-      const sourceTab = params.sourceTab === "workflow" ? "workflow" : "agents";
+      const sourceTab = params.sourceTab === "workflow" ? "workflow" : params.sourceTab === "workbench" ? "workbench" : "agents";
       const normalizedRoleId = toStudioRoleId(params.roleId);
       const result = await runRoleWithCoordinator({
         runId: params.runId,
@@ -422,16 +422,23 @@ export function useAgenticOrchestrationBridge(params: {
         return;
       }
       if (action.type === "run_role") {
-        const sourceTab = action.payload.sourceTab === "workflow" ? "workflow" : "agents";
-        if (workspaceTab !== "workflow") {
+        const sourceTab =
+          action.payload.sourceTab === "workflow"
+            ? "workflow"
+            : action.payload.sourceTab === "workbench"
+              ? "workbench"
+              : "agents";
+        if (sourceTab === "workflow" && workspaceTab !== "workflow") {
           onSelectWorkspaceTab("workflow");
         }
         setStatus(
           sourceTab === "workflow"
             ? `그래프 역할 실행 요청: ${action.payload.roleId} (${action.payload.taskId})`
-            : `역할 실행 요청: ${action.payload.roleId} (${action.payload.taskId})`,
+            : sourceTab === "workbench"
+              ? `작업 보드 역할 실행 요청: ${action.payload.roleId} (${action.payload.taskId})`
+              : `역할 실행 요청: ${action.payload.roleId} (${action.payload.taskId})`,
         );
-        if (sourceTab === "agents") {
+        if (sourceTab === "agents" || sourceTab === "workbench") {
           applyPreset(presetForRole(action.payload.roleId));
         }
         void runRoleDirect({ ...action.payload, sourceTab });

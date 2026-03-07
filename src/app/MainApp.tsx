@@ -26,6 +26,7 @@ import { useWorkspaceQuickPanel } from "./hooks/useWorkspaceQuickPanel";
 import { useDashboardAgentBridge } from "./hooks/useDashboardAgentBridge";
 import { useAgenticOrchestrationBridge } from "./hooks/useAgenticOrchestrationBridge";
 import { useMissionControl } from "./hooks/useMissionControl";
+import { useWorkbenchSessions } from "./hooks/useWorkbenchSessions";
 import { useWorkspaceEventPersistence } from "./hooks/useWorkspaceEventPersistence";
 import { useAgenticActionBus } from "./hooks/useAgenticActionBus";
 import { useWorkflowHandoffPanel } from "./hooks/useWorkflowHandoffPanel";
@@ -237,7 +238,7 @@ import {
 } from "./main";
 import WorkflowCanvasPane from "./main/presentation/WorkflowCanvasPane";
 import WorkflowInspectorPane from "./main/presentation/WorkflowInspectorPane";
-import { buildFeedPageVm, buildWorkflowInspectorPaneProps } from "./main/presentation/mainAppPropsBuilders";
+import { buildFeedPageVm, buildWorkbenchProps, buildWorkflowInspectorPaneProps } from "./main/presentation/mainAppPropsBuilders";
 import {
   cancelFeedReplyFeedbackClearTimer,
   scheduleFeedReplyFeedbackAutoClear,
@@ -322,10 +323,7 @@ import type { FeedCategory, InternalMemorySnippet, WebProviderRunResult, RunReco
 
 const HIDDEN_WORKSPACE_TABS = new Set<WorkspaceTab>(["dashboard", "intelligence", "feed", "handoff", "agents"]);
 
-const WORKSPACE_TOPBAR_TABS: Array<{ tab: WorkspaceTab; label: string }> = [
-  { tab: "workflow", label: "그래프" },
-  { tab: "knowledge", label: "데이터베이스" }, { tab: "settings", label: "설정" },
-];
+const WORKSPACE_TOPBAR_TABS: Array<{ tab: WorkspaceTab; label: string }> = [{ tab: "workbench", label: "작업 보드" }, { tab: "workflow", label: "그래프" }, { tab: "knowledge", label: "데이터베이스" }, { tab: "settings", label: "설정" }];
 
 function App() {
   const USER_BG_IMAGE_STORAGE_KEY = "rail.settings.user_bg_image";
@@ -335,7 +333,7 @@ function App() {
   const defaultLoginCompleted = useMemo(() => loadPersistedLoginCompleted(), []);
   const defaultAuthMode = useMemo(() => loadPersistedAuthMode(), []);
   const defaultCodexMultiAgentMode = useMemo(() => loadPersistedCodexMultiAgentMode(), []);
-  const [workspaceTab, setWorkspaceTab] = useState<WorkspaceTab>("workflow");
+  const [workspaceTab, setWorkspaceTab] = useState<WorkspaceTab>("workbench");
   const [workflowRoleId, setWorkflowRoleId] = useState<StudioRoleId>("pm_planner");
   const [workflowRoleTaskId, setWorkflowRoleTaskId] = useState("TASK-001");
   const [workflowRolePrompt, setWorkflowRolePrompt] = useState("");
@@ -644,7 +642,7 @@ function App() {
 
   useEffect(() => {
     if (HIDDEN_WORKSPACE_TABS.has(workspaceTab)) {
-      setWorkspaceTab("workflow");
+      setWorkspaceTab("workbench");
     }
   }, [workspaceTab]);
   useEffect(() => {
@@ -786,6 +784,7 @@ function App() {
     invokeFn: invoke,
     appendWorkspaceEvent,
   });
+  const workbench = useWorkbenchSessions({ cwd, hasTauriRuntime, invokeFn: invoke, appendWorkspaceEvent, subscribeAction });
 
   const setStatus = useCallback((message: string) => {
     setStatusCore(message);
@@ -2283,6 +2282,7 @@ function App() {
     <WorkflowRoleDock
       onChangePrompt={setWorkflowRolePrompt}
       onChangeTaskId={setWorkflowRoleTaskId}
+      onOpenWorkbench={() => setWorkspaceTab("workbench")}
       onRunRole={() => {
         const taskId = workflowRoleTaskId.trim();
         if (!taskId) {
@@ -2418,6 +2418,14 @@ function App() {
     graphNodes: graph.nodes,
     setFeedInspectorPostId,
     setNodeSelection,
+  });
+  const workbenchPageProps = buildWorkbenchProps({
+    sessions: workbench.sessions, selectedSession: workbench.selectedSession, selectedSessionId: workbench.selectedSessionId,
+    createRoleSession: workbench.createRoleSession, publishAction, setStatus, createManualSession: workbench.createManualSession,
+    openSession: workbench.openSession, archiveSession: workbench.archiveSession, attachSessionNote: workbench.attachSessionNote,
+    attachArtifactPath: workbench.attachArtifactPath, setManualSessionStatus: workbench.setManualSessionStatus,
+    setSessionReviewState: workbench.setSessionReviewState, recordCompanionEvent: workbench.recordCompanionEvent,
+    recordUnityVerification: workbench.recordUnityVerification, executeSessionCommand: workbench.executeSessionCommand,
   });
   const { onSelectWorkspaceTab } = useWorkspaceNavigation({
     workspaceTab,
@@ -2682,6 +2690,7 @@ function App() {
     applyPreset,
     onRoleRunCompleted: (payload) => {
       missionControl.onRoleRunCompleted(payload);
+      workbench.onRoleRunCompleted(payload);
       const roleId = toStudioRoleId(payload.roleId);
       if (roleId) {
         setWorkflowRoleRuntimeStateByRole((prev) => ({
@@ -3040,6 +3049,7 @@ function App() {
           webBridgeRunning={webBridgeStatus.running}
           webBridgeStatus={webBridgeStatus}
           webWorkerBusy={webWorkerBusy}
+          workbench={workbenchPageProps}
           workspaceEvents={workspaceEvents}
           workspaceTab={workspaceTab}
         />

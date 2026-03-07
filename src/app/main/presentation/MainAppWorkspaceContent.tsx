@@ -4,6 +4,7 @@ import FeedPage from "../../../pages/feed/FeedPage";
 import KnowledgeBasePage from "../../../pages/knowledge/KnowledgeBasePage";
 import DashboardIntelligenceSettings from "../../../pages/settings/DashboardIntelligenceSettings";
 import SettingsPage from "../../../pages/settings/SettingsPage";
+import WorkbenchPage from "../../../pages/workbench/WorkbenchPage";
 
 export function MainAppWorkspaceContent(props: any) {
   const handleInjectContextSources = (entries: any[]) => {
@@ -19,6 +20,25 @@ export function MainAppWorkspaceContent(props: any) {
 
   return (
     <>
+      {props.workspaceTab === "workbench" && (
+        <WorkbenchPage
+          cwd={props.cwd}
+          onAddNote={props.workbench.addNote}
+          onArchiveSession={props.workbench.archiveSession}
+          onAttachArtifact={props.workbench.attachArtifactPath}
+          onCreateManualSession={props.workbench.createManualSession}
+          onCreateRoleSession={props.workbench.launchRoleSession}
+          onExecuteCommand={props.workbench.executeSessionCommand}
+          onRecordCompanionEvent={props.workbench.recordCompanionEvent}
+          onRecordUnityVerification={props.workbench.recordUnityVerification}
+          onSelectSession={props.workbench.openSession}
+          onSetManualStatus={props.workbench.setManualSessionStatus}
+          onSetReviewState={props.workbench.setSessionReviewState}
+          selectedSession={props.workbench.selectedSession}
+          selectedSessionId={props.workbench.selectedSessionId}
+          sessions={props.workbench.sessions}
+        />
+      )}
       {props.workspaceTab === "feed" && <FeedPage vm={props.feedPageVm} />}
       {props.workspaceTab === "knowledge" && (
         <KnowledgeBasePage
